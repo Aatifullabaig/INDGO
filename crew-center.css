@@ -355,6 +355,29 @@ table.leaderboard-table {
     background-color: rgba(0, 27, 148, 0.15);
 }
 
+/* --- NEW: Crew Rest Timer Styles --- */
+.crew-rest-notice {
+    margin-top: 1.5rem;
+    padding: 1rem 1.5rem;
+    background-color: rgba(240, 173, 78, 0.1); /* Soft yellow */
+    border-left: 4px solid var(--warning-color);
+    border-radius: 5px;
+}
+.crew-rest-notice p {
+    margin-bottom: 0.75rem;
+}
+.crew-rest-timer-display {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: var(--warning-color);
+    text-align: center;
+    font-family: 'monospace', 'Courier New', Courier;
+    margin-top: 1rem;
+    padding: 0.5rem;
+    background-color: rgba(0,0,0,0.2);
+    border-radius: 5px;
+}
+
 
 /* --- Modal --- */
 .modal-overlay {

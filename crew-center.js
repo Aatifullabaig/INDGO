@@ -3,6 +3,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const token = localStorage.getItem('authToken');
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
 
+    let crewRestInterval = null; // To manage the countdown timer
+
+    // --- Helper to format milliseconds into HH:MM:SS ---
+    function formatTime(ms) {
+        if (ms < 0) ms = 0;
+        let seconds = Math.floor(ms / 1000);
+        let minutes = Math.floor(seconds / 60);
+        let hours = Math.floor(minutes / 60);
+
+        seconds = seconds % 60;
+        minutes = minutes % 60;
+
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
     // --- Rank model (keep in sync with backend) ---
     const PILOT_RANKS = [
         'IndGo Cadet',
@@ -319,22 +334,75 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderOnRestViews = async (pilot, leaderboardsHTML) => {
         const dutyStatusView = document.getElementById('view-duty-status');
-        const filePirepView = document.getElementById('view-file-pirep');
+        
+        // Clear any previous timer when re-rendering the view
+        if (crewRestInterval) {
+            clearInterval(crewRestInterval);
+            crewRestInterval = null;
+        }
+
+        let dutyStatusHTML = '';
+
+        if (pilot.timeUntilNextDutyMs > 0) {
+            // Pilot is on MANDATORY crew rest
+            dutyStatusHTML = `
+                <div class="content-card">
+                    <h2><i class="fa-solid fa-bed"></i> Current Status: 🔴 On Rest (Mandatory)</h2>
+                    <div class="crew-rest-notice">
+                        <p>In accordance with Flight & Duty Time Limitations (FTPL), a minimum <strong>8-hour rest period</strong> is required after completing a duty. You may go on duty again after this period has elapsed.</p>
+                        <p>Time remaining until next duty:</p>
+                        <div class="crew-rest-timer-display" id="crew-rest-timer">--:--:--</div>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Pilot is on rest but ELIGIBLE for duty
+            dutyStatusHTML = `
+                <div class="content-card">
+                    <h2><i class="fa-solid fa-user-clock"></i> Current Status: 🔴 On Rest</h2>
+                    <p>You have completed your mandatory rest period and are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>
+                </div>
+            `;
+        }
 
         dutyStatusView.innerHTML = `
-            <div class="content-card">
-                <h2><i class="fa-solid fa-user-clock"></i> Current Status: 🔴 On Rest</h2>
-                <p>You are currently on crew rest. To begin your next duty, please select an available flight roster from the Sector Ops page.</p>
-            </div>
+            ${dutyStatusHTML}
             ${createStatsCardHTML(pilot)}
             ${leaderboardsHTML}
         `;
-        filePirepView.innerHTML = getPirepFormHTML(pilot);
+
+        // After the HTML is in the DOM, start the timer if necessary
+        if (pilot.timeUntilNextDutyMs > 0) {
+            const timerElement = document.getElementById('crew-rest-timer');
+            let remainingTime = pilot.timeUntilNextDutyMs;
+
+            if(timerElement) {
+                timerElement.textContent = formatTime(remainingTime); // Initial display
+    
+                crewRestInterval = setInterval(() => {
+                    remainingTime -= 1000;
+                    if (remainingTime <= 0) {
+                        clearInterval(crewRestInterval);
+                        // Re-fetch all data to ensure the UI is fully updated
+                        fetchPilotData(); 
+                        showNotification('Your mandatory crew rest is complete. You are now eligible for duty.', 'success');
+                    } else {
+                        timerElement.textContent = formatTime(remainingTime);
+                    }
+                }, 1000);
+            }
+        }
     };
 
     const renderOnDutyViews = async (pilot, leaderboardsHTML) => {
         const dutyStatusView = document.getElementById('view-duty-status');
         const filePirepView = document.getElementById('view-file-pirep');
+
+        // Ensure any stray rest timer is cleared when switching to duty view
+        if (crewRestInterval) {
+            clearInterval(crewRestInterval);
+            crewRestInterval = null;
+        }
 
         try {
             const [rosterRes, pirepsRes] = await Promise.all([
@@ -353,7 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dutyStatusView.innerHTML = `
                 <div class="content-card">
                     <div class="on-duty-header">
-                        <h2><i class="fa-solid fa-user-clock"></i> Current Status: 🟢 On Duty</h2>
+                        <h2><i class="fa-solid fa-plane-departure"></i> Current Status: 🟢 On Duty</h2>
                         <button id="end-duty-btn" class="end-duty-btn">Complete Duty Day</button>
                     </div>
                     <p style="margin-bottom: 1.5rem;"><strong>Active Roster:</strong> ${currentRoster.name}</p>
