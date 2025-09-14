@@ -21,9 +21,9 @@ body {
     font-family: var(--font-body);
     background-color: var(--bg-color);
     color: var(--dashboard-text-color);
-    background-image: url('images/lightblue.png');
-    background-repeat: repeat;
-    background-attachment: fixed;
+    /* PERF: remove repaint-heavy fixed background */
+    /* background-image: url('images/lightblue.png'); */
+    /* background-attachment: fixed; */
     line-height: 1.6;
 }
 
@@ -33,7 +33,11 @@ body {
     flex-grow: 1;
     padding: 2rem 3rem;
     overflow-y: auto;
-    transition: margin-left 0.4s ease;
+    /* keep only the property that actually changes */
+    transition: margin-left 0.25s ease;
+    /* PERF: large containers skip rendering until scrolled into view */
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 1000px;
 }
 
 /* --- Sidebar (REDESIGNED) --- */
@@ -44,10 +48,10 @@ body {
     display: flex;
     flex-direction: column;
     padding: 1.5rem 1rem;
-    backdrop-filter: blur(10px);
-    transition: width 0.4s ease, padding 0.4s ease;
+    /* PERF: drop blur; it’s the biggest scroll jank culprit */
+    /* backdrop-filter: blur(10px); */
+    transition: width 0.25s ease, padding 0.25s ease;
     flex-shrink: 0;
-    /* --- FIX: Set fixed height and sticky position --- */
     height: 100vh;
     position: sticky;
     top: 0;
@@ -56,45 +60,32 @@ body {
 .sidebar-header {
     display: flex;
     align-items: center;
-    justify-content: space-between; /* Positions items at ends */
+    justify-content: space-between;
     margin-bottom: 2rem;
     padding: 0 0.5rem;
     flex-shrink: 0;
 }
-.logo-container {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
+.logo-container { display: flex; align-items: center; gap: 12px; }
 .logo-image { width: 35px; height: 35px; }
-.logo-text { font-weight: 700; font-size: 1.1rem; text-transform: uppercase; color: #ffffff; transition: opacity 0.3s ease; white-space: nowrap; }
+.logo-text { font-weight: 700; font-size: 1.1rem; text-transform: uppercase; color: #ffffff; transition: opacity 0.2s ease; white-space: nowrap; }
 
 /* Nav Styles (REDESIGNED) */
-.sidebar-nav {
-    flex-grow: 1; /* Allows this section to fill available space */
-    overflow-y: auto; /* Makes the nav scrollable if content overflows */
-    overflow-x: hidden;
-}
+.sidebar-nav { flex-grow: 1; overflow-y: auto; overflow-x: hidden; }
 .sidebar-nav ul { list-style: none; }
 .sidebar-nav .nav-link {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    color: var(--dashboard-text-muted);
-    text-decoration: none;
-    padding: 0.85rem 1rem;
-    border-radius: 5px;
-    margin-bottom: 0.5rem;
-    transition: background-color 0.3s, color 0.3s;
+    display: flex; align-items: center; gap: 15px;
+    color: var(--dashboard-text-muted); text-decoration: none;
+    padding: 0.85rem 1rem; border-radius: 5px; margin-bottom: 0.5rem;
+    transition: background-color 0.2s, color 0.2s;
 }
 .sidebar-nav .nav-link i { width: 20px; font-size: 1.1rem; text-align: center; }
 .sidebar-nav .nav-link:hover { background-color: var(--accent-color); color: #fff; }
 .sidebar-nav .nav-link.active { background-color: var(--accent-color); color: #fff; font-weight: 500; }
-.nav-text { transition: opacity 0.3s ease; white-space: nowrap; }
+.nav-text { transition: opacity 0.2s ease; white-space: nowrap; }
 
 /* Footer and Profile Section at the Bottom (REDESIGNED) */
 .sidebar-footer {
-    flex-shrink: 0; /* Prevents this section from shrinking */
+    flex-shrink: 0;
     border-top: 1px solid var(--border-color);
     padding-top: 1rem;
     display: flex;
@@ -102,20 +93,13 @@ body {
     gap: 1rem;
 }
 
-.sidebar-profile {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
+.sidebar-profile { display: flex; align-items: center; gap: 12px; }
 .profile-img {
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid var(--accent-color);
-    flex-shrink: 0;
+    width: 45px; height: 45px; border-radius: 50%;
+    object-fit: cover; border: 2px solid var(--accent-color); flex-shrink: 0;
+    /* hint the browser to decode off-thread when possible (HTML adds decoding=async) */
 }
-.profile-details { flex-grow: 1; transition: opacity 0.3s ease; white-space: nowrap; overflow: hidden; }
+.profile-details { flex-grow: 1; transition: opacity 0.2s ease; white-space: nowrap; overflow: hidden; }
 #pilot-name { font-weight: 600; color: #ffffff; font-size: 1.1rem; }
 .user-role { color: var(--dashboard-text-muted); font-size: 0.9rem; margin-top: 0.1rem; }
 
@@ -126,14 +110,9 @@ body {
 .sidebar-actions { display: flex; flex-direction: column; gap: 0.5rem; }
 
 .logout-button, .dashboard-link {
-    display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    gap: 15px;
-    text-decoration: none;
-    padding: 0.75rem 1rem;
-    border-radius: 5px;
-    transition: all 0.3s;
+    display: flex; justify-content: flex-start; align-items: center; gap: 15px;
+    text-decoration: none; padding: 0.75rem 1rem; border-radius: 5px;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
     color: var(--dashboard-text-muted);
 }
 .dashboard-link { background-color: rgba(255,255,255,0.05); }
@@ -141,73 +120,69 @@ body {
 .logout-button:hover { background-color: var(--error-color); color: #fff; }
 
 .sidebar-toggle-btn {
-    background: none;
-    border: none;
-    color: var(--dashboard-text-muted);
-    cursor: pointer;
-    font-size: 1.2rem;
-    padding: 0.5rem;
-    flex-shrink: 0;
+    background: none; border: none; color: var(--dashboard-text-muted);
+    cursor: pointer; font-size: 1.2rem; padding: 0.5rem; flex-shrink: 0;
 }
 .sidebar-toggle-btn:hover { color: #fff; }
-.sidebar-toggle-btn i { transition: transform 0.4s ease; }
+.sidebar-toggle-btn i { transition: transform 0.25s ease; }
 
 /* --- Collapsed Sidebar Styles (ADJUSTED) --- */
-.dashboard-container.sidebar-collapsed .sidebar {
-    width: 88px;
-    padding: 1.5rem 0.5rem;
-}
+.dashboard-container.sidebar-collapsed .sidebar { width: 88px; padding: 1.5rem 0.5rem; }
 .dashboard-container.sidebar-collapsed .logo-text,
 .dashboard-container.sidebar-collapsed .nav-text,
-/* REMOVED .stats-grid from this rule */
 .dashboard-container.sidebar-collapsed .profile-details {
-    opacity: 0;
-    visibility: hidden;
-    width: 0;
+    opacity: 0; visibility: hidden; width: 0;
 }
 .dashboard-container.sidebar-collapsed .sidebar-header,
 .dashboard-container.sidebar-collapsed .nav-link,
 .dashboard-container.sidebar-collapsed .dashboard-link,
 .dashboard-container.sidebar-collapsed .logout-button {
-    justify-content: center;
-    padding-left: 0;
-    padding-right: 0;
+    justify-content: center; padding-left: 0; padding-right: 0;
 }
-.dashboard-container.sidebar-collapsed .logo-container {
-    justify-content: center;
-    flex-grow: 1; /* Helps center logo when text is gone */
-}
-.dashboard-container.sidebar-collapsed .sidebar-profile {
-    justify-content: center;
-}
-.dashboard-container.sidebar-collapsed .sidebar-toggle-btn i {
-    transform: rotate(180deg);
-}
+.dashboard-container.sidebar-collapsed .logo-container { justify-content: center; flex-grow: 1; }
+.dashboard-container.sidebar-collapsed .sidebar-profile { justify-content: center; }
+.dashboard-container.sidebar-collapsed .sidebar-toggle-btn i { transform: rotate(180deg); }
 
 /* --- Main Content (Shared) --- */
 .content-view { display: none; }
-.content-view.active { display: block; animation: fadeIn 0.5s ease-in-out; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.content-card { background: var(--primary-glass); border: 1px solid var(--border-color); border-radius: 10px; padding: 2rem; }
-.content-card h2 { margin-top: 0; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; color: #ffffff; display: flex; align-items: center; gap: 12px; }
-
-/* ADDED RULE for spacing cards */
-.content-card + .content-card {
-    margin-top: 2rem;
+/* PERF: remove fade-in animation on every view switch */
+.content-view.active { display: block; }
+.content-card {
+    background: var(--primary-glass);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 2rem;
+    /* skip rendering cards until needed */
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 600px;
+}
+.content-card h2 {
+    margin-top: 0; margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem; color: #ffffff; display: flex; align-items: center; gap: 12px;
 }
 
+/* card spacing */
+.content-card + .content-card { margin-top: 2rem; }
 
-/* --- Specific Component Styling (No Changes Here) --- */
-/* Roster List, On Duty UI, PIREP History, Forms, etc. */
+/* --- Specific Component Styling --- */
 #roster-list-container { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem; }
-.roster-item { background-color: rgba(0, 27, 148, 0.15); border-radius: 8px; padding: 1rem 1.5rem; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--accent-color); flex-wrap: wrap; gap: 1rem; }
+.roster-item {
+    background-color: rgba(0, 27, 148, 0.15);
+    border-radius: 8px; padding: 1rem 1.5rem;
+    display: flex; justify-content: space-between; align-items: center;
+    border-left: 4px solid var(--accent-color); flex-wrap: wrap; gap: 1rem;
+    /* PERF: drop transform + large shadow on hover */
+    transition: background-color 0.2s, border-color 0.2s;
+}
 .roster-info strong { display: block; color: var(--dashboard-text-color); font-size: 1.2rem; margin-bottom: 0.25rem; }
 .roster-info small { opacity: 0.8; }
 .roster-path { font-family: monospace; font-size: 0.9rem; color: var(--accent-color); margin-top: 0.5rem; opacity: 0.9; }
+
 .on-duty-header { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
 .on-duty-header h2 { margin: 0; }
 .roster-checklist { display: flex; flex-direction: column; gap: 0.75rem; }
-.roster-leg-item { background-color: rgba(13, 16, 28, 0.5); border: 1px solid var(--border-color); padding: 0.75rem 1rem; border-radius: 5px; display: flex; align-items: center; gap: 1rem; transition: all 0.3s ease; }
+.roster-leg-item { background-color: rgba(13, 16, 28, 0.5); border: 1px solid var(--border-color); padding: 0.75rem 1rem; border-radius: 5px; display: flex; align-items: center; gap: 1rem; transition: background-color 0.2s, border-color 0.2s; }
 .roster-leg-item.completed { border-left: 4px solid var(--success-color); background-color: rgba(40, 167, 69, 0.1); }
 .roster-leg-item.completed .flight-number { text-decoration: line-through; opacity: 0.6; }
 #pirep-history-list { display: flex; flex-direction: column; gap: 1rem; }
@@ -222,12 +197,19 @@ body {
 .status-pending { background-color: var(--warning-color); }
 .status-approved { background-color: var(--success-color); color: #fff; }
 .status-rejected { background-color: var(--error-color); color: #fff; }
+
 .form-group { margin-bottom: 1.25rem; }
 .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; }
 .form-group-row { display: flex; gap: 1rem; }
 .form-group-row .form-group { flex: 1; }
-input, textarea { width: 100%; padding: 0.8rem; border-radius: 5px; border: 1px solid var(--border-color); background-color: var(--bg-color); color: #fff; font-size: 1rem; box-sizing: border-box; }
-.cta-button, .end-duty-btn { display: inline-block; padding: 0.8rem 1.5rem; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; transition: all 0.3s; }
+input, textarea {
+    width: 100%; padding: 0.8rem; border-radius: 5px; border: 1px solid var(--border-color);
+    background-color: var(--bg-color); color: #fff; font-size: 1rem; box-sizing: border-box;
+}
+.cta-button, .end-duty-btn {
+    display: inline-block; padding: 0.8rem 1.5rem; border: none; border-radius: 5px;
+    font-weight: bold; cursor: pointer; transition: background-color 0.2s;
+}
 .cta-button { background-color: var(--accent-color); color: white; }
 .cta-button:hover { background: #0025c4; }
 .end-duty-btn { background-color: var(--error-color); color: white; }
@@ -237,7 +219,7 @@ input, textarea { width: 100%; padding: 0.8rem; border-radius: 5px; border: 1px 
 /* --- NEW STYLES FOR FILE INPUT --- */
 .file-input {
     padding: 0.6rem;
-    background-color: var(--secondary-bg); /* A slightly different background */
+    background-color: var(--secondary-bg);
     border: 1px solid var(--border-color);
     border-radius: 5px;
     color: var(--dashboard-text-muted);
@@ -245,258 +227,94 @@ input, textarea { width: 100%; padding: 0.8rem; border-radius: 5px; border: 1px 
 }
 .file-input::file-selector-button {
     background-color: var(--accent-color);
-    color: #fff;
-    border: none;
-    padding: 0.6rem 1rem;
-    border-radius: 4px;
-    cursor: pointer;
-    margin-right: 1rem;
-    transition: background-color 0.3s;
+    color: #fff; border: none; padding: 0.6rem 1rem; border-radius: 4px; cursor: pointer; margin-right: 1rem;
+    transition: background-color 0.2s;
 }
-.file-input::file-selector-button:hover {
-    background-color: #0025c4;
-}
+.file-input::file-selector-button:hover { background-color: #0025c4; }
 
-/* --- Additions for Roster Details --- */
+/* --- Roster Details Drawer (kept; doesn’t run during scroll) --- */
+.roster-actions { display: flex; gap: 0.75rem; align-items: center; }
 
-/* Container to hold the action buttons */
-.roster-actions {
-    display: flex;
-    gap: 0.75rem;
-    align-items: center;
-}
-
-/* New secondary button style for "Details" */
 .details-button {
-    display: inline-block;
-    padding: 0.8rem 1.5rem;
-    border: 1px solid var(--border-color);
-    border-radius: 5px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.3s;
-    background-color: rgba(255, 255, 255, 0.05);
-    color: var(--dashboard-text-muted);
+    display: inline-block; padding: 0.8rem 1.5rem; border: 1px solid var(--border-color);
+    border-radius: 5px; font-weight: bold; cursor: pointer;
+    background-color: rgba(255, 255, 255, 0.05); color: var(--dashboard-text-muted);
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
 }
-.details-button:hover {
-    background-color: var(--accent-color);
-    color: #fff;
-    border-color: var(--accent-color);
-}
+.details-button:hover { background-color: var(--accent-color); color: #fff; border-color: var(--accent-color); }
 
-/* The details panel, hidden by default */
 .roster-leg-details {
-    display: none;
-    width: 100%; /* Take full width of the roster item */
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border-color);
-    flex-basis: 100%; /* Ensures it takes a new line in flex container */
-}
-/* This class will be toggled by JS to show the panel */
-.roster-leg-details.visible {
     display: block;
-}
-
-.roster-leg-details ul {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.roster-leg-details li {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background-color: rgba(13, 16, 28, 0.6);
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    font-size: 0.9rem;
-}
-
-.leg-aircraft {
-    font-style: italic;
-    color: var(--dashboard-text-muted);
-}
-
-.leg-time {
-    font-weight: bold;
-}
-
-/* --- NEW: PROMOTION MODAL STYLES --- */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
+    max-height: 0; opacity: 0; overflow: hidden;
+    transition: max-height .25s ease, opacity .25s ease;
     width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(5px);
-    display: none; /* Hidden by default */
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    opacity: 0;
-    transition: opacity 0.3s ease-in-out;
 }
-.modal-overlay.visible {
-    display: flex;
-    opacity: 1;
-}
-.modal-content {
-    background-color: var(--secondary-bg);
-    padding: 2.5rem;
-    border-radius: 10px;
-    border: 1px solid var(--border-color);
-    width: 90%;
-    max-width: 500px;
-    text-align: center;
-    position: relative;
-    transform: scale(0.95);
-    transition: transform 0.3s ease-in-out;
-}
-.modal-overlay.visible .modal-content {
-    transform: scale(1);
-}
-.modal-close {
-    position: absolute;
-    top: 10px;
-    right: 15px;
-    background: none;
-    border: none;
-    font-size: 2rem;
-    color: var(--dashboard-text-muted);
-    cursor: pointer;
-}
-.modal-header h2 {
-    color: var(--success-color);
-    border-bottom: none;
-    margin-bottom: 1rem;
-    font-size: 1.5rem;
-}
-.modal-body #promo-rank-name {
-    color: var(--dashboard-text-color);
-    font-size: 2rem;
-    margin: 0.5rem 0;
-}
-.modal-body .promo-hours {
-    color: var(--dashboard-text-muted);
-    margin-bottom: 1.5rem;
-}
-.modal-body h4 {
-    margin-top: 1.5rem;
-    margin-bottom: 0.75rem;
-    text-align: left;
-    color: #fff;
-}
-#promo-perks-list {
-    list-style: none;
-    text-align: left;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-#promo-perks-list li {
-    background-color: var(--primary-glass);
-    padding: 0.75rem 1rem;
-    border-radius: 5px;
-    border-left: 3px solid var(--success-color);
-}
-.modal-footer {
-    margin-top: 2rem;
+.roster-leg-details.visible {
+    max-height: 600px; opacity: 1; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);
 }
 
-/* ===== Rank/Operator badges & nicer Sector Ops details ===== */
+.roster-leg-details ul { list-style: none; display: flex; flex-direction: column; gap: 0.6rem; }
+.roster-leg-details li {
+    display: grid; grid-template-columns: 1fr auto; gap: 0.75rem; align-items: center;
+    background-color: rgba(13, 16, 28, 0.6); padding: 0.5rem 1rem; border-radius: 4px; font-size: 0.9rem;
+}
+.leg-main { display: flex; flex-direction: column; gap: 2px; }
+.leg-meta { opacity: .85; font-size: .85rem; display: flex; gap: .75rem; }
+.leg-badges { display: inline-flex; gap: .5rem; align-items: center; }
+
+.leg-aircraft { font-style: italic; color: var(--dashboard-text-muted); }
+.leg-time { font-weight: bold; }
+
+/* ===== Rank/Operator badges ===== */
 .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0.2rem 0.55rem;
-    border-radius: 999px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: .2px;
-    border: 1px solid var(--border-color);
-    background: rgba(255,255,255,0.05);
-    color: var(--dashboard-text-muted);
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; letter-spacing: .2px;
+    border: 1px solid var(--border-color); background: rgba(255,255,255,0.05); color: var(--dashboard-text-muted);
 }
 .badge-operator { border-color: rgba(0, 200, 255, 0.25); }
 .badge-rank { border-color: rgba(0, 255, 170, 0.25); }
 .ml-8 { margin-left: .5rem; }
 
-/* Nicer hover for roster cards */
-.roster-item {
-    position: relative;
-    transition: transform .2s ease, box-shadow .2s ease, background-color .2s ease;
-}
-.roster-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0,0,0,.25);
-    background-color: rgba(0, 27, 148, 0.22);
-}
-
-/* Details drawer animation */
-.roster-leg-details {
-    display: block;            /* switch to block to animate height */
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-    transition: max-height .35s ease, opacity .35s ease;
-    width: 100%;
-    margin-top: 0;
-    padding-top: 0;
-    border-top: 0;
-}
-.roster-leg-details.visible {
-    max-height: 600px; /* large enough for most rosters */
-    opacity: 1;
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border-color);
-}
-
-/* Leg rows with right-side chips */
-.roster-leg-details ul { gap: 0.6rem; }
-.roster-leg-details li {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 0.75rem;
-    align-items: center;
-}
-.leg-main { display: flex; flex-direction: column; gap: 2px; }
-.leg-meta { opacity: .85; font-size: .85rem; display: flex; gap: .75rem; }
-
-/* Chips group */
-.leg-badges { display: inline-flex; gap: .5rem; align-items: center; }
-
-/* Selects styled to match inputs */
-.select-control {
-    width: 100%;
-    padding: 0.8rem;
-    border-radius: 5px;
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-color);
-    color: #fff;
-    font-size: 1rem;
-    box-sizing: border-box;
-    appearance: none;
-}
-
-/* Small muted helper */
-.muted { color: var(--dashboard-text-muted); font-size: 0.85rem; }
-
-/* PIREP history chips line */
-.pirep-chips { margin-top: 0.4rem; display: flex; gap: .5rem; flex-wrap: wrap; }
-
-
-/* --- MAP STYLING (MODIFIED) --- */
+/* --- MAP STYLING (unchanged logically) --- */
 #map {
     width: 100%;
-    height: 450px; /* Adjusted height */
+    height: 450px;
     background-color: #1a233f;
     border: 1px solid var(--border-color);
-    border-radius: 8px; /* Added border-radius */
-    margin-bottom: 2rem; /* Added margin */
-    z-index: 0; /* Ensure it's behind modals etc. */
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    z-index: 0;
+    /* PERF: isolate the map’s paints */
+    contain: content;
+}
+
+/* --- Modal (PERF: remove overlay blur) --- */
+.modal-overlay {
+    position: fixed; inset: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    /* backdrop-filter: blur(5px);  <-- removed */
+    display: none; align-items: center; justify-content: center;
+    z-index: 1000; opacity: 0; transition: opacity 0.2s ease-in-out;
+}
+.modal-overlay.visible { display: flex; opacity: 1; }
+.modal-content {
+    background-color: var(--secondary-bg); padding: 2.5rem; border-radius: 10px; border: 1px solid var(--border-color);
+    width: 90%; max-width: 500px; text-align: center; position: relative;
+    /* remove scale animation to avoid extra composites */
+    /* transform: scale(0.95); transition: transform 0.3s ease-in-out; */
+}
+.modal-close {
+    position: absolute; top: 10px; right: 15px; background: none; border: none; font-size: 2rem; color: var(--dashboard-text-muted); cursor: pointer;
+}
+.modal-header h2 { color: var(--success-color); border-bottom: none; margin-bottom: 1rem; font-size: 1.5rem; }
+.modal-body #promo-rank-name { color: var(--dashboard-text-color); font-size: 2rem; margin: 0.5rem 0; }
+.modal-body .promo-hours { color: var(--dashboard-text-muted); margin-bottom: 1.5rem; }
+.modal-body h4 { margin-top: 1.5rem; margin-bottom: 0.75rem; text-align: left; color: #fff; }
+#promo-perks-list { list-style: none; text-align: left; display: flex; flex-direction: column; gap: 0.5rem; }
+#promo-perks-list li { background-color: var(--primary-glass); padding: 0.75rem 1rem; border-radius: 5px; border-left: 3px solid var(--success-color); }
+.modal-footer { margin-top: 2rem; }
+
+/* --- Respect OS Reduced Motion setting --- */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
 }
