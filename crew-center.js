@@ -564,25 +564,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (roster && roster.legs) {
                         // Render the list of legs
                         detailsContainer.innerHTML = `
-                            <ul>
-                                ${roster.legs.map(leg => `
-                                    <li>
-                                        <div class="leg-main">
-                                            <strong>${leg.flightNumber}: ${leg.departure} → ${leg.arrival}</strong>
-                                            <div class="leg-meta">
-                                                <span><i class="fa-solid fa-plane"></i> ${leg.aircraft}</span>
-                                                <span><i class="fa-solid fa-stopwatch"></i> ${Number(leg.flightTime || 0).toFixed(1)} hrs</span>
-                                            </div>
-                                        </div>
-                                        <div class="leg-badges">
-                                            <span class="badge badge-rank" title="Minimum Rank">Req: ${leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft)}</span>
-                                        </div>
-                                    </li>
-                                `).join('')}
-                            </ul>`;
-                    } else {
-                        detailsContainer.innerHTML = '<p>Details could not be loaded.</p>';
-                    }
+        <ul>
+            ${roster.legs.map(leg => `
+                <li>
+                    <div class="leg-main">
+                        <strong>${leg.flightNumber}: ${leg.departure} → ${leg.arrival}</strong>
+                        <div class="leg-meta">
+                            <span><i class="fa-solid fa-plane"></i> ${leg.aircraft}</span>
+                            <span><i class="fa-solid fa-stopwatch"></i> ${Number(leg.flightTime || 0).toFixed(1)} hrs</span>
+                        </div>
+                    </div>
+                    <div class="leg-badges">
+                        <span class="badge badge-operator">${leg.operator}</span>
+                        <span class="badge badge-rank" title="Minimum Rank">Req: ${leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft)}</span>
+                    </div>
+                </li>
+            `).join('')}
+        </ul>`;
+} else {
+    detailsContainer.innerHTML = '<p>Details could not be loaded.</p>';
+}
                 } catch (error) {
                     console.error('Failed to fetch roster details:', error);
                     detailsContainer.innerHTML = `<p class="error-text">${error.message}</p>`;
