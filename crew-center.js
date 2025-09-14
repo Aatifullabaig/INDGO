@@ -550,7 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
             target.setAttribute('aria-expanded', isVisible);
 
             // Fetch and render details only if it's visible and not already loaded
-            if (isVisible && !detailsContainer.innerHTML) {
+            if (isVisible && !detailsContainer.innerHTML.trim()) {
                 detailsContainer.innerHTML = '<p>Loading details...</p>';
                 try {
                     // Fetch all rosters again to find the specific one
