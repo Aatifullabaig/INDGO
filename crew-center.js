@@ -323,14 +323,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Views
     const renderAllViews = async (pilot, leaderboardsHTML) => {
-        if (pilot.dutyStatus === 'ON_DUTY') {
-            await renderOnDutyViews(pilot, leaderboardsHTML);
-        } else {
-            await renderOnRestViews(pilot, leaderboardsHTML);
-        }
-        await fetchAndDisplayRosters();
-        await fetchPirepHistory();
-    };
+    if (pilot.dutyStatus === 'ON_DUTY') {
+        await renderOnDutyViews(pilot, leaderboardsHTML);
+    } else {
+        await renderOnRestViews(pilot, leaderboardsHTML);
+    }
+
+    await fetchAndDisplayRosters();
+    await fetchPirepHistory();
+
+    // Always populate the File PIREP tab regardless of duty status
+    const filePirepView = document.getElementById('view-file-pirep');
+    if (filePirepView) {
+        filePirepView.innerHTML = getPirepFormHTML(pilot);
+    }
+};
 
     const renderOnRestViews = async (pilot, leaderboardsHTML) => {
         const dutyStatusView = document.getElementById('view-duty-status');
