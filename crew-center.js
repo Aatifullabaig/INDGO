@@ -438,6 +438,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const viewId = link.dataset.view;
         mainContentContainer.querySelector('.content-view.active').classList.remove('active');
         document.getElementById(viewId).classList.add('active');
+        
+        if (viewId === 'view-rosters' && window.leafletMap) {
+            // A brief timeout ensures the browser has rendered the container before resizing the map.
+            setTimeout(() => {
+                window.leafletMap.invalidateSize();
+            }, 150);
+        }
+    }
     });
 
     // PIREP submit (FormData for image)
