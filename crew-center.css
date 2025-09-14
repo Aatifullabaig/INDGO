@@ -321,10 +321,13 @@ input, textarea {
 }
 .leaderboard-card h4 {
     margin-top: 1.5rem;
-    margin-bottom: 0.5rem;
-    color: var(--dashboard-text-muted);
-    text-transform: uppercase;
-    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+    color: var(--dashboard-text-color); /* Legibility Fix */
+    text-transform: none; /* Legibility Fix */
+    font-size: 1rem; /* Legibility Fix */
+    font-weight: 600; /* Legibility Fix */
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
 }
 .leaderboard-card h4:first-of-type {
     margin-top: 0;
