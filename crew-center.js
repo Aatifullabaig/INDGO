@@ -542,7 +542,51 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Roster Details Toggle
         if (target.classList.contains('details-button')) {
-            // This can be expanded to fetch and show leg details
+            const rosterId = target.dataset.rosterId;
+            const detailsContainer = document.getElementById(`details-${rosterId}`);
+            
+            // Toggle visibility
+            const isVisible = detailsContainer.classList.toggle('visible');
+            target.setAttribute('aria-expanded', isVisible);
+
+            // Fetch and render details only if it's visible and not already loaded
+            if (isVisible && !detailsContainer.innerHTML) {
+                detailsContainer.innerHTML = '<p>Loading details...</p>';
+                try {
+                    // Fetch all rosters again to find the specific one
+                    const res = await fetch(`${API_BASE_URL}/api/rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
+                    if (!res.ok) throw new Error('Could not fetch roster details.');
+                    
+                    const allRosters = await res.json();
+                    const roster = allRosters.find(r => r._id === rosterId);
+
+                    if (roster && roster.legs) {
+                        // Render the list of legs
+                        detailsContainer.innerHTML = `
+                            <ul>
+                                ${roster.legs.map(leg => `
+                                    <li>
+                                        <div class="leg-main">
+                                            <strong>${leg.flightNumber}: ${leg.departure} → ${leg.arrival}</strong>
+                                            <div class="leg-meta">
+                                                <span><i class="fa-solid fa-plane"></i> ${leg.aircraft}</span>
+                                                <span><i class="fa-solid fa-stopwatch"></i> ${Number(leg.flightTime || 0).toFixed(1)} hrs</span>
+                                            </div>
+                                        </div>
+                                        <div class="leg-badges">
+                                            <span class="badge badge-rank" title="Minimum Rank">Req: ${leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft)}</span>
+                                        </div>
+                                    </li>
+                                `).join('')}
+                            </ul>`;
+                    } else {
+                        detailsContainer.innerHTML = '<p>Details could not be loaded.</p>';
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch roster details:', error);
+                    detailsContainer.innerHTML = `<p class="error-text">${error.message}</p>`;
+                }
+            }
         }
 
         // Go On Duty
