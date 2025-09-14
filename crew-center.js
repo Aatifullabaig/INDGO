@@ -445,7 +445,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 window.leafletMap.invalidateSize();
             }, 150);
         }
-    }
     });
 
     // PIREP submit (FormData for image)
