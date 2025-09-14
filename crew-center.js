@@ -149,8 +149,10 @@ document.addEventListener('DOMContentLoaded', () => {
             pilotNameElem.textContent = pilot.name || 'N/A';
             pilotCallsignElem.textContent = pilot.callsign || 'N/A';
             profilePictureElem.src = pilot.imageUrl || 'images/default-avatar.png';
+            
+            const leaderboardsHTML = await fetchAndDisplayLeaderboards();
+            await renderAllViews(pilot, leaderboardsHTML);
 
-            await renderAllViews(pilot);
         } catch (error) {
             console.error('Error fetching pilot data:', error);
             showNotification(error.message, 'error');
@@ -173,6 +175,73 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         </div>
     `;
+
+    // Leaderboard rendering
+    const renderLeaderboardTable = (title, data, valueKey) => {
+        if (!data || data.length === 0) {
+            return `<h4>Top by ${title}</h4><p class="muted">No data available yet.</p>`;
+        }
+        return `
+            <h4>Top by ${title}</h4>
+            <table class="leaderboard-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Pilot</th>
+                        <th>${title === 'Hours' ? '<i class="fa-solid fa-stopwatch"></i>' : '<i class="fa-solid fa-plane-arrival"></i>'} ${title}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.map((pilot, index) => `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>
+                                ${pilot.name}
+                                <small>${pilot.callsign || 'N/A'}</small>
+                            </td>
+                            <td>${Number(pilot[valueKey] || 0).toFixed(1)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    };
+    
+    const fetchAndDisplayLeaderboards = async () => {
+        try {
+            const [weeklyRes, monthlyRes] = await Promise.all([
+                fetch(`${API_BASE_URL}/api/leaderboard/weekly`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${API_BASE_URL}/api/leaderboard/monthly`, { headers: { 'Authorization': `Bearer ${token}` } })
+            ]);
+    
+            if (!weeklyRes.ok || !monthlyRes.ok) throw new Error('Could not load leaderboard data.');
+    
+            const weeklyData = await weeklyRes.json();
+            const monthlyData = await monthlyRes.json();
+    
+            return `
+                <div class="content-card">
+                    <h2><i class="fa-solid fa-trophy"></i> Leaderboards</h2>
+                    <div class="leaderboards-container">
+                        <div class="leaderboard-card">
+                            <h3>This Week</h3>
+                            ${renderLeaderboardTable('Hours', weeklyData.topByHours, 'weeklyFlightHours')}
+                            ${renderLeaderboardTable('Sectors', weeklyData.topBySectors, 'weeklySectors')}
+                        </div>
+                        <div class="leaderboard-card">
+                            <h3>This Month</h3>
+                            ${renderLeaderboardTable('Hours', monthlyData.topByHours, 'leaderboardMonthlyFlightHours')}
+                            ${renderLeaderboardTable('Sectors', monthlyData.topBySectors, 'monthlySectors')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        } catch (error) {
+            console.error('Leaderboard fetch error:', error);
+            return `<div class="content-card"><h2><i class="fa-solid fa-trophy"></i> Leaderboards</h2><p>Could not load leaderboards at this time.</p></div>`;
+        }
+    };
+    
 
     // Build PIREP form (rank-aware)
     const getPirepFormHTML = (pilot) => {
@@ -238,31 +307,32 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // Views
-    const renderAllViews = async (pilot) => {
+    const renderAllViews = async (pilot, leaderboardsHTML) => {
         if (pilot.dutyStatus === 'ON_DUTY') {
-            await renderOnDutyViews(pilot);
+            await renderOnDutyViews(pilot, leaderboardsHTML);
         } else {
-            await renderOnRestViews(pilot);
+            await renderOnRestViews(pilot, leaderboardsHTML);
         }
         await fetchAndDisplayRosters();
         await fetchPirepHistory();
     };
 
-    const renderOnRestViews = async (pilot) => {
+    const renderOnRestViews = async (pilot, leaderboardsHTML) => {
         const dutyStatusView = document.getElementById('view-duty-status');
         const filePirepView = document.getElementById('view-file-pirep');
 
         dutyStatusView.innerHTML = `
             <div class="content-card">
-                <h2><i class="fa-solid fa-plane-departure"></i> Duty Status: 🔴 On Rest</h2>
+                <h2><i class="fa-solid fa-user-clock"></i> Current Status: 🔴 On Rest</h2>
                 <p>You are currently on crew rest. To begin your next duty, please select an available flight roster from the Sector Ops page.</p>
             </div>
             ${createStatsCardHTML(pilot)}
+            ${leaderboardsHTML}
         `;
         filePirepView.innerHTML = getPirepFormHTML(pilot);
     };
 
-    const renderOnDutyViews = async (pilot) => {
+    const renderOnDutyViews = async (pilot, leaderboardsHTML) => {
         const dutyStatusView = document.getElementById('view-duty-status');
         const filePirepView = document.getElementById('view-file-pirep');
 
@@ -283,9 +353,10 @@ document.addEventListener('DOMContentLoaded', () => {
             dutyStatusView.innerHTML = `
                 <div class="content-card">
                     <div class="on-duty-header">
-                        <h2>🟢 On Duty: ${currentRoster.name}</h2>
+                        <h2><i class="fa-solid fa-user-clock"></i> Current Status: 🟢 On Duty</h2>
                         <button id="end-duty-btn" class="end-duty-btn">Complete Duty Day</button>
                     </div>
+                    <p style="margin-bottom: 1.5rem;"><strong>Active Roster:</strong> ${currentRoster.name}</p>
                     <div class="roster-checklist">
                         ${currentRoster.legs.map(leg => {
                             const isCompleted = filedFlightNumbers.has(leg.flightNumber);
@@ -304,6 +375,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         }).join('')}
                     </div>
                 </div>
+                ${createStatsCardHTML(pilot)}
+                ${leaderboardsHTML}
             `;
             filePirepView.innerHTML = getPirepFormHTML(pilot);
 
