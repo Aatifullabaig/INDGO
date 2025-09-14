@@ -205,7 +205,7 @@ body::before {
 .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; }
 .form-group-row { display: flex; gap: 1rem; }
 .form-group-row .form-group { flex: 1; }
-input, textarea {
+input, textarea, select {
     width: 100%; padding: 0.8rem; border-radius: 5px; border: 1px solid var(--border-color);
     background-color: var(--bg-color); color: #fff; font-size: 1rem; box-sizing: border-box;
 }
@@ -378,7 +378,6 @@ table.leaderboard-table {
     border-radius: 5px;
 }
 
-
 /* --- Modal --- */
 .modal-overlay {
     position: fixed; inset: 0;
@@ -390,6 +389,12 @@ table.leaderboard-table {
 .modal-content {
     background-color: var(--secondary-bg); padding: 2.5rem; border-radius: 10px; border: 1px solid var(--border-color);
     width: 90%; max-width: 500px; text-align: center; position: relative;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    transform: scale(0.95);
+    transition: transform 0.2s ease-in-out;
+}
+.modal-overlay.visible .modal-content {
+    transform: scale(1);
 }
 .modal-close {
     position: absolute; top: 10px; right: 15px; background: none; border: none; font-size: 2rem; color: var(--dashboard-text-muted); cursor: pointer;
@@ -405,4 +410,101 @@ table.leaderboard-table {
 /* --- Respect OS Reduced Motion setting --- */
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* --- NEW STYLES FOR FLIGHT PLAN, NOTIFICATIONS, AND ALERTS --- */
+
+/* Notification Badge & Button */
+#notifications-btn { position: relative; }
+.notification-badge {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: var(--error-color);
+    color: white;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    border: 1px solid var(--secondary-bg);
+}
+
+/* Notification Modal List */
+#notifications-list-container {
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+.notification-item {
+    background-color: var(--primary-glass);
+    padding: 1rem;
+    border-radius: 5px;
+    border-left: 3px solid var(--accent-color);
+}
+.notification-item p { margin: 0; }
+.notification-item small { opacity: 0.7; font-size: 0.8rem; }
+
+/* Pending Test Banner */
+.pending-test-banner {
+    padding: 1rem 1.5rem;
+    background-color: rgba(240, 173, 78, 0.1);
+    border-left: 4px solid var(--warning-color);
+    border-radius: 5px;
+    margin-bottom: 2rem;
+}
+.pending-test-banner h3 { color: var(--warning-color); margin: 0 0 0.5rem 0; }
+.pending-test-banner p { margin: 0; }
+
+
+/* Flight Plan View */
+.flight-plan-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+.fp-detail-item {
+    background: rgba(13, 16, 28, 0.6);
+    padding: 1rem;
+    border-radius: 5px;
+}
+.fp-detail-item strong {
+    display: block;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    opacity: 0.7;
+    margin-bottom: 0.5rem;
+}
+.fp-detail-item span {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: var(--dashboard-text-color);
+    word-wrap: break-word; /* For long routes */
+}
+.fp-detail-item span.status-PLANNED { color: var(--warning-color); }
+.fp-detail-item span.status-FLYING { color: var(--success-color); }
+
+.flight-plan-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+}
+
+/* Modal for Arrive action */
+#arrive-modal-content {
+    text-align: left;
+}
+#arrive-modal-content h2 {
+    color: var(--dashboard-text-color);
+}
+#arrive-modal-content .form-group {
+    text-align: left;
 }

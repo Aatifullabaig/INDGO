@@ -36,10 +36,10 @@
             <nav class="sidebar-nav">
                 <ul>
                     <li><a href="#" class="nav-link active" data-view="view-duty-status"><i class="fa-solid fa-house"></i><span class="nav-text">Pilot Hub</span></a></li>
-                    <li><a href="#" class="nav-link" data-view="view-file-pirep"><i class="fa-solid fa-file-signature"></i><span class="nav-text">File PIREP</span></a></li>
+                    <li><a href="#" class="nav-link" data-view="view-flight-plan"><i class="fa-solid fa-paper-plane"></i><span class="nav-text">Flight Plan</span></a></li>
                     <li><a href="#" class="nav-link" data-view="view-rosters"><i class="fa-solid fa-map-location-dot"></i><span class="nav-text">Sector Ops</span></a></li>
                     <li><a href="#" class="nav-link" data-view="view-history"><i class="fa-solid fa-clock-rotate-left"></i><span class="nav-text">Flight Log</span></a></li>
-                    </ul>
+                </ul>
             </nav>
 
             <div class="sidebar-footer">
@@ -60,8 +60,8 @@
         <main class="main-content">
             <div id="view-duty-status" class="content-view active">
             </div>
-            <div id="view-file-pirep" class="content-view">
-                 </div>
+            <div id="view-flight-plan" class="content-view">
+            </div>
             <div id="view-rosters" class="content-view">
                 <div class="content-card">
                     <h2><i class="fa-solid fa-map-location-dot"></i> Sector Ops - Your Available Rosters</h2>
@@ -101,13 +101,43 @@
                 
                 <h4>New Perks Unlocked:</h4>
                 <ul id="promo-perks-list">
-                    </ul>
+                </ul>
             </div>
             <div class="modal-footer">
                 <button id="modal-confirm-btn" class="cta-button">Awesome!</button>
             </div>
         </div>
     </div>
+
+    <div id="arrive-flight-modal" class="modal-overlay">
+        <div class="modal-content" id="arrive-modal-content">
+             <button class="modal-close" data-close-modal>&times;</button>
+             <h2><i class="fa-solid fa-plane-arrival"></i> Complete Flight & File PIREP</h2>
+             <p>To finalize your flight, provide any remarks and a verification image (e.g., flight summary). This will automatically generate your PIREP.</p>
+             <form id="arrive-flight-form">
+                <div class="form-group">
+                    <label for="arrival-remarks">Remarks (Optional)</label>
+                    <textarea id="arrival-remarks" rows="3"></textarea>
+                </div>
+                 <div class="form-group">
+                    <label for="arrival-verification-image">Verification Image</label>
+                    <input type="file" id="arrival-verification-image" class="file-input" accept="image/*" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="cta-button">Complete Flight</button>
+                </div>
+             </form>
+        </div>
+    </div>
+
+    <div id="notifications-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close" data-close-modal>&times;</button>
+            <h2><i class="fa-solid fa-bell"></i> Notifications</h2>
+            <div id="notifications-list-container"></div>
+        </div>
+    </div>
+
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="map.js"></script>
