@@ -554,11 +554,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 detailsContainer.innerHTML = '<p>Loading details...</p>';
                 try {
                     // Fetch all rosters again to find the specific one
-                    const res = await fetch(`${API_BASE_URL}/api/rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
-                    if (!res.ok) throw new Error('Could not fetch roster details.');
-                    
-                    const allRosters = await res.json();
-                    const roster = allRosters.find(r => r._id === rosterId);
+                    const res = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) throw new Error('Could not fetch roster details.');
+    
+    const rosterData = await res.json(); // The response is an object: { rosters: [...] }
+    const allRosters = rosterData.rosters || []; // Extract the array from the 'rosters' property
+    const roster = allRosters.find(r => r._id === rosterId); // Now, find the specific roster
 
                     if (roster && roster.legs) {
                         // Render the list of legs
