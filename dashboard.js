@@ -179,6 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('profile-name').value = user.name;
             document.getElementById('profile-bio').value = user.bio || '';
             document.getElementById('profile-discord').value = user.discord || '';
+            document.getElementById('profile-if-username').value = user.infiniteFlightUsername || '';
             document.getElementById('profile-ifc').value = user.ifc || '';
             document.getElementById('profile-youtube').value = user.youtube || '';
             document.getElementById('profile-preferred').value = user.preferredContact || 'none';
@@ -915,6 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('name', document.getElementById('profile-name').value);
             formData.append('bio', document.getElementById('profile-bio').value || '');
             formData.append('discord', document.getElementById('profile-discord').value || '');
+            formData.append('infiniteFlightUsername', document.getElementById('profile-if-username').value || '');
             formData.append('ifc', document.getElementById('profile-ifc').value || '');
             formData.append('youtube', document.getElementById('profile-youtube').value || '');
             formData.append('preferredContact', document.getElementById('profile-preferred').value || 'none');
