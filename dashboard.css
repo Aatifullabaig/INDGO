@@ -120,7 +120,7 @@ body {
 
 .sidebar-actions { display: flex; flex-direction: column; gap: 0.5rem; }
 
-.logout-button, .dashboard-link {
+.logout-button, .dashboard-link, .notification-button {
     display: flex;
     justify-content: flex-start;
     align-items: center;
@@ -132,7 +132,7 @@ body {
     color: var(--dashboard-text-muted);
 }
 .dashboard-link { background-color: rgba(255,255,255,0.05); }
-.dashboard-link:hover { background-color: var(--accent-color); color: #fff; }
+.dashboard-link:hover, .notification-button:hover { background-color: var(--accent-color); color: #fff; }
 .logout-button:hover { background-color: var(--error-color); color: #fff; }
 
 .sidebar-toggle-btn {
@@ -162,6 +162,7 @@ body {
 .dashboard-container.sidebar-collapsed .sidebar-header,
 .dashboard-container.sidebar-collapsed .nav-link,
 .dashboard-container.sidebar-collapsed .dashboard-link,
+.dashboard-container.sidebar-collapsed .notification-button,
 .dashboard-container.sidebar-collapsed .logout-button {
     justify-content: center;
     padding-left: 0;
@@ -254,6 +255,68 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
 .user-controls select, .user-controls input { width: auto; }
 
 .delete-user-btn { background: var(--error-color); color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; }
+
+/* --- NEW: Notification Styles --- */
+.notification-container { position: relative; }
+.notification-button { position: relative; }
+.notification-button .badge {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: var(--error-color);
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+}
+.notification-dropdown {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 10px;
+    background-color: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    width: 320px;
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+.notification-dropdown.active { display: block; }
+.notification-header {
+    padding: 1rem;
+    font-weight: bold;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-color);
+}
+.notification-item {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.notification-item:last-child { border-bottom: none; }
+.notification-item p { margin: 0 0 0.25rem 0; font-size: 0.95em; }
+.notification-item small { color: var(--dashboard-text-muted); font-size: 0.8em; }
+
+/* --- NEW: Status Badge Styles --- */
+.status-badge {
+    padding: 0.2em 0.6em;
+    border-radius: 10px;
+    font-size: 0.8em;
+    font-weight: bold;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+.status-badge.warning {
+    background-color: var(--warning-color);
+    color: #111;
+}
 
 .skeleton-card {
     background-color: var(--secondary-bg);

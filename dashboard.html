@@ -45,6 +45,18 @@
                     </div>
                 </div>
                 <div class="sidebar-actions">
+                    <div id="notification-bell-container" class="notification-container">
+                        <a href="#" id="notification-bell" class="notification-button">
+                            <i class="fas fa-bell"></i>
+                            <span id="notification-badge" class="badge" style="display: none;"></span>
+                            <span class="nav-text">Notifications</span>
+                        </a>
+                        <div id="notification-panel" class="notification-dropdown">
+                            <div class="notification-header">Your Notifications</div>
+                            <div id="notification-list">
+                                </div>
+                        </div>
+                    </div>
                     <a href="crew-center.html" class="dashboard-link"><i class="fas fa-plane"></i><span class="nav-text">Crew Center</span></a>
                     <a href="#" id="sidebar-logout-btn" class="logout-button"><i class="fas fa-sign-out-alt"></i><span class="nav-text">Logout</span></a>
                 </div>
@@ -132,7 +144,7 @@
 
             <div id="tab-pilot-management" class="content-card">
                 <h2><i class="fas fa-user-cog"></i> Pilot Roster Management</h2>
-                <p>Promote, demote, or change the rank of pilots in the virtual airline.</p>
+                <p>Promote, demote, or change the rank of pilots in the virtual airline. Pilots awaiting promotion tests are highlighted.</p>
                 <div id="pilot-management-container" class="user-list-container-style">
                     <div class="skeleton-card"><div class="skeleton-line"></div></div>
                     <div class="skeleton-card"><div class="skeleton-line"></div></div>

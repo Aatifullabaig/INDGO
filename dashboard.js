@@ -44,6 +44,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const pendingPirepsContainer = document.getElementById('pending-pireps-container');
     const rosterManagementContainer = document.getElementById('tab-roster-management');
 
+    // --- NEW: NOTIFICATION ELEMENTS ---
+    const notificationBell = document.getElementById('notification-bell');
+    const notificationBadge = document.getElementById('notification-badge');
+    const notificationPanel = document.getElementById('notification-panel');
+    const notificationList = document.getElementById('notification-list');
+    let unreadNotifications = [];
+
     // --- APP STATE & CONFIG ---
     const token = localStorage.getItem('authToken');
     let currentUserId = null;
@@ -176,6 +183,12 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('profile-youtube').value = user.youtube || '';
             document.getElementById('profile-preferred').value = user.preferredContact || 'none';
 
+            // --- NEW: Handle notifications from backend ---
+            if (user.unreadNotifications && user.unreadNotifications.length > 0) {
+                unreadNotifications = user.unreadNotifications;
+                updateNotificationUI();
+            }
+
             // --- ROLE-BASED TAB VISIBILITY ---
             const showTab = (element) => {
                 if (element) element.style.display = 'list-item';
@@ -233,6 +246,53 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         container.appendChild(fragment);
+    }
+
+    // --- NEW: NOTIFICATION HANDLING ---
+    function updateNotificationUI() {
+        if (unreadNotifications.length > 0) {
+            notificationBadge.textContent = unreadNotifications.length;
+            notificationBadge.style.display = 'block';
+        } else {
+            notificationBadge.style.display = 'none';
+        }
+
+        notificationList.innerHTML = '';
+        if (unreadNotifications.length === 0) {
+            notificationList.innerHTML = '<div class="notification-item">No new notifications.</div>';
+        } else {
+            unreadNotifications.forEach(n => {
+                const item = document.createElement('div');
+                item.className = 'notification-item';
+                item.innerHTML = `<p>${n.message}</p><small>${new Date(n.createdAt).toLocaleString()}</small>`;
+                notificationList.appendChild(item);
+            });
+        }
+    }
+
+    if (notificationBell) {
+        notificationBell.addEventListener('click', async (e) => {
+            e.preventDefault();
+            notificationPanel.classList.toggle('active');
+
+            // If panel is opened and there are unread notifications, mark them as read
+            if (notificationPanel.classList.contains('active') && unreadNotifications.length > 0) {
+                const idsToMarkRead = unreadNotifications.map(n => n._id);
+                try {
+                    await safeFetch(`${API_BASE_URL}/api/me/notifications/read`, {
+                        method: 'POST',
+                        body: JSON.stringify({ notificationIds: idsToMarkRead })
+                    });
+                    unreadNotifications = [];
+                    // Delay hiding the badge for a better user experience
+                    setTimeout(() => {
+                        notificationBadge.style.display = 'none';
+                    }, 1500);
+                } catch (error) {
+                    console.error("Could not mark notifications as read:", error);
+                }
+            }
+        });
     }
 
     // --- PIREP MANAGEMENT ---
@@ -574,7 +634,8 @@ document.addEventListener('DOMContentLoaded', () => {
             renderUserList(users);
             renderLiveOperations(users);
             renderLogList(logs);
-        } catch (error) {
+        } catch (error)
+        {
             console.error('Failed to populate admin tools:', error);
             if (userListContainer) userListContainer.innerHTML = '<p style="color: red;">Could not load users.</p>';
             if (logContainer) logContainer.innerHTML = '<p style="color: red;">Could not load logs.</p>';
@@ -749,6 +810,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function populatePilotManagement() {
         if (!pilotManagementContainer) return;
         try {
+            // UPDATED: Fetch all users to get promotionStatus
             const users = await safeFetch(`${API_BASE_URL}/api/users`);
             const pilots = users.filter(u => u.role === 'pilot');
             renderPilotList(pilots);
@@ -757,6 +819,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // UPDATED: renderPilotList to show promotion status
     function renderPilotList(pilots) {
         const createRankOptions = (currentRank) => {
             return pilotRanks.map(rank =>
@@ -768,9 +831,15 @@ document.addEventListener('DOMContentLoaded', () => {
              const card = document.createElement('div');
              card.className = 'user-manage-card';
              card.setAttribute('data-userid', pilot._id);
+
+             // NEW: Add a badge if pilot is pending a test
+             const statusBadge = pilot.promotionStatus === 'PENDING_TEST'
+                ? '<span class="status-badge warning">Pending Test</span>'
+                : '';
+
              card.innerHTML = `
                 <div class="user-info">
-                    <strong>${pilot.name}</strong> (${pilot.callsign || 'No Callsign'})
+                    <strong>${pilot.name}</strong> (${pilot.callsign || 'No Callsign'}) ${statusBadge}
                     <small>${pilot.email}</small>
                 </div>
                 <div class="user-controls">
@@ -1061,9 +1130,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         })
                     });
                     showNotification('Pilot rank updated successfully!', 'success');
-                    // Update default selected state
-                    Array.from(selectElement.options).forEach(opt => opt.defaultSelected = false);
-                    selectElement.querySelector(`option[value="${newRank}"]`).defaultSelected = true;
+                    // NEW: Refresh the pilot list to show updated status
+                    populatePilotManagement(); 
+                    fetchUserData(); // Refresh notifications for the admin
                 } catch (error) {
                     showNotification(`Failed to update rank: ${error.message}`, 'error');
                     selectElement.value = originalRank; // Revert on error
