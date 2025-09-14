@@ -21,10 +21,22 @@ body {
     font-family: var(--font-body);
     background-color: var(--bg-color);
     color: var(--dashboard-text-color);
-    /* PERF: remove repaint-heavy fixed background */
-    /* background-image: url('images/lightblue.png'); */
-    /* background-attachment: fixed; */
     line-height: 1.6;
+    position: relative; /* Establishes a stacking context */
+    z-index: 0;         /* Ensures content stays above the new background */
+}
+
+/* --- PERFORMANCE-FRIENDLY Fixed Background --- */
+body::before {
+    content: '';
+    position: fixed; /* Fixed to the viewport */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('images/lightblue.png'); /* BACKGROUND RESTORED */
+    background-repeat: repeat;
+    z-index: -1;      /* Places it behind everything */
 }
 
 /* --- Main Layout --- */
@@ -33,9 +45,7 @@ body {
     flex-grow: 1;
     padding: 2rem 3rem;
     overflow-y: auto;
-    /* keep only the property that actually changes */
     transition: margin-left 0.25s ease;
-    /* PERF: large containers skip rendering until scrolled into view */
     content-visibility: auto;
     contain-intrinsic-size: 1px 1000px;
 }
@@ -48,8 +58,6 @@ body {
     display: flex;
     flex-direction: column;
     padding: 1.5rem 1rem;
-    /* PERF: drop blur; it’s the biggest scroll jank culprit */
-    /* backdrop-filter: blur(10px); */
     transition: width 0.25s ease, padding 0.25s ease;
     flex-shrink: 0;
     height: 100vh;
@@ -97,7 +105,6 @@ body {
 .profile-img {
     width: 45px; height: 45px; border-radius: 50%;
     object-fit: cover; border: 2px solid var(--accent-color); flex-shrink: 0;
-    /* hint the browser to decode off-thread when possible (HTML adds decoding=async) */
 }
 .profile-details { flex-grow: 1; transition: opacity 0.2s ease; white-space: nowrap; overflow: hidden; }
 #pilot-name { font-weight: 600; color: #ffffff; font-size: 1.1rem; }
@@ -145,14 +152,12 @@ body {
 
 /* --- Main Content (Shared) --- */
 .content-view { display: none; }
-/* PERF: remove fade-in animation on every view switch */
 .content-view.active { display: block; }
 .content-card {
     background: var(--primary-glass);
     border: 1px solid var(--border-color);
     border-radius: 10px;
     padding: 2rem;
-    /* skip rendering cards until needed */
     content-visibility: auto;
     contain-intrinsic-size: 1px 600px;
 }
@@ -162,7 +167,6 @@ body {
     padding-bottom: 1rem; color: #ffffff; display: flex; align-items: center; gap: 12px;
 }
 
-/* card spacing */
 .content-card + .content-card { margin-top: 2rem; }
 
 /* --- Specific Component Styling --- */
@@ -172,7 +176,6 @@ body {
     border-radius: 8px; padding: 1rem 1.5rem;
     display: flex; justify-content: space-between; align-items: center;
     border-left: 4px solid var(--accent-color); flex-wrap: wrap; gap: 1rem;
-    /* PERF: drop transform + large shadow on hover */
     transition: background-color 0.2s, border-color 0.2s;
 }
 .roster-info strong { display: block; color: var(--dashboard-text-color); font-size: 1.2rem; margin-bottom: 0.25rem; }
@@ -232,7 +235,7 @@ input, textarea {
 }
 .file-input::file-selector-button:hover { background-color: #0025c4; }
 
-/* --- Roster Details Drawer (kept; doesn’t run during scroll) --- */
+/* --- Roster Details Drawer --- */
 .roster-actions { display: flex; gap: 0.75rem; align-items: center; }
 
 .details-button {
@@ -275,7 +278,25 @@ input, textarea {
 .badge-rank { border-color: rgba(0, 255, 170, 0.25); }
 .ml-8 { margin-left: .5rem; }
 
-/* --- MAP STYLING (unchanged logically) --- */
+
+/* --- ADDED BACK from old CSS --- */
+.select-control {
+    width: 100%;
+    padding: 0.8rem;
+    border-radius: 5px;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+    color: #fff;
+    font-size: 1rem;
+    box-sizing: border-box;
+    appearance: none;
+}
+.muted { color: var(--dashboard-text-muted); font-size: 0.85rem; }
+.pirep-chips { margin-top: 0.4rem; display: flex; gap: .5rem; flex-wrap: wrap; }
+/* --- END of added back styles --- */
+
+
+/* --- MAP STYLING --- */
 #map {
     width: 100%;
     height: 450px;
@@ -284,15 +305,13 @@ input, textarea {
     border-radius: 8px;
     margin-bottom: 2rem;
     z-index: 0;
-    /* PERF: isolate the map’s paints */
     contain: content;
 }
 
-/* --- Modal (PERF: remove overlay blur) --- */
+/* --- Modal --- */
 .modal-overlay {
     position: fixed; inset: 0;
     background-color: rgba(0, 0, 0, 0.7);
-    /* backdrop-filter: blur(5px);  <-- removed */
     display: none; align-items: center; justify-content: center;
     z-index: 1000; opacity: 0; transition: opacity 0.2s ease-in-out;
 }
@@ -300,8 +319,6 @@ input, textarea {
 .modal-content {
     background-color: var(--secondary-bg); padding: 2.5rem; border-radius: 10px; border: 1px solid var(--border-color);
     width: 90%; max-width: 500px; text-align: center; position: relative;
-    /* remove scale animation to avoid extra composites */
-    /* transform: scale(0.95); transition: transform 0.3s ease-in-out; */
 }
 .modal-close {
     position: absolute; top: 10px; right: 15px; background: none; border: none; font-size: 2rem; color: var(--dashboard-text-muted); cursor: pointer;
