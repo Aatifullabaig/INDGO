@@ -508,3 +508,129 @@ table.leaderboard-table {
 #arrive-modal-content .form-group {
     text-align: left;
 }
+
+/* --- MOBILE RESPONSIVE STYLES --- */
+/* Apply these styles only on screens 768px or smaller */
+@media (max-width: 768px) {
+
+    /* --- Main Layout --- */
+    .dashboard-container {
+        /* Stack sidebar on top of main content instead of side-by-side */
+        flex-direction: column;
+    }
+
+    .sidebar {
+        /* Make the sidebar full width and not sticky on mobile */
+        width: 100%;
+        height: auto;
+        position: relative; /* Override sticky positioning */
+        padding: 1rem;
+    }
+
+    /* Don't allow sidebar to be collapsed on mobile */
+    .dashboard-container.sidebar-collapsed .sidebar {
+        width: 100%;
+        padding: 1rem;
+    }
+
+    .sidebar-header {
+        margin-bottom: 1rem;
+    }
+
+    .sidebar-footer {
+        /* Arrange profile and links horizontally to save space */
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding-top: 1rem;
+        flex-wrap: wrap;
+    }
+    
+    .sidebar-nav ul {
+        /* Display nav links horizontally for a more compact look */
+        display: flex;
+        overflow-x: auto; /* Allow scrolling if they don't fit */
+        padding-bottom: 1rem; /* Add some space for scrollbar */
+    }
+
+    .sidebar-nav .nav-link {
+        flex-shrink: 0; /* Prevent links from shrinking */
+    }
+    
+    .main-content {
+        /* Reduce padding on mobile to maximize space */
+        padding: 1rem;
+    }
+
+    /* Hide the sidebar toggle button on mobile as it's not needed */
+    #sidebar-toggle {
+        display: none;
+    }
+
+    /* --- Content Cards & Forms --- */
+    .content-card {
+        padding: 1.5rem 1rem;
+    }
+    
+    .content-card h2 {
+        font-size: 1.25rem; /* Slightly smaller headings */
+    }
+
+    /* Stack form elements that were in a row */
+    .form-group-row {
+        flex-direction: column;
+        gap: 0;
+    }
+
+    /* --- Roster & PIREP Lists --- */
+    .roster-item, .pirep-history-item {
+        /* Stack content vertically */
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .roster-actions {
+        width: 100%; /* Make action buttons take full width */
+    }
+    
+    .roster-actions .cta-button, .roster-actions .details-button {
+        width: 100%;
+        text-align: center;
+    }
+
+    .pirep-details {
+        /* Stack PIREP details and align them left */
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+        width: 100%;
+        margin-top: 0.5rem;
+    }
+
+    /* --- Specific Components --- */
+    #map {
+        /* Make the map shorter on mobile */
+        height: 300px;
+    }
+
+    /* Stack leaderboard cards vertically */
+    .leaderboards-container {
+        grid-template-columns: 1fr;
+    }
+
+    .flight-plan-details {
+        grid-template-columns: 1fr; /* Stack all flight plan details */
+    }
+    
+    .fp-detail-item[style*="grid-column"] {
+        grid-column: auto !important; /* Reset the full-width override for the 'route' field */
+    }
+
+    /* --- Modals --- */
+    .modal-content {
+        width: 95%;
+        padding: 1.5rem;
+    }
+}
