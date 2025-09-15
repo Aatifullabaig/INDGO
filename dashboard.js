@@ -134,6 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     type === 'error' ? "linear-gradient(to right, #ff5f6d, #ffc371)" :
                     "linear-gradient(to right, #4facfe, #00f2fe)",
             },
+            escapeMarkup: false, // Allow HTML in notifications
         }).showToast();
     }
 
@@ -331,8 +332,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 <p><small>Filed on: ${new Date(p.createdAt).toLocaleString()}</small></p>
             </div>
             <div class="card-actions">
-                <button class="btn-approve" data-id="${p._id}">Approve</button>
-                <button class="btn-reject" data-id="${p._id}">Reject</button>
+                <div class="pirep-actions-left">
+                    <button class="btn-approve" data-id="${p._id}">Approve</button>
+                    <button class="btn-reject" data-id="${p._id}">Reject</button>
+                </div>
+                <div class="pirep-actions-right">
+                    <label for="correct-time-${p._id}">Correct Time (hrs):</label>
+                    <input type="number" step="0.1" min="0.1" id="correct-time-${p._id}" placeholder="${p.flightTime.toFixed(1)}">
+                </div>
             </div>
         `;
         return card;
@@ -350,22 +357,24 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target.classList.contains('btn-approve')) {
                 e.target.disabled = true;
                 e.target.textContent = 'Approving...';
+                
+                // **UPDATED**: Get corrected flight time from input
+                const correctedTimeInput = document.getElementById(`correct-time-${pirepId}`);
+                const correctedFlightTime = correctedTimeInput ? correctedTimeInput.value : null;
+
+                const body = {};
+                if (correctedFlightTime && !isNaN(parseFloat(correctedFlightTime))) {
+                    body.correctedFlightTime = parseFloat(correctedFlightTime);
+                }
+
                 try {
                     const result = await safeFetch(`${API_BASE_URL}/api/pireps/${pirepId}/approve`, {
-                        method: 'PUT'
+                        method: 'PUT',
+                        body: JSON.stringify(body)
                     });
 
-                    if (result.promotionDetails) {
-                        const perksList = result.promotionDetails.perks.map(perk => `<li>${perk}</li>`).join('');
-                        const promotionMessage = `
-                            ${result.message}<br>
-                            <strong>New Rank:</strong> ${result.promotionDetails.newRank}<br>
-                            <strong>Perks:</strong><ul>${perksList}</ul>
-                        `;
-                        showNotification(promotionMessage, 'success', 10000);
-                    } else {
-                        showNotification(result.message, 'success');
-                    }
+                    // The backend now sends a more detailed message, including potential HTML for promotions
+                    showNotification(result.message, 'success', 10000);
 
                     const pirepCard = document.getElementById(`pirep-${pirepId}`);
                     if (pirepCard) pirepCard.remove();
@@ -663,6 +672,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = document.createElement('div');
         card.className = 'user-manage-card';
         card.setAttribute('data-userid', user._id);
+        
+        // **UPDATED**: Add FTPL toggle button
+        const ftplButtonText = user.isFtplExempt ? 'Enable FTPL' : 'Disable FTPL';
 
         card.innerHTML = `
             <div class="user-info">
@@ -679,6 +691,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <select class="role-select" data-userid="${user._id}" ${controlsDisabled}>
                     ${createRoleOptions(user.role)}
                 </select>
+                <button type="button" class="ftpl-toggle-btn" data-userid="${user._id}" data-exempt="${user.isFtplExempt || false}" ${controlsDisabled}>
+                    ${user.isFtplExempt ? 'FTPL: Exempt' : 'FTPL: Active'}
+                </button>
                 <button type="button" class="delete-user-btn" data-userid="${user._id}" data-username="${user.name}" ${controlsDisabled}>
                     <i class="fas fa-trash-alt"></i> Delete
                 </button>
@@ -688,6 +703,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function renderUserList(users) {
+        // NOTE: The backend /api/users endpoint needs to be updated to return the 'isFtplExempt' field for each user
+        // for the FTPL toggle button to display the correct initial state. Assuming it does for this implementation.
         renderList(userListContainer, users, createUserCardElement, 'No users found.');
     }
 
@@ -820,7 +837,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // UPDATED: renderPilotList to show promotion status
+    // **UPDATED**: renderPilotList to show promotion status
     function renderPilotList(pilots) {
         const createRankOptions = (currentRank) => {
             return pilotRanks.map(rank =>
@@ -833,7 +850,7 @@ document.addEventListener('DOMContentLoaded', () => {
              card.className = 'user-manage-card';
              card.setAttribute('data-userid', pilot._id);
 
-             // NEW: Add a badge if pilot is pending a test
+             // **NEW**: Add a badge if pilot is pending a test
              const statusBadge = pilot.promotionStatus === 'PENDING_TEST'
                 ? '<span class="status-badge warning">Pending Test</span>'
                 : '';
@@ -1015,6 +1032,8 @@ document.addEventListener('DOMContentLoaded', () => {
         userListContainer.addEventListener('click', async (e) => {
             const target = e.target;
             const deleteBtn = target.closest('.delete-user-btn');
+            const ftplBtn = target.closest('.ftpl-toggle-btn');
+            
             if (deleteBtn) {
                 e.preventDefault();
                 const userId = deleteBtn.dataset.userid;
@@ -1029,6 +1048,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     deleteBtn.closest('.user-manage-card').remove();
                 } catch (error) {
                     showNotification(`Failed to delete user: ${error.message}`, 'error');
+                }
+                return;
+            }
+
+            // **NEW**: Handle FTPL Toggle
+            if (ftplBtn) {
+                e.preventDefault();
+                const userId = ftplBtn.dataset.userid;
+                if (!userId || !confirm('Are you sure you want to change the FTPL status for this user?')) return;
+                
+                try {
+                    const result = await safeFetch(`${API_BASE_URL}/api/users/${userId}/toggle-ftpl`, { method: 'PUT' });
+                    showNotification(result.message, 'success');
+                    // Update the button UI
+                    ftplBtn.dataset.exempt = result.isFtplExempt;
+                    ftplBtn.textContent = `FTPL: ${result.isFtplExempt ? 'Exempt' : 'Active'}`;
+                } catch (error) {
+                    showNotification(`Failed to toggle FTPL: ${error.message}`, 'error');
                 }
                 return;
             }
@@ -1132,9 +1169,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         })
                     });
                     showNotification('Pilot rank updated successfully!', 'success');
-                    // NEW: Refresh the pilot list to show updated status
+                    // **UPDATED**: Refresh pilot list and admin notifications
                     populatePilotManagement(); 
-                    fetchUserData(); // Refresh notifications for the admin
+                    fetchUserData();
                 } catch (error) {
                     showNotification(`Failed to update rank: ${error.message}`, 'error');
                     selectElement.value = originalRank; // Revert on error

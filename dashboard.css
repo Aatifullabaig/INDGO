@@ -231,7 +231,38 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
 .cta-button:hover { background: #0025c4; }
 .cta-button:disabled { background: #555; cursor: not-allowed; }
 
-.card-actions { margin-top: 1rem; display: flex; gap: 1rem; }
+/* **UPDATED**: PIREP Card Actions Layout */
+.card-actions {
+    margin-top: 1rem;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.pirep-actions-left {
+    display: flex;
+    gap: 1rem;
+}
+
+.pirep-actions-right {
+    margin-left: auto; /* Pushes this group to the right */
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pirep-actions-right label {
+    font-size: 0.9em;
+    color: var(--dashboard-text-muted);
+}
+
+.pirep-actions-right input {
+    width: 80px; /* Smaller input for time */
+    padding: 0.4rem;
+    font-size: 0.9rem;
+}
+
 .btn-approve, .btn-reject { padding: 0.5rem 1rem; border: none; border-radius: 5px; color: white; cursor: pointer; }
 .btn-approve { background-color: var(--success-color); }
 .btn-reject { background-color: var(--error-color); }
@@ -255,6 +286,26 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
 .user-controls select, .user-controls input { width: auto; }
 
 .delete-user-btn { background: var(--error-color); color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; }
+
+/* **NEW**: FTPL Toggle Button Styles */
+.ftpl-toggle-btn {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    cursor: pointer;
+    background-color: var(--secondary-bg);
+    color: var(--dashboard-text-muted);
+    transition: all 0.3s;
+}
+.ftpl-toggle-btn:hover {
+    border-color: var(--accent-color);
+    color: #fff;
+}
+.ftpl-toggle-btn[data-exempt="true"] {
+    background-color: var(--warning-color);
+    color: #111;
+    border-color: var(--warning-color);
+}
 
 /* --- NEW: Notification Styles --- */
 .notification-container { position: relative; }
