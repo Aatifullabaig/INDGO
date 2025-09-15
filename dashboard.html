@@ -25,14 +25,52 @@
 
             <nav class="sidebar-nav">
                 <ul>
-                    <li><a href="#" class="nav-link active" data-view="tab-profile"><i class="fas fa-user-edit"></i><span class="nav-text">My Profile</span></a></li>
-                    <li><a href="#" class="nav-link" data-view="tab-password"><i class="fas fa-key"></i><span class="nav-text">Security</span></a></li>
-                    <li id="pirep-tab-link" style="display: none;"><a href="#" class="nav-link" data-view="tab-pirep-management"><i class="fas fa-check-square"></i><span class="nav-text">PIREP Management</span></a></li>
-                    <li id="roster-tab-link" style="display: none;"><a href="#" class="nav-link" data-view="tab-roster-management"><i class="fas fa-clipboard-list"></i><span class="nav-text">Roster Management</span></a></li>
-                    <li id="pilot-management-tab-link" style="display: none;"><a href="#" class="nav-link" data-view="tab-pilot-management"><i class="fas fa-user-cog"></i><span class="nav-text">Manage Pilots</span></a></li>
-                    <li id="community-tab-link" style="display: none;"><a href="#" class="nav-link" data-view="tab-community"><i class="fas fa-users"></i><span class="nav-text">Community</span></a></li>
-                    <li id="admin-tab-link" style="display: none;"><a href="#" class="nav-link" data-view="tab-admin"><i class="fas fa-user-shield"></i><span class="nav-text">Admin Tools</span></a></li>
-                    <li id="pilot-tab-link" style="display: none;"><a href="#" class="nav-link" data-view="tab-pilots"><i class="fas fa-database"></i><span class="nav-text">Pilot Database</span></a></li>
+                    <li class="nav-category category-open"> <a href="#" class="nav-category-header">
+                            <i class="fas fa-user-cog"></i>
+                            <span class="nav-text">Account Settings</span>
+                            <i class="fas fa-chevron-down category-arrow"></i>
+                        </a>
+                        <ul class="nav-submenu">
+                            <li><a href="#" class="nav-link active" data-view="tab-profile"><i class="fas fa-user-edit"></i><span class="nav-text">My Profile</span></a></li>
+                            <li><a href="#" class="nav-link" data-view="tab-password"><i class="fas fa-key"></i><span class="nav-text">Security</span></a></li>
+                        </ul>
+                    </li>
+
+                    <li class="nav-category">
+                        <a href="#" class="nav-category-header">
+                            <i class="fas fa-tasks"></i>
+                            <span class="nav-text">Management</span>
+                             <i class="fas fa-chevron-down category-arrow"></i>
+                        </a>
+                        <ul class="nav-submenu">
+                            <li id="pirep-tab-link" style="display: none;"><a href="#" class="nav-link" data-view="tab-pirep-management"><i class="fas fa-check-square"></i><span class="nav-text">PIREP Management</span></a></li>
+                            <li id="roster-tab-link" style="display: none;"><a href="#" class="nav-link" data-view="tab-roster-management"><i class="fas fa-clipboard-list"></i><span class="nav-text">Roster Management</span></a></li>
+                            <li id="pilot-management-tab-link" style="display: none;"><a href="#" class="nav-link" data-view="tab-pilot-management"><i class="fas fa-user-cog"></i><span class="nav-text">Manage Pilots</span></a></li>
+                        </ul>
+                    </li>
+                    
+                    <li class="nav-category">
+                        <a href="#" class="nav-category-header">
+                           <i class="fas fa-bullhorn"></i>
+                           <span class="nav-text">Content</span>
+                            <i class="fas fa-chevron-down category-arrow"></i>
+                        </a>
+                        <ul class="nav-submenu">
+                             <li id="community-tab-link" style="display: none;"><a href="#" class="nav-link" data-view="tab-community"><i class="fas fa-users"></i><span class="nav-text">Community</span></a></li>
+                        </ul>
+                    </li>
+
+                    <li class="nav-category">
+                        <a href="#" class="nav-category-header">
+                            <i class="fas fa-shield-alt"></i>
+                            <span class="nav-text">Administration</span>
+                            <i class="fas fa-chevron-down category-arrow"></i>
+                        </a>
+                        <ul class="nav-submenu">
+                             <li id="admin-tab-link" style="display: none;"><a href="#" class="nav-link" data-view="tab-admin"><i class="fas fa-user-shield"></i><span class="nav-text">Admin Tools</span></a></li>
+                             <li id="pilot-tab-link" style="display: none;"><a href="#" class="nav-link" data-view="tab-pilots"><i class="fas fa-database"></i><span class="nav-text">Pilot Database</span></a></li>
+                        </ul>
+                    </li>
                 </ul>
             </nav>
 

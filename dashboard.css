@@ -401,3 +401,52 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
         background-position: -200% 0;
     }
 }
+
+/* --- NEW: SIDEBAR CATEGORY (ACCORDION) STYLES --- */
+.nav-category {
+    margin-bottom: 0.5rem;
+}
+
+.nav-category-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    color: var(--dashboard-text-color);
+    text-decoration: none;
+    padding: 0.85rem 1rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    font-weight: 500;
+}
+
+.nav-category-header:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.nav-category-header .category-arrow {
+    margin-left: auto;
+    transition: transform 0.3s ease;
+}
+
+.nav-submenu {
+    list-style: none;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease-out;
+    padding-left: 1rem; /* Indent submenu items */
+}
+
+.nav-category.category-open > .nav-submenu {
+    max-height: 500px; /* A large enough value to show all items */
+    transition: max-height 0.4s ease-in;
+    margin-top: 0.5rem;
+}
+
+.nav-category.category-open > .nav-category-header .category-arrow {
+    transform: rotate(180deg);
+}
+
+.nav-submenu .nav-link {
+    padding-left: 2.1rem; /* Align text with category header text */
+}

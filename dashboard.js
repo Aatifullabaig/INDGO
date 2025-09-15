@@ -631,6 +631,29 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- NEW: SIDEBAR CATEGORY (ACCORDION) LOGIC ---
+    function attachCategoryListeners() {
+        const sidebarNav = document.querySelector('.sidebar-nav');
+        if (!sidebarNav) return;
+
+        sidebarNav.addEventListener('click', (e) => {
+            const header = e.target.closest('.nav-category-header');
+            if (!header) return;
+
+            e.preventDefault();
+            const parentCategory = header.parentElement;
+            const currentlyOpen = sidebarNav.querySelector('.nav-category.category-open');
+
+            // If there is an open category and it's not the one we clicked, close it
+            if (currentlyOpen && currentlyOpen !== parentCategory) {
+                currentlyOpen.classList.remove('category-open');
+            }
+
+            // Toggle the clicked category
+            parentCategory.classList.toggle('category-open');
+        });
+    }
+
     // --- ADMIN: POPULATE USERS & LOGS (OPTIMIZED) ---
     async function populateAdminTools() {
         try {
@@ -1257,5 +1280,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- INITIALIZATION ---
     attachTabListeners();
+    attachCategoryListeners(); // <-- ADD THIS LINE
     fetchUserData();
 });
