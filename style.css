@@ -637,6 +637,28 @@ a {
     opacity: 0.4;
 }
 
+/* --- Login & Forms --- */
+.form-container {
+    max-width: 450px;
+    margin: 2rem auto;
+    text-align: left;
+    background: var(--primary-glass);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 2rem 3rem;
+}
+
+.form-footer-link {
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-color);
+}
+/* --- END ADDED STYLE --- */
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
 /* --- Footer --- */
 .site-footer { 
     padding: 3rem 5%; 
