@@ -429,21 +429,22 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = rosters.map(roster => {
                 const dutyDisabled = CURRENT_PILOT?.promotionStatus === 'PENDING_TEST' ? 'disabled' : '';
 
-                // --- LIVERY UPDATE LOGIC ---
-                const firstLeg = roster.legs?.[0]; // Safely get the first leg of the roster
+                // --- MODIFIED LIVERY LOGIC ---
+                // 1. Determine if the roster has single or multiple aircraft types
+                const aircraftTypes = new Set(roster.legs.map(leg => leg.aircraft));
+                const isMultiAircraft = aircraftTypes.size > 1;
+
                 let aircraftImageHTML = ''; // Initialize as empty
 
-                if (firstLeg) {
+                // 2. Only show the main image if it's a single-aircraft roster
+                if (!isMultiAircraft && roster.legs.length > 0) {
+                    const firstLeg = roster.legs[0];
                     const aircraftCode = firstLeg.aircraft;
-                    // Extract the airline IATA/ICAO code from the flight number (e.g., "IGO" from "IGO1234")
                     const airlineCode = firstLeg.flightNumber.replace(/\d+$/, '').toUpperCase();
 
-                    // Define the path for the specific livery image
                     const liveryImagePath = `Images/liveries/${airlineCode}_${aircraftCode}.png`;
-                    // Define the path for the generic fallback image
                     const genericImagePath = `Images/planesForCC/${aircraftCode}.png`;
 
-                    // Create the HTML. The 'onerror' attribute handles the fallback logic.
                     aircraftImageHTML = `
                         <div class="roster-aircraft-container">
                             <img src="${liveryImagePath}" 
@@ -452,10 +453,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                  onerror="this.onerror=null; this.src='${genericImagePath}'; this.alt='${aircraftCode}';">
                         </div>`;
                 }
-                // --- END LIVERY UPDATE LOGIC ---
+                // --- END MODIFIED LIVERY LOGIC ---
 
                 return `
-                <div class="roster-item">
+                <div class="roster-item" data-multi-aircraft="${isMultiAircraft}">
                     <div class="roster-info">
                         <strong>${roster.name}</strong>
                         <small>Hub: ${roster.hub} | Total Time: ${Number(roster.totalFlightTime || 0).toFixed(1)} hrs</small>
@@ -507,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>`;
             }).join('');
-        } catch (error) {
+        } catch (error)
             container.innerHTML = `<p class="error-text">${error.message}</p>`;
         }
     };
@@ -572,6 +573,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (target.classList.contains('details-button')) {
             const rosterId = target.dataset.rosterId;
             const detailsContainer = document.getElementById(`details-${rosterId}`);
+            const rosterItem = target.closest('.roster-item');
+            const isMultiAircraft = rosterItem.dataset.multiAircraft === 'true';
             
             // Toggle visibility
             const isVisible = detailsContainer.classList.toggle('visible');
@@ -581,54 +584,71 @@ document.addEventListener('DOMContentLoaded', () => {
             if (isVisible && !detailsContainer.innerHTML.trim()) {
                 detailsContainer.innerHTML = '<p>Loading details...</p>';
                 try {
-                    // Fetch all rosters again to find the specific one
                     const res = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
                     if (!res.ok) throw new Error('Could not fetch roster details.');
     
-                    const rosterData = await res.json(); // The response is an object: { rosters: [...] }
-                    const allRosters = rosterData.rosters || []; // Extract the array from the 'rosters' property
-                    const roster = allRosters.find(r => r._id === rosterId); // Now, find the specific roster
+                    const rosterData = await res.json();
+                    const allRosters = rosterData.rosters || [];
+                    const roster = allRosters.find(r => r._id === rosterId);
 
                     if (roster && roster.legs) {
-                        // Render the list of legs with the new design
                         detailsContainer.innerHTML = `
                             <ul>
                                 ${roster.legs.map(leg => {
-                                    // Extract the airline IATA/ICAO code from the flight number (e.g., DL from DL1)
                                     const airlineCode = leg.flightNumber.replace(/\d+$/, '').toUpperCase();
-                                    // User will place logos in Images/vas/{CODE}.png
                                     const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : 'images/default-airline.png'; 
 
+                                    // --- NEW: Generate aircraft image for this leg if needed ---
+                                    let legAircraftImageHTML = '';
+                                    if (isMultiAircraft) {
+                                        const legAircraftCode = leg.aircraft;
+                                        const legAirlineCode = leg.flightNumber.replace(/\d+$/, '').toUpperCase();
+                                        const liveryImagePath = `Images/liveries/${legAirlineCode}_${legAircraftCode}.png`;
+                                        const genericImagePath = `Images/planesForCC/${legAircraftCode}.png`;
+
+                                        legAircraftImageHTML = `
+                                        <div class="leg-aircraft-image-container">
+                                            <img src="${liveryImagePath}" 
+                                                 alt="${legAirlineCode} ${legAircraftCode}" 
+                                                 class="leg-aircraft-image"
+                                                 onerror="this.onerror=null; this.src='${genericImagePath}'; this.alt='${legAircraftCode}';">
+                                        </div>`;
+                                    }
+                                    // --- END NEW ---
+
                                     return `
-                                    <li>
-                                        <div class="leg-header">
-                                            <img src="${logoPath}" class="leg-airline-logo" alt="${airlineCode}" onerror="this.style.display='none'">
-                                            <span class="leg-airline-name">${leg.operator} (${leg.flightNumber})</span>
-                                        </div>
-                                        <div class="leg-body">
-                                            <div class="leg-departure">
-                                                <span class="leg-label">Departure</span>
-                                                <div class="leg-airport">
-                                                    ${leg.departureCountry ? `<img src="https://flagcdn.com/w20/${leg.departureCountry.toLowerCase()}.png" class="country-flag" alt="${leg.departureCountry}">` : ''}
-                                                    <span class="leg-icao">${leg.departure}</span>
+                                    <li class="${isMultiAircraft ? 'multi-aircraft-leg' : ''}">
+                                        <div class="leg-main-content">
+                                            <div class="leg-header">
+                                                <img src="${logoPath}" class="leg-airline-logo" alt="${airlineCode}" onerror="this.style.display='none'">
+                                                <span class="leg-airline-name">${leg.operator} (${leg.flightNumber})</span>
+                                            </div>
+                                            <div class="leg-body">
+                                                <div class="leg-departure">
+                                                    <span class="leg-label">Departure</span>
+                                                    <div class="leg-airport">
+                                                        ${leg.departureCountry ? `<img src="https://flagcdn.com/w20/${leg.departureCountry.toLowerCase()}.png" class="country-flag" alt="${leg.departureCountry}">` : ''}
+                                                        <span class="leg-icao">${leg.departure}</span>
+                                                    </div>
+                                                    <small class="leg-details-meta">Aircraft: ${leg.aircraft}</small>
                                                 </div>
-                                                <small class="leg-details-meta">Aircraft: ${leg.aircraft}</small>
-                                            </div>
-                                            <div class="leg-icon">
-                                                <i class="fa-solid fa-plane"></i>
-                                            </div>
-                                            <div class="leg-arrival">
-                                                <span class="leg-label">Arrival</span>
-                                                <div class="leg-airport">
-                                                    ${leg.arrivalCountry ? `<img src="https://flagcdn.com/w20/${leg.arrivalCountry.toLowerCase()}.png" class="country-flag" alt="${leg.arrivalCountry}">` : ''}
-                                                    <span class="leg-icao">${leg.arrival}</span>
+                                                <div class="leg-icon">
+                                                    <i class="fa-solid fa-plane"></i>
                                                 </div>
-                                                <small class="leg-details-meta">EET: ${Number(leg.flightTime || 0).toFixed(1)} hrs</small>
+                                                <div class="leg-arrival">
+                                                    <span class="leg-label">Arrival</span>
+                                                    <div class="leg-airport">
+                                                        ${leg.arrivalCountry ? `<img src="https://flagcdn.com/w20/${leg.arrivalCountry.toLowerCase()}.png" class="country-flag" alt="${leg.arrivalCountry}">` : ''}
+                                                        <span class="leg-icao">${leg.arrival}</span>
+                                                    </div>
+                                                    <small class="leg-details-meta">EET: ${Number(leg.flightTime || 0).toFixed(1)} hrs</small>
+                                                </div>
+                                            </div>
+                                            <div class="leg-badges-footer">
+                                                <span class="badge badge-rank" title="Minimum Rank">Req: ${leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft)}</span>
                                             </div>
                                         </div>
-                                        <div class="leg-badges-footer">
-                                            <span class="badge badge-rank" title="Minimum Rank">Req: ${leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft)}</span>
-                                        </div>
+                                        ${legAircraftImageHTML}
                                     </li>
                                     `;
                                 }).join('')}
