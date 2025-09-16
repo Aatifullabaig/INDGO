@@ -436,6 +436,33 @@ input, textarea, select {
     align-self: flex-end;
 }
 
+
+/* --- NEW STYLES for Multi-Aircraft Roster Details --- */
+.roster-leg-details li.multi-aircraft-leg {
+    flex-direction: row; /* Overrides the default column direction */
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.5rem;
+}
+.multi-aircraft-leg .leg-main-content {
+    flex-grow: 1;
+}
+.leg-aircraft-image-container {
+    width: 140px;
+    height: 70px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.leg-aircraft-image-container .leg-aircraft-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.4));
+}
+
+
 /* --- NEW STYLES for Roster Aircraft Image --- */
 .roster-info {
     flex-grow: 1; /* Allows the text info to take up available space */
@@ -763,7 +790,6 @@ table.leaderboard-table {
         align-items: center;
         justify-content: space-between;
         gap: 1rem;
-        padding-top: 1rem;
         flex-wrap: wrap;
     }
     
