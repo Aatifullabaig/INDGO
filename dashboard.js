@@ -631,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- NEW: SIDEBAR CATEGORY (ACCORDION) LOGIC ---
+    // --- SIDEBAR CATEGORY (ACCORDION) LOGIC ---
     function attachCategoryListeners() {
         const sidebarNav = document.querySelector('.sidebar-nav');
         if (!sidebarNav) return;
@@ -639,6 +639,12 @@ document.addEventListener('DOMContentLoaded', () => {
         sidebarNav.addEventListener('click', (e) => {
             const header = e.target.closest('.nav-category-header');
             if (!header) return;
+
+            // ---- FIX: PREVENT ACCORDION FROM WORKING WHEN SIDEBAR IS COLLAPSED ----
+            if (dashboardContainer.classList.contains('sidebar-collapsed')) {
+                e.preventDefault();
+                return;
+            }
 
             e.preventDefault();
             const parentCategory = header.parentElement;

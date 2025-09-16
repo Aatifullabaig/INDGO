@@ -188,8 +188,14 @@ body {
     visibility: hidden;
     width: 0;
 }
+/* ---- FIX: HIDE ARROW WHEN COLLAPSED ---- */
+.dashboard-container.sidebar-collapsed .category-arrow {
+    display: none;
+}
+/* ---- FIX: CENTER CATEGORY HEADER ICONS ---- */
 .dashboard-container.sidebar-collapsed .sidebar-header,
-.dashboard-container.sidebar-collapsed .nav-link {
+.dashboard-container.sidebar-collapsed .nav-link,
+.dashboard-container.sidebar-collapsed .nav-category-header {
     justify-content: center;
     padding-left: 0;
     padding-right: 0;
