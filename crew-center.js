@@ -508,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>`;
             }).join('');
-        } catch (error)
+        } catch (error) { 
             container.innerHTML = `<p class="error-text">${error.message}</p>`;
         }
     };
