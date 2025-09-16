@@ -35,19 +35,10 @@
 
             <nav class="sidebar-nav">
                 <ul>
-                    <li class="nav-category category-open">
-                        <a href="#" class="nav-category-header">
-                            <i class="fas fa-compass"></i>
-                            <span class="nav-text">Navigation</span>
-                            <i class="fas fa-chevron-down category-arrow"></i>
-                        </a>
-                        <ul class="nav-submenu">
-                            <li><a href="#" class="nav-link active" data-view="view-duty-status"><i class="fa-solid fa-house"></i><span class="nav-text">Pilot Hub</span></a></li>
-                            <li><a href="#" class="nav-link" data-view="view-flight-plan"><i class="fa-solid fa-paper-plane"></i><span class="nav-text">Flight Plan</span></a></li>
-                            <li><a href="#" class="nav-link" data-view="view-rosters"><i class="fa-solid fa-map-location-dot"></i><span class="nav-text">Sector Ops</span></a></li>
-                            <li><a href="#" class="nav-link" data-view="view-history"><i class="fa-solid fa-clock-rotate-left"></i><span class="nav-text">Flight Log</span></a></li>
-                        </ul>
-                    </li>
+                    <li><a href="#" class="nav-link active" data-view="view-duty-status"><i class="fa-solid fa-house"></i><span class="nav-text">Pilot Hub</span></a></li>
+                    <li><a href="#" class="nav-link" data-view="view-flight-plan"><i class="fa-solid fa-paper-plane"></i><span class="nav-text">Flight Plan</span></a></li>
+                    <li><a href="#" class="nav-link" data-view="view-rosters"><i class="fa-solid fa-map-location-dot"></i><span class="nav-text">Sector Ops</span></a></li>
+                    <li><a href="#" class="nav-link" data-view="view-history"><i class="fa-solid fa-clock-rotate-left"></i><span class="nav-text">Flight Log</span></a></li>
                 </ul>
             </nav>
 
@@ -58,7 +49,7 @@
                         <h3 id="pilot-name">Loading...</h3>
                         <p id="pilot-callsign" class="user-role">Loading...</p>
                     </div>
-                     <a href="#" id="logout-button" class="logout-button" title="Logout">
+                    <a href="#" id="logout-button" class="logout-button" title="Logout">
                         <i class="fas fa-sign-out-alt"></i>
                         <span class="nav-text">Logout</span>
                     </a>
@@ -70,11 +61,11 @@
         </aside>
 
         <main class="main-content">
-            <div id="view-duty-status" class="content-card active">
+            <div id="view-duty-status" class="content-view active">
             </div>
-            <div id="view-flight-plan" class="content-card">
+            <div id="view-flight-plan" class="content-view">
             </div>
-            <div id="view-rosters" class="content-card">
+            <div id="view-rosters" class="content-view">
                 <div class="content-card">
                     <h2><i class="fa-solid fa-map-location-dot"></i> Sector Ops - Your Available Rosters</h2>
                     <p>Select a roster to begin your duty day. These rosters are suggested based on where your last duty ended or your last flight landed.</p>
@@ -89,7 +80,7 @@
                     </div>
                 </div>
             </div>
-            <div id="view-history" class="content-card">
+            <div id="view-history" class="content-view">
                 <div class="content-card">
                     <h2><i class="fa-solid fa-clock-rotate-left"></i> PIREP History</h2>
                     <div id="pirep-history-list">
