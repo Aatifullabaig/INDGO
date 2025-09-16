@@ -427,8 +427,33 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             container.innerHTML = rosters.map(roster => {
-                const operator = roster.operator || DEFAULT_OPERATOR;
                 const dutyDisabled = CURRENT_PILOT?.promotionStatus === 'PENDING_TEST' ? 'disabled' : '';
+
+                // --- LIVERY UPDATE LOGIC ---
+                const firstLeg = roster.legs?.[0]; // Safely get the first leg of the roster
+                let aircraftImageHTML = ''; // Initialize as empty
+
+                if (firstLeg) {
+                    const aircraftCode = firstLeg.aircraft;
+                    // Extract the airline IATA/ICAO code from the flight number (e.g., "IGO" from "IGO1234")
+                    const airlineCode = firstLeg.flightNumber.replace(/\d+$/, '').toUpperCase();
+
+                    // Define the path for the specific livery image
+                    const liveryImagePath = `Images/liveries/${airlineCode}_${aircraftCode}.png`;
+                    // Define the path for the generic fallback image
+                    const genericImagePath = `Images/planesForCC/${aircraftCode}.png`;
+
+                    // Create the HTML. The 'onerror' attribute handles the fallback logic.
+                    aircraftImageHTML = `
+                        <div class="roster-aircraft-container">
+                            <img src="${liveryImagePath}" 
+                                 alt="${airlineCode} ${aircraftCode}" 
+                                 class="roster-aircraft-image" 
+                                 onerror="this.onerror=null; this.src='${genericImagePath}'; this.alt='${aircraftCode}';">
+                        </div>`;
+                }
+                // --- END LIVERY UPDATE LOGIC ---
+
                 return `
                 <div class="roster-item">
                     <div class="roster-info">
@@ -436,12 +461,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         <small>Hub: ${roster.hub} | Total Time: ${Number(roster.totalFlightTime || 0).toFixed(1)} hrs</small>
                         <div class="roster-path">${roster.legs.map(l => l.departure).join(' → ')} → ${roster.legs.slice(-1)[0].arrival}</div>
                     </div>
-                    <div class="roster-actions">
-                        <button class="details-button" data-roster-id="${roster._id}" aria-expanded="false">Details</button>
-                        <button class="cta-button go-on-duty-btn" data-roster-id="${roster._id}" ${dutyDisabled}>Go On Duty</button>
+                    <div class="roster-right-panel">
+                        ${aircraftImageHTML}
+                        <div class="roster-actions">
+                            <button class="details-button" data-roster-id="${roster._id}" aria-expanded="false">Details</button>
+                            <button class="cta-button go-on-duty-btn" data-roster-id="${roster._id}" ${dutyDisabled}>Go On Duty</button>
+                        </div>
                     </div>
                     <div class="roster-leg-details" id="details-${roster._id}">
-                        </div>
+                    </div>
                 </div>`;
             }).join('');
         } catch (error) {
@@ -567,7 +595,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <ul>
                                 ${roster.legs.map(leg => {
                                     // Extract the airline IATA/ICAO code from the flight number (e.g., DL from DL1)
-                                    const airlineCode = (leg.flightNumber.match(/^[a-zA-Z]+/) || [''])[0].toUpperCase();
+                                    const airlineCode = leg.flightNumber.replace(/\d+$/, '').toUpperCase();
                                     // User will place logos in Images/vas/{CODE}.png
                                     const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : 'images/default-airline.png'; 
 
