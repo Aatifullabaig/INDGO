@@ -555,35 +555,59 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     // Fetch all rosters again to find the specific one
                     const res = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
-    if (!res.ok) throw new Error('Could not fetch roster details.');
+                    if (!res.ok) throw new Error('Could not fetch roster details.');
     
-    const rosterData = await res.json(); // The response is an object: { rosters: [...] }
-    const allRosters = rosterData.rosters || []; // Extract the array from the 'rosters' property
-    const roster = allRosters.find(r => r._id === rosterId); // Now, find the specific roster
+                    const rosterData = await res.json(); // The response is an object: { rosters: [...] }
+                    const allRosters = rosterData.rosters || []; // Extract the array from the 'rosters' property
+                    const roster = allRosters.find(r => r._id === rosterId); // Now, find the specific roster
 
                     if (roster && roster.legs) {
-                        // Render the list of legs
+                        // Render the list of legs with the new design
                         detailsContainer.innerHTML = `
-        <ul>
-            ${roster.legs.map(leg => `
-                <li>
-                    <div class="leg-main">
-                        <strong>${leg.flightNumber}: ${leg.departure} → ${leg.arrival}</strong>
-                        <div class="leg-meta">
-                            <span><i class="fa-solid fa-plane"></i> ${leg.aircraft}</span>
-                            <span><i class="fa-solid fa-stopwatch"></i> ${Number(leg.flightTime || 0).toFixed(1)} hrs</span>
-                        </div>
-                    </div>
-                    <div class="leg-badges">
-                        <span class="badge badge-operator">${leg.operator}</span>
-                        <span class="badge badge-rank" title="Minimum Rank">Req: ${leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft)}</span>
-                    </div>
-                </li>
-            `).join('')}
-        </ul>`;
-} else {
-    detailsContainer.innerHTML = '<p>Details could not be loaded.</p>';
-}
+                            <ul>
+                                ${roster.legs.map(leg => {
+                                    // Extract the airline IATA/ICAO code from the flight number (e.g., DL from DL1)
+                                    const airlineCode = (leg.flightNumber.match(/^[a-zA-Z]+/) || [''])[0].toUpperCase();
+                                    // User will place logos in Images/vas/{CODE}.png
+                                    const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : 'images/default-airline.png'; 
+
+                                    return `
+                                    <li>
+                                        <div class="leg-header">
+                                            <img src="${logoPath}" class="leg-airline-logo" alt="${airlineCode}" onerror="this.style.display='none'">
+                                            <span class="leg-airline-name">${leg.operator} (${leg.flightNumber})</span>
+                                        </div>
+                                        <div class="leg-body">
+                                            <div class="leg-departure">
+                                                <span class="leg-label">Departure</span>
+                                                <div class="leg-airport">
+                                                    ${leg.departureCountry ? `<img src="https://flagcdn.com/w20/${leg.departureCountry.toLowerCase()}.png" class="country-flag" alt="${leg.departureCountry}">` : ''}
+                                                    <span class="leg-icao">${leg.departure}</span>
+                                                </div>
+                                                <small class="leg-details-meta">Aircraft: ${leg.aircraft}</small>
+                                            </div>
+                                            <div class="leg-icon">
+                                                <i class="fa-solid fa-plane"></i>
+                                            </div>
+                                            <div class="leg-arrival">
+                                                <span class="leg-label">Arrival</span>
+                                                <div class="leg-airport">
+                                                    ${leg.arrivalCountry ? `<img src="https://flagcdn.com/w20/${leg.arrivalCountry.toLowerCase()}.png" class="country-flag" alt="${leg.arrivalCountry}">` : ''}
+                                                    <span class="leg-icao">${leg.arrival}</span>
+                                                </div>
+                                                <small class="leg-details-meta">EET: ${Number(leg.flightTime || 0).toFixed(1)} hrs</small>
+                                            </div>
+                                        </div>
+                                        <div class="leg-badges-footer">
+                                            <span class="badge badge-rank" title="Minimum Rank">Req: ${leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft)}</span>
+                                        </div>
+                                    </li>
+                                    `;
+                                }).join('')}
+                            </ul>`;
+                    } else {
+                        detailsContainer.innerHTML = '<p>Details could not be loaded.</p>';
+                    }
                 } catch (error) {
                     console.error('Failed to fetch roster details:', error);
                     detailsContainer.innerHTML = `<p class="error-text">${error.message}</p>`;
