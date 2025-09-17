@@ -738,19 +738,6 @@ table.leaderboard-table {
     margin-top: 1.5rem;
 }
 
-/* NEW: Styles for the dispatch data sub-header */
-.fp-section-header {
-    grid-column: 1 / -1;
-    margin-top: 1.5rem;
-    margin-bottom: 0.5rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--border-color);
-    color: var(--dashboard-text-color);
-    font-size: 1.1rem;
-    font-weight: 600;
-}
-
-
 /* Modal for Arrive action */
 #arrive-modal-content {
     text-align: left;
