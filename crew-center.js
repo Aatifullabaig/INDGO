@@ -316,6 +316,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="fp-detail-item"><strong>ADC #</strong><span>${plan.adcNumber || 'N/A'}</span></div>
                 <div class="fp-detail-item"><strong>Persons on Board</strong><span>${plan.pob}</span></div>
                 <div class="fp-detail-item" style="grid-column: 1 / -1;"><strong>Route</strong><span>${plan.route}</span></div>
+                
+                ${plan.dispatchData ? `
+                    <h3 class="fp-section-header">Dispatch & Loadsheet</h3>
+                    <div class="fp-detail-item"><strong>Cruise Alt.</strong><span>${plan.dispatchData.ofp?.general?.cruise_altitude_ft?.toLocaleString() || 'N/A'} ft</span></div>
+                    <div class="fp-detail-item"><strong>Zero Fuel Wt.</strong><span>${plan.dispatchData.ofp?.weights?.zfw_kg?.toLocaleString() || 'N/A'} kg</span></div>
+                    <div class="fp-detail-item"><strong>Takeoff Wt.</strong><span>${plan.dispatchData.ofp?.weights?.tow_kg?.toLocaleString() || 'N/A'} kg</span></div>
+                    <div class="fp-detail-item"><strong>Trip Fuel</strong><span>${plan.dispatchData.ofp?.fuel_plan?.trip_kg?.toLocaleString() || 'N/A'} kg</span></div>
+                    <div class="fp-detail-item"><strong>Total Fuel</strong><span>${plan.dispatchData.ofp?.fuel_plan?.total_kg?.toLocaleString() || 'N/A'} kg</span></div>
+                ` : ''}
+
             </div>
             <div class="flight-plan-actions">${actions}</div>
         </div>`;
