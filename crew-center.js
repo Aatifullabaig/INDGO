@@ -695,10 +695,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // ***** START: FIXED SECTION *****
         // End Duty
         if (target.id === 'end-duty-btn') {
-             // Logic for ending duty (can be enhanced with promotion modal)
+            target.disabled = true;
+            target.textContent = 'Ending...';
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/duty/end`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.message || 'Failed to end duty.');
+                showNotification(result.message, 'success');
+                await fetchPilotData(); // Refresh all user data and UI
+            } catch (err) {
+                showNotification(`Error: ${err.message}`, 'error');
+                target.disabled = false;
+                target.textContent = 'Complete Duty Day';
+            }
         }
+        // ***** END: FIXED SECTION *****
 
         // Flight Plan Actions
         const planId = target.dataset.planId;
