@@ -899,6 +899,12 @@ table.leaderboard-table {
     margin-bottom: 1.5rem;
 }
 
+.roster-details-actions {
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
 /* --- MOBILE RESPONSIVE STYLES --- */
 /* Apply these styles only on screens 768px or smaller */
 @media (max-width: 768px) {

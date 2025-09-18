@@ -23,33 +23,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!flightNumber || typeof flightNumber !== 'string') {
             return 'UNKNOWN';
         }
-
         const cleanedFlightNumber = flightNumber.trim().toUpperCase();
-
-        // This regex looks for:
-        // ^                  - Start of the string
-        // ([A-Z0-9]{2,3})    - A capturing group for the airline code (2-3 alphanumeric chars)
-        // ([0-9]{1,4})       - A capturing group for the flight number digits (1-4 digits)
-        // ([A-Z]?)           - An optional capturing group for a letter suffix
-        // $                  - End of the string
         const match = cleanedFlightNumber.match(/^([A-Z0-9]{2,3})([0-9]{1,4})([A-Z]?)$/);
-
         if (match && match[1]) {
-            // --- MODIFIED LINE ---
-            // Always return the first two characters of the matched code.
             return match[1].substring(0, 2);
         }
-
-        // Fallback for non-standard flight numbers (e.g., general aviation)
-        // This will take all characters from the beginning until the first number.
         const fallbackMatch = cleanedFlightNumber.match(/^(\D+)/);
         if (fallbackMatch && fallbackMatch[1]) {
-             // --- MODIFIED LINE ---
-            // Also apply the truncation to the fallback result.
             return fallbackMatch[1].substring(0, 2);
         }
-
-        return 'UNKNOWN'; // Return a default if no pattern is matched
+        return 'UNKNOWN';
     }
 
     // --- Rank model (keep in sync with backend) ---
@@ -60,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
     const rankIndex = (r) => PILOT_RANKS.indexOf(String(r || '').trim());
     
-    // --- Fleet definition (from original, more detailed script) ---
+    // --- Fleet definition ---
     const FLEET = [
         { code:'Q400', name:'De Havilland Dash 8 Q400', minRank:'IndGo Cadet', operator:'IndGo Air Virtual' },
         { code:'A320', name:'Airbus A320',              minRank:'IndGo Cadet', operator:'IndGo Air Virtual' },
@@ -94,7 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const userCanFlyAircraft = (userRank, aircraftCode) => {
         const ac = FLEET.find(a => a.code === aircraftCode);
-        if (!ac) return false; // More secure: if aircraft isn't defined, don't allow it.
+        if (!ac) return false;
         const ui = rankIndex(userRank);
         const ri = rankIndex(ac.minRank);
         return ui >= 0 && ri >= 0 && ri <= ui;
@@ -258,7 +241,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderOnDutyContent = async (pilot) => {
         if (!pilot.currentRoster) return `<div class="content-card"><p>Error: On duty but no roster data found.</p></div>`;
 
-        // Using the superior UI from the original script to show roster progress
         try {
             const [rosterRes, pirepsRes] = await Promise.all([
                 fetch(`${API_BASE_URL}/api/rosters`, { headers: { 'Authorization': `Bearer ${token}` } }),
@@ -304,8 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Flight Plan View ---
     const renderFlightPlanView = (pilot) => {
-        const viewContainer = document.getElementById('view-flight-plan'); // Ensure your HTML has this ID for the view
-
+        const viewContainer = document.getElementById('view-flight-plan');
         if (pilot.promotionStatus === 'PENDING_TEST') {
             viewContainer.innerHTML = `<div class="content-card">${getPendingTestBannerHTML()}</div>`;
             return;
@@ -388,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>`;
     };
 
-    // --- Other Data Display Functions (Largely Unchanged) ---
+    // --- Other Data Display Functions ---
     const renderLeaderboardTable = (title, data, valueKey) => {
         if (!data || data.length === 0) return `<h4>Top by ${title}</h4><p class="muted">No data available yet.</p>`;
         return `
@@ -449,17 +430,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const criteria = data.searchCriteria || {};
 
             if (criteria.searched?.length > 0) {
-                // MODIFIED: Added the "View on Map" button to the header
+                // MODIFIED: Removed the "View on Map" button from the header
                 header.innerHTML = `
                     <div class="roster-header-info">
                         Showing rosters for <strong>${criteria.searched.join(' & ')}</strong>
                         <span class="badge badge-rank ml-8">Your rank: ${CURRENT_PILOT?.rank || 'Unknown'}</span>
                     </div>
-                    <button id="go-to-map-btn" class="details-button"><i class="fa-solid fa-map-location-dot"></i> View on Map</button>
-                `; //
-                if (window.plotRosters) window.plotRosters(criteria.searched[0], rosters); //
+                `;
+                if (window.plotRosters) window.plotRosters(criteria.searched[0], rosters);
             } else {
-                header.innerHTML = 'No location data found. Showing rosters from primary hubs.'; //
+                header.innerHTML = 'No location data found. Showing rosters from primary hubs.';
             }
 
             if (rosters.length === 0) {
@@ -469,20 +449,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             container.innerHTML = rosters.map(roster => {
                 const dutyDisabled = CURRENT_PILOT?.promotionStatus === 'PENDING_TEST' ? 'disabled' : '';
-
                 const aircraftTypes = new Set(roster.legs.map(leg => leg.aircraft));
                 const isMultiAircraft = aircraftTypes.size > 1;
-
                 let aircraftImageHTML = ''; 
 
                 if (!isMultiAircraft && roster.legs.length > 0) {
                     const firstLeg = roster.legs[0];
                     const aircraftCode = firstLeg.aircraft;
-                    const airlineCode = extractAirlineCode(firstLeg.flightNumber); // <-- FIXED
-
+                    const airlineCode = extractAirlineCode(firstLeg.flightNumber);
                     const liveryImagePath = `Images/liveries/${airlineCode}_${aircraftCode}.png`;
                     const genericImagePath = `Images/planesForCC/${aircraftCode}.png`;
-
                     aircraftImageHTML = `
                         <div class="roster-aircraft-container">
                             <img src="${liveryImagePath}" 
@@ -606,40 +582,29 @@ document.addEventListener('DOMContentLoaded', () => {
     mainContentContainer.addEventListener('click', async (e) => {
         const target = e.target;
         
-        // NEW: Listener for the "Go to Map" button
-        if (target.id === 'go-to-map-btn' || target.closest('#go-to-map-btn')) {
-            document.getElementById('map').scrollIntoView({ behavior: 'smooth' }); //
-        }
-        
-        // MODIFIED: Roster Details Toggle with Map Interaction
-        if (target.classList.contains('details-button') && target.dataset.rosterId) {
-            const rosterId = target.dataset.rosterId; //
-            const detailsContainer = document.getElementById(`details-${rosterId}`); //
+        // MODIFIED: Roster Details Toggle WITHOUT Map Interaction
+        if (target.classList.contains('details-button') && target.dataset.rosterId && !target.classList.contains('view-roster-on-map-btn')) {
+            const rosterId = target.dataset.rosterId;
+            const detailsContainer = document.getElementById(`details-${rosterId}`);
 
-            // First, close any other details panel that might be open
             document.querySelectorAll('.roster-leg-details.visible').forEach(openDetail => {
                 if (openDetail.id !== `details-${rosterId}`) {
-                    openDetail.classList.remove('visible'); //
-                    const otherId = openDetail.id.replace('details-', ''); //
-                    document.querySelector(`.details-button[data-roster-id="${otherId}"]`).setAttribute('aria-expanded', 'false'); //
+                    openDetail.classList.remove('visible');
+                    const otherId = openDetail.id.replace('details-', '');
+                    document.querySelector(`.details-button[data-roster-id="${otherId}"]`).setAttribute('aria-expanded', 'false');
                 }
             });
 
-            // Toggle the one that was clicked
-            const isVisible = detailsContainer.classList.toggle('visible'); //
-            target.setAttribute('aria-expanded', isVisible); //
+            const isVisible = detailsContainer.classList.toggle('visible');
+            target.setAttribute('aria-expanded', isVisible);
 
+            // MODIFIED: This block no longer scrolls to the map automatically.
             if (isVisible) {
-                // If it's now visible, focus the map and scroll to it
-                if (window.focusOnRoster) {
-                    window.focusOnRoster(rosterId); //
-                    document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' }); //
-                }
+                // Focus the map visually without scrolling the page.
+                if (window.focusOnRoster) window.focusOnRoster(rosterId);
             } else {
-                // If it was just closed (and no others are open), reset the map
-                if (window.showAllRosters) {
-                    window.showAllRosters(); //
-                }
+                // If it was just closed, reset the map view.
+                if (window.showAllRosters) window.showAllRosters();
             }
 
             // Fetch and render details only if it's visible and not already loaded
@@ -648,26 +613,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const res = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
                     if (!res.ok) throw new Error('Could not fetch roster details.');
-    
                     const rosterData = await res.json();
                     const allRosters = rosterData.rosters || [];
                     const roster = allRosters.find(r => r._id === rosterId);
-                    const isMultiAircraft = roster.legs.some((leg, i, arr) => i > 0 && leg.aircraft !== arr[0].aircraft); //
+                    const isMultiAircraft = roster.legs.some((leg, i, arr) => i > 0 && leg.aircraft !== arr[0].aircraft);
 
                     if (roster && roster.legs) {
+                        // MODIFIED: Added the new "View on Map" button here
                         detailsContainer.innerHTML = `
+                            <div class="roster-details-actions">
+                                <button class="details-button view-roster-on-map-btn" data-roster-id="${rosterId}">
+                                    <i class="fa-solid fa-map-location-dot"></i> View Route on Map
+                                </button>
+                            </div>
                             <ul>
                                 ${roster.legs.map(leg => {
-                                    const airlineCode = extractAirlineCode(leg.flightNumber); // <-- FIXED
-                                    const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : 'images/default-airline.png'; 
-
+                                    const airlineCode = extractAirlineCode(leg.flightNumber);
+                                    const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : 'images/default-airline.png';
                                     let legAircraftImageHTML = '';
                                     if (isMultiAircraft) {
                                         const legAircraftCode = leg.aircraft;
-                                        const legAirlineCode = extractAirlineCode(leg.flightNumber); // <-- Also fixed here for consistency
+                                        const legAirlineCode = extractAirlineCode(leg.flightNumber);
                                         const liveryImagePath = `Images/liveries/${legAirlineCode}_${legAircraftCode}.png`;
                                         const genericImagePath = `Images/planesForCC/${legAircraftCode}.png`;
-
                                         legAircraftImageHTML = `
                                         <div class="leg-aircraft-image-container">
                                             <img src="${liveryImagePath}" 
@@ -676,7 +644,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                                  onerror="this.onerror=null; this.src='${genericImagePath}'; this.alt='${legAircraftCode}';">
                                         </div>`;
                                     }
-
                                     return `
                                     <li class="${isMultiAircraft ? 'multi-aircraft-leg' : ''}">
                                         <div class="leg-main-content">
@@ -693,9 +660,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                                     </div>
                                                     <small class="leg-details-meta">Aircraft: ${leg.aircraft}</small>
                                                 </div>
-                                                <div class="leg-icon">
-                                                    <i class="fa-solid fa-plane"></i>
-                                                </div>
+                                                <div class="leg-icon"><i class="fa-solid fa-plane"></i></div>
                                                 <div class="leg-arrival">
                                                     <span class="leg-label">Arrival</span>
                                                     <div class="leg-airport">
@@ -724,6 +689,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // NEW: Listener for the "View on Map" button inside the details panel
+        if (target.classList.contains('view-roster-on-map-btn') || target.closest('.view-roster-on-map-btn')) {
+            const button = target.closest('.view-roster-on-map-btn');
+            const rosterId = button.dataset.rosterId;
+            if (window.focusOnRoster) {
+                window.focusOnRoster(rosterId); // Focuses the map on the route
+                document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' }); // Scrolls to the map
+            }
+        }
+
         // Go On Duty
         if (target.classList.contains('go-on-duty-btn')) {
             const rosterId = target.dataset.rosterId;
@@ -748,7 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // End Duty
         if (target.id === 'end-duty-btn') {
-             // Logic for ending duty (can be enhanced with promotion modal)
+             // Logic for ending duty
         }
 
         // Flight Plan Actions
