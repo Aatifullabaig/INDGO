@@ -557,6 +557,127 @@ input, textarea, select {
     filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
 }
 
+roster-item {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding: 1.25rem;
+}
+
+/* Hide old structure elements if they still exist somehow */
+.roster-info, .roster-right-panel {
+    display: none;
+}
+
+/* Header section with logos and title */
+.roster-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    width: 100%;
+}
+
+.roster-airlines {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.roster-airline-logo {
+    height: 28px;
+    max-width: 80px;
+    object-fit: contain;
+    background-color: rgba(255, 255, 255, 0.85);
+    border-radius: 4px;
+    padding: 2px;
+}
+
+.roster-title-info {
+    text-align: right;
+    flex-shrink: 0;
+    margin-left: 1rem;
+}
+
+.roster-name {
+    display: block;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.roster-meta {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--dashboard-text-muted);
+}
+
+/* Main flight info section with Departure/Arrival */
+.roster-flight-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.5rem 0;
+}
+
+.flight-segment {
+    display: flex;
+    flex-direction: column;
+    flex-basis: 40%;
+}
+
+.flight-segment.departure {
+    align-items: flex-start;
+}
+
+.flight-segment.arrival {
+    align-items: flex-end;
+}
+
+.segment-label {
+    font-size: 0.9rem;
+    color: var(--dashboard-text-muted);
+    text-transform: uppercase;
+}
+
+.segment-icao {
+    font-family: 'monospace', sans-serif;
+    font-size: 2.8rem;
+    font-weight: bold;
+    color: #4dabf7; /* Light blue from image */
+    line-height: 1.1;
+}
+
+.segment-time {
+    font-size: 1.2rem;
+    color: #4dabf7; /* Matching blue */
+}
+
+.flight-divider {
+    font-size: 1.5rem;
+    color: var(--dashboard-text-muted);
+}
+
+.roster-actions {
+    width: 100%;
+    justify-content: flex-end;
+    margin-top: 0.5rem;
+}
+
+/* Override mobile styles for the old design */
+@media (max-width: 768px) {
+    .roster-actions {
+        flex-direction: row; /* Ensure buttons are side-by-side if they fit */
+    }
+    .roster-actions .cta-button, .roster-actions .details-button {
+       flex-grow: 1; /* Make buttons share the space */
+    }
+}
+
 /* --- Responsive Adjustments for Roster Item on Mobile --- */
 @media (max-width: 768px) {
     .roster-right-panel {

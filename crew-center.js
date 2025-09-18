@@ -430,7 +430,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const criteria = data.searchCriteria || {};
 
             if (criteria.searched?.length > 0) {
-                // MODIFIED: Removed the "View on Map" button from the header
                 header.innerHTML = `
                     <div class="roster-header-info">
                         Showing rosters for <strong>${criteria.searched.join(' & ')}</strong>
@@ -449,39 +448,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
             container.innerHTML = rosters.map(roster => {
                 const dutyDisabled = CURRENT_PILOT?.promotionStatus === 'PENDING_TEST' ? 'disabled' : '';
-                const aircraftTypes = new Set(roster.legs.map(leg => leg.aircraft));
-                const isMultiAircraft = aircraftTypes.size > 1;
-                let aircraftImageHTML = ''; 
 
-                if (!isMultiAircraft && roster.legs.length > 0) {
-                    const firstLeg = roster.legs[0];
-                    const aircraftCode = firstLeg.aircraft;
-                    const airlineCode = extractAirlineCode(firstLeg.flightNumber);
-                    const liveryImagePath = `Images/liveries/${airlineCode}_${aircraftCode}.png`;
-                    const genericImagePath = `Images/planesForCC/${aircraftCode}.png`;
-                    aircraftImageHTML = `
-                        <div class="roster-aircraft-container">
-                            <img src="${liveryImagePath}" 
-                                 alt="${airlineCode} ${aircraftCode}" 
-                                 class="roster-aircraft-image" 
-                                 onerror="this.onerror=null; this.src='${genericImagePath}'; this.alt='${aircraftCode}';">
-                        </div>`;
-                }
+                // --- NEW LOGIC FOR REDESIGN ---
+                // Get unique airline codes for logos
+                const uniqueAirlines = [...new Set(roster.legs.map(leg => extractAirlineCode(leg.flightNumber)))];
+                const airlineLogosHTML = uniqueAirlines.map(code => {
+                    if (!code || code === 'UNKNOWN') return '';
+                    const logoPath = `Images/vas/${code}.png`;
+                    return `<img src="${logoPath}" alt="${code}" class="roster-airline-logo" onerror="this.style.display='none'">`;
+                }).join('');
 
+                // Get first departure and last arrival
+                const firstLeg = roster.legs[0];
+                const lastLeg = roster.legs[roster.legs.length - 1];
+
+                // --- NEW HTML STRUCTURE FOR REDESIGN ---
                 return `
-                <div class="roster-item" data-multi-aircraft="${isMultiAircraft}">
-                    <div class="roster-info">
-                        <strong>${roster.name}</strong>
-                        <small>Hub: ${roster.hub} | Total Time: ${Number(roster.totalFlightTime || 0).toFixed(1)} hrs</small>
-                        <div class="roster-path">${roster.legs.map(l => l.departure).join(' → ')} → ${roster.legs.slice(-1)[0].arrival}</div>
-                    </div>
-                    <div class="roster-right-panel">
-                        ${aircraftImageHTML}
-                        <div class="roster-actions">
-                            <button class="details-button" data-roster-id="${roster._id}" aria-expanded="false">Details</button>
-                            <button class="cta-button go-on-duty-btn" data-roster-id="${roster._id}" ${dutyDisabled}>Go On Duty</button>
+                <div class="roster-item" data-roster-id="${roster._id}">
+                    <div class="roster-card-header">
+                        <div class="roster-airlines">
+                            ${airlineLogosHTML}
+                        </div>
+                        <div class="roster-title-info">
+                            <span class="roster-name">${roster.name}</span>
+                            <span class="roster-meta">Total: ${Number(roster.totalFlightTime || 0).toFixed(1)} hrs</span>
                         </div>
                     </div>
+                    
+                    <div class="roster-flight-info">
+                        <div class="flight-segment departure">
+                            <span class="segment-label">Departs</span>
+                            <span class="segment-icao">${firstLeg.departure}</span>
+                            <span class="segment-time">TBA</span>
+                        </div>
+                        <div class="flight-divider">
+                            <i class="fa-solid fa-plane"></i>
+                        </div>
+                        <div class="flight-segment arrival">
+                            <span class="segment-label">Arrives</span>
+                            <span class="segment-icao">${lastLeg.arrival}</span>
+                            <span class="segment-time">TBA</span>
+                        </div>
+                    </div>
+
+                    <div class="roster-actions">
+                        <button class="details-button" data-roster-id="${roster._id}" aria-expanded="false">Details</button>
+                        <button class="cta-button go-on-duty-btn" data-roster-id="${roster._id}" ${dutyDisabled}>Go On Duty</button>
+                    </div>
+                    
                     <div class="roster-leg-details" id="details-${roster._id}">
                     </div>
                 </div>`;
