@@ -258,18 +258,64 @@ body::before {
 
 .content-card + .content-card { margin-top: 2rem; }
 
-/* --- Specific Component Styling --- */
-#roster-list-container { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem; }
-.roster-item {
-    background-color: rgba(0, 27, 148, 0.15);
-    border-radius: 8px; padding: 1rem 1.5rem;
-    display: flex; justify-content: space-between; align-items: center;
-    border-left: 4px solid var(--accent-color); flex-wrap: wrap; gap: 1rem;
-    transition: background-color 0.2s, border-color 0.2s;
+/* --- Specific Component Styling (Roster REDESIGNED) --- */
+#roster-list-container { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 1.5rem; 
+    margin-top: 1.5rem; 
 }
-.roster-info strong { display: block; color: var(--dashboard-text-color); font-size: 1.2rem; margin-bottom: 0.25rem; }
-.roster-info small { opacity: 0.8; }
-.roster-path { font-family: monospace; font-size: 0.9rem; color: var(--accent-color); margin-top: 0.5rem; opacity: 0.9; }
+
+.roster-item {
+    background: var(--primary-glass);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    transition: background-color 0.3s, box-shadow 0.3s, transform 0.3s;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.roster-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px var(--glow-color);
+    background-color: rgba(26, 35, 63, 0.7);
+}
+
+.roster-info strong {
+    display: block;
+    color: #ffffff;
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.roster-info small {
+    display: block;
+    opacity: 1;
+    color: var(--dashboard-text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.roster-path {
+    font-family: 'monospace', sans-serif;
+    font-size: 0.95rem;
+    color: #aeb9e1;
+    background-color: rgba(13, 16, 28, 0.7);
+    padding: 0.5rem 0.75rem;
+    border-radius: 5px;
+    display: inline-block;
+    letter-spacing: 0.5px;
+    border: 1px solid var(--border-color);
+}
+
 
 .on-duty-header { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
 .on-duty-header h2 { margin: 0; border-bottom: none; padding-bottom: 0; }
@@ -335,7 +381,21 @@ input, textarea, select {
 }
 .details-button:hover { background-color: var(--accent-color); color: #fff; border-color: var(--accent-color); }
 
-/* --- NEW Roster Leg Details (Image-based design) --- */
+/* --- REDESIGNED Roster Leg Details --- */
+.roster-leg-details {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.5s ease-in-out, margin-top 0.5s ease-in-out;
+    width: 100%;
+    flex-basis: 100%;
+    margin-top: 0;
+}
+
+.roster-leg-details.visible {
+    max-height: 1500px; /* A large enough value to show all content */
+    margin-top: 1.5rem;
+}
+
 .roster-leg-details ul {
     list-style: none;
     display: flex;
@@ -348,11 +408,17 @@ input, textarea, select {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    background-color: rgba(0, 27, 148, 0.25);
-    padding: 1rem;
+    background-color: rgba(13, 16, 28, 0.6);
+    padding: 1.25rem;
     border-radius: 8px;
     border: 1px solid var(--border-color);
+    transition: background-color 0.3s;
 }
+
+.roster-leg-details li:hover {
+    background-color: rgba(13, 16, 28, 0.9);
+}
+
 
 .leg-header {
     display: flex;
@@ -508,14 +574,31 @@ input, textarea, select {
     }
 }
 
-/* ===== Rank/Operator badges ===== */
+/* ===== Rank/Operator badges (IMPROVED LEGIBILITY) ===== */
 .badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; letter-spacing: .2px;
-    border: 1px solid var(--border-color); background: rgba(255,255,255,0.05); color: var(--dashboard-text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0.3rem 0.8rem;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+    border: 1px solid transparent;
 }
-.badge-operator { border-color: rgba(0, 200, 255, 0.25); }
-.badge-rank { border-color: rgba(0, 255, 170, 0.25); }
+
+.badge-operator {
+    background-color: rgba(0, 150, 255, 0.25);
+    border-color: rgba(0, 150, 255, 0.6);
+    color: #92d5f1; /* Lighter Sky Blue */
+}
+
+.badge-rank {
+    background-color: rgba(0, 220, 150, 0.25);
+    border-color: rgba(0, 220, 150, 0.6);
+    color: #79e0bc; /* Lighter Aquamarine */
+}
 .ml-8 { margin-left: .5rem; }
 
 
