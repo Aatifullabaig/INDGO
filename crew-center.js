@@ -477,7 +477,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     
-                    <%-- RESTORED: The main departure/arrival display --%>
                     <div class="roster-flight-info">
                         <div class="flight-segment departure">
                             <span class="segment-label">Departs</span>
@@ -494,7 +493,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
 
-                    <%-- NEW: Footer to hold the path and action buttons --%>
                     <div class="roster-card-footer">
                         <div class="roster-path-display">${pathString}</div>
                         <div class="roster-actions">
