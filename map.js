@@ -166,57 +166,75 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // MODIFIED: highlightRoster is now focusOnRoster
     window.focusOnRoster = function(rosterId) {
-        if (!window.leafletMap) return;
-        resetHighlights();
-        routeInfoLayerGroup.clearLayers(); // Clear any existing route labels
+    if (!window.leafletMap) return;
+    resetHighlights();
+    routeInfoLayerGroup.clearLayers(); // Clear any existing route labels
 
-        const rosterData = rosterLayers[rosterId];
-        if (!rosterData) return;
+    const rosterData = rosterLayers[rosterId];
+    if (!rosterData) return;
 
-        // Hide all markers and polylines first
-        Object.values(allAirportMarkers).forEach(marker => window.leafletMap.removeLayer(marker));
-        Object.values(rosterLayers).forEach(data => {
-            data.polylines.forEach(p => window.leafletMap.removeLayer(p));
-        });
+    // Hide all markers and polylines first
+    Object.values(allAirportMarkers).forEach(marker => window.leafletMap.removeLayer(marker));
+    Object.values(rosterLayers).forEach(data => {
+        data.polylines.forEach(p => window.leafletMap.removeLayer(p));
+    });
 
-        // Show and highlight layers for the selected roster
-        rosterData.polylines.forEach(p => {
-            p.addTo(window.leafletMap).setStyle(highlightLineStyle).bringToFront();
-        });
-        rosterData.airportMarkers.forEach(m => {
-            m.addTo(window.leafletMap).setStyle(highlightAirportStyle).bringToFront();
-        });
+    // Show and highlight layers for the selected roster
+    rosterData.polylines.forEach(p => {
+        p.addTo(window.leafletMap).setStyle(highlightLineStyle).bringToFront();
+    });
+    rosterData.airportMarkers.forEach(m => {
+        m.addTo(window.leafletMap).setStyle(highlightAirportStyle).bringToFront();
+    });
 
-        // NEW: Create and add custom labels for each leg
-        rosterData.legs.forEach(leg => {
-            const airlineCode = leg.flightNumber.replace(/\d+$/, '').toUpperCase();
-            const aircraftCode = leg.aircraft;
-            const liveryPath = `Images/liveries/${airlineCode}_${aircraftCode}.png`;
-            const genericPath = `Images/planesForCC/${aircraftCode}.png`;
+    // --- MODIFIED SECTION FOR OVERLAP FIX ---
+    const processedReturnRoutes = new Set(); // Tracks routes to find their return leg
 
-            const iconHtml = `
-                <div class="map-route-label">
-                    <img src="${liveryPath}" class="map-route-aircraft-img" 
-                         onerror="this.onerror=null; this.src='${genericPath}';">
-                    <span class="map-route-text">${leg.departure} → ${leg.arrival}</span>
-                </div>`;
-            
-            const routeIcon = L.divIcon({
-                className: 'map-route-icon-container', // Custom class to remove default leaflet styles
-                html: iconHtml
-            });
+    // Create and add custom labels for each leg
+    rosterData.legs.forEach(leg => {
+        const forwardRouteKey = `${leg.departure}-${leg.arrival}`;
+        const reverseRouteKey = `${leg.arrival}-${leg.departure}`;
+        let labelClass = "map-route-label"; // Base class
 
-            // Place the label at the midpoint of the leg's polyline
-            const midpoint = L.latLngBounds(leg.depCoords, leg.arrCoords).getCenter();
-            L.marker(midpoint, { icon: routeIcon }).addTo(routeInfoLayerGroup);
-        });
-
-        const allLayersForBounds = [...rosterData.polylines, ...rosterData.airportMarkers];
-        if (allLayersForBounds.length > 0) {
-            const featureGroup = L.featureGroup(allLayersForBounds);
-            window.leafletMap.fitBounds(featureGroup.getBounds().pad(0.2));
+        // Check if this leg is the return trip for a previously processed leg
+        if (processedReturnRoutes.has(forwardRouteKey)) {
+            labelClass += " offset-return"; // Add the offset class if it's a return leg
+        } else {
+            // If not, add its reverse key to the set to be watched for later
+            processedReturnRoutes.add(reverseRouteKey);
         }
-    };
+
+        const airlineCode = leg.flightNumber.replace(/\d+$/, '').toUpperCase();
+        const aircraftCode = leg.aircraft;
+        const liveryPath = `Images/liveries/${airlineCode}_${aircraftCode}.png`;
+        const genericPath = `Images/planesForCC/${aircraftCode}.png`;
+
+        // Use the dynamically assigned labelClass
+        const iconHtml = `
+            <div class="${labelClass}">
+                <img src="${liveryPath}" class="map-route-aircraft-img"
+                     onerror="this.onerror=null; this.src='${genericPath}';">
+                <span class="map-route-text">${leg.departure} → ${leg.arrival}</span>
+            </div>`;
+
+        const routeIcon = L.divIcon({
+            className: 'map-route-icon-container',
+            html: iconHtml
+        });
+
+        // Place the label at the midpoint of the leg's polyline
+        const midpoint = L.latLngBounds(leg.depCoords, leg.arrCoords).getCenter();
+        L.marker(midpoint, { icon: routeIcon }).addTo(routeInfoLayerGroup);
+    });
+    // --- END OF MODIFIED SECTION ---
+
+    const allLayersForBounds = [...rosterData.polylines, ...rosterData.airportMarkers];
+    if (allLayersForBounds.length > 0) {
+        const featureGroup = L.featureGroup(allLayersForBounds);
+        window.leafletMap.fitBounds(featureGroup.getBounds().pad(0.2));
+    }
+};
+
 
     loadAirportsData();
 });

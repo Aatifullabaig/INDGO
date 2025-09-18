@@ -853,19 +853,18 @@ table.leaderboard-table {
     display: flex;
     align-items: center;
     gap: 8px;
-    /* Using a white box as requested, with high opacity */
-    background-color: rgba(255, 255, 255, 0.9); 
-    color: #0d101c; /* Dark text for contrast */
-    padding: 4px 8px;
-    border-radius: 5px;
-    border: 1px solid rgba(13, 16, 28, 0.5);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    /* Style changes: Removed background and border, added white text with a shadow */
+    background-color: transparent;
+    color: #ffffff; /* White text */
+    border: none;
+    box-shadow: none;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); /* Strong shadow for readability */
     font-family: 'monospace', sans-serif;
-    font-size: 0.8rem;
+    font-size: 0.9rem; /* Slightly larger for better visibility */
     font-weight: bold;
     white-space: nowrap;
     /* This transform centers the label perfectly on the line's midpoint */
-    transform: translate(-50%, -50%); 
+    transform: translate(-50%, -50%);
     transition: all 0.2s ease-in-out;
 }
 
@@ -883,6 +882,10 @@ table.leaderboard-table {
 
 .map-route-text {
     letter-spacing: 0.5px;
+}
+
+.map-route-label.offset-return {
+    transform: translate(-50%, calc(-50% + 30px));
 }
 
 /* --- NEW: ROSTER HEADER LAYOUT --- */
