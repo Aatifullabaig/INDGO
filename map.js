@@ -1,15 +1,13 @@
-// --- map.js (Corrected) ---
-// This version exposes the map instance on the window object (window.leafletMap)
-// so that other scripts can interact with it, specifically to fix the initialization bug.
+// --- map.js (Updated) ---
+// This version adds functionality to focus on a single roster, displaying custom route info.
 
 document.addEventListener('DOMContentLoaded', () => {
-    // The local 'map' variable has been removed to avoid confusion.
-    // We will now use 'window.leafletMap' exclusively.
     let airportsData;
-    const rosterLayers = {}; // To store layers (lines, markers) for each roster
+    const rosterLayers = {}; // To store layers (lines, markers, leg data) for each roster
     const allAirportMarkers = {}; // Global store to avoid duplicate airport markers {icao: marker}
+    let routeInfoLayerGroup = null; // A layer group specifically for our custom route labels
 
-    // --- NEW: Define styles for map elements ---
+    // --- Define styles for map elements ---
     const defaultLineStyle = { color: '#5a6a9c', weight: 2, opacity: 0.7 };
     const highlightLineStyle = { color: '#FFA500', weight: 3, opacity: 1 }; // Orange
 
@@ -30,22 +28,18 @@ document.addEventListener('DOMContentLoaded', () => {
         fillOpacity: 1
     };
 
-    // MODIFIED: Initialize the map using a global variable
     function initializeMap() {
-        if (window.leafletMap) return; // Check if the global map object already exists
+        if (window.leafletMap) return;
         
-        window.leafletMap = L.map('map', {
-            worldCopyJump: true // Ensures smooth panning across the date line
-        }).setView([20, 0], 2);
+        window.leafletMap = L.map('map', { worldCopyJump: true }).setView([20, 0], 2);
 
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
             subdomains: 'abcd',
             maxZoom: 20,
-            minZoom: 2 // Prevent zooming out too far
+            minZoom: 2
         }).addTo(window.leafletMap);
 
-        // Set map boundaries to prevent endless panning
         const southWest = L.latLng(-85, -180);
         const northEast = L.latLng(85, 180);
         const bounds = L.latLngBounds(southWest, northEast);
@@ -53,9 +47,11 @@ document.addEventListener('DOMContentLoaded', () => {
         window.leafletMap.on('drag', function() {
             window.leafletMap.panInsideBounds(bounds, { animate: false });
         });
+
+        // Initialize the layer group for our custom labels
+        routeInfoLayerGroup = L.layerGroup().addTo(window.leafletMap);
     }
 
-    // Load airport data from the API
     async function loadAirportsData() {
         if (airportsData) return;
         try {
@@ -67,22 +63,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // MODIFIED: Function to clear all previously plotted routes and markers
     function clearAllRosterLayers() {
-        if (!window.leafletMap) return; // Don't do anything if map doesn't exist
+        if (!window.leafletMap) return;
         Object.values(rosterLayers).forEach(data => {
             data.polylines.forEach(polyline => window.leafletMap.removeLayer(polyline));
         });
         Object.values(allAirportMarkers).forEach(marker => window.leafletMap.removeLayer(marker));
+        routeInfoLayerGroup.clearLayers(); // Also clear custom labels
 
         for (const key in rosterLayers) { delete rosterLayers[key]; }
         for (const key in allAirportMarkers) { delete allAirportMarkers[key]; }
     }
 
-    // MODIFIED: Main function to plot all available rosters
     window.plotRosters = async function(pilotLocation, rosters) {
         initializeMap();
-        if (!window.leafletMap) return; // Guard against missing map object
+        if (!window.leafletMap) return;
         
         clearAllRosterLayers();
         await loadAirportsData();
@@ -93,12 +88,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         rosters.forEach(roster => {
-            // Initialize storage for this roster's layers
-            rosterLayers[roster._id] = { polylines: [], airportMarkers: [] };
-
+            // MODIFIED: Store leg data along with layers
+            rosterLayers[roster._id] = { polylines: [], airportMarkers: [], legs: [] };
             const rosterUniqueIcaos = new Set();
 
-            // First, create the polylines for each leg
             roster.legs.forEach(leg => {
                 rosterUniqueIcaos.add(leg.departure);
                 rosterUniqueIcaos.add(leg.arrival);
@@ -110,36 +103,39 @@ document.addEventListener('DOMContentLoaded', () => {
                     const latlngs = [[dep.lat, dep.lon], [arr.lat, arr.lon]];
                     const polyline = L.polyline(latlngs, defaultLineStyle).addTo(window.leafletMap);
                     rosterLayers[roster._id].polylines.push(polyline);
+                    // NEW: Store detailed leg info for later use
+                    rosterLayers[roster._id].legs.push({
+                        ...leg,
+                        depCoords: [dep.lat, dep.lon],
+                        arrCoords: [arr.lat, arr.lon]
+                    });
                 }
             });
 
-            // Next, create and associate airport markers
             rosterUniqueIcaos.forEach(icao => {
                 const airport = airportsData[icao];
                 if (airport) {
                     let marker;
-                    // If marker doesn't exist globally, create it
                     if (!allAirportMarkers[icao]) {
                         marker = L.circleMarker([airport.lat, airport.lon], defaultAirportStyle)
                             .addTo(window.leafletMap)
                             .bindPopup(`<b>${airport.icao}</b><br>${airport.name}`);
                         allAirportMarkers[icao] = marker;
                     }
-                    // Add the marker (new or existing) to this roster's data
                     marker = allAirportMarkers[icao];
                     rosterLayers[roster._id].airportMarkers.push(marker);
                 }
             });
         });
 
-        // Center the map on the pilot's location
         const pilotAirport = airportsData[pilotLocation];
         if (pilotAirport) {
             window.leafletMap.setView([pilotAirport.lat, pilotAirport.lon], 5);
+        } else {
+             window.leafletMap.fitWorld(); // Fallback if pilot location not found
         }
     };
 
-    // MODIFIED: Resets all routes and airports to the default style
     window.resetHighlights = function() {
         Object.values(rosterLayers).forEach(data => {
             data.polylines.forEach(polyline => polyline.setStyle(defaultLineStyle));
@@ -148,26 +144,73 @@ document.addEventListener('DOMContentLoaded', () => {
             marker.setStyle(defaultAirportStyle);
         });
     };
-
-    // MODIFIED: Highlights a specific roster's route and airports
-    window.highlightRoster = function(rosterId) {
+    
+    // NEW: Function to reset the map to its initial state, showing all rosters
+    window.showAllRosters = function() {
         if (!window.leafletMap) return;
-        resetHighlights(); // First, reset everything to default
+        resetHighlights();
+        routeInfoLayerGroup.clearLayers();
+
+        // Add all layers back to the map
+        Object.values(allAirportMarkers).forEach(marker => marker.addTo(window.leafletMap));
+        Object.values(rosterLayers).forEach(data => {
+            data.polylines.forEach(polyline => polyline.addTo(window.leafletMap));
+        });
+
+        // Create a feature group of everything to set the view
+        const allMarkersGroup = L.featureGroup(Object.values(allAirportMarkers));
+        if (Object.keys(allAirportMarkers).length > 0) {
+            window.leafletMap.fitBounds(allMarkersGroup.getBounds().pad(0.1));
+        }
+    }
+
+    // MODIFIED: highlightRoster is now focusOnRoster
+    window.focusOnRoster = function(rosterId) {
+        if (!window.leafletMap) return;
+        resetHighlights();
+        routeInfoLayerGroup.clearLayers(); // Clear any existing route labels
 
         const rosterData = rosterLayers[rosterId];
         if (!rosterData) return;
 
-        // Highlight the lines for this roster
-        rosterData.polylines.forEach(polyline => {
-            polyline.setStyle(highlightLineStyle).bringToFront();
+        // Hide all markers and polylines first
+        Object.values(allAirportMarkers).forEach(marker => window.leafletMap.removeLayer(marker));
+        Object.values(rosterLayers).forEach(data => {
+            data.polylines.forEach(p => window.leafletMap.removeLayer(p));
         });
 
-        // Highlight the airports for this roster
-        rosterData.airportMarkers.forEach(marker => {
-            marker.setStyle(highlightAirportStyle).bringToFront();
+        // Show and highlight layers for the selected roster
+        rosterData.polylines.forEach(p => {
+            p.addTo(window.leafletMap).setStyle(highlightLineStyle).bringToFront();
+        });
+        rosterData.airportMarkers.forEach(m => {
+            m.addTo(window.leafletMap).setStyle(highlightAirportStyle).bringToFront();
         });
 
-        // Zoom and pan the map to fit the highlighted route
+        // NEW: Create and add custom labels for each leg
+        rosterData.legs.forEach(leg => {
+            const airlineCode = leg.flightNumber.replace(/\d+$/, '').toUpperCase();
+            const aircraftCode = leg.aircraft;
+            const liveryPath = `Images/liveries/${airlineCode}_${aircraftCode}.png`;
+            const genericPath = `Images/planesForCC/${aircraftCode}.png`;
+
+            const iconHtml = `
+                <div class="map-route-label">
+                    <img src="${liveryPath}" class="map-route-aircraft-img" 
+                         onerror="this.onerror=null; this.src='${genericPath}';">
+                    <span class="map-route-text">${leg.departure} → ${leg.arrival}</span>
+                </div>`;
+            
+            const routeIcon = L.divIcon({
+                className: 'map-route-icon-container', // Custom class to remove default leaflet styles
+                html: iconHtml
+            });
+
+            // Place the label at the midpoint of the leg's polyline
+            const midpoint = L.latLngBounds(leg.depCoords, leg.arrCoords).getCenter();
+            L.marker(midpoint, { icon: routeIcon }).addTo(routeInfoLayerGroup);
+        });
+
         const allLayersForBounds = [...rosterData.polylines, ...rosterData.airportMarkers];
         if (allLayersForBounds.length > 0) {
             const featureGroup = L.featureGroup(allLayersForBounds);
@@ -175,6 +218,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Initial load of airport data when script loads
     loadAirportsData();
 });

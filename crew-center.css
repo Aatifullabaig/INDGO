@@ -839,6 +839,63 @@ table.leaderboard-table {
     border-radius: 2px;
 }
 
+/* --- NEW STYLES FOR MAP ROUTE LABELS --- */
+
+/* This class is applied by L.divIcon to its container, helping to reset default icon styles */
+.map-route-icon-container {
+    background: transparent;
+    border: none;
+    margin-left: 0 !important; /* Override Leaflet's default negative margins */
+    margin-top: 0 !important;
+}
+
+.map-route-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* Using a white box as requested, with high opacity */
+    background-color: rgba(255, 255, 255, 0.9); 
+    color: #0d101c; /* Dark text for contrast */
+    padding: 4px 8px;
+    border-radius: 5px;
+    border: 1px solid rgba(13, 16, 28, 0.5);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    font-family: 'monospace', sans-serif;
+    font-size: 0.8rem;
+    font-weight: bold;
+    white-space: nowrap;
+    /* This transform centers the label perfectly on the line's midpoint */
+    transform: translate(-50%, -50%); 
+    transition: all 0.2s ease-in-out;
+}
+
+.map-route-label:hover {
+    transform: translate(-50%, -50%) scale(1.1);
+    z-index: 1000 !important;
+}
+
+.map-route-aircraft-img {
+    height: 25px;
+    width: 40px;
+    object-fit: contain;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+}
+
+.map-route-text {
+    letter-spacing: 0.5px;
+}
+
+/* --- NEW: ROSTER HEADER LAYOUT --- */
+/* This ensures the title and button align nicely */
+#roster-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap; /* Allows stacking on small screens */
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
 /* --- MOBILE RESPONSIVE STYLES --- */
 /* Apply these styles only on screens 768px or smaller */
 @media (max-width: 768px) {

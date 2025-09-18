@@ -415,10 +415,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const criteria = data.searchCriteria || {};
 
             if (criteria.searched?.length > 0) {
-                header.innerHTML = `<div>Showing rosters for <strong>${criteria.searched.join(' & ')}</strong><span class="badge badge-rank ml-8">Your rank: ${CURRENT_PILOT?.rank || 'Unknown'}</span></div>`;
-                if (window.plotRosters) window.plotRosters(criteria.searched[0], rosters);
+                // MODIFIED: Added the "View on Map" button to the header
+                header.innerHTML = `
+                    <div class="roster-header-info">
+                        Showing rosters for <strong>${criteria.searched.join(' & ')}</strong>
+                        <span class="badge badge-rank ml-8">Your rank: ${CURRENT_PILOT?.rank || 'Unknown'}</span>
+                    </div>
+                    <button id="go-to-map-btn" class="details-button"><i class="fa-solid fa-map-location-dot"></i> View on Map</button>
+                `; //
+                if (window.plotRosters) window.plotRosters(criteria.searched[0], rosters); //
             } else {
-                header.innerHTML = 'No location data found. Showing rosters from primary hubs.';
+                header.innerHTML = 'No location data found. Showing rosters from primary hubs.'; //
             }
 
             if (rosters.length === 0) {
@@ -429,14 +436,11 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = rosters.map(roster => {
                 const dutyDisabled = CURRENT_PILOT?.promotionStatus === 'PENDING_TEST' ? 'disabled' : '';
 
-                // --- MODIFIED LIVERY LOGIC ---
-                // 1. Determine if the roster has single or multiple aircraft types
                 const aircraftTypes = new Set(roster.legs.map(leg => leg.aircraft));
                 const isMultiAircraft = aircraftTypes.size > 1;
 
-                let aircraftImageHTML = ''; // Initialize as empty
+                let aircraftImageHTML = ''; 
 
-                // 2. Only show the main image if it's a single-aircraft roster
                 if (!isMultiAircraft && roster.legs.length > 0) {
                     const firstLeg = roster.legs[0];
                     const aircraftCode = firstLeg.aircraft;
@@ -453,7 +457,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                  onerror="this.onerror=null; this.src='${genericImagePath}'; this.alt='${aircraftCode}';">
                         </div>`;
                 }
-                // --- END MODIFIED LIVERY LOGIC ---
 
                 return `
                 <div class="roster-item" data-multi-aircraft="${isMultiAircraft}">
@@ -569,16 +572,41 @@ document.addEventListener('DOMContentLoaded', () => {
     mainContentContainer.addEventListener('click', async (e) => {
         const target = e.target;
         
-        // Roster Details Toggle
-        if (target.classList.contains('details-button')) {
-            const rosterId = target.dataset.rosterId;
-            const detailsContainer = document.getElementById(`details-${rosterId}`);
-            const rosterItem = target.closest('.roster-item');
-            const isMultiAircraft = rosterItem.dataset.multiAircraft === 'true';
-            
-            // Toggle visibility
-            const isVisible = detailsContainer.classList.toggle('visible');
-            target.setAttribute('aria-expanded', isVisible);
+        // NEW: Listener for the "Go to Map" button
+        if (target.id === 'go-to-map-btn' || target.closest('#go-to-map-btn')) {
+            document.getElementById('map').scrollIntoView({ behavior: 'smooth' }); //
+        }
+        
+        // MODIFIED: Roster Details Toggle with Map Interaction
+        if (target.classList.contains('details-button') && target.dataset.rosterId) {
+            const rosterId = target.dataset.rosterId; //
+            const detailsContainer = document.getElementById(`details-${rosterId}`); //
+
+            // First, close any other details panel that might be open
+            document.querySelectorAll('.roster-leg-details.visible').forEach(openDetail => {
+                if (openDetail.id !== `details-${rosterId}`) {
+                    openDetail.classList.remove('visible'); //
+                    const otherId = openDetail.id.replace('details-', ''); //
+                    document.querySelector(`.details-button[data-roster-id="${otherId}"]`).setAttribute('aria-expanded', 'false'); //
+                }
+            });
+
+            // Toggle the one that was clicked
+            const isVisible = detailsContainer.classList.toggle('visible'); //
+            target.setAttribute('aria-expanded', isVisible); //
+
+            if (isVisible) {
+                // If it's now visible, focus the map and scroll to it
+                if (window.focusOnRoster) {
+                    window.focusOnRoster(rosterId); //
+                    document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' }); //
+                }
+            } else {
+                // If it was just closed (and no others are open), reset the map
+                if (window.showAllRosters) {
+                    window.showAllRosters(); //
+                }
+            }
 
             // Fetch and render details only if it's visible and not already loaded
             if (isVisible && !detailsContainer.innerHTML.trim()) {
@@ -590,6 +618,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const rosterData = await res.json();
                     const allRosters = rosterData.rosters || [];
                     const roster = allRosters.find(r => r._id === rosterId);
+                    const isMultiAircraft = roster.legs.some((leg, i, arr) => i > 0 && leg.aircraft !== arr[0].aircraft); //
 
                     if (roster && roster.legs) {
                         detailsContainer.innerHTML = `
@@ -598,7 +627,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                     const airlineCode = leg.flightNumber.replace(/\d+$/, '').toUpperCase();
                                     const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : 'images/default-airline.png'; 
 
-                                    // --- NEW: Generate aircraft image for this leg if needed ---
                                     let legAircraftImageHTML = '';
                                     if (isMultiAircraft) {
                                         const legAircraftCode = leg.aircraft;
@@ -614,7 +642,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                                  onerror="this.onerror=null; this.src='${genericImagePath}'; this.alt='${legAircraftCode}';">
                                         </div>`;
                                     }
-                                    // --- END NEW ---
 
                                     return `
                                     <li class="${isMultiAircraft ? 'multi-aircraft-leg' : ''}">
