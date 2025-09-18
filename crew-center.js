@@ -18,6 +18,34 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
 
+    // --- Helper to extract airline code from flight number ---
+    function extractAirlineCode(flightNumber) {
+        if (!flightNumber || typeof flightNumber !== 'string') {
+            return 'UNKNOWN';
+        }
+
+        // This regex looks for:
+        // ^                  - Start of the string
+        // ([A-Z0-9]{2,3})    - A capturing group for the airline code (2-3 alphanumeric chars)
+        // ([0-9]{1,4})       - A capturing group for the flight number digits (1-4 digits)
+        // ([A-Z]?)           - An optional capturing group for a letter suffix
+        // $                  - End of the string
+        const match = flightNumber.trim().toUpperCase().match(/^([A-Z0-9]{2,3})([0-9]{1,4})([A-Z]?)$/);
+
+        if (match && match[1]) {
+            return match[1]; // Return the first captured group (the airline code)
+        }
+
+        // Fallback for non-standard flight numbers (e.g., general aviation)
+        // This will take all characters from the beginning until the first number.
+        const fallbackMatch = flightNumber.trim().toUpperCase().match(/^(\D+)/);
+        if (fallbackMatch && fallbackMatch[1]) {
+            return fallbackMatch[1];
+        }
+
+        return 'UNKNOWN'; // Return a default if no pattern is matched
+    }
+
     // --- Rank model (keep in sync with backend) ---
     const PILOT_RANKS = [
         'IndGo Cadet', 'Skyline Observer', 'Route Explorer', 'Skyline Officer',
@@ -444,7 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!isMultiAircraft && roster.legs.length > 0) {
                     const firstLeg = roster.legs[0];
                     const aircraftCode = firstLeg.aircraft;
-                    const airlineCode = firstLeg.flightNumber.replace(/\d+$/, '').toUpperCase();
+                    const airlineCode = extractAirlineCode(firstLeg.flightNumber); // <-- FIXED
 
                     const liveryImagePath = `Images/liveries/${airlineCode}_${aircraftCode}.png`;
                     const genericImagePath = `Images/planesForCC/${aircraftCode}.png`;
@@ -624,13 +652,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         detailsContainer.innerHTML = `
                             <ul>
                                 ${roster.legs.map(leg => {
-                                    const airlineCode = leg.flightNumber.replace(/\d+$/, '').toUpperCase();
+                                    const airlineCode = extractAirlineCode(leg.flightNumber); // <-- FIXED
                                     const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : 'images/default-airline.png'; 
 
                                     let legAircraftImageHTML = '';
                                     if (isMultiAircraft) {
                                         const legAircraftCode = leg.aircraft;
-                                        const legAirlineCode = leg.flightNumber.replace(/\d+$/, '').toUpperCase();
+                                        const legAirlineCode = extractAirlineCode(leg.flightNumber); // <-- Also fixed here for consistency
                                         const liveryImagePath = `Images/liveries/${legAirlineCode}_${legAircraftCode}.png`;
                                         const genericImagePath = `Images/planesForCC/${legAircraftCode}.png`;
 
