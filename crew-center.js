@@ -24,23 +24,29 @@ document.addEventListener('DOMContentLoaded', () => {
             return 'UNKNOWN';
         }
 
+        const cleanedFlightNumber = flightNumber.trim().toUpperCase();
+
         // This regex looks for:
         // ^                  - Start of the string
         // ([A-Z0-9]{2,3})    - A capturing group for the airline code (2-3 alphanumeric chars)
         // ([0-9]{1,4})       - A capturing group for the flight number digits (1-4 digits)
         // ([A-Z]?)           - An optional capturing group for a letter suffix
         // $                  - End of the string
-        const match = flightNumber.trim().toUpperCase().match(/^([A-Z0-9]{2,3})([0-9]{1,4})([A-Z]?)$/);
+        const match = cleanedFlightNumber.match(/^([A-Z0-9]{2,3})([0-9]{1,4})([A-Z]?)$/);
 
         if (match && match[1]) {
-            return match[1]; // Return the first captured group (the airline code)
+            // --- MODIFIED LINE ---
+            // Always return the first two characters of the matched code.
+            return match[1].substring(0, 2);
         }
 
         // Fallback for non-standard flight numbers (e.g., general aviation)
         // This will take all characters from the beginning until the first number.
-        const fallbackMatch = flightNumber.trim().toUpperCase().match(/^(\D+)/);
+        const fallbackMatch = cleanedFlightNumber.match(/^(\D+)/);
         if (fallbackMatch && fallbackMatch[1]) {
-            return fallbackMatch[1];
+             // --- MODIFIED LINE ---
+            // Also apply the truncation to the fallback result.
+            return fallbackMatch[1].substring(0, 2);
         }
 
         return 'UNKNOWN'; // Return a default if no pattern is matched
