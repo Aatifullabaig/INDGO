@@ -461,6 +461,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Get first departure and last arrival
                 const firstLeg = roster.legs[0];
                 const lastLeg = roster.legs[roster.legs.length - 1];
+                
+                const pathString = [roster.legs[0].departure, ...roster.legs.map(leg => leg.arrival)].join(' → ');
 
                 // --- NEW HTML STRUCTURE FOR REDESIGN ---
                 return `
@@ -475,6 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     
+                    <%-- RESTORED: The main departure/arrival display --%>
                     <div class="roster-flight-info">
                         <div class="flight-segment departure">
                             <span class="segment-label">Departs</span>
@@ -491,9 +494,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
 
-                    <div class="roster-actions">
-                        <button class="details-button" data-roster-id="${roster._id}" aria-expanded="false">Details</button>
-                        <button class="cta-button go-on-duty-btn" data-roster-id="${roster._id}" ${dutyDisabled}>Go On Duty</button>
+                    <%-- NEW: Footer to hold the path and action buttons --%>
+                    <div class="roster-card-footer">
+                        <div class="roster-path-display">${pathString}</div>
+                        <div class="roster-actions">
+                            <button class="details-button" data-roster-id="${roster._id}" aria-expanded="false">Details</button>
+                            <button class="cta-button go-on-duty-btn" data-roster-id="${roster._id}" ${dutyDisabled}>Go On Duty</button>
+                        </div>
                     </div>
                     
                     <div class="roster-leg-details" id="details-${roster._id}">

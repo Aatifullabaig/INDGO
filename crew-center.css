@@ -662,19 +662,47 @@ roster-item {
     color: var(--dashboard-text-muted);
 }
 
-.roster-actions {
+.roster-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     width: 100%;
-    justify-content: flex-end;
-    margin-top: 0.5rem;
+    margin-top: 1rem;
+    flex-wrap: wrap; /* Allows path and buttons to stack on small screens */
+    gap: 1rem;
+}
+
+.roster-path-display {
+    font-family: 'monospace', sans-serif;
+    font-size: 0.9rem;
+    color: var(--dashboard-text-muted);
+    background-color: rgba(13, 16, 28, 0.7);
+    padding: 0.5rem 0.75rem;
+    border-radius: 5px;
+    border: 1px solid var(--border-color);
+    flex-grow: 1; /* Allows the path to take available space */
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+.roster-actions {
+    flex-shrink: 0; /* Prevent buttons from shrinking */
+    width: auto; /* Override any full-width settings */
 }
 
 /* Override mobile styles for the old design */
 @media (max-width: 768px) {
-    .roster-actions {
-        flex-direction: row; /* Ensure buttons are side-by-side if they fit */
+    .roster-card-footer {
+        justify-content: center; /* Center items when they stack */
     }
-    .roster-actions .cta-button, .roster-actions .details-button {
-       flex-grow: 1; /* Make buttons share the space */
+    .roster-path-display, .roster-actions {
+        width: 100%;
+    }
+    .roster-path-display {
+        text-align: center;
     }
 }
 
