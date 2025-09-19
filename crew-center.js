@@ -954,7 +954,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- Initial Load ---
     fetchPilotData();
-    
+
+     document.getElementById('dispatch-callsign').textContent = CURRENT_PILOT?.callsign || 'N/A';
+
     // --- MODIFIED FUNCTION ---
     const handleSimbriefReturn = async () => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -983,39 +985,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Header
                 document.getElementById('dispatch-flight-number').textContent = ofpData.general.flight_number || 'N/A';
                 document.getElementById('dispatch-route-short').textContent = `${ofpData.origin.icao_code} → ${ofpData.destination.icao_code}`;
-                document.getElementById('dispatch-date').textContent = new Date().toLocaleDateString();
+                // MODIFIED: Use the flight date from SimBrief, not today's date
+                document.getElementById('dispatch-date').textContent = new Date(ofpData.general.date).toLocaleDateString();
 
                 // Main Info Column
                 document.getElementById('dispatch-callsign').textContent = CURRENT_PILOT?.callsign || 'N/A';
+                document.getElementById('dispatch-callsign').textContent = ofpData.atc.callsign || 'N/A';
                 document.getElementById('dispatch-aircraft').textContent = ofpData.aircraft.icaocode || 'N/A';
                 document.getElementById('dispatch-etd').textContent = formatTimeFromTimestamp(ofpData.times.sched_out);
                 document.getElementById('dispatch-eta').textContent = formatTimeFromTimestamp(ofpData.times.sched_in);
                 document.getElementById('dispatch-duration').textContent = formatDuration(ofpData.times.est_time_enroute);
 
                 // Fuel & Weights
-                document.getElementById('dispatch-fuel-taxi').textContent = formatWeight(ofpData.weights.taxi_fuel);
+                document.getElementById('dispatch-fuel-taxi').textContent = formatWeight(ofpData.fuel.taxi_fuel);
                 document.getElementById('dispatch-fuel-trip').textContent = formatWeight(ofpData.fuel.trip);
                 document.getElementById('dispatch-fuel-total').textContent = formatWeight(ofpData.fuel.plan_ramp);
                 document.getElementById('dispatch-zfw').textContent = formatWeight(ofpData.weights.est_zfw);
                 document.getElementById('dispatch-tow').textContent = formatWeight(ofpData.weights.est_tow);
 
                 // ATC
+                // Note: SimBrief's basic OFP does not provide FIC/ADC numbers. Reusing flight number/callsign as placeholders.
                 document.getElementById('dispatch-fic').textContent = ofpData.general.flight_number || 'N/A';
-                document.getElementById('dispatch-adc').textContent = ofpData.general.callsign || 'N/A';
+                document.getElementById('dispatch-adc').textContent = ofpData.atc.callsign || 'N/A';
                 document.getElementById('dispatch-squawk').textContent = ofpData.atc.squawk || '----';
 
                 // Passengers & Cargo
                 document.getElementById('dispatch-pax').textContent = ofpData.general.passengers || '0';
+                // Note: Cargo is calculated from total payload minus passenger weight.
                 document.getElementById('dispatch-cargo').textContent = formatWeight(ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight));
                 
                 // Footer
                 document.getElementById('dispatch-route-full').textContent = ofpData.general.route;
                 
-                // Collect all alternates
+                // Collect all alternates from the API response
                 const alternates = [ofpData.alternate?.icao_code, ofpData.alternate2?.icao_code, ofpData.alternate3?.icao_code, ofpData.alternate4?.icao_code]
                     .filter(Boolean) // Remove any undefined/null values
                     .join(', ');
                 document.getElementById('dispatch-alternates').textContent = alternates || 'None';
+
+                // Note: V-Speeds and detailed weather are not included in the default SimBrief data fetch.
+                // They would require enabling runway analysis (tlr=1) and are left as "---".
 
                 // Show the dispatch pass and hide the form
                 formContainer.style.display = 'none';
