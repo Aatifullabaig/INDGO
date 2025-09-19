@@ -736,9 +736,13 @@ document.addEventListener('DOMContentLoaded', () => {
         card.className = 'user-manage-card';
         card.setAttribute('data-userid', user._id);
         
+        const statusBadge = user.promotionStatus === 'PENDING_TEST'
+            ? '<span class="status-badge warning">Pending Test</span>'
+            : '';
+        
         card.innerHTML = `
             <div class="user-info">
-                <strong>${user.name}</strong>
+                <strong>${user.name}</strong> ${statusBadge}
                 <small>${user.email}</small>
                 <div><small>Rank: ${user.rank || '—'} • Hours: ${user.flightHours?.toFixed(1) ?? 0}</small></div>
             </div>

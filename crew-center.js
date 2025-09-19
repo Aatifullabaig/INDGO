@@ -71,11 +71,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const rankIndex = (r) => PILOT_RANKS.indexOf(String(r || '').trim());
     
     const FLEET = [
-        { code:'Q400', name:'De Havilland Dash 8 Q400', minRank:'IndGo Cadet', operator:'IndGo Air Virtual' },
+        { code:'DH8D', name:'De Havilland Dash 8 Q400', minRank:'IndGo Cadet', operator:'IndGo Air Virtual' },
         { code:'A320', name:'Airbus A320',              minRank:'IndGo Cadet', operator:'IndGo Air Virtual' },
         { code:'B738', name:'Boeing 737-800',           minRank:'IndGo Cadet', operator:'IndGo Air Virtual' },
         { code:'A321', name:'Airbus A321',              minRank:'Skyline Observer', operator:'IndGo Air Virtual' },
-        { code:'B737', name:'Boeing 737 (family)',      minRank:'Skyline Observer', operator:'IndGo Air Virtual' },
+        { code:'B739', name:'Boeing 737-900',      minRank:'Skyline Observer', operator:'IndGo Air Virtual' },
         { code:'A330', name:'Airbus A330-300',          minRank:'Route Explorer', operator:'IndGo Air Virtual' },
         { code:'B38M', name:'Boeing 737 MAX 8',         minRank:'Route Explorer', operator:'IndGo Air Virtual' },
         { code:'B788', name:'Boeing 787-8',             minRank:'Skyline Officer', operator:'IndGo Air Virtual' },
