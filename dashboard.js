@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const manageHighlightsContainer = document.getElementById('manage-highlights-container');
     const pendingPirepsContainer = document.getElementById('pending-pireps-container');
     const rosterManagementContainer = document.getElementById('tab-roster-management');
+    const inviteListContainer = document.getElementById('invite-list-container');
 
     // --- NEW: NOTIFICATION ELEMENTS ---
     const notificationBell = document.getElementById('notification-bell');
@@ -141,10 +142,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- DATA PRELOADING FUNCTION ---
     function preloadDashboardData() {
         console.log("Pre-loading dashboard data...");
-        // These functions are called without 'await' to run in the background.
-        // They will fetch data and render it when ready, replacing the skeletons.
         if (adminTabLink && adminTabLink.style.display !== 'none') {
             populateAdminTools();
+            populateInvites(); 
         }
         if (pilotTabLink && pilotTabLink.style.display !== 'none') {
             populatePilotDatabase();
@@ -185,7 +185,6 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('profile-youtube').value = user.youtube || '';
             document.getElementById('profile-preferred').value = user.preferredContact || 'none';
 
-            // --- NEW: Handle notifications from backend ---
             if (user.unreadNotifications && user.unreadNotifications.length > 0) {
                 unreadNotifications = user.unreadNotifications;
                 updateNotificationUI();
@@ -221,7 +220,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 showTab(rosterTabLink);
             }
             
-            // *** NEW: Start pre-loading all necessary data after UI is ready ***
             preloadDashboardData();
 
         } catch (error) {
@@ -234,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- PERFORMANCE OPTIMIZATION: Generic function to render lists efficiently ---
     function renderList(container, items, itemRenderer, emptyMessage) {
         if (!container) return;
-        container.innerHTML = ''; // Clear previous content (including skeletons)
+        container.innerHTML = ''; 
 
         if (!items || items.length === 0) {
             container.innerHTML = `<p>${emptyMessage}</p>`;
@@ -250,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
         container.appendChild(fragment);
     }
 
-    // --- NEW: NOTIFICATION HANDLING ---
+    // --- NOTIFICATION HANDLING ---
     function updateNotificationUI() {
         if (unreadNotifications.length > 0) {
             notificationBadge.textContent = unreadNotifications.length;
@@ -277,7 +275,6 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             notificationPanel.classList.toggle('active');
 
-            // If panel is opened and there are unread notifications, mark them as read
             if (notificationPanel.classList.contains('active') && unreadNotifications.length > 0) {
                 const idsToMarkRead = unreadNotifications.map(n => n._id);
                 try {
@@ -286,7 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         body: JSON.stringify({ notificationIds: idsToMarkRead })
                     });
                     unreadNotifications = [];
-                    // Delay hiding the badge for a better user experience
                     setTimeout(() => {
                         notificationBadge.style.display = 'none';
                     }, 1500);
@@ -358,7 +354,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.target.disabled = true;
                 e.target.textContent = 'Approving...';
                 
-                // **UPDATED**: Get corrected flight time from input
                 const correctedTimeInput = document.getElementById(`correct-time-${pirepId}`);
                 const correctedFlightTime = correctedTimeInput ? correctedTimeInput.value : null;
 
@@ -372,10 +367,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         method: 'PUT',
                         body: JSON.stringify(body)
                     });
-
-                    // The backend now sends a more detailed message, including potential HTML for promotions
                     showNotification(result.message, 'success', 10000);
-
                     const pirepCard = document.getElementById(`pirep-${pirepId}`);
                     if (pirepCard) pirepCard.remove();
                     if (pendingPirepsContainer.children.length === 0) {
@@ -624,9 +616,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (target) {
                     target.classList.add('active');
                 }
-                
-                // Data is now pre-loaded, so we no longer need the
-                // conditional fetching logic here.
             });
         });
     }
@@ -640,7 +629,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const header = e.target.closest('.nav-category-header');
             if (!header) return;
 
-            // ---- FIX: PREVENT ACCORDION FROM WORKING WHEN SIDEBAR IS COLLAPSED ----
             if (dashboardContainer.classList.contains('sidebar-collapsed')) {
                 e.preventDefault();
                 return;
@@ -650,26 +638,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const parentCategory = header.parentElement;
             const currentlyOpen = sidebarNav.querySelector('.nav-category.category-open');
 
-            // If there is an open category and it's not the one we clicked, close it
             if (currentlyOpen && currentlyOpen !== parentCategory) {
                 currentlyOpen.classList.remove('category-open');
             }
 
-            // Toggle the clicked category
             parentCategory.classList.toggle('category-open');
         });
     }
 
-    // --- ADMIN: POPULATE USERS & LOGS (OPTIMIZED) ---
+    // --- ADMIN: POPULATE USERS & LOGS ---
     async function populateAdminTools() {
         try {
-            // OPTIMIZED: Start both network requests in parallel
             const [users, logs] = await Promise.all([
                 safeFetch(`${API_BASE_URL}/api/users`),
                 safeFetch(`${API_BASE_URL}/api/logs`)
             ]);
-
-            // Now that both have finished, render the results
             renderUserList(users);
             renderLiveOperations(users);
             renderLogList(logs);
@@ -679,6 +662,57 @@ document.addEventListener('DOMContentLoaded', () => {
             if (userListContainer) userListContainer.innerHTML = '<p style="color: red;">Could not load users.</p>';
             if (logContainer) logContainer.innerHTML = '<p style="color: red;">Could not load logs.</p>';
         }
+    }
+    
+    // --- ADMIN: INVITATION MANAGEMENT ---
+    async function populateInvites() {
+        if (!inviteListContainer) return;
+        try {
+            const invites = await safeFetch(`${API_BASE_URL}/api/invites`);
+            renderInviteList(invites);
+        } catch (error) {
+            console.error('Failed to load invites:', error);
+            if (inviteListContainer) inviteListContainer.innerHTML = `<p style="color:red;">Could not load invites: ${error.message}</p>`;
+        }
+    }
+
+    function createInviteCardElement(invite) {
+        const card = document.createElement('div');
+        card.className = 'user-manage-card';
+        card.setAttribute('data-inviteid', invite._id);
+
+        let statusHtml;
+        switch (invite.status) {
+            case 'PENDING':
+                statusHtml = `Status: <span style="color: var(--warning-color);">Pending</span>`;
+                break;
+            case 'ACCEPTED':
+                statusHtml = `Status: <span style="color: var(--success-color);">Accepted</span> by ${invite.usedBy?.name || 'N/A'}`;
+                break;
+            case 'EXPIRED':
+                statusHtml = `Status: <span style="color: var(--dashboard-text-muted);">Expired</span>`;
+                break;
+            default:
+                statusHtml = `Status: ${invite.status}`;
+        }
+
+        card.innerHTML = `
+            <div class="user-info">
+                <strong><code>${invite.code}</code></strong>
+                <small>Expires: ${new Date(invite.expiresAt).toLocaleString()}</small>
+                <div><small>${statusHtml}</small></div>
+            </div>
+            <div class="user-controls">
+                <button class="delete-user-btn delete-invite-btn" data-id="${invite._id}" ${invite.status !== 'PENDING' ? 'disabled' : ''}>
+                    <i class="fas fa-trash-alt"></i> Delete
+                </button>
+            </div>
+        `;
+        return card;
+    }
+
+    function renderInviteList(invites) {
+        renderList(inviteListContainer, invites, createInviteCardElement, 'No invite codes have been created yet.');
     }
 
     const createRoleOptions = (selectedRole) => {
@@ -702,9 +736,6 @@ document.addEventListener('DOMContentLoaded', () => {
         card.className = 'user-manage-card';
         card.setAttribute('data-userid', user._id);
         
-        // **UPDATED**: Add FTPL toggle button
-        const ftplButtonText = user.isFtplExempt ? 'Enable FTPL' : 'Disable FTPL';
-
         card.innerHTML = `
             <div class="user-info">
                 <strong>${user.name}</strong>
@@ -732,8 +763,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function renderUserList(users) {
-        // NOTE: The backend /api/users endpoint needs to be updated to return the 'isFtplExempt' field for each user
-        // for the FTPL toggle button to display the correct initial state. Assuming it does for this implementation.
         renderList(userListContainer, users, createUserCardElement, 'No users found.');
     }
 
@@ -758,20 +787,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!container) return;
 
         const onDutyPilots = users.filter(u => u.dutyStatus === 'ON_DUTY');
-
         if (onDutyPilots.length === 0) {
             container.innerHTML = '<p>No pilots are currently on duty.</p>';
             return;
         }
 
-        safeFetch(`${API_BASE_URL}/api/rosters`).then(rosters => {
+        safeFetch(`${API_BASE_URL}/api/rosters?all=true`).then(rosters => {
             const rosterMap = new Map(rosters.map(r => [r._id.toString(), r.name]));
-            container.innerHTML = onDutyPilots.map(pilot => `
-                <div class="live-ops-item" style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);">
+            const renderer = pilot => {
+                const item = document.createElement('div');
+                item.className = 'live-ops-item';
+                item.style.cssText = 'padding: 0.5rem; border-bottom: 1px solid var(--border-color);';
+                item.innerHTML = `
                     <strong>${pilot.name} (${pilot.callsign || 'N/A'})</strong> is ON DUTY.
-                    <small style="display: block; color: var(--dashboard-text-muted);">Roster: ${rosterMap.get(pilot.currentRoster) || 'N/A'}</small>
-                </div>
-            `).join('');
+                    <small style="display: block; color: var(--dashboard-text-muted);">Roster: ${rosterMap.get(pilot.currentRoster) || 'Unknown Roster'}</small>
+                `;
+                return item;
+            };
+            renderList(container, onDutyPilots, renderer, 'No pilots are currently on duty.');
         }).catch(err => {
             container.innerHTML = '<p style="color: red;">Could not load roster data for live ops.</p>';
         });
@@ -781,7 +814,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function populateCommunityManagement() {
         if (!manageEventsContainer || !manageHighlightsContainer) return;
         try {
-            // Run in parallel for speed
             const [events, highlights] = await Promise.all([
                 safeFetch(`${API_BASE_URL}/api/events`),
                 safeFetch(`${API_BASE_URL}/api/highlights`)
@@ -857,7 +889,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function populatePilotManagement() {
         if (!pilotManagementContainer) return;
         try {
-            // UPDATED: Fetch all users to get promotionStatus
             const users = await safeFetch(`${API_BASE_URL}/api/users`);
             const pilots = users.filter(u => u.role === 'pilot');
             renderPilotList(pilots);
@@ -866,7 +897,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // **UPDATED**: renderPilotList to show promotion status
     function renderPilotList(pilots) {
         const createRankOptions = (currentRank) => {
             return pilotRanks.map(rank =>
@@ -879,7 +909,6 @@ document.addEventListener('DOMContentLoaded', () => {
              card.className = 'user-manage-card';
              card.setAttribute('data-userid', pilot._id);
 
-             // **NEW**: Add a badge if pilot is pending a test
              const statusBadge = pilot.promotionStatus === 'PENDING_TEST'
                 ? '<span class="status-badge warning">Pending Test</span>'
                 : '';
@@ -1056,32 +1085,32 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- EVENT DELEGATION: ADMIN USER ACTIONS ---
-    if (userListContainer) {
-        userListContainer.addEventListener('click', async (e) => {
+    // --- EVENT DELEGATION: ADMIN ACTIONS ---
+    const adminTabContent = document.getElementById('tab-admin');
+    if (adminTabContent) {
+        adminTabContent.addEventListener('click', async (e) => {
             const target = e.target;
-            const deleteBtn = target.closest('.delete-user-btn');
+            const deleteUserBtn = target.closest('.delete-user-btn:not(.delete-invite-btn)');
             const ftplBtn = target.closest('.ftpl-toggle-btn');
-            
-            if (deleteBtn) {
+            const setCsBtn = target.closest('.set-callsign-btn');
+            const createInviteBtn = target.closest('#create-invite-btn');
+            const deleteInviteBtn = target.closest('.delete-invite-btn');
+
+            if (deleteUserBtn) {
                 e.preventDefault();
-                const userId = deleteBtn.dataset.userid;
-                const userName = deleteBtn.dataset.username;
+                const userId = deleteUserBtn.dataset.userid;
+                const userName = deleteUserBtn.dataset.username;
                 if (!userId || !confirm(`WARNING: Are you sure you want to delete ${userName}? This action cannot be undone.`)) return;
 
                 try {
-                    await safeFetch(`${API_BASE_URL}/api/users/${userId}`, {
-                        method: 'DELETE'
-                    });
+                    await safeFetch(`${API_BASE_URL}/api/users/${userId}`, { method: 'DELETE' });
                     showNotification('User deleted successfully.', 'success');
-                    deleteBtn.closest('.user-manage-card').remove();
+                    deleteUserBtn.closest('.user-manage-card').remove();
                 } catch (error) {
                     showNotification(`Failed to delete user: ${error.message}`, 'error');
                 }
-                return;
             }
 
-            // **NEW**: Handle FTPL Toggle
             if (ftplBtn) {
                 e.preventDefault();
                 const userId = ftplBtn.dataset.userid;
@@ -1090,16 +1119,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const result = await safeFetch(`${API_BASE_URL}/api/users/${userId}/toggle-ftpl`, { method: 'PUT' });
                     showNotification(result.message, 'success');
-                    // Update the button UI
                     ftplBtn.dataset.exempt = result.isFtplExempt;
                     ftplBtn.textContent = `FTPL: ${result.isFtplExempt ? 'Exempt' : 'Active'}`;
                 } catch (error) {
                     showNotification(`Failed to toggle FTPL: ${error.message}`, 'error');
                 }
-                return;
             }
 
-            const setCsBtn = target.closest('.set-callsign-btn');
             if (setCsBtn) {
                 e.preventDefault();
                 const userId = setCsBtn.dataset.userid;
@@ -1113,21 +1139,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     await safeFetch(`${API_BASE_URL}/api/users/${userId}/callsign`, {
                         method: 'PUT',
-                        body: JSON.stringify({
-                            callsign
-                        })
+                        body: JSON.stringify({ callsign })
                     });
                     showNotification(`Callsign ${callsign} assigned.`, 'success');
-                    // Re-populate relevant lists if they are loaded
                     if (document.getElementById('pilot-db-container')) populatePilotDatabase();
                 } catch (error) {
                     showNotification(`Failed to set callsign: ${error.message}`, 'error');
                 }
-                return;
+            }
+            
+            if (createInviteBtn) {
+                e.preventDefault();
+                createInviteBtn.disabled = true;
+                createInviteBtn.textContent = 'Creating...';
+                try {
+                    await safeFetch(`${API_BASE_URL}/api/invites`, { method: 'POST' });
+                    showNotification('New invite code created successfully!', 'success');
+                    populateInvites();
+                } catch (error) {
+                    showNotification(`Failed to create invite: ${error.message}`, 'error');
+                } finally {
+                    createInviteBtn.disabled = false;
+                    createInviteBtn.textContent = 'Create New Invite Code';
+                }
+            }
+            
+            if (deleteInviteBtn) {
+                e.preventDefault();
+                const inviteId = deleteInviteBtn.dataset.id;
+                if (!inviteId || !confirm('Are you sure you want to delete this invite code?')) return;
+
+                try {
+                    await safeFetch(`${API_BASE_URL}/api/invites/${inviteId}`, { method: 'DELETE' });
+                    showNotification('Invite code deleted.', 'success');
+                    deleteInviteBtn.closest('.user-manage-card').remove();
+                } catch (error) {
+                    showNotification(`Failed to delete invite: ${error.message}`, 'error');
+                }
             }
         });
 
-        userListContainer.addEventListener('change', async (e) => {
+        adminTabContent.addEventListener('change', async (e) => {
             if (e.target.classList.contains('role-select')) {
                 const select = e.target;
                 const userId = select.dataset.userid;
@@ -1137,9 +1189,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     await safeFetch(`${API_BASE_URL}/api/users/${userId}/role`, {
                         method: 'PUT',
-                        body: JSON.stringify({
-                            newRole
-                        })
+                        body: JSON.stringify({ newRole })
                     });
                     showNotification('User role updated successfully.', 'success');
                     Array.from(select.options).forEach(opt => opt.defaultSelected = false);
@@ -1186,24 +1236,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newRank = selectElement.value;
                 const originalRank = Array.from(selectElement.options).find(opt => opt.defaultSelected)?.value;
 
-                if (!confirm(`Are you sure you want to change this pilot's rank to ${newRank}?`)) {
-                    selectElement.value = originalRank; // Revert on cancel
+                if (!confirm(`Are you sure you want to change this pilot's rank to ${newRank}? This is irreversible and will complete their promotion test if they are pending one.`)) {
+                    selectElement.value = originalRank; 
                     return;
                 }
                 try {
                     await safeFetch(`${API_BASE_URL}/api/users/${userId}/rank`, {
                         method: 'PUT',
-                        body: JSON.stringify({
-                            newRank
-                        })
+                        body: JSON.stringify({ newRank })
                     });
                     showNotification('Pilot rank updated successfully!', 'success');
-                    // **UPDATED**: Refresh pilot list and admin notifications
                     populatePilotManagement(); 
                     fetchUserData();
                 } catch (error) {
                     showNotification(`Failed to update rank: ${error.message}`, 'error');
-                    selectElement.value = originalRank; // Revert on error
+                    selectElement.value = originalRank;
                 }
             }
         });
@@ -1224,9 +1271,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 await safeFetch(`${API_BASE_URL}/api/users/${userId}/callsign`, {
                     method: 'PUT',
-                    body: JSON.stringify({
-                        callsign
-                    })
+                    body: JSON.stringify({ callsign })
                 });
                 showNotification('Callsign updated successfully.', 'success');
                 if (document.getElementById('tab-admin')) populateAdminTools();
@@ -1286,6 +1331,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- INITIALIZATION ---
     attachTabListeners();
-    attachCategoryListeners(); // <-- ADD THIS LINE
+    attachCategoryListeners();
     fetchUserData();
 });
