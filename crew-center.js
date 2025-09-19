@@ -338,7 +338,6 @@ document.addEventListener('DOMContentLoaded', () => {
              `;
         }
 
-        [cite_start]
         return `
         <div class="content-card">
             <h2><i class="fa-solid fa-file-import"></i> Generate New Flight Plan with SimBrief</h2>
