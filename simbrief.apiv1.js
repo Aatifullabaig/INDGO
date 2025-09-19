@@ -102,7 +102,7 @@ function do_simbriefsubmit(outputpage)
 		}
 			
 	outputpage_save = outputpage;
-	outputpage_calc = outputpage.replace("http://","");
+	outputpage_calc = outputpage.replace(/^(https?:\/\/)?/, "");
 	
 	
 	
