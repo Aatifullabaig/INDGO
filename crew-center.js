@@ -325,7 +325,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // MODIFIED: This function now returns a form for generating a new flight plan.
     const getGenerateSimbriefHTML = (pilot) => {
-        const simbriefUsernameSet = pilot.simbriefUsername && pilot.simbriefUsername.trim() !== '';
+        const simbriefUsernameSet = pilot.simbriefUserId && pilot.simbriefUserId.trim() !== '';
         if (!simbriefUsernameSet) {
              return `
              <div class="content-card">
