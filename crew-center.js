@@ -385,22 +385,39 @@ document.addEventListener('DOMContentLoaded', () => {
         return `
         <div class="content-card">
             <h2><i class="fa-solid fa-file-pen"></i> File New Flight Plan</h2>
-            <p>Your aircraft list is filtered to what <strong>${pilot.rank}</strong> is allowed to fly.</p>
+            <p>Your aircraft list is filtered to what <strong>${pilot.rank}</strong> is allowed to fly. Use SimBrief to generate and populate the fields below.</p>
+            
             <form id="file-flight-plan-form">
                 <div class="form-group-row">
-                    <div class="form-group"><label>Departure (ICAO)</label><input type="text" id="fp-departure" required maxlength="4"></div>
-                    <div class="form-group"><label>Arrival (ICAO)</label><input type="text" id="fp-arrival" required maxlength="4"></div>
-                    <div class="form-group"><label>Alternate (ICAO)</label><input type="text" id="fp-alternate" maxlength="4"></div>
-                </div>
+                    <div class="form-group">
+                        <label>Flight Number</label>
+                        <input type="text" id="fp-flightNumber" required>
+                    </div>
 
-                <div class="form-group-row">
-                    <div class="form-group" style="grid-column: 1 / -1;">
+                    <div class="form-group">
                         <label>Aircraft</label>
                         <select id="fp-aircraft" required>
                             <option value="" disabled selected>-- Select Aircraft --</option>
                             ${allowed.map(ac => `<option value="${ac.code}">${ac.name} (${ac.code})</option>`).join('')}
                         </select>
                     </div>
+                </div>
+
+                <div class="form-group-row">
+                    <div class="form-group"><label>Departure (ICAO)</label><input type="text" id="fp-departure" required maxlength="4"></div>
+                    <div class="form-group"><label>Arrival (ICAO)</label><input type="text" id="fp-arrival" required maxlength="4"></div>
+                    <div class="form-group"><label>Alternate (ICAO)</label><input type="text" id="fp-alternate" maxlength="4"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Route</label>
+                    <textarea id="fp-route" rows="3" required></textarea>
+                </div>
+
+                <div class="form-group-row">
+                    <div class="form-group"><label>ETD (Your Local Time)</label><input type="datetime-local" id="fp-etd" required></div>
+                    <div class="form-group"><label>EET (Hours)</label><input type="number" step="0.1" id="fp-eet" required></div>
+                    <div class="form-group"><label>Persons on Board</label><input type="number" id="fp-pob" required></div>
                 </div>
                 
                 <div class="form-actions" style="display: flex; gap: 10px; margin-top: 1rem;">
