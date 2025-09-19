@@ -156,22 +156,24 @@ document.addEventListener('DOMContentLoaded', () => {
             CURRENT_PILOT = pilot;
             ACTIVE_FLIGHT_PLAN = pilot.currentFlightPlan;
 
-            pilotNameElem.textContent = pilot.name || 'N/A';
-            pilotCallsignElem.textContent = pilot.callsign || 'N/A';
-            profilePictureElem.src = pilot.imageUrl || 'images/default-avatar.png';
-            
-            await renderAllViews(pilot);
+             pilotNameElem.textContent = pilot.name || 'N/A';
+        pilotCallsignElem.textContent = pilot.callsign || 'N/A';
+        profilePictureElem.src = pilot.imageUrl || 'images/default-avatar.png';
+        
+        await renderAllViews(pilot);
 
-            // --- ADDED --- Check for rank promotion after data refresh
-            if (oldRank && pilot.rank !== oldRank && rankIndex(pilot.rank) > rankIndex(oldRank)) {
-                showPromotionModal(pilot.rank);
-            }
-
-        } catch (error) {
-            console.error('Error fetching pilot data:', error);
-            showNotification(error.message, 'error');
+        if (oldRank && pilot.rank !== oldRank && rankIndex(pilot.rank) > rankIndex(oldRank)) {
+            showPromotionModal(pilot.rank);
         }
-    };
+
+        // ADD THIS LINE HERE
+        await handleSimbriefReturn(); // Process SimBrief data AFTER the main render is complete
+
+    } catch (error) {
+        console.error('Error fetching pilot data:', error);
+        showNotification(error.message, 'error');
+    }
+};
     
     // --- ADDED --- Promotion Modal Logic
     const showPromotionModal = (newRank) => {
@@ -972,5 +974,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 };
 
-    handleSimbriefReturn(); // Call the new function
 });
