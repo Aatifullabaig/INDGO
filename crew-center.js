@@ -959,6 +959,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- MODIFIED FUNCTION ---
     // --- MODIFIED FUNCTION ---
+    // --- MODIFIED FUNCTION ---
     const handleSimbriefReturn = async () => {
         const urlParams = new URLSearchParams(window.location.search);
         const ofpId = urlParams.get('ofp_id');
@@ -975,20 +976,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await response.json();
                 const ofpData = data.OFP;
                 
-                // --- NEW: Helper function to parse METAR string ---
+                // --- Helper function to parse METAR string ---
                 const parseMetar = (metarString) => {
                     if (!metarString || typeof metarString !== 'string') {
                         return { wind: '---', temp: '---', condition: '---' };
                     }
                     const parts = metarString.split(' ');
-                    
-                    // Find wind - format is DDDSSGFFKT
                     const wind = parts.find(p => p.endsWith('KT'));
-
-                    // Find temp - format is TT/DD
                     const temp = parts.find(p => p.includes('/') && !p.startsWith('A') && !p.startsWith('Q'));
-
-                    // Find condition (clouds) - formats like FEW, SCT, BKN, OVC
                     const condition = parts.filter(p => /^(FEW|SCT|BKN|OVC|SKC|CLR|NSC)/.test(p)).join(' ');
 
                     return {
@@ -1009,7 +1004,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Header
                 document.getElementById('dispatch-flight-number').textContent = ofpData.general.flight_number || 'N/A';
                 document.getElementById('dispatch-route-short').textContent = `${ofpData.origin.icao_code} → ${ofpData.destination.icao_code}`;
-                document.getElementById('dispatch-date').textContent = new Date(ofpData.general.date).toLocaleDateString();
+                document.getElementById('dispatch-date').textContent = new Date().toLocaleDateString(); // SimBrief date format can vary
 
                 // Main Info Column
                 document.getElementById('dispatch-callsign').textContent = ofpData.atc.callsign || 'N/A';
@@ -1032,9 +1027,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Passengers & Cargo
                 document.getElementById('dispatch-pax').textContent = ofpData.general.passengers || '0';
-                document.getElementById('dispatch-cargo').textContent = formatWeight(ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight));
+                const cargoWeight = ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight);
+                document.getElementById('dispatch-cargo').textContent = formatWeight(cargoWeight);
                 
-                // --- NEW: Weather Population ---
+                // Weather Population
                 const departureWeather = parseMetar(ofpData.weather.orig_metar);
                 const arrivalWeather = parseMetar(ofpData.weather.dest_metar);
 
@@ -1048,6 +1044,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 dispatchDisplay.querySelector('.data-card:nth-of-type(5) .data-item:nth-of-type(2) span').textContent = arrivalWeather.temp;
                 dispatchDisplay.querySelector('.data-card:nth-of-type(5) .data-item:nth-of-type(3) span').textContent = arrivalWeather.wind;
 
+                // --- NEW: V-Speed Extraction & Population ---
+                try {
+                    // Get planned runway for takeoff
+                    const plannedRunway = ofpData.tlr?.takeoff?.conditions?.planned_runway;
+                    
+                    // Find the data for that specific runway in the array of runways
+                    const runwayData = ofpData.tlr?.takeoff?.runway?.find(r => r.identifier === plannedRunway);
+                    
+                    // Extract Takeoff Speeds
+                    const v1 = runwayData?.speeds_v1 ?? '---';
+                    const vr = runwayData?.speeds_vr ?? '---';
+                    const v2 = runwayData?.speeds_v2 ?? '---';
+                    
+                    // Extract Landing Speed (Vref)
+                    const vref = ofpData.tlr?.landing?.distance_dry?.speeds_vref ?? '---';
+                    
+                    // Update the HTML elements
+                    document.getElementById('dispatch-v1').textContent = `${v1} kts`;
+                    document.getElementById('dispatch-vr').textContent = `${vr} kts`;
+                    document.getElementById('dispatch-v2').textContent = `${v2} kts`;
+                    document.getElementById('dispatch-vref').textContent = `${vref} kts`;
+
+                } catch (speedError) {
+                    console.error("Could not parse V-Speeds:", speedError);
+                    // Set default values if parsing fails
+                    document.getElementById('dispatch-v1').textContent = '---';
+                    document.getElementById('dispatch-vr').textContent = '---';
+                    document.getElementById('dispatch-v2').textContent = '---';
+                    document.getElementById('dispatch-vref').textContent = '---';
+                }
+                // --- END OF NEW CODE ---
 
                 // Footer
                 document.getElementById('dispatch-route-full').textContent = ofpData.general.route;
