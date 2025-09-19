@@ -338,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
              `;
         }
 
-        [cite_start]// The SimBrief API requires 'orig', 'dest', and 'type' at a minimum[cite: 17].
+        [cite_start]
         return `
         <div class="content-card">
             <h2><i class="fa-solid fa-file-import"></i> Generate New Flight Plan with SimBrief</h2>
