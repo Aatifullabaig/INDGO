@@ -928,12 +928,6 @@ document.getElementById('fp-route').value = ofpData.general.route;
 document.getElementById('fp-pob').value = ofpData.general.passengers;
 const eetHours = parseInt(ofpData.times.est_time_enroute) / 3600;
 document.getElementById('fp-eet').value = eetHours.toFixed(1);
-                // Convert flight time from seconds to hours for the form
-                const eetHours = parseInt(data.times.est_time_enroute) / 3600;
-                document.getElementById('fp-eet').value = eetHours.toFixed(1);
-
-                // Set a reasonable ETD (e.g., now)
-                document.getElementById('fp-etd').value = new Date().toISOString().slice(0, 16);
 
                 showNotification('Flight plan populated successfully! Review and file.', 'success');
 
