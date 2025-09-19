@@ -922,40 +922,52 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchPilotData();
     
     const handleSimbriefReturn = async () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const ofpId = urlParams.get('ofp_id');
+    const urlParams = new URLSearchParams(window.location.search);
+    const ofpId = urlParams.get('ofp_id');
 
-        if (ofpId) {
-            showNotification('Fetching flight plan from SimBrief...', 'info');
-            try {
-                // Call your PHP proxy script
-                const response = await fetch(`/.netlify/functions/simbrief?fetch_ofp=true&ofp_id=${ofpId}`);
-                if (!response.ok) {
-                    throw new Error('Could not retrieve flight plan from SimBrief.');
-                }
-                const data = await response.json();
+    if (ofpId) {
+        // --- START OF CHANGES ---
 
-                const ofpData = data.OFP; // Get the main object
-document.getElementById('fp-flightNumber').value = ofpData.general.flight_number;
-document.getElementById('fp-aircraft').value = ofpData.aircraft.icaocode;
-document.getElementById('fp-departure').value = ofpData.origin.icao_code;
-document.getElementById('fp-arrival').value = ofpData.destination.icao_code;
-document.getElementById('fp-alternate').value = ofpData.alternate.icao_code;
-document.getElementById('fp-route').value = ofpData.general.route;
-document.getElementById('fp-pob').value = ofpData.general.passengers;
-const eetHours = parseInt(ofpData.times.est_time_enroute) / 3600;
-document.getElementById('fp-eet').value = eetHours.toFixed(1);
+        // 1. Force the Flight Plan view to be active
+        document.querySelector('.content-view.active').classList.remove('active');
+        document.querySelector('.nav-link.active').classList.remove('active');
+        
+        const flightPlanView = document.getElementById('view-flight-plan');
+        flightPlanView.classList.add('active');
+        document.querySelector('a[data-view="view-flight-plan"]').classList.add('active');
 
-                showNotification('Flight plan populated successfully! Review and file.', 'success');
+        // 2. Ensure the form is rendered on the page BEFORE we try to fill it.
+        // We use the CURRENT_PILOT data if it's available.
+        const pilotDataForForm = CURRENT_PILOT || { rank: 'IndGo Cadet' }; // Provide a default for safety
+        flightPlanView.innerHTML = getFileFlightPlanHTML(pilotDataForForm);
 
-                // Clean the URL so it doesn't re-trigger on refresh
-                window.history.replaceState({}, document.title, window.location.pathname);
+        // --- END OF CHANGES ---
 
-            } catch (error) {
-                showNotification(error.message, 'error');
+        showNotification('Fetching flight plan from SimBrief...', 'info');
+        try {
+            const response = await fetch(`/.netlify/functions/simbrief?fetch_ofp=true&ofp_id=${ofpId}`);
+            if (!response.ok) {
+                throw new Error('Could not retrieve flight plan from SimBrief.');
             }
-        }
-    };
+            const data = await response.json();
+            const ofpData = data.OFP;
 
-    handleSimbriefReturn(); // Call the new function
-});
+            // Now this part is safe to run because the form exists
+            document.getElementById('fp-flightNumber').value = ofpData.general.flight_number;
+            document.getElementById('fp-aircraft').value = ofpData.aircraft.icaocode;
+            document.getElementById('fp-departure').value = ofpData.origin.icao_code;
+            document.getElementById('fp-arrival').value = ofpData.destination.icao_code;
+            document.getElementById('fp-alternate').value = ofpData.alternate.icao_code;
+            document.getElementById('fp-route').value = ofpData.general.route;
+            document.getElementById('fp-pob').value = ofpData.general.passengers;
+            const eetHours = parseInt(ofpData.times.est_time_enroute) / 3600;
+            document.getElementById('fp-eet').value = eetHours.toFixed(1);
+
+            showNotification('Flight plan populated successfully! Review and file.', 'success');
+            window.history.replaceState({}, document.title, window.location.pathname);
+
+        } catch (error) {
+            showNotification(error.message, 'error');
+        }
+    }
+};
