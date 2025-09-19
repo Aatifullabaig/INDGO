@@ -1,152 +1,139 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crew Center</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    <link rel="stylesheet" href="crew-center.css">
-    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
-    <link rel="icon" href="/images/indgo.png" type="image/x-icon">
-    <style>
-        /* Simple style for the new header */
-        #roster-list-header {
-            margin-bottom: 1rem;
-            padding: 0.75rem;
-            background-color: rgba(0, 27, 148, 0.2);
-            border-left: 3px solid var(--accent-color);
-            border-radius: 4px;
-            font-size: 0.95rem;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Crew Center</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <link rel="stylesheet" href="crew-center.css" />
+  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet"/>
+  <link rel="icon" href="/images/indgo.png" type="image/x-icon"/>
+
+  <style>
+    #roster-list-header {
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+      background-color: rgba(0, 27, 148, 0.2);
+      border-left: 3px solid var(--accent-color);
+      border-radius: 4px;
+      font-size: 0.95rem;
+    }
+  </style>
 </head>
 <body>
-    <div class="dashboard-container">
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <div class="logo-container">
-                    <img src="/images/indgo.png" alt="Logo" class="logo-image">
-                    <span class="logo-text">Crew Center</span>
-                </div>
-                 <button id="sidebar-toggle" class="sidebar-toggle-btn" title="Toggle Sidebar">
-                    <i class="fas fa-angle-double-left"></i>
-                </button>
-            </div>
-
-            <nav class="sidebar-nav">
-                <ul>
-                    <li><a href="#" class="nav-link active" data-view="view-duty-status"><i class="fa-solid fa-house"></i><span class="nav-text">Pilot Hub</span></a></li>
-                    <li><a href="#" class="nav-link" data-view="view-flight-plan"><i class="fa-solid fa-paper-plane"></i><span class="nav-text">Flight Plan</span></a></li>
-                    <li><a href="#" class="nav-link" data-view="view-rosters"><i class="fa-solid fa-map-location-dot"></i><span class="nav-text">Sector Ops</span></a></li>
-                    <li><a href="#" class="nav-link" data-view="view-history"><i class="fa-solid fa-clock-rotate-left"></i><span class="nav-text">Flight Log</span></a></li>
-                </ul>
-            </nav>
-
-            <div class="sidebar-footer">
-                 <div class="sidebar-profile">
-                    <img id="profile-picture" src="images/default-avatar.png" alt="Profile Picture" class="profile-img">
-                    <div class="profile-details">
-                        <h3 id="pilot-name">Loading...</h3>
-                        <p id="pilot-callsign" class="user-role">Loading...</p>
-                    </div>
-                    <a href="#" id="logout-button" class="logout-button" title="Logout">
-                        <i class="fas fa-sign-out-alt"></i>
-                        <span class="nav-text">Logout</span>
-                    </a>
-                </div>
-                <div class="sidebar-actions">
-                     <a href="dashboard.html" class="dashboard-link"><i class="fas fa-tachometer-alt"></i><span class="nav-text">Dashboard</span></a>
-                </div>
-            </div>
-        </aside>
-
-        <main class="main-content">
-            <div id="view-duty-status" class="content-view active">
-            </div>
-            <div id="view-flight-plan" class="content-view">
-            </div>
-            <div id="view-rosters" class="content-view">
-                <div class="content-card">
-                    <h2><i class="fa-solid fa-map-location-dot"></i> Sector Ops - Your Available Rosters</h2>
-                    <p>Select a roster to begin your duty day. These rosters are suggested based on where your last duty ended or your last flight landed.</p>
-                    
-                    <div id="map"></div>
-                    
-                    <div id="roster-list-header">
-                        <p>Finding rosters for your location...</p>
-                    </div>
-                    <div id="roster-list-container">
-                        <p>Loading available rosters...</p>
-                    </div>
-                </div>
-            </div>
-            <div id="view-history" class="content-view">
-                <div class="content-card">
-                    <h2><i class="fa-solid fa-clock-rotate-left"></i> PIREP History</h2>
-                    <div id="pirep-history-list">
-                        <p>Loading your flight history...</p>
-                    </div>
-                </div>
-            </div>
-        </main>
-    </div>
-    
-    <div id="promotion-modal" class="modal-overlay">
-        <div class="modal-content">
-            <button id="modal-close-btn" class="modal-close">&times;</button>
-            <div class="modal-header">
-                <h2>🎉 Congratulations! Promotion Unlocked! 🎉</h2>
-            </div>
-            <div class="modal-body">
-                <p>Your hard work has paid off. You have been promoted to:</p>
-                <h3 id="promo-rank-name">New Rank Name</h3>
-                <p class="promo-hours">Flight Hours Required: <strong id="promo-hours-required">0 hrs</strong></p>
-                
-                <h4>New Perks Unlocked:</h4>
-                <ul id="promo-perks-list">
-                </ul>
-            </div>
-            <div class="modal-footer">
-                <button id="modal-confirm-btn" class="cta-button">Awesome!</button>
-            </div>
+  <div class="dashboard-container">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-container">
+          <img src="/images/indgo.png" alt="Logo" class="logo-image" />
+          <span class="logo-text">Crew Center</span>
         </div>
-    </div>
+        <button id="sidebar-toggle" class="sidebar-toggle-btn" title="Toggle Sidebar">
+          <i class="fas fa-angle-double-left"></i>
+        </button>
+      </div>
 
-    <div id="arrive-flight-modal" class="modal-overlay">
-        <div class="modal-content" id="arrive-modal-content">
-             <button class="modal-close" data-close-modal>&times;</button>
-             <h2><i class="fa-solid fa-plane-arrival"></i> Complete Flight & File PIREP</h2>
-             <p>To finalize your flight, provide any remarks and a verification image (e.g., flight summary). This will automatically generate your PIREP.</p>
-             <form id="arrive-flight-form">
-                <div class="form-group">
-                    <label for="arrival-remarks">Remarks (Optional)</label>
-                    <textarea id="arrival-remarks" rows="3"></textarea>
-                </div>
-                 <div class="form-group">
-                    <label for="arrival-verification-image">Verification Image</label>
-                    <input type="file" id="arrival-verification-image" class="file-input" accept="image/*" required>
-                </div>
-                <div class="modal-footer">
-                    <button type="submit" class="cta-button">Complete Flight</button>
-                </div>
-             </form>
+      <nav class="sidebar-nav">
+        <ul>
+          <li><a href="#" class="nav-link active" data-view="view-duty-status"><i class="fa-solid fa-house"></i><span class="nav-text">Pilot Hub</span></a></li>
+          <li><a href="#" class="nav-link" data-view="view-flight-plan"><i class="fa-solid fa-paper-plane"></i><span class="nav-text">Flight Plan</span></a></li>
+          <li><a href="#" class="nav-link" data-view="view-rosters"><i class="fa-solid fa-map-location-dot"></i><span class="nav-text">Sector Ops</span></a></li>
+          <li><a href="#" class="nav-link" data-view="view-history"><i class="fa-solid fa-clock-rotate-left"></i><span class="nav-text">Flight Log</span></a></li>
+        </ul>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-profile">
+          <img id="profile-picture" src="images/default-avatar.png" alt="Profile Picture" class="profile-img" />
+          <div class="profile-details">
+            <h3 id="pilot-name">Loading...</h3>
+            <p id="pilot-callsign" class="user-role">Loading...</p>
+          </div>
+          <a href="#" id="logout-button" class="logout-button" title="Logout">
+            <i class="fas fa-sign-out-alt"></i>
+            <span class="nav-text">Logout</span>
+          </a>
         </div>
-    </div>
-
-    <div id="notifications-modal" class="modal-overlay">
-        <div class="modal-content">
-            <button class="modal-close" data-close-modal>&times;</button>
-            <h2><i class="fa-solid fa-bell"></i> Notifications</h2>
-            <div id="notifications-list-container"></div>
+        <div class="sidebar-actions">
+          <a href="dashboard.html" class="dashboard-link"><i class="fas fa-tachometer-alt"></i><span class="nav-text">Dashboard</span></a>
         </div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div id="view-duty-status" class="content-view active"></div>
+
+      <div id="view-flight-plan" class="content-view"></div>
+
+      <div id="view-rosters" class="content-view">
+        <div class="content-card">
+          <h2><i class="fa-solid fa-map-location-dot"></i> Sector Ops - Your Available Rosters</h2>
+          <p>Select a roster to begin your duty day. These rosters are suggested based on where your last duty ended or your last flight landed.</p>
+
+          <div id="map"></div>
+
+          <div id="roster-list-header">
+            <p>Finding rosters for your location...</p>
+          </div>
+          <div id="roster-list-container">
+            <p>Loading available rosters...</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="view-history" class="content-view">
+        <div class="content-card">
+          <h2><i class="fa-solid fa-clock-rotate-left"></i> PIREP History</h2>
+          <div id="pirep-history-list">
+            <p>Loading your flight history...</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Arrive modal -->
+  <div id="arrive-flight-modal" class="modal-overlay">
+    <div class="modal-content" id="arrive-modal-content">
+      <button class="modal-close" data-close-modal>&times;</button>
+      <h2><i class="fa-solid fa-plane-arrival"></i> Complete Flight & File PIREP</h2>
+      <p>To finalize your flight, provide any remarks and a verification image (e.g., flight summary). This will automatically generate your PIREP.</p>
+      <form id="arrive-flight-form">
+        <div class="form-group">
+          <label for="arrival-remarks">Remarks (Optional)</label>
+          <textarea id="arrival-remarks" rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="arrival-verification-image">Verification Image</label>
+          <input type="file" id="arrival-verification-image" class="file-input" accept="image/*" required />
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="cta-button">Complete Flight</button>
+        </div>
+      </form>
     </div>
+  </div>
 
+  <!-- Notifications modal -->
+  <div id="notifications-modal" class="modal-overlay">
+    <div class="modal-content">
+      <button class="modal-close" data-close-modal>&times;</button>
+      <h2><i class="fa-solid fa-bell"></i> Notifications</h2>
+      <div id="notifications-list-container"></div>
+    </div>
+  </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="map.js"></script>
-    
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
-    <script src="crew-center.js"></script>
+  <!-- libs -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="map.js"></script>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+
+  <!-- SimBrief include hosted on InfinityFree (NO /htdocs/) -->
+  <script src="https://php-simbrief.infinityfree.me/simbrief.apiv1.js"></script>
+
+  <!-- app -->
+  <script src="crew-center.js"></script>
 </body>
 </html>
