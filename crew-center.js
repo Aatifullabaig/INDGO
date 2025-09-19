@@ -1034,15 +1034,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const departureWeather = parseMetar(ofpData.weather.orig_metar);
                 const arrivalWeather = parseMetar(ofpData.weather.dest_metar);
 
-                // Departure Weather Card
-                dispatchDisplay.querySelector('.data-card:nth-of-type(4) .data-item:nth-of-type(1) span').textContent = departureWeather.condition;
-                dispatchDisplay.querySelector('.data-card:nth-of-type(4) .data-item:nth-of-type(2) span').textContent = departureWeather.temp;
-                dispatchDisplay.querySelector('.data-card:nth-of-type(4) .data-item:nth-of-type(3) span').textContent = departureWeather.wind;
+                // Departure Weather
+                document.getElementById('dispatch-dep-cond').textContent = departureWeather.condition;
+                document.getElementById('dispatch-dep-temp').textContent = departureWeather.temp;
+                document.getElementById('dispatch-dep-wind').textContent = departureWeather.wind;
                 
-                // Arrival Weather Card
-                dispatchDisplay.querySelector('.data-card:nth-of-type(5) .data-item:nth-of-type(1) span').textContent = arrivalWeather.condition;
-                dispatchDisplay.querySelector('.data-card:nth-of-type(5) .data-item:nth-of-type(2) span').textContent = arrivalWeather.temp;
-                dispatchDisplay.querySelector('.data-card:nth-of-type(5) .data-item:nth-of-type(3) span').textContent = arrivalWeather.wind;
+                // Arrival Weather
+                document.getElementById('dispatch-arr-cond').textContent = arrivalWeather.condition;
+                document.getElementById('dispatch-arr-temp').textContent = arrivalWeather.temp;
+                document.getElementById('dispatch-arr-wind').textContent = arrivalWeather.wind;
 
                 // --- NEW: V-Speed Extraction & Population ---
                 try {
