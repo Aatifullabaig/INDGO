@@ -40,6 +40,7 @@
                     <li><a href="#" class="nav-link" data-view="view-flight-plan"><i class="fa-solid fa-paper-plane"></i><span class="nav-text">Flight Plan</span></a></li>
                     <li><a href="#" class="nav-link" data-view="view-rosters"><i class="fa-solid fa-map-location-dot"></i><span class="nav-text">Sector Ops</span></a></li>
                     <li><a href="#" class="nav-link" data-view="view-history"><i class="fa-solid fa-clock-rotate-left"></i><span class="nav-text">Flight Log</span></a></li>
+                    <li id="notifications-bell" class="nav-link-item"><a href="#" class="nav-link"><i class="fa-solid fa-bell"></i><span class="nav-text">Notifications</span><span class="notification-badge" style="display: none;"></span></a></li>
                 </ul>
             </nav>
 
@@ -187,14 +188,13 @@
 
     <div id="promotion-modal" class="modal-overlay">
         <div class="modal-content">
-            <button id="modal-close-btn" class="modal-close">&times;</button>
+            <button id="modal-close-btn" class="modal-close" data-close-modal>&times;</button>
             <div class="modal-header">
                 <h2>🎉 Congratulations! Promotion Unlocked! 🎉</h2>
             </div>
             <div class="modal-body">
                 <p>Your hard work has paid off. You have been promoted to:</p>
                 <h3 id="promo-rank-name">New Rank Name</h3>
-                <p class="promo-hours">Flight Hours Required: <strong id="promo-hours-required">0 hrs</strong></p>
                 
                 <h4>New Perks Unlocked:</h4>
                 <ul id="promo-perks-list">

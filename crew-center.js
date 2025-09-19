@@ -1,24 +1,21 @@
-// Crew Center – Merged Script with Flight Plan Workflow & Promotion Lockout
+// Crew Center – Merged Script with Notifications, View-Switching, Flight Plan Workflow & Promotion Lockout
 document.addEventListener('DOMContentLoaded', () => {
     const token = localStorage.getItem('authToken');
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
 
     let crewRestInterval = null; // To manage the countdown timer
 
-    // --- Helper to format milliseconds into HH:MM:SS ---
+    // --- Helper Functions ---
     function formatTime(ms) {
         if (ms < 0) ms = 0;
         let seconds = Math.floor(ms / 1000);
         let minutes = Math.floor(seconds / 60);
         let hours = Math.floor(minutes / 60);
-
         seconds = seconds % 60;
         minutes = minutes % 60;
-
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
 
-    // --- START: NEW HELPER FUNCTIONS FOR DISPATCH ---
     function formatDuration(seconds) {
         if (isNaN(seconds) || seconds < 0) return '00:00';
         const hours = Math.floor(seconds / 3600);
@@ -28,13 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatTimeFromTimestamp(timestamp) {
         if (!timestamp) return '----';
-        // Check if it's a UNIX timestamp (seconds) or a standard ISO string/Date object
         const date = (typeof timestamp === 'number' && timestamp.toString().length === 10) 
             ? new Date(timestamp * 1000) 
             : new Date(timestamp);
-            
         if (isNaN(date.getTime())) return '----';
-        
         return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
     }
     
@@ -51,33 +45,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const wind = parts.find(p => p.endsWith('KT'));
         const temp = parts.find(p => p.includes('/') && !p.startsWith('A') && !p.startsWith('Q'));
         const condition = parts.filter(p => /^(FEW|SCT|BKN|OVC|SKC|CLR|NSC)/.test(p)).join(' ');
-
         return {
             wind: wind || '---',
             temp: temp ? `${temp.split('/')[0]}°C` : '---',
             condition: condition || '---'
         };
     };
-    // --- END: NEW HELPER FUNCTIONS FOR DISPATCH ---
 
-    // --- Helper to extract airline code from flight number ---
     function extractAirlineCode(flightNumber) {
-        if (!flightNumber || typeof flightNumber !== 'string') {
-            return 'UNKNOWN';
-        }
+        if (!flightNumber || typeof flightNumber !== 'string') return 'UNKNOWN';
         const cleanedFlightNumber = flightNumber.trim().toUpperCase();
         const match = cleanedFlightNumber.match(/^([A-Z0-9]{2,3})([0-9]{1,4})([A-Z]?)$/);
-        if (match && match[1]) {
-            return match[1].substring(0, 2);
-        }
+        if (match && match[1]) return match[1].substring(0, 2);
         const fallbackMatch = cleanedFlightNumber.match(/^(\D+)/);
-        if (fallbackMatch && fallbackMatch[1]) {
-            return fallbackMatch[1].substring(0, 2);
-        }
+        if (fallbackMatch && fallbackMatch[1]) return fallbackMatch[1].substring(0, 2);
         return 'UNKNOWN';
     }
 
-    // --- Rank model (keep in sync with backend) ---
+    // --- Rank & Fleet Models ---
     const PILOT_RANKS = [
         'IndGo Cadet', 'Skyline Observer', 'Route Explorer', 'Skyline Officer',
         'Command Captain', 'Elite Captain', 'Blue Eagle', 'Line Instructor',
@@ -85,7 +70,6 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
     const rankIndex = (r) => PILOT_RANKS.indexOf(String(r || '').trim());
     
-    // --- Fleet definition ---
     const FLEET = [
         { code:'Q400', name:'De Havilland Dash 8 Q400', minRank:'IndGo Cadet', operator:'IndGo Air Virtual' },
         { code:'A320', name:'Airbus A320',              minRank:'IndGo Cadet', operator:'IndGo Air Virtual' },
@@ -102,7 +86,6 @@ document.addEventListener('DOMContentLoaded', () => {
         { code:'A380', name:'Airbus A380-800',          minRank:'Blue Eagle', operator:'IndGo Air Virtual' },
         { code:'B744', name:'Boeing 747-400',           minRank:'Blue Eagle', operator:'IndGo Air Virtual' },
     ];
-    const DEFAULT_OPERATOR = 'IndGo Air Virtual';
 
     const deduceRankFromAircraftFE = (acStr) => {
         const s = String(acStr || '').toUpperCase();
@@ -149,6 +132,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarNav = document.querySelector('.sidebar-nav');
     const dashboardContainer = document.querySelector('.dashboard-container');
     const sidebarToggleBtn = document.getElementById('sidebar-toggle');
+    const notificationsBell = document.getElementById('notifications-bell');
+    const notificationsModal = document.getElementById('notifications-modal');
 
     // Modals
     const promotionModal = document.getElementById('promotion-modal');
@@ -165,7 +150,27 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    // --- ADDED --- Logout Button Functionality
+    // Function to switch views
+    const switchView = (viewId) => {
+        sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
+        mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
+
+        const newLink = sidebarNav.querySelector(`.nav-link[data-view="${viewId}"]`);
+        const newView = document.getElementById(viewId);
+
+        if (newLink && newView) {
+            newLink.classList.add('active');
+            newView.classList.add('active');
+        }
+    };
+    
+    // Check for URL parameters to set the initial view
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialView = urlParams.get('view');
+    if (initialView) {
+        switchView(initialView);
+    }
+
     logoutButton.addEventListener('click', (e) => {
         e.preventDefault();
         localStorage.removeItem('authToken');
@@ -184,7 +189,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Main Data Fetch & Render Cycle ---
     const fetchPilotData = async () => {
         try {
-            // --- UPDATED --- Store old rank to check for promotion
             const oldRank = CURRENT_PILOT ? CURRENT_PILOT.rank : null;
 
             const response = await fetch(`${API_BASE_URL}/api/me`, {
@@ -199,26 +203,33 @@ document.addEventListener('DOMContentLoaded', () => {
             CURRENT_PILOT = pilot;
             ACTIVE_FLIGHT_PLAN = pilot.currentFlightPlan;
 
-             pilotNameElem.textContent = pilot.name || 'N/A';
-        pilotCallsignElem.textContent = pilot.callsign || 'N/A';
-        profilePictureElem.src = pilot.imageUrl || 'images/default-avatar.png';
+            pilotNameElem.textContent = pilot.name || 'N/A';
+            pilotCallsignElem.textContent = pilot.callsign || 'N/A';
+            profilePictureElem.src = pilot.imageUrl || 'images/default-avatar.png';
+
+            // Update notification bell
+            const badge = notificationsBell.querySelector('.notification-badge');
+            if (pilot.unreadNotifications && pilot.unreadNotifications.length > 0) {
+                badge.textContent = pilot.unreadNotifications.length;
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
         
-        await renderAllViews(pilot);
+            await renderAllViews(pilot);
 
-        if (oldRank && pilot.rank !== oldRank && rankIndex(pilot.rank) > rankIndex(oldRank)) {
-            showPromotionModal(pilot.rank);
+            if (oldRank && pilot.rank !== oldRank && rankIndex(pilot.rank) > rankIndex(oldRank)) {
+                showPromotionModal(pilot.rank);
+            }
+
+            await handleSimbriefReturn();
+
+        } catch (error) {
+            console.error('Error fetching pilot data:', error);
+            showNotification(error.message, 'error');
         }
-
-        // MODIFIED: Process SimBrief data AFTER the main render is complete
-        await handleSimbriefReturn();
-
-    } catch (error) {
-        console.error('Error fetching pilot data:', error);
-        showNotification(error.message, 'error');
-    }
-};
+    };
     
-    // --- ADDED --- Promotion Modal Logic
     const showPromotionModal = (newRank) => {
         const rankNameElem = document.getElementById('promo-rank-name');
         const perksListElem = document.getElementById('promo-perks-list');
@@ -228,7 +239,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         rankNameElem.textContent = newRank;
 
-        // Find newly unlocked aircraft
         const newAircraft = FLEET.filter(ac => ac.minRank === newRank);
         if (newAircraft.length > 0) {
             perksListElem.innerHTML = newAircraft.map(ac => `<li><i class="fa-solid fa-plane-circle-check"></i> <strong>${ac.name}</strong> (${ac.code})</li>`).join('');
@@ -244,7 +254,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         confirmBtn.addEventListener('click', closeHandler);
     };
-
 
     // --- View Rendering Logic ---
     const renderAllViews = async (pilot) => {
@@ -288,7 +297,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         dutyStatusView.innerHTML = `${pendingBanner}${dutyStatusHTML}${createStatsCardHTML(pilot)}${leaderboardsHTML}`;
 
-        // Post-render actions like starting the timer
         if (pilot.dutyStatus === 'ON_REST' && pilot.timeUntilNextDutyMs > 0) {
             const timerElement = document.getElementById('crew-rest-timer');
             if (timerElement) {
@@ -378,7 +386,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const formContainer = document.getElementById('file-flight-plan-container');
         const dispatchDisplay = document.getElementById('dispatch-pass-display');
 
-        // Hide both initially to manage state on view switch
         dispatchDisplay.style.display = 'none';
         formContainer.style.display = 'block';
 
@@ -388,35 +395,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (ACTIVE_FLIGHT_PLAN) {
-            // NEW: If there's an active plan, populate the dispatch pass and show it.
             populateDispatchFromActivePlan(ACTIVE_FLIGHT_PLAN);
         } else if (pilot.dutyStatus === 'ON_DUTY') {
-            // Original logic: Show the filing form if on duty.
             formContainer.innerHTML = getFileFlightPlanHTML(pilot);
         } else {
-            // Original logic: Show message if off duty.
              formContainer.innerHTML = `<div class="content-card"><h2><i class="fa-solid fa-file-pen"></i> File New Flight Plan</h2><p>You must be <strong>On Duty</strong> to file a flight plan. Please start a duty from the Sector Ops page.</p></div>`;
         }
     };
     
-    // UPDATED FUNCTION: Populates the dispatch pass from an existing flight plan object from the DB
     const populateDispatchFromActivePlan = (plan) => {
         const dispatchDisplay = document.getElementById('dispatch-pass-display');
         const formContainer = document.getElementById('file-flight-plan-container');
 
-        // Header
         document.getElementById('dispatch-flight-number').textContent = plan.flightNumber || 'N/A';
         document.getElementById('dispatch-route-short').textContent = `${plan.departure} → ${plan.arrival}`;
         document.getElementById('dispatch-date').textContent = new Date(plan.etd).toLocaleDateString();
 
-        // Main Info Column
         document.getElementById('dispatch-callsign').textContent = CURRENT_PILOT?.callsign || 'N/A';
         document.getElementById('dispatch-aircraft').textContent = plan.aircraft || 'N/A';
         document.getElementById('dispatch-etd').textContent = formatTimeFromTimestamp(plan.etd);
         document.getElementById('dispatch-eta').textContent = formatTimeFromTimestamp(plan.eta);
-        document.getElementById('dispatch-duration').textContent = formatDuration(plan.eet * 3600); // convert hours to seconds for formatter
+        document.getElementById('dispatch-duration').textContent = formatDuration(plan.eet * 3600);
 
-        // --- MODIFIED: Populate detailed data from the 'plan' object ---
         document.getElementById('dispatch-zfw').textContent = formatWeight(plan.zfw);
         document.getElementById('dispatch-tow').textContent = formatWeight(plan.tow);
         document.getElementById('dispatch-pax').textContent = plan.pob || '---';
@@ -441,16 +441,13 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('dispatch-arr-temp').textContent = arrivalWeather.temp;
         document.getElementById('dispatch-arr-wind').textContent = arrivalWeather.wind;
 
-        // ATC Information (from the DB)
         document.getElementById('dispatch-fic').textContent = plan.ficNumber || 'N/A';
         document.getElementById('dispatch-adc').textContent = plan.adcNumber || 'N/A';
         document.getElementById('dispatch-squawk').textContent = plan.squawkCode || '----';
 
-        // Footer
         document.getElementById('dispatch-route-full').textContent = plan.route;
         document.getElementById('dispatch-alternates').textContent = plan.alternate || 'None';
 
-        // Dynamic Actions
         const actionsContainer = document.getElementById('dispatch-actions');
         let actionsHTML = '';
         if (plan.status === 'PLANNED') {
@@ -462,7 +459,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         actionsContainer.innerHTML = actionsHTML;
 
-        // Show the populated dispatch pass
         formContainer.style.display = 'none';
         dispatchDisplay.style.display = 'block';
     };
@@ -480,7 +476,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         <label>Flight Number</label>
                         <input type="text" id="fp-flightNumber" required>
                     </div>
-
                     <div class="form-group">
                         <label>Aircraft</label>
                         <select id="fp-aircraft" required>
@@ -489,24 +484,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         </select>
                     </div>
                 </div>
-
                 <div class="form-group-row">
                     <div class="form-group"><label>Departure (ICAO)</label><input type="text" id="fp-departure" required maxlength="4"></div>
                     <div class="form-group"><label>Arrival (ICAO)</label><input type="text" id="fp-arrival" required maxlength="4"></div>
                     <div class="form-group"><label>Alternate (ICAO)</label><input type="text" id="fp-alternate" maxlength="4"></div>
                 </div>
-
                 <div class="form-group">
                     <label>Route</label>
                     <textarea id="fp-route" rows="3" required></textarea>
                 </div>
-
                 <div class="form-group-row">
                     <div class="form-group"><label>ETD (Your Local Time)</label><input type="datetime-local" id="fp-etd" required></div>
                     <div class="form-group"><label>EET (Hours)</label><input type="number" step="0.1" id="fp-eet" required></div>
                     <div class="form-group"><label>Persons on Board</label><input type="number" id="fp-pob" required></div>
                 </div>
-                
                 <div class="form-actions" style="display: flex; gap: 10px; margin-top: 1rem;">
                     <button type="submit" class="cta-button">File Flight Plan</button>
                     <button type="button" id="generate-with-simbrief-btn" class="secondary-button">Generate with SimBrief</button>
@@ -594,9 +585,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             container.innerHTML = rosters.map(roster => {
                 const dutyDisabled = CURRENT_PILOT?.promotionStatus === 'PENDING_TEST' ? 'disabled' : '';
-
-                // --- NEW LOGIC FOR REDESIGN ---
-                // Get unique airline codes for logos
                 const uniqueAirlines = [...new Set(roster.legs.map(leg => extractAirlineCode(leg.flightNumber)))];
                 const airlineLogosHTML = uniqueAirlines.map(code => {
                     if (!code || code === 'UNKNOWN') return '';
@@ -604,41 +592,32 @@ document.addEventListener('DOMContentLoaded', () => {
                     return `<img src="${logoPath}" alt="${code}" class="roster-airline-logo" onerror="this.style.display='none'">`;
                 }).join('');
 
-                // Get first departure and last arrival
                 const firstLeg = roster.legs[0];
                 const lastLeg = roster.legs[roster.legs.length - 1];
-                
                 const pathString = [roster.legs[0].departure, ...roster.legs.map(leg => leg.arrival)].join(' → ');
 
-                // --- NEW HTML STRUCTURE FOR REDESIGN ---
                 return `
                 <div class="roster-item" data-roster-id="${roster._id}">
                     <div class="roster-card-header">
-                        <div class="roster-airlines">
-                            ${airlineLogosHTML}
-                        </div>
+                        <div class="roster-airlines">${airlineLogosHTML}</div>
                         <div class="roster-title-info">
                             <span class="roster-name">${roster.name}</span>
                             <span class="roster-meta">Total: ${Number(roster.totalFlightTime || 0).toFixed(1)} hrs</span>
                         </div>
                     </div>
-                    
                     <div class="roster-flight-info">
                         <div class="flight-segment departure">
                             <span class="segment-label">Departs</span>
                             <span class="segment-icao">${firstLeg.departure}</span>
                             <span class="segment-time">TBA</span>
                         </div>
-                        <div class="flight-divider">
-                            <i class="fa-solid fa-plane"></i>
-                        </div>
+                        <div class="flight-divider"><i class="fa-solid fa-plane"></i></div>
                         <div class="flight-segment arrival">
                             <span class="segment-label">Arrives</span>
                             <span class="segment-icao">${lastLeg.arrival}</span>
                             <span class="segment-time">TBA</span>
                         </div>
                     </div>
-
                     <div class="roster-card-footer">
                         <div class="roster-path-display">${pathString}</div>
                         <div class="roster-actions">
@@ -646,9 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button class="cta-button go-on-duty-btn" data-roster-id="${roster._id}" ${dutyDisabled}>Go On Duty</button>
                         </div>
                     </div>
-                    
-                    <div class="roster-leg-details" id="details-${roster._id}">
-                    </div>
+                    <div class="roster-leg-details" id="details-${roster._id}"></div>
                 </div>`;
             }).join('');
         } catch (error) {
@@ -696,13 +673,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const link = e.target.closest('.nav-link');
         if (!link) return;
         e.preventDefault();
-        sidebarNav.querySelector('.nav-link.active').classList.remove('active');
-        link.classList.add('active');
-        mainContentContainer.querySelector('.content-view.active').classList.remove('active');
-        document.getElementById(link.dataset.view).classList.add('active');
-        
-        if (link.dataset.view === 'view-rosters' && window.leafletMap) {
-            setTimeout(() => window.leafletMap.invalidateSize(), 150);
+
+        const viewId = link.dataset.view;
+        if (viewId) {
+            switchView(viewId);
+            if (viewId === 'view-rosters' && window.leafletMap) {
+                setTimeout(() => window.leafletMap.invalidateSize(), 150);
+            }
         }
     });
 
@@ -747,7 +724,6 @@ document.addEventListener('DOMContentLoaded', () => {
     mainContentContainer.addEventListener('click', async (e) => {
         const target = e.target;
         
-        // MODIFIED: Roster Details Toggle WITHOUT Map Interaction
         if (target.classList.contains('details-button') && target.dataset.rosterId && !target.classList.contains('view-roster-on-map-btn')) {
             const rosterId = target.dataset.rosterId;
             const detailsContainer = document.getElementById(`details-${rosterId}`);
@@ -763,16 +739,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const isVisible = detailsContainer.classList.toggle('visible');
             target.setAttribute('aria-expanded', isVisible);
 
-            // MODIFIED: This block no longer scrolls to the map automatically.
             if (isVisible) {
-                // Focus the map visually without scrolling the page.
                 if (window.focusOnRoster) window.focusOnRoster(rosterId);
             } else {
-                // If it was just closed, reset the map view.
                 if (window.showAllRosters) window.showAllRosters();
             }
 
-            // Fetch and render details only if it's visible and not already loaded
             if (isVisible && !detailsContainer.innerHTML.trim()) {
                 detailsContainer.innerHTML = '<p>Loading details...</p>';
                 try {
@@ -784,7 +756,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isMultiAircraft = roster.legs.some((leg, i, arr) => i > 0 && leg.aircraft !== arr[0].aircraft);
 
                     if (roster && roster.legs) {
-                        // MODIFIED: Added the new "View on Map" button here
                         detailsContainer.innerHTML = `
                             <div class="roster-details-actions">
                                 <button class="details-button view-roster-on-map-btn" data-roster-id="${rosterId}">
@@ -854,17 +825,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // NEW: Listener for the "View on Map" button inside the details panel
         if (target.classList.contains('view-roster-on-map-btn') || target.closest('.view-roster-on-map-btn')) {
             const button = target.closest('.view-roster-on-map-btn');
             const rosterId = button.dataset.rosterId;
             if (window.focusOnRoster) {
-                window.focusOnRoster(rosterId); // Focuses the map on the route
-                document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' }); // Scrolls to the map
+                window.focusOnRoster(rosterId);
+                document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
 
-        // Go On Duty
         if (target.classList.contains('go-on-duty-btn')) {
             const rosterId = target.dataset.rosterId;
             target.disabled = true;
@@ -886,7 +855,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // --- UPDATED --- End Duty Logic
         if (target.id === 'end-duty-btn') {
             if (confirm('Are you sure you want to complete your duty day? This will put you on mandatory crew rest.')) {
                 target.disabled = true;
@@ -908,7 +876,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Flight Plan Actions
         const planId = target.dataset.planId;
         if (target.id === 'depart-btn') {
             target.disabled = true;
@@ -936,38 +903,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (target.id === 'generate-with-simbrief-btn') {
-        e.preventDefault();
+            e.preventDefault();
 
-        const flightNumber = document.getElementById('fp-flightNumber').value.toUpperCase();
-        const departure = document.getElementById('fp-departure').value.toUpperCase();
-        const arrival = document.getElementById('fp-arrival').value.toUpperCase();
-        const aircraft = document.getElementById('fp-aircraft').value;
+            const flightNumber = document.getElementById('fp-flightNumber').value.toUpperCase();
+            const departure = document.getElementById('fp-departure').value.toUpperCase();
+            const arrival = document.getElementById('fp-arrival').value.toUpperCase();
+            const aircraft = document.getElementById('fp-aircraft').value;
 
-        if (!flightNumber || !departure || !arrival || !aircraft) {
-            showNotification('Please fill in Flight Number, Departure, Arrival, and Aircraft before generating.', 'error');
-            return;
+            if (!flightNumber || !departure || !arrival || !aircraft) {
+                showNotification('Please fill in Flight Number, Departure, Arrival, and Aircraft before generating.', 'error');
+                return;
+            }
+
+            const sbForm = document.getElementById('sbapiform');
+            sbForm.querySelector('input[name="orig"]').value = departure;
+            sbForm.querySelector('input[name="dest"]').value = arrival;
+            sbForm.querySelector('input[name="type"]').value = aircraft;
+            sbForm.querySelector('input[name="fltnum"]').value = flightNumber;
+
+            showNotification('Opening SimBrief planner...', 'info');
+
+            // Add a URL parameter to remember the view on redirect
+            const redirectUrl = window.location.origin + window.location.pathname + '?view=view-flight-plan';
+            simbriefsubmit(redirectUrl);
         }
 
-        // Populate the hidden SimBrief form
-        const sbForm = document.getElementById('sbapiform');
-        sbForm.querySelector('input[name="orig"]').value = departure;
-        sbForm.querySelector('input[name="dest"]').value = arrival;
-        sbForm.querySelector('input[name="type"]').value = aircraft;
-        sbForm.querySelector('input[name="fltnum"]').value = flightNumber;
-
-        showNotification('Opening SimBrief planner...', 'info');
-
-        // Call the SimBrief API function. It will redirect back to this page.
-        simbriefsubmit(window.location.origin + window.location.pathname);
-    }
-        // NEW: Listener for the embedded dispatch pass close button
         if (target.id === 'dispatch-close-btn') {
             document.getElementById('dispatch-pass-display').style.display = 'none';
             document.getElementById('file-flight-plan-container').style.display = 'block';
-            CURRENT_OFP_DATA = null; // Clear the stored data
+            CURRENT_OFP_DATA = null;
         }
 
-        // UPDATED: Listener for the "File this Flight Plan" button on the dispatch pass
         if (target.id === 'file-from-simbrief-btn') {
             e.preventDefault();
             if (!CURRENT_OFP_DATA) {
@@ -979,10 +945,7 @@ document.addEventListener('DOMContentLoaded', () => {
             target.textContent = 'Filing...';
 
             try {
-                // Construct the request body from the stored SimBrief data
                 const ofpData = CURRENT_OFP_DATA;
-                
-                // --- MODIFIED: Extract V-Speeds and other details for the body ---
                 const plannedRunway = ofpData.tlr?.takeoff?.conditions?.planned_runway;
                 const runwayData = ofpData.tlr?.takeoff?.runway?.find(r => r.identifier === plannedRunway);
                 const v1 = runwayData?.speeds_v1 ?? '---';
@@ -1002,8 +965,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     eet: ofpData.times.est_time_enroute / 3600, 
                     pob: parseInt(ofpData.general.passengers, 10),
                     squawkCode: ofpData.atc.squawk,
-                    
-                    // --- NEW: Add all detailed data to the request body ---
                     zfw: ofpData.weights.est_zfw,
                     tow: ofpData.weights.est_tow,
                     cargo: cargoWeight,
@@ -1027,8 +988,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!res.ok) throw new Error(result.message || 'Failed to file flight plan.');
                 
                 showNotification(result.message, 'success');
-                CURRENT_OFP_DATA = null; // Clear data on success
-                await fetchPilotData(); // Refresh all data and views
+                CURRENT_OFP_DATA = null;
+                await fetchPilotData();
                 
             } catch (err) {
                 showNotification(`Error: ${err.message}`, 'error');
@@ -1036,7 +997,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 target.textContent = 'File This Flight Plan';
             }
         }
-});
+    });
 
     // --- Modal Handlers ---
     document.getElementById('arrive-flight-form').addEventListener('submit', async (e) => {
@@ -1082,13 +1043,59 @@ document.addEventListener('DOMContentLoaded', () => {
             e.target.closest('.modal-overlay').classList.remove('visible');
         }
     });
+
+    // Notifications Modal Logic
+    notificationsBell.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const container = document.getElementById('notifications-list-container');
+        container.innerHTML = `<p>Loading notifications...</p>`;
+        notificationsModal.classList.add('visible');
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/me`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const pilot = await response.json();
+            const notifications = pilot.notifications || [];
+
+            if (notifications.length === 0) {
+                container.innerHTML = '<p>You have no notifications.</p>';
+                return;
+            }
+            
+            const unreadIds = notifications.filter(n => !n.read).map(n => n._id);
+
+            container.innerHTML = `
+                <div class="notifications-list">
+                    ${notifications.map(n => `
+                        <div class="notification-item ${n.read ? 'read' : 'unread'}">
+                            <div class="notification-dot"></div>
+                            <div class="notification-content">
+                                <p>${n.message}</p>
+                                <small>${new Date(n.createdAt).toLocaleString()}</small>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                ${unreadIds.length > 0 ? '<button id="mark-all-read-btn" class="cta-button">Mark All as Read</button>' : ''}
+            `;
+
+            if (unreadIds.length > 0) {
+                document.getElementById('mark-all-read-btn').addEventListener('click', async () => {
+                    await fetch(`${API_BASE_URL}/api/me/notifications/read`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ notificationIds: unreadIds })
+                    });
+                    notificationsModal.classList.remove('visible');
+                    fetchPilotData(); // Refresh to update the badge
+                });
+            }
+
+        } catch (err) {
+            container.innerHTML = '<p class="error-text">Could not load notifications.</p>';
+        }
+    });
     
-    // --- Initial Load ---
-    fetchPilotData();
-
-     document.getElementById('dispatch-callsign').textContent = CURRENT_PILOT?.callsign || 'N/A';
-
-    // --- MODIFIED FUNCTION ---
+    // --- SimBrief Return Handler ---
     const handleSimbriefReturn = async () => {
         const urlParams = new URLSearchParams(window.location.search);
         const ofpId = urlParams.get('ofp_id');
@@ -1097,35 +1104,15 @@ document.addEventListener('DOMContentLoaded', () => {
             showNotification('Fetching flight plan from SimBrief...', 'info');
 
             try {
-                // Fetch the data from your Netlify function
                 const response = await fetch(`/.netlify/functions/simbrief?fetch_ofp=true&ofp_id=${ofpId}`);
                 if (!response.ok) {
                     throw new Error('Could not retrieve flight plan from SimBrief.');
                 }
                 const data = await response.json();
                 
-                // NEW: Store the OFP data in the global variable
                 CURRENT_OFP_DATA = data.OFP;
                 const ofpData = CURRENT_OFP_DATA;
                 
-                // --- Helper function to parse METAR string ---
-                const parseMetarLocal = (metarString) => { // Renamed to avoid scope conflict
-                    if (!metarString || typeof metarString !== 'string') {
-                        return { wind: '---', temp: '---', condition: '---' };
-                    }
-                    const parts = metarString.split(' ');
-                    const wind = parts.find(p => p.endsWith('KT'));
-                    const temp = parts.find(p => p.includes('/') && !p.startsWith('A') && !p.startsWith('Q'));
-                    const condition = parts.filter(p => /^(FEW|SCT|BKN|OVC|SKC|CLR|NSC)/.test(p)).join(' ');
-
-                    return {
-                        wind: wind || '---',
-                        temp: temp ? `${temp.split('/')[0]}°C` : '---',
-                        condition: condition || '---'
-                    };
-                };
-
-                // --- Populate the Dispatch Pass (now an embedded element) ---
                 const dispatchDisplay = document.getElementById('dispatch-pass-display');
                 const formContainer = document.getElementById('file-flight-plan-container');
 
@@ -1133,90 +1120,68 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error('Dispatch or form container not found in the DOM.');
                 }
 
-                // Header
                 document.getElementById('dispatch-flight-number').textContent = ofpData.general.flight_number || 'N/A';
                 document.getElementById('dispatch-route-short').textContent = `${ofpData.origin.icao_code} → ${ofpData.destination.icao_code}`;
-                document.getElementById('dispatch-date').textContent = new Date().toLocaleDateString(); // SimBrief date format can vary
+                document.getElementById('dispatch-date').textContent = new Date().toLocaleDateString();
 
-                // Main Info Column
                 document.getElementById('dispatch-callsign').textContent = ofpData.atc.callsign || 'N/A';
                 document.getElementById('dispatch-aircraft').textContent = ofpData.aircraft.icaocode || 'N/A';
                 document.getElementById('dispatch-etd').textContent = formatTimeFromTimestamp(ofpData.times.sched_out);
                 document.getElementById('dispatch-eta').textContent = formatTimeFromTimestamp(ofpData.times.sched_in);
                 document.getElementById('dispatch-duration').textContent = formatDuration(ofpData.times.est_time_enroute);
 
-                // Fuel & Weights
                 document.getElementById('dispatch-fuel-taxi').textContent = formatWeight(ofpData.fuel.taxi);
                 document.getElementById('dispatch-fuel-trip').textContent = formatWeight(ofpData.fuel.enroute_burn);
                 document.getElementById('dispatch-fuel-total').textContent = formatWeight(ofpData.fuel.plan_ramp);
                 document.getElementById('dispatch-zfw').textContent = formatWeight(ofpData.weights.est_zfw);
                 document.getElementById('dispatch-tow').textContent = formatWeight(ofpData.weights.est_tow);
 
-                // ATC - MODIFIED: FIC/ADC are not available until filed.
                 document.getElementById('dispatch-fic').textContent = 'Pending File';
                 document.getElementById('dispatch-adc').textContent = 'Pending File';
                 document.getElementById('dispatch-squawk').textContent = ofpData.atc.squawk || '----';
 
-                // Passengers & Cargo
                 document.getElementById('dispatch-pax').textContent = ofpData.general.passengers || '0';
                 const cargoWeight = ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight);
                 document.getElementById('dispatch-cargo').textContent = formatWeight(cargoWeight);
                 
-                // Weather Population
-                const departureWeather = parseMetarLocal(ofpData.weather.orig_metar);
-                const arrivalWeather = parseMetarLocal(ofpData.weather.dest_metar);
+                const departureWeather = parseMetar(ofpData.weather.orig_metar);
+                const arrivalWeather = parseMetar(ofpData.weather.dest_metar);
 
-                // Departure Weather
                 document.getElementById('dispatch-dep-cond').textContent = departureWeather.condition;
                 document.getElementById('dispatch-dep-temp').textContent = departureWeather.temp;
                 document.getElementById('dispatch-dep-wind').textContent = departureWeather.wind;
                 
-                // Arrival Weather
                 document.getElementById('dispatch-arr-cond').textContent = arrivalWeather.condition;
                 document.getElementById('dispatch-arr-temp').textContent = arrivalWeather.temp;
                 document.getElementById('dispatch-arr-wind').textContent = arrivalWeather.wind;
 
-                // --- NEW: V-Speed Extraction & Population ---
                 try {
-                    // Get planned runway for takeoff
                     const plannedRunway = ofpData.tlr?.takeoff?.conditions?.planned_runway;
-                    
-                    // Find the data for that specific runway in the array of runways
                     const runwayData = ofpData.tlr?.takeoff?.runway?.find(r => r.identifier === plannedRunway);
                     
-                    // Extract Takeoff Speeds
                     const v1 = runwayData?.speeds_v1 ?? '---';
                     const vr = runwayData?.speeds_vr ?? '---';
                     const v2 = runwayData?.speeds_v2 ?? '---';
-                    
-                    // Extract Landing Speed (Vref)
                     const vref = ofpData.tlr?.landing?.distance_dry?.speeds_vref ?? '---';
                     
-                    // Update the HTML elements
                     document.getElementById('dispatch-v1').textContent = `${v1} kts`;
                     document.getElementById('dispatch-vr').textContent = `${vr} kts`;
                     document.getElementById('dispatch-v2').textContent = `${v2} kts`;
                     document.getElementById('dispatch-vref').textContent = `${vref} kts`;
-
                 } catch (speedError) {
                     console.error("Could not parse V-Speeds:", speedError);
-                    // Set default values if parsing fails
                     document.getElementById('dispatch-v1').textContent = '---';
                     document.getElementById('dispatch-vr').textContent = '---';
                     document.getElementById('dispatch-v2').textContent = '---';
                     document.getElementById('dispatch-vref').textContent = '---';
                 }
-                // --- END OF NEW CODE ---
 
-                // Footer
                 document.getElementById('dispatch-route-full').textContent = ofpData.general.route;
-                
                 const alternates = [ofpData.alternate?.icao_code, ofpData.alternate2?.icao_code, ofpData.alternate3?.icao_code, ofpData.alternate4?.icao_code]
                     .filter(Boolean)
                     .join(', ');
                 document.getElementById('dispatch-alternates').textContent = alternates || 'None';
 
-                // MODIFIED: Add the "File This Flight Plan" and "Close" buttons dynamically
                 const dispatchActionsContainer = document.getElementById('dispatch-actions');
                 if (dispatchActionsContainer) {
                     dispatchActionsContainer.innerHTML = `
@@ -1229,13 +1194,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 dispatchDisplay.style.display = 'block';
 
                 showNotification('Dispatch Pass generated successfully!', 'success');
-                // Clear the ofp_id from the URL to prevent re-fetching on page refresh
                 window.history.replaceState({}, document.title, window.location.pathname);
 
             } catch (error) {
                 showNotification(error.message, 'error');
-                CURRENT_OFP_DATA = null; // Clear data on error
+                CURRENT_OFP_DATA = null;
             }
         }
     };
+    
+    // --- Initial Load ---
+    fetchPilotData();
 });
