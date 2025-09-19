@@ -971,3 +971,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 };
+
+    handleSimbriefReturn(); // Call the new function
+});
