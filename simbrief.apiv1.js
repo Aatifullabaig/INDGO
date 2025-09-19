@@ -57,20 +57,6 @@ var api_code;
 * desired output page, as defined by the VA's dispatch system.
 */
 
-if (isset($_GET['fetch_ofp']) && $ofp_id !== false) {
-    header('Content-Type: application/json');
-    header('Access-Control-Allow-Origin: *'); // Allows your Netlify domain to call this
-
-    if ($simbrief->ofp_avail) {
-        echo $simbrief->ofp_json;
-    } else {
-        http_response_code(404);
-        echo json_encode(['error' => 'Flight plan data not found.']);
-    }
-    die(); // Stop the script after sending the JSON
-}
-
-
 function simbriefsubmit(outputpage)
 	{
 	
@@ -690,5 +676,3 @@ function utf8_encode(argString) {
 
   return utftext;
 }
-
-	

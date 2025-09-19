@@ -381,24 +381,35 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const getFileFlightPlanHTML = (pilot) => {
-    const allowed = getAllowedFleet(pilot.rank);
-    return `
-    <div class="content-card">
-        <h2><i class="fa-solid fa-file-pen"></i> File New Flight Plan</h2>
-        <p>Your aircraft list is filtered to what <strong>${pilot.rank}</strong> is allowed to fly.</p>
-        <form id="file-flight-plan-form">
-            <div class="form-group-row">
-                <div class="form-group"><label>Departure (ICAO)</label><input type="text" id="fp-departure" required maxlength="4"></div>
-                <div class="form-group"><label>Arrival (ICAO)</label><input type="text" id="fp-arrival" required maxlength="4"></div>
-                <div class="form-group"><label>Alternate (ICAO)</label><input type="text" id="fp-alternate" maxlength="4"></div>
-            </div>
-            <div class="form-actions" style="display: flex; gap: 10px; margin-top: 1rem;">
-                <button type="submit" class="cta-button">File Flight Plan</button>
-                <button type="button" id="generate-with-simbrief-btn" class="secondary-button">Generate with SimBrief</button>
-            </div>
-        </form>
-    </div>`;
-};
+        const allowed = getAllowedFleet(pilot.rank);
+        return `
+        <div class="content-card">
+            <h2><i class="fa-solid fa-file-pen"></i> File New Flight Plan</h2>
+            <p>Your aircraft list is filtered to what <strong>${pilot.rank}</strong> is allowed to fly.</p>
+            <form id="file-flight-plan-form">
+                <div class="form-group-row">
+                    <div class="form-group"><label>Departure (ICAO)</label><input type="text" id="fp-departure" required maxlength="4"></div>
+                    <div class="form-group"><label>Arrival (ICAO)</label><input type="text" id="fp-arrival" required maxlength="4"></div>
+                    <div class="form-group"><label>Alternate (ICAO)</label><input type="text" id="fp-alternate" maxlength="4"></div>
+                </div>
+
+                <div class="form-group-row">
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label>Aircraft</label>
+                        <select id="fp-aircraft" required>
+                            <option value="" disabled selected>-- Select Aircraft --</option>
+                            ${allowed.map(ac => `<option value="${ac.code}">${ac.name} (${ac.code})</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-actions" style="display: flex; gap: 10px; margin-top: 1rem;">
+                    <button type="submit" class="cta-button">File Flight Plan</button>
+                    <button type="button" id="generate-with-simbrief-btn" class="secondary-button">Generate with SimBrief</button>
+                </div>
+            </form>
+        </div>`;
+    };
 
     // --- Other Data Display Functions ---
     const renderLeaderboardTable = (title, data, valueKey) => {
