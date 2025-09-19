@@ -42,6 +42,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isNaN(kg)) return '--- kg';
         return `${Number(kg).toLocaleString()} kg`;
     }
+    
+    const parseMetar = (metarString) => {
+        if (!metarString || typeof metarString !== 'string') {
+            return { wind: '---', temp: '---', condition: '---' };
+        }
+        const parts = metarString.split(' ');
+        const wind = parts.find(p => p.endsWith('KT'));
+        const temp = parts.find(p => p.includes('/') && !p.startsWith('A') && !p.startsWith('Q'));
+        const condition = parts.filter(p => /^(FEW|SCT|BKN|OVC|SKC|CLR|NSC)/.test(p)).join(' ');
+
+        return {
+            wind: wind || '---',
+            temp: temp ? `${temp.split('/')[0]}°C` : '---',
+            condition: condition || '---'
+        };
+    };
     // --- END: NEW HELPER FUNCTIONS FOR DISPATCH ---
 
     // --- Helper to extract airline code from flight number ---
@@ -358,7 +374,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Flight Plan View ---
-    // MODIFIED: This function now populates the dispatch pass for active flights.
     const renderFlightPlanView = (pilot) => {
         const formContainer = document.getElementById('file-flight-plan-container');
         const dispatchDisplay = document.getElementById('dispatch-pass-display');
@@ -384,7 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
-    // NEW FUNCTION: Populates the dispatch pass from an existing flight plan object from the DB
+    // UPDATED FUNCTION: Populates the dispatch pass from an existing flight plan object from the DB
     const populateDispatchFromActivePlan = (plan) => {
         const dispatchDisplay = document.getElementById('dispatch-pass-display');
         const formContainer = document.getElementById('file-flight-plan-container');
@@ -401,14 +416,30 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('dispatch-eta').textContent = formatTimeFromTimestamp(plan.eta);
         document.getElementById('dispatch-duration').textContent = formatDuration(plan.eet * 3600); // convert hours to seconds for formatter
 
-        // Data not available from basic flight plan (set to ---)
-        ['zfw', 'tow', 'pax', 'cargo', 'fuel-taxi', 'fuel-trip', 'fuel-total', 'v1', 'v2', 'vr', 'vref',
-         'dep-cond', 'dep-temp', 'dep-wind', 'arr-cond', 'arr-temp', 'arr-wind'].forEach(id => {
-            const el = document.getElementById(`dispatch-${id}`);
-            if(el) el.textContent = '---';
-        });
+        // --- MODIFIED: Populate detailed data from the 'plan' object ---
+        document.getElementById('dispatch-zfw').textContent = formatWeight(plan.zfw);
+        document.getElementById('dispatch-tow').textContent = formatWeight(plan.tow);
         document.getElementById('dispatch-pax').textContent = plan.pob || '---';
+        document.getElementById('dispatch-cargo').textContent = formatWeight(plan.cargo);
+        document.getElementById('dispatch-fuel-taxi').textContent = formatWeight(plan.fuelTaxi);
+        document.getElementById('dispatch-fuel-trip').textContent = formatWeight(plan.fuelTrip);
+        document.getElementById('dispatch-fuel-total').textContent = formatWeight(plan.fuelTotal);
+        
+        document.getElementById('dispatch-v1').textContent = plan.v1 || '--- kts';
+        document.getElementById('dispatch-v2').textContent = plan.v2 || '--- kts';
+        document.getElementById('dispatch-vr').textContent = plan.vr || '--- kts';
+        document.getElementById('dispatch-vref').textContent = plan.vref || '--- kts';
+        
+        const departureWeather = parseMetar(plan.departureWeather);
+        const arrivalWeather = parseMetar(plan.arrivalWeather);
 
+        document.getElementById('dispatch-dep-cond').textContent = departureWeather.condition;
+        document.getElementById('dispatch-dep-temp').textContent = departureWeather.temp;
+        document.getElementById('dispatch-dep-wind').textContent = departureWeather.wind;
+        
+        document.getElementById('dispatch-arr-cond').textContent = arrivalWeather.condition;
+        document.getElementById('dispatch-arr-temp').textContent = arrivalWeather.temp;
+        document.getElementById('dispatch-arr-wind').textContent = arrivalWeather.wind;
 
         // ATC Information (from the DB)
         document.getElementById('dispatch-fic').textContent = plan.ficNumber || 'N/A';
@@ -435,8 +466,6 @@ document.addEventListener('DOMContentLoaded', () => {
         formContainer.style.display = 'none';
         dispatchDisplay.style.display = 'block';
     };
-
-    // REMOVED: getActiveFlightPlanHTML function is no longer needed.
 
     const getFileFlightPlanHTML = (pilot) => {
         const allowed = getAllowedFleet(pilot.rank);
@@ -938,7 +967,7 @@ document.addEventListener('DOMContentLoaded', () => {
             CURRENT_OFP_DATA = null; // Clear the stored data
         }
 
-        // NEW: Listener for the "File this Flight Plan" button on the dispatch pass
+        // UPDATED: Listener for the "File this Flight Plan" button on the dispatch pass
         if (target.id === 'file-from-simbrief-btn') {
             e.preventDefault();
             if (!CURRENT_OFP_DATA) {
@@ -952,6 +981,16 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 // Construct the request body from the stored SimBrief data
                 const ofpData = CURRENT_OFP_DATA;
+                
+                // --- MODIFIED: Extract V-Speeds and other details for the body ---
+                const plannedRunway = ofpData.tlr?.takeoff?.conditions?.planned_runway;
+                const runwayData = ofpData.tlr?.takeoff?.runway?.find(r => r.identifier === plannedRunway);
+                const v1 = runwayData?.speeds_v1 ?? '---';
+                const vr = runwayData?.speeds_vr ?? '---';
+                const v2 = runwayData?.speeds_v2 ?? '---';
+                const vref = ofpData.tlr?.landing?.distance_dry?.speeds_vref ?? '---';
+                const cargoWeight = ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight);
+                
                 const body = {
                     flightNumber: ofpData.general.flight_number,
                     aircraft: ofpData.aircraft.icaocode,
@@ -959,10 +998,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     arrival: ofpData.destination.icao_code,
                     alternate: ofpData.alternate.icao_code,
                     route: ofpData.general.route,
-                    etd: new Date(ofpData.times.sched_out * 1000).toISOString(), // Convert UNIX timestamp to ISO
-                    eet: ofpData.times.est_time_enroute / 3600, // Convert seconds to hours
+                    etd: new Date(ofpData.times.sched_out * 1000).toISOString(),
+                    eet: ofpData.times.est_time_enroute / 3600, 
                     pob: parseInt(ofpData.general.passengers, 10),
-                    squawkCode: ofpData.atc.squawk, // Send the squawk code from SimBrief
+                    squawkCode: ofpData.atc.squawk,
+                    
+                    // --- NEW: Add all detailed data to the request body ---
+                    zfw: ofpData.weights.est_zfw,
+                    tow: ofpData.weights.est_tow,
+                    cargo: cargoWeight,
+                    fuelTaxi: ofpData.fuel.taxi,
+                    fuelTrip: ofpData.fuel.enroute_burn,
+                    fuelTotal: ofpData.fuel.plan_ramp,
+                    v1: `${v1} kts`,
+                    vr: `${vr} kts`,
+                    v2: `${v2} kts`,
+                    vref: `${vref} kts`,
+                    departureWeather: ofpData.weather.orig_metar,
+                    arrivalWeather: ofpData.weather.dest_metar
                 };
 
                 const res = await fetch(`${API_BASE_URL}/api/flightplans`, {
@@ -1056,7 +1109,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ofpData = CURRENT_OFP_DATA;
                 
                 // --- Helper function to parse METAR string ---
-                const parseMetar = (metarString) => {
+                const parseMetarLocal = (metarString) => { // Renamed to avoid scope conflict
                     if (!metarString || typeof metarString !== 'string') {
                         return { wind: '---', temp: '---', condition: '---' };
                     }
@@ -1110,8 +1163,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('dispatch-cargo').textContent = formatWeight(cargoWeight);
                 
                 // Weather Population
-                const departureWeather = parseMetar(ofpData.weather.orig_metar);
-                const arrivalWeather = parseMetar(ofpData.weather.dest_metar);
+                const departureWeather = parseMetarLocal(ofpData.weather.orig_metar);
+                const arrivalWeather = parseMetarLocal(ofpData.weather.dest_metar);
 
                 // Departure Weather
                 document.getElementById('dispatch-dep-cond').textContent = departureWeather.condition;
