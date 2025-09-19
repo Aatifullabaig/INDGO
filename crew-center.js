@@ -389,17 +389,26 @@ document.addEventListener('DOMContentLoaded', () => {
         dispatchDisplay.style.display = 'none';
         formContainer.style.display = 'block';
 
+        // Global restrictions still apply
         if (pilot.promotionStatus === 'PENDING_TEST') {
             formContainer.innerHTML = `<div class="content-card">${getPendingTestBannerHTML()}</div>`;
             return;
         }
 
+        // If there's an active plan, show it
         if (ACTIVE_FLIGHT_PLAN) {
             populateDispatchFromActivePlan(ACTIVE_FLIGHT_PLAN);
-        } else if (pilot.dutyStatus === 'ON_DUTY') {
-            formContainer.innerHTML = getFileFlightPlanHTML(pilot);
         } else {
-             formContainer.innerHTML = `<div class="content-card"><h2><i class="fa-solid fa-file-pen"></i> File New Flight Plan</h2><p>You must be <strong>On Duty</strong> to file a flight plan. Please start a duty from the Sector Ops page.</p></div>`;
+            // Otherwise, show the form to file a new plan, regardless of duty status
+            const planHTML = getFileFlightPlanHTML(pilot);
+            const onDutyMessage = pilot.dutyStatus === 'ON_DUTY' 
+                ? `<p>You are <strong>On Duty</strong>. If your flight number matches a leg in your active roster, it will be automatically linked.</p>`
+                : `<p>You are currently <strong>Off Duty</strong>. This flight will be logged as a non-roster flight and will not affect your duty time limits.</p>`;
+            
+            formContainer.innerHTML = planHTML.replace(
+                '<form id="file-flight-plan-form">', 
+                `${onDutyMessage}<form id="file-flight-plan-form">`
+            );
         }
     };
     
