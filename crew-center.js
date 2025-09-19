@@ -881,12 +881,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (target.id === 'generate-with-simbrief-btn') {
         e.preventDefault();
 
+        const flightNumber = document.getElementById('fp-flightNumber').value.toUpperCase();
         const departure = document.getElementById('fp-departure').value.toUpperCase();
         const arrival = document.getElementById('fp-arrival').value.toUpperCase();
         const aircraft = document.getElementById('fp-aircraft').value;
 
-        if (!departure || !arrival || !aircraft) {
-            showNotification('Please fill in Departure, Arrival, and Aircraft before generating.', 'error');
+        if (!flightNumber || !departure || !arrival || !aircraft) {
+            showNotification('Please fill in Flight Number, Departure, Arrival, and Aircraft before generating.', 'error');
             return;
         }
 
@@ -895,6 +896,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sbForm.querySelector('input[name="orig"]').value = departure;
         sbForm.querySelector('input[name="dest"]').value = arrival;
         sbForm.querySelector('input[name="type"]').value = aircraft;
+        sbForm.querySelector('input[name="fltnum"]').value = flightNumber;
 
         showNotification('Opening SimBrief planner...', 'info');
 
