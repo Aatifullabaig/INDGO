@@ -18,6 +18,26 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
 
+    // --- START: NEW HELPER FUNCTIONS FOR DISPATCH ---
+    function formatDuration(seconds) {
+        if (isNaN(seconds) || seconds < 0) return '00:00';
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
+
+    function formatTimeFromTimestamp(timestamp) {
+        if (isNaN(timestamp) || timestamp <= 0) return '----';
+        const date = new Date(timestamp * 1000); // SimBrief provides seconds, convert to ms
+        return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+    }
+    
+    function formatWeight(kg) {
+        if (isNaN(kg)) return '--- kg';
+        return `${Number(kg).toLocaleString()} kg`;
+    }
+    // --- END: NEW HELPER FUNCTIONS FOR DISPATCH ---
+
     // --- Helper to extract airline code from flight number ---
     function extractAirlineCode(flightNumber) {
         if (!flightNumber || typeof flightNumber !== 'string') {
@@ -923,55 +943,76 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initial Load ---
     fetchPilotData();
     
+    // --- MODIFIED FUNCTION ---
     const handleSimbriefReturn = async () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const ofpId = urlParams.get('ofp_id');
+        const urlParams = new URLSearchParams(window.location.search);
+        const ofpId = urlParams.get('ofp_id');
 
-    if (ofpId) {
-        // --- START OF CHANGES ---
+        if (ofpId) {
+            showNotification('Fetching flight plan from SimBrief...', 'info');
 
-        // 1. Force the Flight Plan view to be active
-        document.querySelector('.content-view.active').classList.remove('active');
-        document.querySelector('.nav-link.active').classList.remove('active');
-        
-        const flightPlanView = document.getElementById('view-flight-plan');
-        flightPlanView.classList.add('active');
-        document.querySelector('a[data-view="view-flight-plan"]').classList.add('active');
+            try {
+                // Fetch the data from your Netlify function
+                const response = await fetch(`/.netlify/functions/simbrief?fetch_ofp=true&ofp_id=${ofpId}`);
+                if (!response.ok) {
+                    throw new Error('Could not retrieve flight plan from SimBrief.');
+                }
+                const data = await response.json();
+                const ofpData = data.OFP;
 
-        // 2. Ensure the form is rendered on the page BEFORE we try to fill it.
-        // We use the CURRENT_PILOT data if it's available.
-        const pilotDataForForm = CURRENT_PILOT || { rank: 'IndGo Cadet' }; // Provide a default for safety
-        flightPlanView.innerHTML = getFileFlightPlanHTML(pilotDataForForm);
+                // --- Populate the Dispatch Pass Modal ---
+                const modal = document.getElementById('dispatch-pass-modal');
+                if (!modal) {
+                    throw new Error('Dispatch modal not found in the DOM.');
+                }
 
-        // --- END OF CHANGES ---
+                // Header
+                document.getElementById('dispatch-flight-number').textContent = ofpData.general.flight_number || 'N/A';
+                document.getElementById('dispatch-route-short').textContent = `${ofpData.origin.icao_code} → ${ofpData.destination.icao_code}`;
+                document.getElementById('dispatch-date').textContent = new Date().toLocaleDateString();
 
-        showNotification('Fetching flight plan from SimBrief...', 'info');
-        try {
-            const response = await fetch(`/.netlify/functions/simbrief?fetch_ofp=true&ofp_id=${ofpId}`);
-            if (!response.ok) {
-                throw new Error('Could not retrieve flight plan from SimBrief.');
+                // Main Info Column
+                document.getElementById('dispatch-callsign').textContent = CURRENT_PILOT?.callsign || 'N/A';
+                document.getElementById('dispatch-aircraft').textContent = ofpData.aircraft.icaocode || 'N/A';
+                document.getElementById('dispatch-etd').textContent = formatTimeFromTimestamp(ofpData.times.sched_out);
+                document.getElementById('dispatch-eta').textContent = formatTimeFromTimestamp(ofpData.times.sched_in);
+                document.getElementById('dispatch-duration').textContent = formatDuration(ofpData.times.est_time_enroute);
+
+                // Fuel & Weights
+                document.getElementById('dispatch-fuel-taxi').textContent = formatWeight(ofpData.weights.taxi_fuel);
+                document.getElementById('dispatch-fuel-trip').textContent = formatWeight(ofpData.fuel.trip);
+                document.getElementById('dispatch-fuel-total').textContent = formatWeight(ofpData.fuel.plan_ramp);
+                document.getElementById('dispatch-zfw').textContent = formatWeight(ofpData.weights.est_zfw);
+                document.getElementById('dispatch-tow').textContent = formatWeight(ofpData.weights.est_tow);
+
+                // ATC
+                document.getElementById('dispatch-fic').textContent = ofpData.general.flight_number || 'N/A';
+                document.getElementById('dispatch-adc').textContent = ofpData.general.callsign || 'N/A';
+                document.getElementById('dispatch-squawk').textContent = ofpData.atc.squawk || '----';
+
+                // Passengers & Cargo
+                document.getElementById('dispatch-pax').textContent = ofpData.general.passengers || '0';
+                document.getElementById('dispatch-cargo').textContent = formatWeight(ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight));
+                
+                // Footer
+                document.getElementById('dispatch-route-full').textContent = ofpData.general.route;
+                
+                // Collect all alternates
+                const alternates = [ofpData.alternate?.icao_code, ofpData.alternate2?.icao_code, ofpData.alternate3?.icao_code, ofpData.alternate4?.icao_code]
+                    .filter(Boolean) // Remove any undefined/null values
+                    .join(', ');
+                document.getElementById('dispatch-alternates').textContent = alternates || 'None';
+
+                // Show the modal
+                modal.classList.add('visible');
+
+                showNotification('Dispatch Pass generated successfully!', 'success');
+                // Clean the URL so refreshing doesn't trigger this again
+                window.history.replaceState({}, document.title, window.location.pathname);
+
+            } catch (error) {
+                showNotification(error.message, 'error');
             }
-            const data = await response.json();
-            const ofpData = data.OFP;
-
-            // Now this part is safe to run because the form exists
-            document.getElementById('fp-flightNumber').value = ofpData.general.flight_number;
-            document.getElementById('fp-aircraft').value = ofpData.aircraft.icaocode;
-            document.getElementById('fp-departure').value = ofpData.origin.icao_code;
-            document.getElementById('fp-arrival').value = ofpData.destination.icao_code;
-            document.getElementById('fp-alternate').value = ofpData.alternate.icao_code;
-            document.getElementById('fp-route').value = ofpData.general.route;
-            document.getElementById('fp-pob').value = ofpData.general.passengers;
-            const eetHours = parseInt(ofpData.times.est_time_enroute) / 3600;
-            document.getElementById('fp-eet').value = eetHours.toFixed(1);
-
-            showNotification('Flight plan populated successfully! Review and file.', 'success');
-            window.history.replaceState({}, document.title, window.location.pathname);
-
-        } catch (error) {
-            showNotification(error.message, 'error');
         }
-    }
-};
-
+    };
 });

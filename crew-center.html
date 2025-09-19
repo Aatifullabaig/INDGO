@@ -97,7 +97,96 @@
             </div>
         </main>
     </div>
-    
+
+    <div id="dispatch-pass-modal" class="modal-overlay">
+        <div class="dispatch-pass-container">
+            <div class="dispatch-header">
+                <div class="header-left">
+                    <h2>Indigo Air Virtual Airline</h2>
+                    <p>Performance Dispatch Pass</p>
+                </div>
+                <div class="header-right">
+                    <h2 id="dispatch-flight-number">6E123</h2>
+                    <p id="dispatch-route-short">VOBL → VOHS</p>
+                    <p id="dispatch-date">9/17/2025</p>
+                </div>
+            </div>
+
+            <div class="dispatch-body">
+                <div class="dispatch-column-main">
+                    <div class="data-item"><strong>Callsign:</strong> <span id="dispatch-callsign">123</span></div>
+                    <div class="data-item"><strong>Aircraft:</strong> <span id="dispatch-aircraft">B77W</span></div>
+                    <div class="data-item"><strong>ETD:</strong> <span id="dispatch-etd">1232</span> | <strong>ETA:</strong> <span id="dispatch-eta">0200</span></div>
+                    <div class="data-item"><strong>Duration:</strong> <span id="dispatch-duration">13:28</span></div>
+                </div>
+
+                <div class="dashed-divider"></div>
+
+                <div class="dispatch-column-grid">
+                    <div class="data-card">
+                        <h3>Fuel & Weights</h3>
+                        <div class="data-item"><strong>Taxi Fuel:</strong> <span id="dispatch-fuel-taxi">500 kg</span></div>
+                        <div class="data-item"><strong>Trip Fuel:</strong> <span id="dispatch-fuel-trip">81261.71 kg</span></div>
+                        <div class="data-item"><strong>Total Fuel:</strong> <span id="dispatch-fuel-total">90350.51 kg</span></div>
+                        <div class="data-item"><strong>ZFW:</strong> <span id="dispatch-zfw">27000 kg</span></div>
+                        <div class="data-item"><strong>TOW:</strong> <span id="dispatch-tow">117350.51 kg</span></div>
+                    </div>
+
+                    <div class="data-card">
+                        <h3>V-Speeds & ATC</h3>
+                        <div class="data-item"><strong>V1:</strong> <span>---</span></div>
+                        <div class="data-item"><strong>VR:</strong> <span>---</span></div>
+                        <div class="data-item"><strong>V2:</strong> <span>---</span></div>
+                        <div class="data-item"><strong>FIC:</strong> <span id="dispatch-fic">179589</span></div>
+                        <div class="data-item"><strong>ADC:</strong> <span id="dispatch-adc">R0110B</span></div>
+                        <div class="data-item"><strong>Squawk:</strong> <span id="dispatch-squawk">6161</span></div>
+                    </div>
+
+                    <div class="data-card">
+                        <h3>Landing Speeds</h3>
+                        <div class="data-item"><strong>Vref:</strong> <span>--- knots</span></div>
+                        <div class="data-item"><strong>Vapp:</strong> <span>--- knots</span></div>
+                        <div class="data-item"><strong>flap_15:</strong> <span>--- knots</span></div>
+                        <div class="data-item"><strong>flap_25:</strong> <span>--- knots</span></div>
+                        <div class="data-item"><strong>flap_30:</strong> <span>--- knots</span></div>
+                        <div class="data-item"><strong>flap_5:</strong> <span>--- knots</span></div>
+                    </div>
+
+                     <div class="data-card">
+                        <h3>Departure Weather</h3>
+                        <div class="data-item"><strong>Condition:</strong> <span>---</span></div>
+                        <div class="data-item"><strong>Temp:</strong> <span>---</span></div>
+                        <div class="data-item"><strong>Wind:</strong> <span>---</span></div>
+                    </div>
+                     <div class="data-card">
+                        <h3>Arrival Weather</h3>
+                        <div class="data-item"><strong>Condition:</strong> <span>---</span></div>
+                        <div class="data-item"><strong>Temp:</strong> <span>---</span></div>
+                        <div class="data-item"><strong>Wind:</strong> <span>---</span></div>
+                    </div>
+
+                    <div class="data-card">
+                        <h3>Passengers & Cargo</h3>
+                        <div class="data-item"><strong>Passenger Count:</strong> <span id="dispatch-pax">300</span></div>
+                        <div class="data-item"><strong>Cargo Weight:</strong> <span id="dispatch-cargo">0 kg</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dispatch-footer">
+                <div class="route-info">
+                    <strong>Route:</strong> <span id="dispatch-route-full">VOBL → VOBL1 → NIMBI → LURGI → GIRIL → VOHS2 → VOHS</span>
+                </div>
+                <div class="alternates-info">
+                    <strong>Alternates:</strong> <span id="dispatch-alternates">VOHY, VOWA</span>
+                </div>
+                <div class="dispatch-actions">
+                    <button id="dispatch-download-btn" class="cta-button">Download PDF</button>
+                    <button id="dispatch-close-btn" class="end-duty-btn" data-close-modal>Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <div id="promotion-modal" class="modal-overlay">
         <div class="modal-content">
             <button id="modal-close-btn" class="modal-close">&times;</button>

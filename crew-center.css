@@ -1226,3 +1226,134 @@ table.leaderboard-table {
         padding: 1.5rem;
     }
 }
+
+
+/* ======================================== */
+/* START: NEW DISPATCH PASS MODAL STYLES    */
+/* ======================================== */
+.dispatch-pass-container {
+    background-color: #fff;
+    color: #333;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 1200px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    font-family: 'Arial', sans-serif;
+}
+
+.dispatch-header {
+    background-color: var(--accent-color);
+    color: #fff;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+
+.dispatch-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+.dispatch-header p {
+    margin: 0;
+    opacity: 0.9;
+}
+.header-right {
+    text-align: right;
+}
+.header-right h2 {
+    font-size: 2rem;
+}
+
+.dispatch-body {
+    display: flex;
+    padding: 1.5rem 2rem;
+    gap: 1.5rem;
+}
+
+.dispatch-column-main {
+    flex: 0 0 250px;
+    font-size: 1rem;
+    padding-right: 1.5rem;
+}
+
+.dashed-divider {
+    border-left: 2px dashed #ccc;
+}
+
+.dispatch-column-grid {
+    flex-grow: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    padding-left: 1.5rem;
+}
+
+.data-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.data-card h3 {
+    margin: 0 0 0.5rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #eee;
+    font-size: 1.1rem;
+    color: #000;
+}
+
+.data-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+}
+.dispatch-column-main .data-item {
+    flex-direction: column;
+    margin-bottom: 1rem;
+    justify-content: flex-start;
+}
+.dispatch-column-main .data-item span {
+    font-size: 1.2rem;
+}
+
+.data-item strong {
+    color: #555;
+}
+
+.data-item span {
+    font-weight: bold;
+    color: #000;
+    text-align: right;
+}
+
+.dispatch-footer {
+    background-color: #f7f7f7;
+    padding: 1.5rem 2rem;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+    border-top: 1px solid #eee;
+}
+
+.route-info, .alternates-info {
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+    word-break: break-all;
+}
+.route-info span, .alternates-info span {
+    font-family: 'monospace';
+    font-weight: bold;
+    color: #000;
+}
+
+.dispatch-actions {
+    margin-top: 1.5rem;
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+}
+/* ======================================== */
+/* END: NEW DISPATCH PASS MODAL STYLES      */
+/* ======================================== */
