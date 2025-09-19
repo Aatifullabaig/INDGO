@@ -997,7 +997,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('dispatch-duration').textContent = formatDuration(ofpData.times.est_time_enroute);
 
                 // Fuel & Weights
-                document.getElementById('dispatch-fuel-taxi').textContent = formatWeight(ofpData.fuel.taxi_fuel);
+                document.getElementById('dispatch-fuel-taxi').textContent = formatWeight(ofpData.weights.taxi_fuel);
                 document.getElementById('dispatch-fuel-trip').textContent = formatWeight(ofpData.fuel.trip);
                 document.getElementById('dispatch-fuel-total').textContent = formatWeight(ofpData.fuel.plan_ramp);
                 document.getElementById('dispatch-zfw').textContent = formatWeight(ofpData.weights.est_zfw);
