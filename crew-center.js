@@ -272,12 +272,18 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     `;
 
-    const createStatsCardHTML = (pilot) => `
-        <div class="content-card">
-            <h2><i class="fa-solid fa-chart-line"></i> Pilot Stats</h2>
-            <div class="stats-grid">
-                <div class="stat-item"><strong>Rank</strong><span>${pilot.rank || '---'}</span></div>
-                <div class="stat-item"><strong>Flight Hours</strong><span>${(pilot.flightHours || 0).toFixed(1)}</span></div>
+    const createHubHeaderHTML = (pilot, title) => `
+        <div class="hub-header">
+            <h2>${title}</h2>
+            <div class="hub-stats-grid">
+                <div class="hub-stat-item">
+                    <strong>Rank</strong>
+                    <span>${pilot.rank || '---'}</span>
+                </div>
+                <div class="hub-stat-item">
+                    <strong>Flight Hours</strong>
+                    <span>${(pilot.flightHours || 0).toFixed(1)}</span>
+                </div>
             </div>
         </div>
     `;
@@ -295,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dutyStatusHTML = renderOnRestContent(pilot);
         }
 
-        dutyStatusView.innerHTML = `${pendingBanner}${dutyStatusHTML}${createStatsCardHTML(pilot)}${leaderboardsHTML}`;
+        dutyStatusView.innerHTML = `${pendingBanner}${dutyStatusHTML}${leaderboardsHTML}`;
 
         if (pilot.dutyStatus === 'ON_REST' && pilot.timeUntilNextDutyMs > 0) {
             const timerElement = document.getElementById('crew-rest-timer');
@@ -317,21 +323,26 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const renderOnRestContent = (pilot) => {
+        let content = '';
+        let title = '';
+
         if (pilot.timeUntilNextDutyMs > 0) {
-            return `
-                <div class="content-card">
-                    <h2><i class="fa-solid fa-bed"></i> Current Status: 🔴 On Rest (Mandatory)</h2>
-                    <div class="crew-rest-notice">
-                        <p>A minimum <strong>8-hour rest period</strong> is required after completing a duty. You may go on duty again after this period has elapsed.</p>
-                        <p>Time remaining until next duty:</p>
-                        <div class="crew-rest-timer-display" id="crew-rest-timer">--:--:--</div>
-                    </div>
+            title = '<i class="fa-solid fa-bed"></i> Current Status: 🔴 On Rest (Mandatory)';
+            content = `
+                <div class="crew-rest-notice">
+                    <p>A minimum <strong>8-hour rest period</strong> is required after completing a duty. You may go on duty again after this period has elapsed.</p>
+                    <p>Time remaining until next duty:</p>
+                    <div class="crew-rest-timer-display" id="crew-rest-timer">--:--:--</div>
                 </div>`;
+        } else {
+            title = '<i class="fa-solid fa-user-clock"></i> Current Status: 🔴 On Rest';
+            content = `<p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>`;
         }
+        
         return `
-            <div class="content-card">
-                <h2><i class="fa-solid fa-user-clock"></i> Current Status: 🔴 On Rest</h2>
-                <p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>
+            <div class="pilot-hub-card">
+                ${createHubHeaderHTML(pilot, title)}
+                ${content}
             </div>`;
     };
 
@@ -352,14 +363,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const filedPirepsForRoster = allPireps.filter(p => p.rosterLeg?.rosterId === currentRoster._id);
             const filedFlightNumbers = new Set(filedPirepsForRoster.map(p => p.flightNumber));
 
+            const headerTitle = '<i class="fa-solid fa-plane-departure"></i> Current Status: 🟢 On Duty';
+
             return `
-                <div class="content-card">
+                <div class="pilot-hub-card">
+                    ${createHubHeaderHTML(pilot, headerTitle)}
                     <div class="on-duty-header">
-                        <h2><i class="fa-solid fa-plane-departure"></i> Current Status: 🟢 On Duty</h2>
+                        <div>
+                            <p style="margin: 0;"><strong>Active Roster:</strong> ${currentRoster.name}</p>
+                            <p class="muted" style="margin: 0;">Complete your assigned flights via the <strong>Flight Plan</strong> page.</p>
+                        </div>
                         <button id="end-duty-btn" class="end-duty-btn">Complete Duty Day</button>
                     </div>
-                    <p><strong>Active Roster:</strong> ${currentRoster.name}</p>
-                    <p>Complete your assigned flights via the <strong>Flight Plan</strong> page. Once all legs are flown, you may complete your duty day here.</p>
                     <div class="roster-checklist">
                         ${currentRoster.legs.map(leg => {
                             const isCompleted = filedFlightNumbers.has(leg.flightNumber);
@@ -516,22 +531,33 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Other Data Display Functions ---
-    const renderLeaderboardTable = (title, data, valueKey) => {
+    const renderLeaderboardList = (title, data, valueKey) => {
         if (!data || data.length === 0) return `<h4>Top by ${title}</h4><p class="muted">No data available yet.</p>`;
+        
+        const unit = title === 'Hours' ? 'hrs' : 'flights';
+
         return `
-            <h4>Top by ${title}</h4>
-            <table class="leaderboard-table">
-                <thead><tr><th>#</th><th>Pilot</th><th>${title === 'Hours' ? '<i class="fa-solid fa-stopwatch"></i>' : '<i class="fa-solid fa-plane-arrival"></i>'} ${title}</th></tr></thead>
-                <tbody>
-                    ${data.map((pilot, index) => `
-                        <tr>
-                            <td>${index + 1}</td>
-                            <td>${pilot.name}<small>${pilot.callsign || 'N/A'}</small></td>
-                            <td>${Number(pilot[valueKey] || 0).toFixed(1)}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>`;
+            <h4><i class="fa-solid ${title === 'Hours' ? 'fa-stopwatch' : 'fa-plane-arrival'}"></i> Top by ${title}</h4>
+            <div class="leaderboard-list">
+                ${data.map((pilot, index) => {
+                    const rankClass = index === 0 ? 'rank-1' : '';
+                    const rankContent = index === 0 ? '<i class="fas fa-crown"></i>' : index + 1;
+                    
+                    return `
+                    <div class="leaderboard-entry ${rankClass}">
+                        <span class="rank-position">${rankContent}</span>
+                        <div class="pilot-info">
+                            <strong>${pilot.name}</strong>
+                            <small>${pilot.callsign || 'N/A'}</small>
+                        </div>
+                        <div class="score">
+                            ${Number(pilot[valueKey] || 0).toFixed(1)}
+                            <span class="unit">${unit}</span>
+                        </div>
+                    </div>
+                    `;
+                }).join('')}
+            </div>`;
     };
 
     const fetchAndDisplayLeaderboards = async () => {
@@ -547,15 +573,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="content-card">
                     <h2><i class="fa-solid fa-trophy"></i> Leaderboards</h2>
                     <div class="leaderboards-container">
-                        <div class="leaderboard-card">
+                        <div class="leaderboard-card redesigned">
                             <h3>This Week</h3>
-                            ${renderLeaderboardTable('Hours', weeklyData.topByHours, 'weeklyFlightHours')}
-                            ${renderLeaderboardTable('Sectors', weeklyData.topBySectors, 'weeklySectors')}
+                            ${renderLeaderboardList('Hours', weeklyData.topByHours, 'weeklyFlightHours')}
+                            ${renderLeaderboardList('Sectors', weeklyData.topBySectors, 'weeklySectors')}
                         </div>
-                        <div class="leaderboard-card">
+                        <div class="leaderboard-card redesigned">
                             <h3>This Month</h3>
-                            ${renderLeaderboardTable('Hours', monthlyData.topByHours, 'leaderboardMonthlyFlightHours')}
-                            ${renderLeaderboardTable('Sectors', monthlyData.topBySectors, 'monthlySectors')}
+                            ${renderLeaderboardList('Hours', monthlyData.topByHours, 'leaderboardMonthlyFlightHours')}
+                            ${renderLeaderboardList('Sectors', monthlyData.topBySectors, 'monthlySectors')}
                         </div>
                     </div>
                 </div>`;

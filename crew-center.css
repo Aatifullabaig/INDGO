@@ -780,54 +780,152 @@ roster-item {
     contain: content;
 }
 
-/* --- LEADERBOARD STYLES --- */
+/* --- NEW: LEADERBOARD STYLES (REDESIGNED) --- */
 .leaderboards-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
     gap: 2rem;
 }
-.leaderboard-card h3 {
-    margin: 0 0 1rem 0;
-    color: #fff;
-    font-size: 1.2rem;
+.leaderboard-card.redesigned {
+    background-color: #f8f9fa; /* Light background like dispatch pass */
+    color: #212529; /* Dark text */
+    border-radius: 8px;
+    padding: 1.5rem;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
 }
-.leaderboard-card h4 {
-    margin-top: 1.5rem;
-    margin-bottom: 0.75rem;
-    color: var(--dashboard-text-color); /* Legibility Fix */
-    text-transform: none; /* Legibility Fix */
-    font-size: 1rem; /* Legibility Fix */
-    font-weight: 600; /* Legibility Fix */
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border-color);
-}
-.leaderboard-card h4:first-of-type {
+.leaderboard-card.redesigned h3 {
+    font-size: 1.5rem;
     margin-top: 0;
+    margin-bottom: 0.5rem;
+    color: #000;
 }
-table.leaderboard-table {
-    width: 100%;
-    border-collapse: collapse;
+.leaderboard-card.redesigned p.muted {
+    color: #6c757d; /* Muted text for the new theme */
 }
-.leaderboard-table th, .leaderboard-table td {
+.leaderboard-card.redesigned h4 {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+    color: var(--accent-color);
+    font-size: 1.1rem;
+    font-weight: 700;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e9ecef;
+}
+.leaderboard-card.redesigned h4:first-of-type {
+    margin-top: 0.5rem;
+}
+
+.leaderboard-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.leaderboard-entry {
+    display: flex;
+    align-items: center;
     padding: 0.75rem;
-    text-align: left;
-    border-bottom: 1px solid var(--border-color);
+    border-radius: 6px;
+    transition: background-color 0.2s;
 }
-.leaderboard-table th {
+.leaderboard-entry:hover {
+    background-color: #e9ecef;
+}
+
+.leaderboard-entry .rank-position {
+    font-weight: bold;
+    font-size: 1.1rem;
+    color: #6c757d;
+    width: 40px;
+    flex-shrink: 0;
+    text-align: center;
+}
+.leaderboard-entry .pilot-info {
+    flex-grow: 1;
+    line-height: 1.3;
+}
+.leaderboard-entry .pilot-info strong {
+    display: block;
+    color: #212529;
+}
+.leaderboard-entry .pilot-info small {
+    color: #6c757d;
+    font-size: 0.85rem;
+}
+.leaderboard-entry .score {
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: var(--accent-color);
+}
+.leaderboard-entry .score .unit {
+    font-size: 0.8rem;
+    font-weight: normal;
+    color: #6c757d;
+    margin-left: 4px;
+}
+
+/* Crown for 1st place */
+.leaderboard-entry.rank-1 {
+    background-color: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+}
+.leaderboard-entry.rank-1 .rank-position {
+    color: #ffc107;
+    font-size: 1.5rem;
+}
+.leaderboard-entry.rank-1 .pilot-info strong {
+    color: #000;
+}
+.fa-crown {
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
+/* --- NEW: PILOT HUB CARD STYLES --- */
+.pilot-hub-card {
+    background: var(--primary-glass);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1.5rem 2rem 2rem 2rem; /* More padding */
+}
+.hub-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+.hub-header h2 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 1.5rem;
+}
+.hub-stats-grid {
+    display: flex;
+    gap: 1.5rem;
+    text-align: right;
+}
+.hub-stat-item {
+    line-height: 1.2;
+}
+.hub-stat-item strong {
+    display: block;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    opacity: 0.7;
+}
+.hub-stat-item span {
+    font-size: 1.4rem;
     font-weight: bold;
     color: var(--dashboard-text-color);
 }
-.leaderboard-table td small {
-    display: block;
-    opacity: 0.7;
-    font-size: 0.8rem;
-    margin-top: 2px;
-}
-.leaderboard-table tbody tr:hover {
-    background-color: rgba(0, 27, 148, 0.15);
-}
 
-/* --- NEW: Crew Rest Timer Styles --- */
+/* --- NEW: CREW REST TIMER STYLES (IMPROVED) --- */
 .crew-rest-notice {
     margin-top: 1.5rem;
     padding: 1rem 1.5rem;
