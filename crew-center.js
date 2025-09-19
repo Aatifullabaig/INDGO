@@ -353,17 +353,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Flight Plan View ---
     const renderFlightPlanView = (pilot) => {
         const viewContainer = document.getElementById('view-flight-plan');
+        const formContainer = document.getElementById('file-flight-plan-container');
+        const dispatchDisplay = document.getElementById('dispatch-pass-display');
+
+        // Always hide dispatch pass on initial render of this view
+        dispatchDisplay.style.display = 'none';
+        formContainer.style.display = 'block';
+
         if (pilot.promotionStatus === 'PENDING_TEST') {
-            viewContainer.innerHTML = `<div class="content-card">${getPendingTestBannerHTML()}</div>`;
+            formContainer.innerHTML = `<div class="content-card">${getPendingTestBannerHTML()}</div>`;
             return;
         }
 
         if (ACTIVE_FLIGHT_PLAN) {
-            viewContainer.innerHTML = getActiveFlightPlanHTML(ACTIVE_FLIGHT_PLAN);
+            formContainer.innerHTML = getActiveFlightPlanHTML(ACTIVE_FLIGHT_PLAN);
         } else if (pilot.dutyStatus === 'ON_DUTY') {
-            viewContainer.innerHTML = getFileFlightPlanHTML(pilot);
+            formContainer.innerHTML = getFileFlightPlanHTML(pilot);
         } else {
-             viewContainer.innerHTML = `<div class="content-card"><h2><i class="fa-solid fa-file-pen"></i> File New Flight Plan</h2><p>You must be <strong>On Duty</strong> to file a flight plan. Please start a duty from the Sector Ops page.</p></div>`;
+             formContainer.innerHTML = `<div class="content-card"><h2><i class="fa-solid fa-file-pen"></i> File New Flight Plan</h2><p>You must be <strong>On Duty</strong> to file a flight plan. Please start a duty from the Sector Ops page.</p></div>`;
         }
     };
 
@@ -893,6 +900,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Call the SimBrief API function. It will redirect back to this page.
         simbriefsubmit(window.location.origin + window.location.pathname);
     }
+        // NEW: Listener for the embedded dispatch pass close button
+        if (target.id === 'dispatch-close-btn') {
+            document.getElementById('dispatch-pass-display').style.display = 'none';
+            document.getElementById('file-flight-plan-container').style.display = 'block';
+        }
 });
 
     // --- Modal Handlers ---
@@ -960,10 +972,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = await response.json();
                 const ofpData = data.OFP;
 
-                // --- Populate the Dispatch Pass Modal ---
-                const modal = document.getElementById('dispatch-pass-modal');
-                if (!modal) {
-                    throw new Error('Dispatch modal not found in the DOM.');
+                // --- Populate the Dispatch Pass (now an embedded element) ---
+                const dispatchDisplay = document.getElementById('dispatch-pass-display');
+                const formContainer = document.getElementById('file-flight-plan-container');
+
+                if (!dispatchDisplay || !formContainer) {
+                    throw new Error('Dispatch or form container not found in the DOM.');
                 }
 
                 // Header
@@ -1003,8 +1017,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     .join(', ');
                 document.getElementById('dispatch-alternates').textContent = alternates || 'None';
 
-                // Show the modal
-                modal.classList.add('visible');
+                // Show the dispatch pass and hide the form
+                formContainer.style.display = 'none';
+                dispatchDisplay.style.display = 'block';
 
                 showNotification('Dispatch Pass generated successfully!', 'success');
                 // Clean the URL so refreshing doesn't trigger this again

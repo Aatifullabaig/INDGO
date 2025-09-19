@@ -1241,6 +1241,16 @@ table.leaderboard-table {
     font-family: 'Arial', sans-serif;
 }
 
+/* NEW: Styles for when the dispatch pass is embedded, not a modal */
+#dispatch-pass-display {
+    box-shadow: none;
+    border: 1px solid var(--border-color);
+    width: 100%;
+    max-width: 100%;
+    margin-top: 2rem;
+}
+
+
 .dispatch-header {
     background-color: var(--accent-color);
     color: #fff;

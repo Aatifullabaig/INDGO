@@ -71,35 +71,10 @@
     <div id="view-duty-status" class="content-view active">
     </div>
     <div id="view-flight-plan" class="content-view">
-        </div>
-            <div id="view-rosters" class="content-view">
-                <div class="content-card">
-                    <h2><i class="fa-solid fa-map-location-dot"></i> Sector Ops - Your Available Rosters</h2>
-                    <p>Select a roster to begin your duty day. These rosters are suggested based on where your last duty ended or your last flight landed.</p>
-                    
-                    <div id="map"></div>
-                    
-                    <div id="roster-list-header">
-                        <p>Finding rosters for your location...</p>
-                    </div>
-                    <div id="roster-list-container">
-                        <p>Loading available rosters...</p>
-                    </div>
-                </div>
+        <div id="file-flight-plan-container">
             </div>
-            <div id="view-history" class="content-view">
-                <div class="content-card">
-                    <h2><i class="fa-solid fa-clock-rotate-left"></i> PIREP History</h2>
-                    <div id="pirep-history-list">
-                        <p>Loading your flight history...</p>
-                    </div>
-                </div>
-            </div>
-        </main>
-    </div>
 
-    <div id="dispatch-pass-modal" class="modal-overlay">
-        <div class="dispatch-pass-container">
+        <div id="dispatch-pass-display" class="dispatch-pass-container" style="display: none;">
             <div class="dispatch-header">
                 <div class="header-left">
                     <h2>Indigo Air Virtual Airline</h2>
@@ -182,11 +157,37 @@
                 </div>
                 <div class="dispatch-actions">
                     <button id="dispatch-download-btn" class="cta-button">Download PDF</button>
-                    <button id="dispatch-close-btn" class="end-duty-btn" data-close-modal>Close</button>
+                    <button id="dispatch-close-btn" class="end-duty-btn">Close</button>
                 </div>
             </div>
         </div>
     </div>
+    <div id="view-rosters" class="content-view">
+        <div class="content-card">
+            <h2><i class="fa-solid fa-map-location-dot"></i> Sector Ops - Your Available Rosters</h2>
+            <p>Select a roster to begin your duty day. These rosters are suggested based on where your last duty ended or your last flight landed.</p>
+            
+            <div id="map"></div>
+            
+            <div id="roster-list-header">
+                <p>Finding rosters for your location...</p>
+            </div>
+            <div id="roster-list-container">
+                <p>Loading available rosters...</p>
+            </div>
+        </div>
+    </div>
+    <div id="view-history" class="content-view">
+        <div class="content-card">
+            <h2><i class="fa-solid fa-clock-rotate-left"></i> PIREP History</h2>
+            <div id="pirep-history-list">
+                <p>Loading your flight history...</p>
+            </div>
+        </div>
+    </div>
+</main>
+    </div>
+
     <div id="promotion-modal" class="modal-overlay">
         <div class="modal-content">
             <button id="modal-close-btn" class="modal-close">&times;</button>
