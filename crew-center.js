@@ -1,4 +1,4 @@
-// Crew Center – Merged Script with Flight Plan Workflow & Promotion Lockout
+// Crew Center – Merged Script with SimBrief Integration & Promotion Lockout
 document.addEventListener('DOMContentLoaded', () => {
     const token = localStorage.getItem('authToken');
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
@@ -75,16 +75,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'Unknown';
     };
 
-    const userCanFlyAircraft = (userRank, aircraftCode) => {
-        const ac = FLEET.find(a => a.code === aircraftCode);
-        if (!ac) return false;
-        const ui = rankIndex(userRank);
-        const ri = rankIndex(ac.minRank);
-        return ui >= 0 && ri >= 0 && ri <= ui;
-    };
-
-    const getAllowedFleet = (userRank) => FLEET.filter(a => userCanFlyAircraft(userRank, a.code));
-
     // --- Notifications ---
     function showNotification(message, type) {
         Toastify({
@@ -102,19 +92,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const pilotNameElem = document.getElementById('pilot-name');
     const pilotCallsignElem = document.getElementById('pilot-callsign');
     const profilePictureElem = document.getElementById('profile-picture');
-    const logoutButton = document.getElementById('logout-button');
     const mainContentContainer = document.querySelector('.main-content');
     const sidebarNav = document.querySelector('.sidebar-nav');
     const dashboardContainer = document.querySelector('.dashboard-container');
     const sidebarToggleBtn = document.getElementById('sidebar-toggle');
 
     // Modals
-    const promotionModal = document.getElementById('promotion-modal');
     const arriveFlightModal = document.getElementById('arrive-flight-modal');
 
     // Global state
     let CURRENT_PILOT = null;
-    let ACTIVE_FLIGHT_PLAN = null;
+    let ACTIVE_FLIGHT_PLAN = null; // This will now hold the SimbriefFlight object
 
     // --- Auth & Initial Setup ---
     if (!token) {
@@ -143,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const pilot = await response.json();
             CURRENT_PILOT = pilot;
-            ACTIVE_FLIGHT_PLAN = pilot.currentFlightPlan;
+            ACTIVE_FLIGHT_PLAN = pilot.currentSimbriefFlight;
 
             pilotNameElem.textContent = pilot.name || 'N/A';
             pilotCallsignElem.textContent = pilot.callsign || 'N/A';
@@ -234,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return `
             <div class="content-card">
                 <h2><i class="fa-solid fa-user-clock"></i> Current Status: 🔴 On Rest</h2>
-                <p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>
+                <p>You are eligible for your next assignment. You can either select a roster from <strong>Sector Ops</strong> or import a flight plan from <strong>SimBrief</strong>.</p>
             </div>`;
     };
 
@@ -284,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- Flight Plan View ---
+    // --- Flight Plan View (REFACTORED for SimBrief) ---
     const renderFlightPlanView = (pilot) => {
         const viewContainer = document.getElementById('view-flight-plan');
         if (pilot.promotionStatus === 'PENDING_TEST') {
@@ -295,15 +283,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ACTIVE_FLIGHT_PLAN) {
             viewContainer.innerHTML = getActiveFlightPlanHTML(ACTIVE_FLIGHT_PLAN);
         } else if (pilot.dutyStatus === 'ON_DUTY') {
-            viewContainer.innerHTML = getFileFlightPlanHTML(pilot);
+            viewContainer.innerHTML = `<div class="content-card"><h2><i class="fa-solid fa-file-pen"></i> File New Flight Plan</h2><p>You are currently <strong>On Duty</strong> with an active roster. You must complete your duty before starting a new non-roster flight with SimBrief.</p></div>`;
         } else {
-             viewContainer.innerHTML = `<div class="content-card"><h2><i class="fa-solid fa-file-pen"></i> File New Flight Plan</h2><p>You must be <strong>On Duty</strong> to file a flight plan. Please start a duty from the Sector Ops page.</p></div>`;
+             viewContainer.innerHTML = getGenerateSimbriefHTML(pilot);
         }
     };
 
     const getActiveFlightPlanHTML = (plan) => {
-        const etd = new Date(plan.etd).toLocaleString();
-        const eta = new Date(plan.eta).toLocaleString();
+        const etd = new Date(plan.createdAt).toLocaleString(); 
+        const eta = new Date(new Date(plan.createdAt).getTime() + (plan.flightTime * 60 * 60 * 1000)).toLocaleString();
         let actions = '';
 
         if (plan.status === 'PLANNED') {
@@ -324,47 +312,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="fp-detail-item"><strong>Departure</strong><span>${plan.departure}</span></div>
                 <div class="fp-detail-item"><strong>Arrival</strong><span>${plan.arrival}</span></div>
                 <div class="fp-detail-item"><strong>Alternate</strong><span>${plan.alternate || 'N/A'}</span></div>
-                <div class="fp-detail-item"><strong>ETD</strong><span>${etd}</span></div>
+                <div class="fp-detail-item"><strong>Filed At</strong><span>${etd}</span></div>
                 <div class="fp-detail-item"><strong>ETA</strong><span>${eta}</span></div>
-                <div class="fp-detail-item"><strong>EET</strong><span>${(plan.eet || 0).toFixed(1)} hrs</span></div>
+                <div class="fp-detail-item"><strong>EET</strong><span>${(plan.flightTime || 0).toFixed(1)} hrs</span></div>
                 <div class="fp-detail-item"><strong>FIC #</strong><span>${plan.ficNumber || 'N/A'}</span></div>
                 <div class="fp-detail-item"><strong>ADC #</strong><span>${plan.adcNumber || 'N/A'}</span></div>
-                <div class="fp-detail-item"><strong>Persons on Board</strong><span>${plan.pob}</span></div>
                 <div class="fp-detail-item" style="grid-column: 1 / -1;"><strong>Route</strong><span>${plan.route}</span></div>
             </div>
             <div class="flight-plan-actions">${actions}</div>
         </div>`;
     };
 
-    const getFileFlightPlanHTML = (pilot) => {
-        const allowed = getAllowedFleet(pilot.rank);
+    // MODIFIED: This function now returns a form for generating a new flight plan.
+    const getGenerateSimbriefHTML = (pilot) => {
+        const simbriefUsernameSet = pilot.simbriefUsername && pilot.simbriefUsername.trim() !== '';
+        if (!simbriefUsernameSet) {
+             return `
+             <div class="content-card">
+                 <h2><i class="fa-solid fa-file-import"></i> Generate with SimBrief</h2>
+                 <div class="pending-test-banner">
+                     <h3><i class="fa-solid fa-triangle-exclamation"></i> SimBrief Username Required</h3>
+                     <p>To generate flight plans, you must first set your SimBrief Username in your profile settings. This is a one-time setup.</p>
+                 </div>
+             </div>
+             `;
+        }
+
+        [cite_start]// The SimBrief API requires 'orig', 'dest', and 'type' at a minimum[cite: 17].
         return `
         <div class="content-card">
-            <h2><i class="fa-solid fa-file-pen"></i> File New Flight Plan</h2>
-            <p>Your aircraft list is filtered to what <strong>${pilot.rank}</strong> is allowed to fly.</p>
-            <form id="file-flight-plan-form">
-                <div class="form-group-row">
-                    <div class="form-group"><label>Flight Number</label><input type="text" id="fp-flightNumber" required></div>
+            <h2><i class="fa-solid fa-file-import"></i> Generate New Flight Plan with SimBrief</h2>
+            <p>Enter your flight details below. Your request will be sent to SimBrief to generate a new Operational Flight Plan (OFP).</p>
+            <form id="simbrief-generate-form" class="flight-plan-form">
+                <div class="form-grid">
                     <div class="form-group">
-                        <label>Aircraft</label>
-                        <select id="fp-aircraft" class="select-control" required>
-                            <option value="">-- Select Aircraft --</option>
-                            ${allowed.map(a => `<option value="${a.code}">${a.name} (${a.code})</option>`).join('')}
-                        </select>
+                        <label for="sb-orig">Departure ICAO</label>
+                        <input type="text" id="sb-orig" name="orig" placeholder="e.g., KJFK" maxlength="4" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="sb-dest">Arrival ICAO</label>
+                        <input type="text" id="sb-dest" name="dest" placeholder="e.g., KLAX" maxlength="4" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="sb-type">Aircraft Type</label>
+                        <input type="text" id="sb-type" name="type" placeholder="e.g., B738" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="sb-callsign">Callsign</label>
+                        <input type="text" id="sb-callsign" name="callsign" placeholder="e.g., IND123" required>
                     </div>
                 </div>
-                <div class="form-group-row">
-                    <div class="form-group"><label>Departure (ICAO)</label><input type="text" id="fp-departure" required maxlength="4"></div>
-                    <div class="form-group"><label>Arrival (ICAO)</label><input type="text" id="fp-arrival" required maxlength="4"></div>
-                    <div class="form-group"><label>Alternate (ICAO)</label><input type="text" id="fp-alternate" maxlength="4"></div>
+                <div class="flight-plan-actions">
+                    <button type="submit" id="generate-simbrief-btn" class="cta-button">
+                        <i class="fa-solid fa-cogs"></i> Generate Flight Plan
+                    </button>
                 </div>
-                <div class="form-group"><label>Route</label><textarea id="fp-route" rows="3" required></textarea></div>
-                <div class="form-group-row">
-                    <div class="form-group"><label>Est. Departure (Local)</label><input type="datetime-local" id="fp-etd" required></div>
-                    <div class="form-group"><label>Est. Elapsed Time (Hours)</label><input type="number" id="fp-eet" step="0.1" min="0.1" required></div>
-                    <div class="form-group"><label>Persons on Board</label><input type="number" id="fp-pob" min="1" required></div>
-                </div>
-                <button type="submit" class="cta-button">File Flight Plan</button>
             </form>
         </div>`;
     };
@@ -448,9 +450,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             container.innerHTML = rosters.map(roster => {
                 const dutyDisabled = CURRENT_PILOT?.promotionStatus === 'PENDING_TEST' ? 'disabled' : '';
-
-                // --- NEW LOGIC FOR REDESIGN ---
-                // Get unique airline codes for logos
                 const uniqueAirlines = [...new Set(roster.legs.map(leg => extractAirlineCode(leg.flightNumber)))];
                 const airlineLogosHTML = uniqueAirlines.map(code => {
                     if (!code || code === 'UNKNOWN') return '';
@@ -458,13 +457,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     return `<img src="${logoPath}" alt="${code}" class="roster-airline-logo" onerror="this.style.display='none'">`;
                 }).join('');
 
-                // Get first departure and last arrival
                 const firstLeg = roster.legs[0];
                 const lastLeg = roster.legs[roster.legs.length - 1];
                 
                 const pathString = [roster.legs[0].departure, ...roster.legs.map(leg => leg.arrival)].join(' → ');
 
-                // --- NEW HTML STRUCTURE FOR REDESIGN ---
                 return `
                 <div class="roster-item" data-roster-id="${roster._id}">
                     <div class="roster-card-header">
@@ -561,47 +558,48 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Global Event Listeners for Actions ---
-    mainContentContainer.addEventListener('submit', async (e) => {
-        if (e.target.id === 'file-flight-plan-form') {
-            e.preventDefault();
-            const btn = e.target.querySelector('button');
-            btn.disabled = true;
-            btn.textContent = 'Filing...';
 
-            const body = {
-                flightNumber: document.getElementById('fp-flightNumber').value.toUpperCase(),
-                aircraft: document.getElementById('fp-aircraft').value,
-                departure: document.getElementById('fp-departure').value.toUpperCase(),
-                arrival: document.getElementById('fp-arrival').value.toUpperCase(),
-                alternate: document.getElementById('fp-alternate').value.toUpperCase(),
-                route: document.getElementById('fp-route').value,
-                etd: new Date(document.getElementById('fp-etd').value).toISOString(),
-                eet: parseFloat(document.getElementById('fp-eet').value),
-                pob: parseInt(document.getElementById('fp-pob').value, 10),
-            };
+    // NEW: Added a 'submit' listener for the new SimBrief generation form.
+    mainContentContainer.addEventListener('submit', async (e) => {
+        if (e.target.id === 'simbrief-generate-form') {
+            e.preventDefault(); 
+            const form = e.target;
+            const button = form.querySelector('#generate-simbrief-btn');
+            
+            button.disabled = true;
+            button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating...';
+
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
 
             try {
-                const res = await fetch(`${API_BASE_URL}/api/flightplans`, {
+                // This points to your NEW backend endpoint for generating flights.
+                const res = await fetch(`${API_BASE_URL}/api/simbrief/generate`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify(body)
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify(data)
                 });
                 const result = await res.json();
-                if (!res.ok) throw new Error(result.message || 'Failed to file flight plan.');
+                if (!res.ok) throw new Error(result.message || 'Failed to generate flight plan via SimBrief.');
+                
                 showNotification(result.message, 'success');
                 await fetchPilotData();
-            } catch(err) {
+
+            } catch (err) {
                 showNotification(`Error: ${err.message}`, 'error');
-                btn.disabled = false;
-                btn.textContent = 'File Flight Plan';
+                button.disabled = false;
+                button.innerHTML = '<i class="fa-solid fa-cogs"></i> Generate Flight Plan';
             }
         }
     });
-
+    
     mainContentContainer.addEventListener('click', async (e) => {
         const target = e.target;
         
-        // MODIFIED: Roster Details Toggle WITHOUT Map Interaction
+        // Roster Details Toggle
         if (target.classList.contains('details-button') && target.dataset.rosterId && !target.classList.contains('view-roster-on-map-btn')) {
             const rosterId = target.dataset.rosterId;
             const detailsContainer = document.getElementById(`details-${rosterId}`);
@@ -617,16 +615,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const isVisible = detailsContainer.classList.toggle('visible');
             target.setAttribute('aria-expanded', isVisible);
 
-            // MODIFIED: This block no longer scrolls to the map automatically.
             if (isVisible) {
-                // Focus the map visually without scrolling the page.
                 if (window.focusOnRoster) window.focusOnRoster(rosterId);
             } else {
-                // If it was just closed, reset the map view.
                 if (window.showAllRosters) window.showAllRosters();
             }
 
-            // Fetch and render details only if it's visible and not already loaded
             if (isVisible && !detailsContainer.innerHTML.trim()) {
                 detailsContainer.innerHTML = '<p>Loading details...</p>';
                 try {
@@ -638,7 +632,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isMultiAircraft = roster.legs.some((leg, i, arr) => i > 0 && leg.aircraft !== arr[0].aircraft);
 
                     if (roster && roster.legs) {
-                        // MODIFIED: Added the new "View on Map" button here
                         detailsContainer.innerHTML = `
                             <div class="roster-details-actions">
                                 <button class="details-button view-roster-on-map-btn" data-roster-id="${rosterId}">
@@ -708,13 +701,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // NEW: Listener for the "View on Map" button inside the details panel
+        // View Roster on Map button
         if (target.classList.contains('view-roster-on-map-btn') || target.closest('.view-roster-on-map-btn')) {
             const button = target.closest('.view-roster-on-map-btn');
             const rosterId = button.dataset.rosterId;
             if (window.focusOnRoster) {
-                window.focusOnRoster(rosterId); // Focuses the map on the route
-                document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' }); // Scrolls to the map
+                window.focusOnRoster(rosterId);
+                document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
 
@@ -742,15 +735,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // End Duty
         if (target.id === 'end-duty-btn') {
-             // Logic for ending duty
+             // Logic for ending duty (if any)
         }
+
+        // REMOVED: The old listener for 'import-simbrief-btn' is no longer needed.
 
         // Flight Plan Actions
         const planId = target.dataset.planId;
         if (target.id === 'depart-btn') {
             target.disabled = true;
             try {
-                const res = await fetch(`${API_BASE_URL}/api/flightplans/${planId}/depart`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }});
+                const res = await fetch(`${API_BASE_URL}/api/simbrief/${planId}/depart`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }});
                 const result = await res.json();
                 if (!res.ok) throw new Error(result.message);
                 showNotification(result.message, 'success');
@@ -760,7 +755,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (target.id === 'cancel-btn') {
             target.disabled = true;
             try {
-                const res = await fetch(`${API_BASE_URL}/api/flightplans/${planId}/cancel`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }});
+                const res = await fetch(`${API_BASE_URL}/api/simbrief/${planId}/cancel`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }});
                 const result = await res.json();
                 if (!res.ok) throw new Error(result.message);
                 showNotification(result.message, 'success');
@@ -794,7 +789,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const res = await fetch(`${API_BASE_URL}/api/flightplans/${planId}/arrive`, {
+            const res = await fetch(`${API_BASE_URL}/api/simbrief/${planId}/arrive`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
