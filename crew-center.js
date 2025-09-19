@@ -912,21 +912,22 @@ document.addEventListener('DOMContentLoaded', () => {
             showNotification('Fetching flight plan from SimBrief...', 'info');
             try {
                 // Call your PHP proxy script
-                const response = await fetch(`https://php-simbrief.infinityfree.me/simbrief/simbrief.apiv1.php?fetch_ofp=true&ofp_id=${ofpId}`);
+                const response = await fetch(`/.netlify/functions/simbrief?fetch_ofp=true&ofp_id=${ofpId}`);
                 if (!response.ok) {
                     throw new Error('Could not retrieve flight plan from SimBrief.');
                 }
                 const data = await response.json();
 
-                // Now populate your form with the fetched data
-                document.getElementById('fp-flightNumber').value = data.general.flight_number;
-                document.getElementById('fp-aircraft').value = data.aircraft.icaocode;
-                document.getElementById('fp-departure').value = data.origin.icao_code;
-                document.getElementById('fp-arrival').value = data.destination.icao_code;
-                document.getElementById('fp-alternate').value = data.alternate.icao_code;
-                document.getElementById('fp-route').value = data.general.route;
-                document.getElementById('fp-pob').value = data.general.passengers;
-
+                const ofpData = data.OFP; // Get the main object
+document.getElementById('fp-flightNumber').value = ofpData.general.flight_number;
+document.getElementById('fp-aircraft').value = ofpData.aircraft.icaocode;
+document.getElementById('fp-departure').value = ofpData.origin.icao_code;
+document.getElementById('fp-arrival').value = ofpData.destination.icao_code;
+document.getElementById('fp-alternate').value = ofpData.alternate.icao_code;
+document.getElementById('fp-route').value = ofpData.general.route;
+document.getElementById('fp-pob').value = ofpData.general.passengers;
+const eetHours = parseInt(ofpData.times.est_time_enroute) / 3600;
+document.getElementById('fp-eet').value = eetHours.toFixed(1);
                 // Convert flight time from seconds to hours for the form
                 const eetHours = parseInt(data.times.est_time_enroute) / 3600;
                 document.getElementById('fp-eet').value = eetHours.toFixed(1);

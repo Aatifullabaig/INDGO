@@ -20,7 +20,7 @@
 * same directory as your Dispatch Options page.
 */
 
-var api_dir = 'https://php-simbrief.infinityfree.me/simbrief/'; //Ex. "some/directory/";
+var api_dir = '/.netlify/functions/'; //Ex. "some/directory/";
 
 
 
@@ -111,7 +111,7 @@ function do_simbriefsubmit(outputpage)
 	if (api_code == null || api_code == false || typeof(api_code) == 'undefined')
 		{
 		api_code = 'notset';
-		sb_res_load(api_dir+'simbrief.apiv1.php?api_req='+document.getElementsByName('orig')[0].value+document.getElementsByName('dest')[0].value+document.getElementsByName('type')[0].value+timestamp+outputpage_calc);
+		sb_res_load(api_dir+'simbrief?api_req='+document.getElementsByName('orig')[0].value+document.getElementsByName('dest')[0].value+document.getElementsByName('type')[0].value+timestamp+outputpage_calc);
 		setTimeout(function(){do_simbriefsubmit(outputpage);},500);
 		return;
 		}	
@@ -224,7 +224,7 @@ function Redirect_caller()
 	if (fe_result == null || fe_result == false || typeof(fe_result) == 'undefined')
 		{
 		fe_result = 'notset';
-		sb_res_load(api_dir+'simbrief.apiv1.php?js_url_check='+ofp_id+"&var=fe_result");
+		sb_res_load(api_dir+'simbrief?js_url_check='+ofp_id+"&var=fe_result");
 		setTimeout(function(){Redirect_caller();},500);
 		return;
 		}
