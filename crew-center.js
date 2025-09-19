@@ -27,8 +27,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatTimeFromTimestamp(timestamp) {
-        if (isNaN(timestamp) || timestamp <= 0) return '----';
-        const date = new Date(timestamp * 1000); // SimBrief provides seconds, convert to ms
+        if (!timestamp) return '----';
+        // Check if it's a UNIX timestamp (seconds) or a standard ISO string/Date object
+        const date = (typeof timestamp === 'number' && timestamp.toString().length === 10) 
+            ? new Date(timestamp * 1000) 
+            : new Date(timestamp);
+            
+        if (isNaN(date.getTime())) return '----';
+        
         return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
     }
     
@@ -135,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Global state
     let CURRENT_PILOT = null;
     let ACTIVE_FLIGHT_PLAN = null;
-    let CURRENT_OFP_DATA = null; // NEW: To hold SimBrief data temporarily
+    let CURRENT_OFP_DATA = null; // To hold SimBrief data temporarily
 
     // --- Auth & Initial Setup ---
     if (!token) {
@@ -352,12 +358,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Flight Plan View ---
+    // MODIFIED: This function now populates the dispatch pass for active flights.
     const renderFlightPlanView = (pilot) => {
-        const viewContainer = document.getElementById('view-flight-plan');
         const formContainer = document.getElementById('file-flight-plan-container');
         const dispatchDisplay = document.getElementById('dispatch-pass-display');
 
-        // Always hide dispatch pass on initial render of this view
+        // Hide both initially to manage state on view switch
         dispatchDisplay.style.display = 'none';
         formContainer.style.display = 'block';
 
@@ -367,48 +373,70 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (ACTIVE_FLIGHT_PLAN) {
-            formContainer.innerHTML = getActiveFlightPlanHTML(ACTIVE_FLIGHT_PLAN);
+            // NEW: If there's an active plan, populate the dispatch pass and show it.
+            populateDispatchFromActivePlan(ACTIVE_FLIGHT_PLAN);
         } else if (pilot.dutyStatus === 'ON_DUTY') {
+            // Original logic: Show the filing form if on duty.
             formContainer.innerHTML = getFileFlightPlanHTML(pilot);
         } else {
+            // Original logic: Show message if off duty.
              formContainer.innerHTML = `<div class="content-card"><h2><i class="fa-solid fa-file-pen"></i> File New Flight Plan</h2><p>You must be <strong>On Duty</strong> to file a flight plan. Please start a duty from the Sector Ops page.</p></div>`;
         }
     };
+    
+    // NEW FUNCTION: Populates the dispatch pass from an existing flight plan object from the DB
+    const populateDispatchFromActivePlan = (plan) => {
+        const dispatchDisplay = document.getElementById('dispatch-pass-display');
+        const formContainer = document.getElementById('file-flight-plan-container');
 
-    const getActiveFlightPlanHTML = (plan) => {
-        const etd = new Date(plan.etd).toLocaleString();
-        const eta = new Date(plan.eta).toLocaleString();
-        let actions = '';
+        // Header
+        document.getElementById('dispatch-flight-number').textContent = plan.flightNumber || 'N/A';
+        document.getElementById('dispatch-route-short').textContent = `${plan.departure} → ${plan.arrival}`;
+        document.getElementById('dispatch-date').textContent = new Date(plan.etd).toLocaleDateString();
 
+        // Main Info Column
+        document.getElementById('dispatch-callsign').textContent = CURRENT_PILOT?.callsign || 'N/A';
+        document.getElementById('dispatch-aircraft').textContent = plan.aircraft || 'N/A';
+        document.getElementById('dispatch-etd').textContent = formatTimeFromTimestamp(plan.etd);
+        document.getElementById('dispatch-eta').textContent = formatTimeFromTimestamp(plan.eta);
+        document.getElementById('dispatch-duration').textContent = formatDuration(plan.eet * 3600); // convert hours to seconds for formatter
+
+        // Data not available from basic flight plan (set to ---)
+        ['zfw', 'tow', 'pax', 'cargo', 'fuel-taxi', 'fuel-trip', 'fuel-total', 'v1', 'v2', 'vr', 'vref',
+         'dep-cond', 'dep-temp', 'dep-wind', 'arr-cond', 'arr-temp', 'arr-wind'].forEach(id => {
+            const el = document.getElementById(`dispatch-${id}`);
+            if(el) el.textContent = '---';
+        });
+        document.getElementById('dispatch-pax').textContent = plan.pob || '---';
+
+
+        // ATC Information (from the DB)
+        document.getElementById('dispatch-fic').textContent = plan.ficNumber || 'N/A';
+        document.getElementById('dispatch-adc').textContent = plan.adcNumber || 'N/A';
+        document.getElementById('dispatch-squawk').textContent = plan.squawkCode || '----';
+
+        // Footer
+        document.getElementById('dispatch-route-full').textContent = plan.route;
+        document.getElementById('dispatch-alternates').textContent = plan.alternate || 'None';
+
+        // Dynamic Actions
+        const actionsContainer = document.getElementById('dispatch-actions');
+        let actionsHTML = '';
         if (plan.status === 'PLANNED') {
-            actions = `
+            actionsHTML = `
                 <button id="depart-btn" class="cta-button" data-plan-id="${plan._id}">Depart</button>
                 <button id="cancel-btn" class="end-duty-btn" data-plan-id="${plan._id}">Cancel Flight Plan</button>`;
         } else if (plan.status === 'FLYING') {
-            actions = `<button id="arrive-btn" class="cta-button" data-plan-id="${plan._id}">Arrive & File PIREP</button>`;
+            actionsHTML = `<button id="arrive-btn" class="cta-button" data-plan-id="${plan._id}">Arrive & File PIREP</button>`;
         }
+        actionsContainer.innerHTML = actionsHTML;
 
-        return `
-        <div class="content-card">
-            <h2><i class="fa-solid fa-compass"></i> Active Flight Plan</h2>
-            <div class="flight-plan-details">
-                <div class="fp-detail-item"><strong>Status</strong><span class="status-${plan.status.toLowerCase()}">${plan.status}</span></div>
-                <div class="fp-detail-item"><strong>Flight No.</strong><span>${plan.flightNumber}</span></div>
-                <div class="fp-detail-item"><strong>Aircraft</strong><span>${plan.aircraft}</span></div>
-                <div class="fp-detail-item"><strong>Departure</strong><span>${plan.departure}</span></div>
-                <div class="fp-detail-item"><strong>Arrival</strong><span>${plan.arrival}</span></div>
-                <div class="fp-detail-item"><strong>Alternate</strong><span>${plan.alternate || 'N/A'}</span></div>
-                <div class="fp-detail-item"><strong>ETD</strong><span>${etd}</span></div>
-                <div class="fp-detail-item"><strong>ETA</strong><span>${eta}</span></div>
-                <div class="fp-detail-item"><strong>EET</strong><span>${(plan.eet || 0).toFixed(1)} hrs</span></div>
-                <div class="fp-detail-item"><strong>FIC #</strong><span>${plan.ficNumber || 'N/A'}</span></div>
-                <div class="fp-detail-item"><strong>ADC #</strong><span>${plan.adcNumber || 'N/A'}</span></div>
-                <div class="fp-detail-item"><strong>Persons on Board</strong><span>${plan.pob}</span></div>
-                <div class="fp-detail-item" style="grid-column: 1 / -1;"><strong>Route</strong><span>${plan.route}</span></div>
-            </div>
-            <div class="flight-plan-actions">${actions}</div>
-        </div>`;
+        // Show the populated dispatch pass
+        formContainer.style.display = 'none';
+        dispatchDisplay.style.display = 'block';
     };
+
+    // REMOVED: getActiveFlightPlanHTML function is no longer needed.
 
     const getFileFlightPlanHTML = (pilot) => {
         const allowed = getAllowedFleet(pilot.rank);
@@ -1071,9 +1099,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('dispatch-zfw').textContent = formatWeight(ofpData.weights.est_zfw);
                 document.getElementById('dispatch-tow').textContent = formatWeight(ofpData.weights.est_tow);
 
-                // ATC
-                document.getElementById('dispatch-fic').textContent = ofpData.general.flight_number || 'N/A';
-                document.getElementById('dispatch-adc').textContent = ofpData.atc.callsign || 'N/A';
+                // ATC - MODIFIED: FIC/ADC are not available until filed.
+                document.getElementById('dispatch-fic').textContent = 'Pending File';
+                document.getElementById('dispatch-adc').textContent = 'Pending File';
                 document.getElementById('dispatch-squawk').textContent = ofpData.atc.squawk || '----';
 
                 // Passengers & Cargo
