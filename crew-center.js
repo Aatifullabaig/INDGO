@@ -135,6 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Global state
     let CURRENT_PILOT = null;
     let ACTIVE_FLIGHT_PLAN = null;
+    let CURRENT_OFP_DATA = null; // NEW: To hold SimBrief data temporarily
 
     // --- Auth & Initial Setup ---
     if (!token) {
@@ -186,8 +187,8 @@ document.addEventListener('DOMContentLoaded', () => {
             showPromotionModal(pilot.rank);
         }
 
-        // ADD THIS LINE HERE
-        await handleSimbriefReturn(); // Process SimBrief data AFTER the main render is complete
+        // MODIFIED: Process SimBrief data AFTER the main render is complete
+        await handleSimbriefReturn();
 
     } catch (error) {
         console.error('Error fetching pilot data:', error);
@@ -904,6 +905,53 @@ document.addEventListener('DOMContentLoaded', () => {
         if (target.id === 'dispatch-close-btn') {
             document.getElementById('dispatch-pass-display').style.display = 'none';
             document.getElementById('file-flight-plan-container').style.display = 'block';
+            CURRENT_OFP_DATA = null; // Clear the stored data
+        }
+
+        // NEW: Listener for the "File this Flight Plan" button on the dispatch pass
+        if (target.id === 'file-from-simbrief-btn') {
+            e.preventDefault();
+            if (!CURRENT_OFP_DATA) {
+                showNotification('Error: SimBrief data not found. Please regenerate the flight plan.', 'error');
+                return;
+            }
+
+            target.disabled = true;
+            target.textContent = 'Filing...';
+
+            try {
+                // Construct the request body from the stored SimBrief data
+                const ofpData = CURRENT_OFP_DATA;
+                const body = {
+                    flightNumber: ofpData.general.flight_number,
+                    aircraft: ofpData.aircraft.icaocode,
+                    departure: ofpData.origin.icao_code,
+                    arrival: ofpData.destination.icao_code,
+                    alternate: ofpData.alternate.icao_code,
+                    route: ofpData.general.route,
+                    etd: new Date(ofpData.times.sched_out * 1000).toISOString(), // Convert UNIX timestamp to ISO
+                    eet: ofpData.times.est_time_enroute / 3600, // Convert seconds to hours
+                    pob: parseInt(ofpData.general.passengers, 10),
+                    squawkCode: ofpData.atc.squawk, // Send the squawk code from SimBrief
+                };
+
+                const res = await fetch(`${API_BASE_URL}/api/flightplans`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(body)
+                });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.message || 'Failed to file flight plan.');
+                
+                showNotification(result.message, 'success');
+                CURRENT_OFP_DATA = null; // Clear data on success
+                await fetchPilotData(); // Refresh all data and views
+                
+            } catch (err) {
+                showNotification(`Error: ${err.message}`, 'error');
+                target.disabled = false;
+                target.textContent = 'File This Flight Plan';
+            }
         }
 });
 
@@ -958,8 +1006,6 @@ document.addEventListener('DOMContentLoaded', () => {
      document.getElementById('dispatch-callsign').textContent = CURRENT_PILOT?.callsign || 'N/A';
 
     // --- MODIFIED FUNCTION ---
-    // --- MODIFIED FUNCTION ---
-    // --- MODIFIED FUNCTION ---
     const handleSimbriefReturn = async () => {
         const urlParams = new URLSearchParams(window.location.search);
         const ofpId = urlParams.get('ofp_id');
@@ -974,7 +1020,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error('Could not retrieve flight plan from SimBrief.');
                 }
                 const data = await response.json();
-                const ofpData = data.OFP;
+                
+                // NEW: Store the OFP data in the global variable
+                CURRENT_OFP_DATA = data.OFP;
+                const ofpData = CURRENT_OFP_DATA;
                 
                 // --- Helper function to parse METAR string ---
                 const parseMetar = (metarString) => {
@@ -1084,14 +1133,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     .join(', ');
                 document.getElementById('dispatch-alternates').textContent = alternates || 'None';
 
+                // MODIFIED: Add the "File This Flight Plan" and "Close" buttons dynamically
+                const dispatchActionsContainer = document.getElementById('dispatch-actions');
+                if (dispatchActionsContainer) {
+                    dispatchActionsContainer.innerHTML = `
+                        <button id="file-from-simbrief-btn" class="cta-button">File This Flight Plan</button>
+                        <button id="dispatch-close-btn" class="end-duty-btn">Close</button>
+                    `;
+                }
+
                 formContainer.style.display = 'none';
                 dispatchDisplay.style.display = 'block';
 
                 showNotification('Dispatch Pass generated successfully!', 'success');
+                // Clear the ofp_id from the URL to prevent re-fetching on page refresh
                 window.history.replaceState({}, document.title, window.location.pathname);
 
             } catch (error) {
                 showNotification(error.message, 'error');
+                CURRENT_OFP_DATA = null; // Clear data on error
             }
         }
     };
