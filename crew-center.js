@@ -958,6 +958,7 @@ document.addEventListener('DOMContentLoaded', () => {
      document.getElementById('dispatch-callsign').textContent = CURRENT_PILOT?.callsign || 'N/A';
 
     // --- MODIFIED FUNCTION ---
+    // --- MODIFIED FUNCTION ---
     const handleSimbriefReturn = async () => {
         const urlParams = new URLSearchParams(window.location.search);
         const ofpId = urlParams.get('ofp_id');
@@ -973,6 +974,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 const data = await response.json();
                 const ofpData = data.OFP;
+                
+                // --- NEW: Helper function to parse METAR string ---
+                const parseMetar = (metarString) => {
+                    if (!metarString || typeof metarString !== 'string') {
+                        return { wind: '---', temp: '---', condition: '---' };
+                    }
+                    const parts = metarString.split(' ');
+                    
+                    // Find wind - format is DDDSSGFFKT
+                    const wind = parts.find(p => p.endsWith('KT'));
+
+                    // Find temp - format is TT/DD
+                    const temp = parts.find(p => p.includes('/') && !p.startsWith('A') && !p.startsWith('Q'));
+
+                    // Find condition (clouds) - formats like FEW, SCT, BKN, OVC
+                    const condition = parts.filter(p => /^(FEW|SCT|BKN|OVC|SKC|CLR|NSC)/.test(p)).join(' ');
+
+                    return {
+                        wind: wind || '---',
+                        temp: temp ? `${temp.split('/')[0]}°C` : '---',
+                        condition: condition || '---'
+                    };
+                };
 
                 // --- Populate the Dispatch Pass (now an embedded element) ---
                 const dispatchDisplay = document.getElementById('dispatch-pass-display');
@@ -985,11 +1009,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Header
                 document.getElementById('dispatch-flight-number').textContent = ofpData.general.flight_number || 'N/A';
                 document.getElementById('dispatch-route-short').textContent = `${ofpData.origin.icao_code} → ${ofpData.destination.icao_code}`;
-                // MODIFIED: Use the flight date from SimBrief, not today's date
                 document.getElementById('dispatch-date').textContent = new Date(ofpData.general.date).toLocaleDateString();
 
                 // Main Info Column
-                document.getElementById('dispatch-callsign').textContent = CURRENT_PILOT?.callsign || 'N/A';
                 document.getElementById('dispatch-callsign').textContent = ofpData.atc.callsign || 'N/A';
                 document.getElementById('dispatch-aircraft').textContent = ofpData.aircraft.icaocode || 'N/A';
                 document.getElementById('dispatch-etd').textContent = formatTimeFromTimestamp(ofpData.times.sched_out);
@@ -1004,34 +1026,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('dispatch-tow').textContent = formatWeight(ofpData.weights.est_tow);
 
                 // ATC
-                // Note: SimBrief's basic OFP does not provide FIC/ADC numbers. Reusing flight number/callsign as placeholders.
                 document.getElementById('dispatch-fic').textContent = ofpData.general.flight_number || 'N/A';
                 document.getElementById('dispatch-adc').textContent = ofpData.atc.callsign || 'N/A';
                 document.getElementById('dispatch-squawk').textContent = ofpData.atc.squawk || '----';
 
                 // Passengers & Cargo
                 document.getElementById('dispatch-pax').textContent = ofpData.general.passengers || '0';
-                // Note: Cargo is calculated from total payload minus passenger weight.
                 document.getElementById('dispatch-cargo').textContent = formatWeight(ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight));
                 
+                // --- NEW: Weather Population ---
+                const departureWeather = parseMetar(ofpData.weather.orig_metar);
+                const arrivalWeather = parseMetar(ofpData.weather.dest_metar);
+
+                // Departure Weather Card
+                dispatchDisplay.querySelector('.data-card:nth-of-type(4) .data-item:nth-of-type(1) span').textContent = departureWeather.condition;
+                dispatchDisplay.querySelector('.data-card:nth-of-type(4) .data-item:nth-of-type(2) span').textContent = departureWeather.temp;
+                dispatchDisplay.querySelector('.data-card:nth-of-type(4) .data-item:nth-of-type(3) span').textContent = departureWeather.wind;
+                
+                // Arrival Weather Card
+                dispatchDisplay.querySelector('.data-card:nth-of-type(5) .data-item:nth-of-type(1) span').textContent = arrivalWeather.condition;
+                dispatchDisplay.querySelector('.data-card:nth-of-type(5) .data-item:nth-of-type(2) span').textContent = arrivalWeather.temp;
+                dispatchDisplay.querySelector('.data-card:nth-of-type(5) .data-item:nth-of-type(3) span').textContent = arrivalWeather.wind;
+
+
                 // Footer
                 document.getElementById('dispatch-route-full').textContent = ofpData.general.route;
                 
-                // Collect all alternates from the API response
                 const alternates = [ofpData.alternate?.icao_code, ofpData.alternate2?.icao_code, ofpData.alternate3?.icao_code, ofpData.alternate4?.icao_code]
-                    .filter(Boolean) // Remove any undefined/null values
+                    .filter(Boolean)
                     .join(', ');
                 document.getElementById('dispatch-alternates').textContent = alternates || 'None';
 
-                // Note: V-Speeds and detailed weather are not included in the default SimBrief data fetch.
-                // They would require enabling runway analysis (tlr=1) and are left as "---".
-
-                // Show the dispatch pass and hide the form
                 formContainer.style.display = 'none';
                 dispatchDisplay.style.display = 'block';
 
                 showNotification('Dispatch Pass generated successfully!', 'success');
-                // Clean the URL so refreshing doesn't trigger this again
                 window.history.replaceState({}, document.title, window.location.pathname);
 
             } catch (error) {
