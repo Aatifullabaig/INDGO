@@ -90,8 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const deduceRankFromAircraftFE = (acStr) => {
         const s = String(acStr || '').toUpperCase();
         const has = (pat) => new RegExp(pat, 'i').test(s);
-        if (has('(Q400|A320|B738)')) return 'IndGo Cadet';
-        if (has('(A321|B737)')) return 'Skyline Observer';
+        if (has('(DH8D|Q400|A320|B738)')) return 'IndGo Cadet';
+        if (has('(A321|B737|B739)')) return 'Skyline Observer';
         if (has('(A330|B38M)')) return 'Route Explorer';
         if (has('(787-8|B788|777-200LR|B77L)')) return 'Skyline Officer';
         if (has('(787-9|B789|777-300ER|B77W)')) return 'Command Captain';
