@@ -1556,6 +1556,70 @@ roster-item {
     gap: 1rem;
     justify-content: flex-end;
 }
+
 /* ======================================== */
 /* END: NEW DISPATCH PASS MODAL STYLES      */
 /* ======================================== */
+
+
+/* ================================================== */
+/* START: NEW STYLES FOR MANUAL DISPATCH FORM         */
+/* ================================================== */
+.dispatch-pass-container .form-group {
+    margin-bottom: 1rem;
+}
+.dispatch-pass-container .form-group label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-weight: bold;
+    font-size: 0.9rem;
+    color: #555;
+}
+
+.dispatch-input,
+.dispatch-pass-container select.dispatch-input,
+.dispatch-pass-container textarea.dispatch-input,
+.dispatch-pass-container input.dispatch-input {
+    width: 100%;
+    padding: 0.7rem;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    background-color: #f0f2f5;
+    color: #333;
+    font-size: 1rem;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.dispatch-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(0, 27, 148, 0.2);
+}
+
+.dispatch-pass-container .dispatch-actions .cta-button {
+    background-color: var(--accent-color);
+    color: white;
+}
+.dispatch-pass-container .dispatch-actions .cta-button:hover {
+    background-color: #0025c4;
+}
+
+.dispatch-pass-container .dispatch-actions .details-button {
+    background-color: #e9ecef;
+    color: #333;
+    border-color: #ccc;
+}
+.dispatch-pass-container .dispatch-actions .details-button:hover {
+    background-color: #dee2e6;
+    border-color: #adb5bd;
+}
+
+/* Hide the old, unused container */
+#file-flight-plan-container {
+    display: none !important;
+}
+
+/* ================================================== */
+/* END: NEW STYLES FOR MANUAL DISPATCH FORM           */
+/* ================================================== */

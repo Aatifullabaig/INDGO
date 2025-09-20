@@ -377,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="on-duty-header">
                         <div>
                             <p style="margin: 0;"><strong>Active Roster:</strong> ${currentRoster.name}</p>
-                            <p class="muted" style="margin: 0;">Complete your assigned flights via the <strong>Flight Plan</strong> page.</p>
+                            <p class="muted" style="margin: 0;">Complete your assigned flights via the <strong>Dispatch</strong> page.</p>
                         </div>
                         <button id="end-duty-btn" class="end-duty-btn">Complete Duty Day</button>
                     </div>
@@ -404,38 +404,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Flight Plan View ---
     const renderFlightPlanView = (pilot) => {
-        const formContainer = document.getElementById('file-flight-plan-container');
+        const manualDispatchContainer = document.getElementById('manual-dispatch-container');
         const dispatchDisplay = document.getElementById('dispatch-pass-display');
+        const viewContainer = document.getElementById('view-flight-plan');
 
+        // Hide both initially
+        manualDispatchContainer.style.display = 'none';
         dispatchDisplay.style.display = 'none';
-        formContainer.style.display = 'block';
 
         // Global restrictions still apply
         if (pilot.promotionStatus === 'PENDING_TEST') {
-            formContainer.innerHTML = `<div class="content-card">${getPendingTestBannerHTML()}</div>`;
+            viewContainer.innerHTML = `<div class="content-card">${getPendingTestBannerHTML()}</div>`;
             return;
         }
 
-        // If there's an active plan, show it
+        // If there's an active plan, show the dispatch pass
         if (ACTIVE_FLIGHT_PLAN) {
             populateDispatchFromActivePlan(ACTIVE_FLIGHT_PLAN);
         } else {
-            // Otherwise, show the form to file a new plan, regardless of duty status
-            const planHTML = getFileFlightPlanHTML(pilot);
-            const onDutyMessage = pilot.dutyStatus === 'ON_DUTY' 
-                ? `<p>You are <strong>On Duty</strong>. If your flight number matches a leg in your active roster, it will be automatically linked.</p>`
-                : `<p>You are currently <strong>Off Duty</strong>. This flight will be logged as a non-roster flight and will not affect your duty time limits.</p>`;
-            
-            formContainer.innerHTML = planHTML.replace(
-                '<form id="file-flight-plan-form">', 
-                `${onDutyMessage}<form id="file-flight-plan-form">`
-            );
+            // Otherwise, show the form to file a new plan
+            const aircraftSelect = document.getElementById('fp-aircraft');
+            if (aircraftSelect) {
+                const allowed = getAllowedFleet(pilot.rank);
+                aircraftSelect.innerHTML = `
+                    <option value="" disabled selected>-- Select Aircraft --</option>
+                    ${allowed.map(ac => `<option value="${ac.code}">${ac.name} (${ac.code})</option>`).join('')}
+                `;
+            }
+            manualDispatchContainer.style.display = 'block';
         }
     };
     
     const populateDispatchFromActivePlan = (plan) => {
         const dispatchDisplay = document.getElementById('dispatch-pass-display');
-        const formContainer = document.getElementById('file-flight-plan-container');
+        const manualDispatchContainer = document.getElementById('manual-dispatch-container');
 
         document.getElementById('dispatch-flight-number').textContent = plan.flightNumber || 'N/A';
         document.getElementById('dispatch-route-short').textContent = `${plan.departure} → ${plan.arrival}`;
@@ -489,51 +491,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         actionsContainer.innerHTML = actionsHTML;
 
-        formContainer.style.display = 'none';
+        manualDispatchContainer.style.display = 'none';
         dispatchDisplay.style.display = 'block';
-    };
-
-    const getFileFlightPlanHTML = (pilot) => {
-        const allowed = getAllowedFleet(pilot.rank);
-        return `
-        <div class="content-card">
-            <h2><i class="fa-solid fa-file-pen"></i> File New Flight Plan</h2>
-            <p>Your aircraft list is filtered to what <strong>${pilot.rank}</strong> is allowed to fly. Use SimBrief to generate and populate the fields below.</p>
-            
-            <form id="file-flight-plan-form">
-                <div class="form-group-row">
-                    <div class="form-group">
-                        <label>Flight Number</label>
-                        <input type="text" id="fp-flightNumber" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Aircraft</label>
-                        <select id="fp-aircraft" required>
-                            <option value="" disabled selected>-- Select Aircraft --</option>
-                            ${allowed.map(ac => `<option value="${ac.code}">${ac.name} (${ac.code})</option>`).join('')}
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group-row">
-                    <div class="form-group"><label>Departure (ICAO)</label><input type="text" id="fp-departure" required maxlength="4"></div>
-                    <div class="form-group"><label>Arrival (ICAO)</label><input type="text" id="fp-arrival" required maxlength="4"></div>
-                    <div class="form-group"><label>Alternate (ICAO)</label><input type="text" id="fp-alternate" maxlength="4"></div>
-                </div>
-                <div class="form-group">
-                    <label>Route</label>
-                    <textarea id="fp-route" rows="3" required></textarea>
-                </div>
-                <div class="form-group-row">
-                    <div class="form-group"><label>ETD (Your Local Time)</label><input type="datetime-local" id="fp-etd" required></div>
-                    <div class="form-group"><label>EET (Hours)</label><input type="number" step="0.1" id="fp-eet" required></div>
-                    <div class="form-group"><label>Persons on Board</label><input type="number" id="fp-pob" required></div>
-                </div>
-                <div class="form-actions" style="display: flex; gap: 10px; margin-top: 1rem;">
-                    <button type="submit" class="cta-button">File Flight Plan</button>
-                    <button type="button" id="generate-with-simbrief-btn" class="secondary-button">Generate with SimBrief</button>
-                </div>
-            </form>
-        </div>`;
     };
 
     // --- Other Data Display Functions ---
@@ -730,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
     mainContentContainer.addEventListener('submit', async (e) => {
         if (e.target.id === 'file-flight-plan-form') {
             e.preventDefault();
-            const btn = e.target.querySelector('button');
+            const btn = e.target.querySelector('button[type="submit"]');
             btn.disabled = true;
             btn.textContent = 'Filing...';
 
@@ -741,10 +700,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 arrival: document.getElementById('fp-arrival').value.toUpperCase(),
                 alternate: document.getElementById('fp-alternate').value.toUpperCase(),
                 route: document.getElementById('fp-route').value,
-                etd: new Date(document.getElementById('fp-etd').value).toISOString(),
-                eet: parseFloat(document.getElementById('fp-eet').value),
-                pob: parseInt(document.getElementById('fp-pob').value, 10),
+                etd: document.getElementById('fp-etd').value ? new Date(document.getElementById('fp-etd').value).toISOString() : null,
+                eet: parseFloat(document.getElementById('fp-eet').value) || null,
+                pob: parseInt(document.getElementById('fp-pob').value, 10) || null,
             };
+
+            // Basic validation for required fields
+            if (!body.flightNumber || !body.aircraft || !body.departure || !body.arrival) {
+                 showNotification('Please fill in all required Core Details.', 'error');
+                 btn.disabled = false;
+                 btn.textContent = 'File Manually';
+                 return;
+            }
 
             try {
                 const res = await fetch(`${API_BASE_URL}/api/flightplans`, {
@@ -759,7 +726,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch(err) {
                 showNotification(`Error: ${err.message}`, 'error');
                 btn.disabled = false;
-                btn.textContent = 'File Flight Plan';
+                btn.textContent = 'File Manually';
             }
         }
     });
@@ -973,7 +940,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (target.id === 'dispatch-close-btn') {
             document.getElementById('dispatch-pass-display').style.display = 'none';
-            document.getElementById('file-flight-plan-container').style.display = 'block';
+            document.getElementById('manual-dispatch-container').style.display = 'block';
             CURRENT_OFP_DATA = null;
         }
 
@@ -1157,9 +1124,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ofpData = CURRENT_OFP_DATA;
                 
                 const dispatchDisplay = document.getElementById('dispatch-pass-display');
-                const formContainer = document.getElementById('file-flight-plan-container');
+                const manualDispatchContainer = document.getElementById('manual-dispatch-container');
 
-                if (!dispatchDisplay || !formContainer) {
+                if (!dispatchDisplay || !manualDispatchContainer) {
                     throw new Error('Dispatch or form container not found in the DOM.');
                 }
 
@@ -1228,12 +1195,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const dispatchActionsContainer = document.getElementById('dispatch-actions');
                 if (dispatchActionsContainer) {
                     dispatchActionsContainer.innerHTML = `
+                        <button id="dispatch-close-btn" class="end-duty-btn">Cancel</button>
                         <button id="file-from-simbrief-btn" class="cta-button">File This Flight Plan</button>
-                        <button id="dispatch-close-btn" class="end-duty-btn">Close</button>
                     `;
                 }
 
-                formContainer.style.display = 'none';
+                manualDispatchContainer.style.display = 'none';
                 dispatchDisplay.style.display = 'block';
 
                 showNotification('Dispatch Pass generated successfully!', 'success');

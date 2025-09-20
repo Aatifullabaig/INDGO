@@ -37,7 +37,7 @@
             <nav class="sidebar-nav">
                 <ul>
                     <li><a href="#" class="nav-link active" data-view="view-duty-status"><i class="fa-solid fa-house"></i><span class="nav-text">Pilot Hub</span></a></li>
-                    <li><a href="#" class="nav-link" data-view="view-flight-plan"><i class="fa-solid fa-paper-plane"></i><span class="nav-text">Flight Plan</span></a></li>
+                    <li><a href="#" class="nav-link" data-view="view-flight-plan"><i class="fa-solid fa-paper-plane"></i><span class="nav-text">Dispatch</span></a></li>
                     <li><a href="#" class="nav-link" data-view="view-rosters"><i class="fa-solid fa-map-location-dot"></i><span class="nav-text">Sector Ops</span></a></li>
                     <li><a href="#" class="nav-link" data-view="view-history"><i class="fa-solid fa-clock-rotate-left"></i><span class="nav-text">Flight Log</span></a></li>
                     <li id="notifications-bell" class="nav-link-item"><a href="#" class="nav-link"><i class="fa-solid fa-bell"></i><span class="nav-text">Notifications</span><span class="notification-badge" style="display: none;"></span></a></li>
@@ -77,92 +77,162 @@
     <div id="view-duty-status" class="content-view active">
         </div>
     <div id="view-flight-plan" class="content-view">
-        <div id="file-flight-plan-container">
+        <div id="manual-dispatch-container" class="dispatch-pass-container" style="display: none;">
+            <div class="dispatch-header">
+                <div class="header-left">
+                    <h2>File a Dispatch Plan</h2>
+                    <p>Complete the fields below to log a flight.</p>
+                </div>
             </div>
+            <form id="file-flight-plan-form">
+                <div class="dispatch-body">
+                    <div class="dispatch-column-grid" style="padding-left: 0; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                        <div class="data-card">
+                            <h3><i class="fa-solid fa-circle-info"></i> Core Details (Required)</h3>
+                            <div class="form-group">
+                                <label for="fp-flightNumber">Flight Number</label>
+                                <input type="text" id="fp-flightNumber" class="dispatch-input" required>
+                            </div>
+                             <div class="form-group">
+                                <label for="fp-aircraft">Aircraft</label>
+                                <select id="fp-aircraft" class="dispatch-input" required>
+                                    </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="fp-departure">Departure (ICAO)</label>
+                                <input type="text" id="fp-departure" class="dispatch-input" required maxlength="4">
+                            </div>
+                            <div class="form-group">
+                                <label for="fp-arrival">Arrival (ICAO)</label>
+                                <input type="text" id="fp-arrival" class="dispatch-input" required maxlength="4">
+                            </div>
+                        </div>
+                        <div class="data-card">
+                            <h3><i class="fa-solid fa-map-route"></i> Route Details (Optional)</h3>
+                            <p class="muted" style="margin-top: -0.5rem; margin-bottom: 1rem;">Enter "N/A" if unknown. SimBrief will populate this automatically.</p>
+                            <div class="form-group">
+                                <label for="fp-alternate">Alternate (ICAO)</label>
+                                <input type="text" id="fp-alternate" class="dispatch-input" maxlength="4">
+                            </div>
+                            <div class="form-group">
+                                <label for="fp-route">Route</label>
+                                <textarea id="fp-route" rows="2" class="dispatch-input"></textarea>
+                            </div>
+                             <div class="form-group">
+                                <label for="fp-etd">ETD (Your Local Time)</label>
+                                <input type="datetime-local" id="fp-etd" class="dispatch-input">
+                            </div>
+                            <div class="form-group-row">
+                                <div class="form-group">
+                                    <label for="fp-eet">EET (Hours)</label>
+                                    <input type="number" step="0.1" id="fp-eet" class="dispatch-input">
+                                </div>
+                                <div class="form-group">
+                                    <label for="fp-pob">Persons on Board</label>
+                                    <input type="number" id="fp-pob" class="dispatch-input">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dispatch-footer">
+                    <div class="route-info">
+                        <strong>Note:</strong> Your flight officially begins and a timer starts once you click the 'Depart' button on the next screen.
+                    </div>
+                     <div class="dispatch-actions">
+                        <button type="submit" class="details-button">File Manually</button>
+                        <button type="button" id="generate-with-simbrief-btn" class="cta-button">Generate with SimBrief</button>
+                     </div>
+                     <div class="route-info" style="text-align: right; margin-top: 0.5rem;">
+                        <small>Don't have a SimBrief account? Use the 'File Manually' option.</small>
+                     </div>
+                </div>
+            </form>
+        </div>
 
         <div id="dispatch-pass-display" class="dispatch-pass-container" style="display: none;">
-    <div class="dispatch-header">
-        <div class="header-left">
-            <h2>Indigo Air Virtual Airline</h2>
-            <p>Performance Dispatch Pass</p>
-        </div>
-        <div class="header-right">
-            <h2 id="dispatch-flight-number">N/A</h2>
-            <p id="dispatch-route-short">---- → ----</p>
-            <p id="dispatch-date">--/--/----</p>
-        </div>
-    </div>
-
-    <div class="dispatch-body">
-        <div class="dispatch-column-main">
-            <div class="data-item"><strong>Callsign:</strong> <span id="dispatch-callsign">---</span></div>
-            <div class="data-item"><strong>Aircraft:</strong> <span id="dispatch-aircraft">---</span></div>
-            <div class="data-item"><strong>ETD:</strong> <span id="dispatch-etd">----</span> | <strong>ETA:</strong> <span id="dispatch-eta">----</span></div>
-            <div class="data-item"><strong>Duration:</strong> <span id="dispatch-duration">--:--</span></div>
-        </div>
-
-        <div class="dashed-divider"></div>
-
-        <div class="dispatch-column-grid">
-            <div class="data-card">
-                <h3>Weights & Payload</h3>
-                <div class="data-item"><strong>ZFW:</strong> <span id="dispatch-zfw">--- kg</span></div>
-                <div class="data-item"><strong>TOW:</strong> <span id="dispatch-tow">--- kg</span></div>
-                <div class="data-item"><strong>Passengers:</strong> <span id="dispatch-pax">---</span></div>
-                <div class="data-item"><strong>Cargo:</strong> <span id="dispatch-cargo">--- kg</span></div>
-            </div>
-            <div class="data-card">
-                <h3>Fuel</h3>
-                <div class="data-item"><strong>Taxi Fuel:</strong> <span id="dispatch-fuel-taxi">--- kg</span></div>
-                <div class="data-item"><strong>Trip Fuel:</strong> <span id="dispatch-fuel-trip">--- kg</span></div>
-                <div class="data-item"><strong>Total Fuel:</strong> <span id="dispatch-fuel-total">--- kg</span></div>
-            </div>
-            <div class="data-card">
-                <h3>Critical Speeds</h3>
-                <div class="speeds-grid">
-                    <div class="speed-item"><label>V1</label><span id="dispatch-v1">---</span></div>
-                    <div class="speed-item"><label>VR</label><span id="dispatch-vr">---</span></div>
-                    <div class="speed-item"><label>V2</label><span id="dispatch-v2">---</span></div>
-                    <div class="speed-item landing-speed"><label>VREF</label><span id="dispatch-vref">---</span></div>
+            <div class="dispatch-header">
+                <div class="header-left">
+                    <h2>Indigo Air Virtual Airline</h2>
+                    <p>Performance Dispatch Pass</p>
+                </div>
+                <div class="header-right">
+                    <h2 id="dispatch-flight-number">N/A</h2>
+                    <p id="dispatch-route-short">---- → ----</p>
+                    <p id="dispatch-date">--/--/----</p>
                 </div>
             </div>
-            <div class="data-card">
-                <h3>Weather</h3>
-                <div class="weather-container">
-                    <div class="weather-sub-card">
-                        <h4><i class="fa-solid fa-plane-departure"></i> Departure</h4>
-                        <div class="data-item"><span>Condition:</span> <span id="dispatch-dep-cond">---</span></div>
-                        <div class="data-item"><span>Temp:</span> <span id="dispatch-dep-temp">---</span></div>
-                        <div class="data-item"><span>Wind:</span> <span id="dispatch-dep-wind">---</span></div>
+
+            <div class="dispatch-body">
+                <div class="dispatch-column-main">
+                    <div class="data-item"><strong>Callsign:</strong> <span id="dispatch-callsign">---</span></div>
+                    <div class="data-item"><strong>Aircraft:</strong> <span id="dispatch-aircraft">---</span></div>
+                    <div class="data-item"><strong>ETD:</strong> <span id="dispatch-etd">----</span> | <strong>ETA:</strong> <span id="dispatch-eta">----</span></div>
+                    <div class="data-item"><strong>Duration:</strong> <span id="dispatch-duration">--:--</span></div>
+                </div>
+
+                <div class="dashed-divider"></div>
+
+                <div class="dispatch-column-grid">
+                    <div class="data-card">
+                        <h3>Weights & Payload</h3>
+                        <div class="data-item"><strong>ZFW:</strong> <span id="dispatch-zfw">--- kg</span></div>
+                        <div class="data-item"><strong>TOW:</strong> <span id="dispatch-tow">--- kg</span></div>
+                        <div class="data-item"><strong>Passengers:</strong> <span id="dispatch-pax">---</span></div>
+                        <div class="data-item"><strong>Cargo:</strong> <span id="dispatch-cargo">--- kg</span></div>
                     </div>
-                    <div class="weather-sub-card">
-                        <h4><i class="fa-solid fa-plane-arrival"></i> Arrival</h4>
-                        <div class="data-item"><span>Condition:</span> <span id="dispatch-arr-cond">---</span></div>
-                        <div class="data-item"><span>Temp:</span> <span id="dispatch-arr-temp">---</span></div>
-                        <div class="data-item"><span>Wind:</span> <span id="dispatch-arr-wind">---</span></div>
+                    <div class="data-card">
+                        <h3>Fuel</h3>
+                        <div class="data-item"><strong>Taxi Fuel:</strong> <span id="dispatch-fuel-taxi">--- kg</span></div>
+                        <div class="data-item"><strong>Trip Fuel:</strong> <span id="dispatch-fuel-trip">--- kg</span></div>
+                        <div class="data-item"><strong>Total Fuel:</strong> <span id="dispatch-fuel-total">--- kg</span></div>
+                    </div>
+                    <div class="data-card">
+                        <h3>Critical Speeds</h3>
+                        <div class="speeds-grid">
+                            <div class="speed-item"><label>V1</label><span id="dispatch-v1">---</span></div>
+                            <div class="speed-item"><label>VR</label><span id="dispatch-vr">---</span></div>
+                            <div class="speed-item"><label>V2</label><span id="dispatch-v2">---</span></div>
+                            <div class="speed-item landing-speed"><label>VREF</label><span id="dispatch-vref">---</span></div>
+                        </div>
+                    </div>
+                    <div class="data-card">
+                        <h3>Weather</h3>
+                        <div class="weather-container">
+                            <div class="weather-sub-card">
+                                <h4><i class="fa-solid fa-plane-departure"></i> Departure</h4>
+                                <div class="data-item"><span>Condition:</span> <span id="dispatch-dep-cond">---</span></div>
+                                <div class="data-item"><span>Temp:</span> <span id="dispatch-dep-temp">---</span></div>
+                                <div class="data-item"><span>Wind:</span> <span id="dispatch-dep-wind">---</span></div>
+                            </div>
+                            <div class="weather-sub-card">
+                                <h4><i class="fa-solid fa-plane-arrival"></i> Arrival</h4>
+                                <div class="data-item"><span>Condition:</span> <span id="dispatch-arr-cond">---</span></div>
+                                <div class="data-item"><span>Temp:</span> <span id="dispatch-arr-temp">---</span></div>
+                                <div class="data-item"><span>Wind:</span> <span id="dispatch-arr-wind">---</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="data-card">
+                        <h3>ATC Information</h3>
+                        <div class="data-item"><strong>FIC #:</strong> <span id="dispatch-fic">---</span></div>
+                        <div class="data-item"><strong>ADC #:</strong> <span id="dispatch-adc">---</span></div>
+                        <div class="data-item"><strong>Squawk:</strong> <span id="dispatch-squawk">----</span></div>
                     </div>
                 </div>
             </div>
-            <div class="data-card">
-                <h3>ATC Information</h3>
-                <div class="data-item"><strong>FIC #:</strong> <span id="dispatch-fic">---</span></div>
-                <div class="data-item"><strong>ADC #:</strong> <span id="dispatch-adc">---</span></div>
-                <div class="data-item"><strong>Squawk:</strong> <span id="dispatch-squawk">----</span></div>
+
+            <div class="dispatch-footer">
+                <div class="route-info">
+                    <strong>Route:</strong> <span id="dispatch-route-full">---</span>
+                </div>
+                <div class="alternates-info">
+                    <strong>Alternates:</strong> <span id="dispatch-alternates">---</span>
+                </div>
+                <div class="dispatch-actions" id="dispatch-actions">
+                </div>
             </div>
         </div>
-    </div>
-
-    <div class="dispatch-footer">
-        <div class="route-info">
-            <strong>Route:</strong> <span id="dispatch-route-full">---</span>
-        </div>
-        <div class="alternates-info">
-            <strong>Alternates:</strong> <span id="dispatch-alternates">---</span>
-        </div>
-        <div class="dispatch-actions" id="dispatch-actions">
-        </div>
-    </div>
-</div>
     </div>
     <div id="view-rosters" class="content-view">
         <div class="content-card">
