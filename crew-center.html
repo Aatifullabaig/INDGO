@@ -155,7 +155,6 @@
                 <div class="header-left">
                     <h2>Indigo Air Virtual Airline</h2>
                     <p>Performance Dispatch Pass</p>
-                    <p class="muted" style="font-size: 0.8rem; margin-top: 0.5rem;">Scroll down to review full details and file your plan.</p>
                 </div>
                 <div class="header-right">
                     <h2 id="dispatch-flight-number">N/A</h2>
@@ -165,31 +164,45 @@
             </div>
 
             <div class="dispatch-body">
-                <div class="dispatch-column-main">
-                    <div class="data-item"><strong>Callsign:</strong> <span id="dispatch-callsign">---</span></div>
-                    <div class="data-item"><strong>Aircraft:</strong> <span id="dispatch-aircraft">---</span></div>
-                    <div class="data-item"><strong>ETD:</strong> <span id="dispatch-etd">----</span> | <strong>ETA:</strong> <span id="dispatch-eta">----</span></div>
-                    <div class="data-item"><strong>Duration:</strong> <span id="dispatch-duration">--:--</span></div>
+                <div class="dispatch-left-panel">
+                    <div class="dispatch-core-info">
+                        <div class="data-item"><strong>Callsign:</strong> <span id="dispatch-callsign">---</span></div>
+                        <div class="data-item"><strong>Aircraft:</strong> <span id="dispatch-aircraft">---</span></div>
+                        <div class="data-item"><strong>ETD:</strong> <span id="dispatch-etd">----</span> | <strong>ETA:</strong> <span id="dispatch-eta">----</span></div>
+                        <div class="data-item"><strong>Duration:</strong> <span id="dispatch-duration">--:--</span></div>
+                    </div>
+                    <div class="dispatch-route-panel data-card">
+                         <div class="route-info">
+                            <strong>Route:</strong> <span id="dispatch-route-full">---</span>
+                        </div>
+                        <div class="alternates-info">
+                            <strong>Alternates:</strong> <span id="dispatch-alternates">---</span>
+                        </div>
+                    </div>
+                    <div id="dispatch-map" class="dispatch-map-container"></div>
                 </div>
-
-                <div class="dashed-divider"></div>
-
-                <div class="dispatch-column-grid">
+                <div class="dispatch-right-panel">
                     <div class="data-card">
-                        <h3>Weights & Payload</h3>
+                        <h3><i class="fa-solid fa-weight-hanging"></i> Weights & Payload</h3>
                         <div class="data-item"><strong>ZFW:</strong> <span id="dispatch-zfw">--- kg</span></div>
                         <div class="data-item"><strong>TOW:</strong> <span id="dispatch-tow">--- kg</span></div>
                         <div class="data-item"><strong>Passengers:</strong> <span id="dispatch-pax">---</span></div>
                         <div class="data-item"><strong>Cargo:</strong> <span id="dispatch-cargo">--- kg</span></div>
                     </div>
                     <div class="data-card">
-                        <h3>Fuel</h3>
+                        <h3><i class="fa-solid fa-gas-pump"></i> Fuel</h3>
                         <div class="data-item"><strong>Taxi Fuel:</strong> <span id="dispatch-fuel-taxi">--- kg</span></div>
                         <div class="data-item"><strong>Trip Fuel:</strong> <span id="dispatch-fuel-trip">--- kg</span></div>
                         <div class="data-item"><strong>Total Fuel:</strong> <span id="dispatch-fuel-total">--- kg</span></div>
                     </div>
+                     <div class="data-card">
+                        <h3><i class="fa-solid fa-tower-broadcast"></i> ATC Information</h3>
+                        <div class="data-item"><strong>FIC #:</strong> <span id="dispatch-fic">---</span></div>
+                        <div class="data-item"><strong>ADC #:</strong> <span id="dispatch-adc">---</span></div>
+                        <div class="data-item"><strong>Squawk:</strong> <span id="dispatch-squawk">----</span></div>
+                    </div>
                     <div class="data-card">
-                        <h3>Critical Speeds</h3>
+                        <h3><i class="fa-solid fa-gauge-high"></i> Critical Speeds</h3>
                         <div class="speeds-grid">
                             <div class="speed-item"><label>V1</label><span id="dispatch-v1">---</span></div>
                             <div class="speed-item"><label>VR</label><span id="dispatch-vr">---</span></div>
@@ -198,7 +211,7 @@
                         </div>
                     </div>
                     <div class="data-card">
-                        <h3>Weather</h3>
+                        <h3><i class="fa-solid fa-cloud-sun"></i> Weather</h3>
                         <div class="weather-container">
                             <div class="weather-sub-card">
                                 <h4><i class="fa-solid fa-plane-departure"></i> Departure</h4>
@@ -214,25 +227,11 @@
                             </div>
                         </div>
                     </div>
-                    <div class="data-card">
-                        <h3>ATC Information</h3>
-                        <div class="data-item"><strong>FIC #:</strong> <span id="dispatch-fic">---</span></div>
-                        <div class="data-item"><strong>ADC #:</strong> <span id="dispatch-adc">---</span></div>
-                        <div class="data-item"><strong>Squawk:</strong> <span id="dispatch-squawk">----</span></div>
-                    </div>
                 </div>
-
                  </div>
-                 <div id="dispatch-map" class="dispatch-map-container"></div>
             <div class="dispatch-footer">
-                <div class="route-info">
-                    <strong>Route:</strong> <span id="dispatch-route-full">---</span>
-                </div>
-                <div class="alternates-info">
-                    <strong>Alternates:</strong> <span id="dispatch-alternates">---</span>
-                </div>
                 <div class="dispatch-actions-wrapper" id="dispatch-actions">
-                </div>
+                    </div>
             </div>
         </div>
     </div>

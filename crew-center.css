@@ -1407,35 +1407,77 @@ roster-item {
     font-size: 2rem;
 }
 
+/* === START: RESTRUCTURED DISPATCH BODY === */
 .dispatch-body {
+    display: grid;
+    grid-template-columns: 2fr 1.25fr; /* Left column is wider than the right */
+    gap: 2rem;
+    padding: 2rem;
+}
+
+@media (max-width: 1024px) {
+    .dispatch-body {
+        grid-template-columns: 1fr; /* Stack columns on smaller screens */
+    }
+}
+
+.dispatch-left-panel, .dispatch-right-panel {
     display: flex;
     flex-direction: column;
-    padding: 1.5rem 2rem;
     gap: 1.5rem;
 }
 
-.dispatch-main-grid {
-    display: flex;
-    gap: 1.5rem;
-}
-
-.dispatch-column-main {
-    flex: 0 0 250px;
+.dispatch-core-info {
     font-size: 1rem;
-    padding-right: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    background-color: #f8f9fa;
+    padding: 1.25rem;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
 }
-
-.dashed-divider {
-    border-left: 2px dashed #ccc;
+.dispatch-core-info .data-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #eee;
 }
+.dispatch-core-info .data-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+.dispatch-core-info .data-item strong {
+    color: #555;
+    font-size: 0.9rem;
+}
+.dispatch-core-info .data-item span {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #000;
+}
+.dispatch-route-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.25rem;
+}
+.dispatch-right-panel .data-card {
+    background-color: #f8f9fa;
+    padding: 1.25rem;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+/* === END: RESTRUCTURED DISPATCH BODY === */
 
-.dispatch-column-grid {
-    flex-grow: 1;
+/* Remove old layout styles that are no longer needed */
+.dispatch-column-main, .dashed-divider, .dispatch-column-grid {
+    display: none;
+}
+/* Old styles for manual form are still needed */
+.dispatch-pass-container .dispatch-column-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.5rem;
-    padding-left: 1.5rem;
-    align-items: start;
 }
 
 .data-card {
@@ -1450,20 +1492,15 @@ roster-item {
     border-bottom: 1px solid #eee;
     font-size: 1.1rem;
     color: #000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .data-item {
     display: flex;
     justify-content: space-between;
     font-size: 0.9rem;
-}
-.dispatch-column-main .data-item {
-    flex-direction: column;
-    margin-bottom: 1rem;
-    justify-content: flex-start;
-}
-.dispatch-column-main .data-item span {
-    font-size: 1.2rem;
 }
 
 .data-item strong {
@@ -1536,12 +1573,12 @@ roster-item {
 }
 
 .dispatch-map-container {
-    height: 400px;
+    height: 450px; /* Give it a more substantial height */
     width: 100%;
-    margin-top: 1.5rem;
     border-radius: 8px;
     border: 1px solid #e0e0e0;
     background-color: #e9ecef;
+    flex-grow: 1; /* Allow map to fill vertical space in its panel */
 }
 
 .dispatch-footer {
@@ -1554,8 +1591,13 @@ roster-item {
 
 .route-info, .alternates-info {
     font-size: 0.9rem;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0;
     word-break: break-all;
+}
+.route-info strong, .alternates-info strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: #555;
 }
 .route-info span, .alternates-info span {
     font-family: 'monospace';
@@ -1564,7 +1606,7 @@ roster-item {
 }
 
 .dispatch-actions-wrapper {
-    margin-top: 1.5rem;
+    margin-top: 0; /* Remove top margin as it's the only element */
     display: flex;
     flex-wrap: wrap;
     gap: 1.5rem;
