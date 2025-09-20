@@ -129,6 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const profilePictureElem = document.getElementById('profile-picture');
     const logoutButton = document.getElementById('logout-button');
     const mainContentContainer = document.querySelector('.main-content');
+    const mainContentLoader = document.getElementById('main-content-loader'); // <-- ADDED
     const sidebarNav = document.querySelector('.sidebar-nav');
     const dashboardContainer = document.querySelector('.dashboard-container');
     const sidebarToggleBtn = document.getElementById('sidebar-toggle');
@@ -227,6 +228,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error fetching pilot data:', error);
             showNotification(error.message, 'error');
+        } finally { // <-- ADDED finally block
+            // Hide the loader regardless of success or failure
+            if (mainContentLoader) {
+                mainContentLoader.classList.remove('active');
+            }
         }
     };
     
@@ -594,6 +600,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const fetchAndDisplayRosters = async () => {
         const container = document.getElementById('roster-list-container');
         const header = document.getElementById('roster-list-header');
+        container.innerHTML = '<p>Loading available rosters...</p>';
+        header.innerHTML = '<p>Finding rosters for your location...</p>';
         try {
             const response = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!response.ok) throw new Error('Could not fetch personalized rosters.');
