@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
 
     let crewRestInterval = null; // To manage the countdown timer
+    let dispatchMap = null; // To hold the Leaflet map instance
 
     // --- Helper Functions ---
     function formatTime(ms) {
@@ -129,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const profilePictureElem = document.getElementById('profile-picture');
     const logoutButton = document.getElementById('logout-button');
     const mainContentContainer = document.querySelector('.main-content');
-    const mainContentLoader = document.getElementById('main-content-loader'); // <-- ADDED
+    const mainContentLoader = document.getElementById('main-content-loader');
     const sidebarNav = document.querySelector('.sidebar-nav');
     const dashboardContainer = document.querySelector('.dashboard-container');
     const sidebarToggleBtn = document.getElementById('sidebar-toggle');
@@ -187,6 +188,38 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('sidebarState', dashboardContainer.classList.contains('sidebar-collapsed') ? 'collapsed' : 'expanded');
     });
 
+    // --- Map Plotting ---
+    const plotDispatchMap = (mapContainerId, origin, dest, navlogFixes) => {
+        if (dispatchMap) {
+            dispatchMap.remove();
+            dispatchMap = null;
+        }
+
+        if (!origin || !dest || !navlogFixes || navlogFixes.length === 0) {
+            document.getElementById(mapContainerId).innerHTML = '<p style="text-align: center; padding-top: 2rem;">Route data not available for map display.</p>';
+            return;
+        }
+
+        dispatchMap = L.map(mapContainerId, {
+            scrollWheelZoom: false,
+            zoomControl: true
+        });
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20
+        }).addTo(dispatchMap);
+
+        const latlngs = navlogFixes.map(fix => [parseFloat(fix.pos_lat), parseFloat(fix.pos_long)]);
+        const routeLine = L.polyline(latlngs, { color: '#00a8ff', weight: 3 }).addTo(dispatchMap);
+
+        L.marker([origin.pos_lat, origin.pos_long]).addTo(dispatchMap).bindPopup(`<b>Departure:</b> ${origin.icao_code}`);
+        L.marker([dest.pos_lat, dest.pos_long]).addTo(dispatchMap).bindPopup(`<b>Arrival:</b> ${dest.icao_code}`);
+
+        dispatchMap.fitBounds(routeLine.getBounds().pad(0.1));
+    };
+
     // --- Main Data Fetch & Render Cycle ---
     const fetchPilotData = async () => {
         try {
@@ -208,7 +241,6 @@ document.addEventListener('DOMContentLoaded', () => {
             pilotCallsignElem.textContent = pilot.callsign || 'N/A';
             profilePictureElem.src = pilot.imageUrl || 'images/default-avatar.png';
 
-            // Update notification bell
             const badge = notificationsBell.querySelector('.notification-badge');
             if (pilot.unreadNotifications && pilot.unreadNotifications.length > 0) {
                 badge.textContent = pilot.unreadNotifications.length;
@@ -228,8 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error fetching pilot data:', error);
             showNotification(error.message, 'error');
-        } finally { // <-- ADDED finally block
-            // Hide the loader regardless of success or failure
+        } finally {
             if (mainContentLoader) {
                 mainContentLoader.classList.remove('active');
             }
@@ -266,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const leaderboardsHTML = await fetchAndDisplayLeaderboards();
         
         renderPilotHubView(pilot, leaderboardsHTML);
-        renderFlightPlanView(pilot);
+        await renderFlightPlanView(pilot);
         await fetchAndDisplayRosters();
         await fetchPirepHistory();
     };
@@ -403,26 +434,22 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Flight Plan View ---
-    const renderFlightPlanView = (pilot) => {
+    const renderFlightPlanView = async (pilot) => {
         const manualDispatchContainer = document.getElementById('manual-dispatch-container');
         const dispatchDisplay = document.getElementById('dispatch-pass-display');
         const viewContainer = document.getElementById('view-flight-plan');
 
-        // Hide both initially
         manualDispatchContainer.style.display = 'none';
         dispatchDisplay.style.display = 'none';
 
-        // Global restrictions still apply
         if (pilot.promotionStatus === 'PENDING_TEST') {
             viewContainer.innerHTML = `<div class="content-card">${getPendingTestBannerHTML()}</div>`;
             return;
         }
 
-        // If there's an active plan, show the dispatch pass
         if (ACTIVE_FLIGHT_PLAN) {
-            populateDispatchFromActivePlan(ACTIVE_FLIGHT_PLAN);
+            await populateDispatchFromActivePlan(ACTIVE_FLIGHT_PLAN);
         } else {
-            // Otherwise, show the form to file a new plan
             const aircraftSelect = document.getElementById('fp-aircraft');
             if (aircraftSelect) {
                 const allowed = getAllowedFleet(pilot.rank);
@@ -435,9 +462,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
-    const populateDispatchFromActivePlan = (plan) => {
+    const populateDispatchFromActivePlan = async (plan) => {
         const dispatchDisplay = document.getElementById('dispatch-pass-display');
         const manualDispatchContainer = document.getElementById('manual-dispatch-container');
+
+        // Fetch full OFP data to get navlog for map
+        let fullOfpData = {};
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/flightplans/${plan._id}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const detailedPlan = await res.json();
+                fullOfpData = detailedPlan.ofpData || {};
+            }
+        } catch (e) {
+            console.error("Could not fetch full OFP for active flight:", e);
+        }
 
         document.getElementById('dispatch-flight-number').textContent = plan.flightNumber || 'N/A';
         document.getElementById('dispatch-route-short').textContent = `${plan.departure} → ${plan.arrival}`;
@@ -483,16 +524,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const actionsContainer = document.getElementById('dispatch-actions');
         let actionsHTML = '';
         if (plan.status === 'PLANNED') {
-            actionsHTML = `
-                <button id="depart-btn" class="cta-button" data-plan-id="${plan._id}">Depart</button>
-                <button id="cancel-btn" class="end-duty-btn" data-plan-id="${plan._id}">Cancel Flight Plan</button>`;
+             actionsHTML = `
+                <div class="dispatch-action-group">
+                    <button id="cancel-btn" class="end-duty-btn" data-plan-id="${plan._id}">Cancel Flight Plan</button>
+                    <p class="dispatch-action-description">Removes this flight plan. You can then file a new one.</p>
+                </div>
+                <div class="dispatch-action-group">
+                    <button id="depart-btn" class="cta-button" data-plan-id="${plan._id}">Depart</button>
+                    <p class="dispatch-action-description">Starts the flight timer and officially begins your flight.</p>
+                </div>`;
         } else if (plan.status === 'FLYING') {
-            actionsHTML = `<button id="arrive-btn" class="cta-button" data-plan-id="${plan._id}">Arrive & File PIREP</button>`;
+            actionsHTML = `
+                <div class="dispatch-action-group">
+                    <button id="arrive-btn" class="cta-button" data-plan-id="${plan._id}">Arrive & File PIREP</button>
+                    <p class="dispatch-action-description">Ends the flight and opens the PIREP submission form.</p>
+                </div>`;
         }
         actionsContainer.innerHTML = actionsHTML;
 
         manualDispatchContainer.style.display = 'none';
         dispatchDisplay.style.display = 'block';
+
+        plotDispatchMap('dispatch-map', fullOfpData?.origin, fullOfpData?.destination, fullOfpData?.navlog?.fix);
     };
 
     // --- Other Data Display Functions ---
@@ -705,7 +758,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 pob: parseInt(document.getElementById('fp-pob').value, 10) || null,
             };
 
-            // Basic validation for required fields
             if (!body.flightNumber || !body.aircraft || !body.departure || !body.arrival) {
                  showNotification('Please fill in all required Core Details.', 'error');
                  btn.disabled = false;
@@ -933,7 +985,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             showNotification('Opening SimBrief planner...', 'info');
 
-            // Add a URL parameter to remember the view on redirect
             const redirectUrl = window.location.origin + window.location.pathname + '?view=view-flight-plan';
             simbriefsubmit(redirectUrl);
         }
@@ -986,7 +1037,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     v2: `${v2} kts`,
                     vref: `${vref} kts`,
                     departureWeather: ofpData.weather.orig_metar,
-                    arrivalWeather: ofpData.weather.dest_metar
+                    arrivalWeather: ofpData.weather.dest_metar,
+                    ofpData: ofpData // Send the full OFP data to the backend
                 };
 
                 const res = await fetch(`${API_BASE_URL}/api/flightplans`, {
@@ -1096,7 +1148,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         body: JSON.stringify({ notificationIds: unreadIds })
                     });
                     notificationsModal.classList.remove('visible');
-                    fetchPilotData(); // Refresh to update the badge
+                    fetchPilotData();
                 });
             }
 
@@ -1195,14 +1247,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const dispatchActionsContainer = document.getElementById('dispatch-actions');
                 if (dispatchActionsContainer) {
                     dispatchActionsContainer.innerHTML = `
-                        <button id="dispatch-close-btn" class="end-duty-btn">Cancel</button>
-                        <button id="file-from-simbrief-btn" class="cta-button">File This Flight Plan</button>
+                        <div class="dispatch-action-group">
+                            <button id="dispatch-close-btn" class="details-button">Cancel</button>
+                            <p class="dispatch-action-description">Discards this generated plan and returns to the filing form.</p>
+                        </div>
+                        <div class="dispatch-action-group">
+                            <button id="file-from-simbrief-btn" class="cta-button">File This Flight Plan</button>
+                            <p class="dispatch-action-description">Submits this flight plan to the airline and makes it your active flight.</p>
+                        </div>
                     `;
                 }
-
+                
                 manualDispatchContainer.style.display = 'none';
                 dispatchDisplay.style.display = 'block';
 
+                plotDispatchMap('dispatch-map', ofpData.origin, ofpData.destination, ofpData.navlog.fix);
+                
                 showNotification('Dispatch Pass generated successfully!', 'success');
                 window.history.replaceState({}, document.title, window.location.pathname);
 

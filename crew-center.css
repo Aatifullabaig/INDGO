@@ -1176,7 +1176,6 @@ roster-item {
     align-items: center;
     flex-wrap: wrap; /* Allows stacking on small screens */
     gap: 1rem;
-    margin-bottom: 1.5rem;
 }
 
 .roster-details-actions {
@@ -1410,7 +1409,13 @@ roster-item {
 
 .dispatch-body {
     display: flex;
+    flex-direction: column;
     padding: 1.5rem 2rem;
+    gap: 1.5rem;
+}
+
+.dispatch-main-grid {
+    display: flex;
     gap: 1.5rem;
 }
 
@@ -1530,6 +1535,14 @@ roster-item {
     color: var(--success-color);
 }
 
+.dispatch-map-container {
+    height: 400px;
+    width: 100%;
+    margin-top: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    background-color: #e9ecef;
+}
 
 .dispatch-footer {
     background-color: #f7f7f7;
@@ -1550,12 +1563,34 @@ roster-item {
     color: #000;
 }
 
-.dispatch-actions {
+.dispatch-actions-wrapper {
     margin-top: 1.5rem;
     display: flex;
-    gap: 1rem;
+    flex-wrap: wrap;
+    gap: 1.5rem;
     justify-content: flex-end;
+    align-items: flex-start;
 }
+.dispatch-action-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+.dispatch-action-group .cta-button,
+.dispatch-action-group .end-duty-btn,
+.dispatch-action-group .details-button {
+    width: 220px;
+    text-align: center;
+}
+.dispatch-action-description {
+    font-size: 0.8rem;
+    color: #6c757d;
+    max-width: 220px;
+    text-align: center;
+    line-height: 1.3;
+}
+
 
 /* ======================================== */
 /* END: NEW DISPATCH PASS MODAL STYLES      */
