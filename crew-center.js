@@ -466,30 +466,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const dispatchDisplay = document.getElementById('dispatch-pass-display');
         const manualDispatchContainer = document.getElementById('manual-dispatch-container');
 
-        // Fetch full OFP data to get navlog for map
-        let fullOfpData = {};
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/flightplans/${plan._id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const detailedPlan = await res.json();
-                fullOfpData = detailedPlan.ofpData || {};
-            }
-        } catch (e) {
-            console.error("Could not fetch full OFP for active flight:", e);
-        }
-
+        // --- DOM population remains the same ---
         document.getElementById('dispatch-flight-number').textContent = plan.flightNumber || 'N/A';
         document.getElementById('dispatch-route-short').textContent = `${plan.departure} → ${plan.arrival}`;
         document.getElementById('dispatch-date').textContent = new Date(plan.etd).toLocaleDateString();
-
         document.getElementById('dispatch-callsign').textContent = CURRENT_PILOT?.callsign || 'N/A';
         document.getElementById('dispatch-aircraft').textContent = plan.aircraft || 'N/A';
         document.getElementById('dispatch-etd').textContent = formatTimeFromTimestamp(plan.etd);
         document.getElementById('dispatch-eta').textContent = formatTimeFromTimestamp(plan.eta);
         document.getElementById('dispatch-duration').textContent = formatDuration(plan.eet * 3600);
-
         document.getElementById('dispatch-zfw').textContent = formatWeight(plan.zfw);
         document.getElementById('dispatch-tow').textContent = formatWeight(plan.tow);
         document.getElementById('dispatch-pax').textContent = plan.pob || '---';
@@ -497,30 +482,23 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('dispatch-fuel-taxi').textContent = formatWeight(plan.fuelTaxi);
         document.getElementById('dispatch-fuel-trip').textContent = formatWeight(plan.fuelTrip);
         document.getElementById('dispatch-fuel-total').textContent = formatWeight(plan.fuelTotal);
-        
         document.getElementById('dispatch-v1').textContent = plan.v1 || '--- kts';
         document.getElementById('dispatch-v2').textContent = plan.v2 || '--- kts';
         document.getElementById('dispatch-vr').textContent = plan.vr || '--- kts';
         document.getElementById('dispatch-vref').textContent = plan.vref || '--- kts';
-        
         const departureWeather = parseMetar(plan.departureWeather);
         const arrivalWeather = parseMetar(plan.arrivalWeather);
-
         document.getElementById('dispatch-dep-cond').textContent = departureWeather.condition;
         document.getElementById('dispatch-dep-temp').textContent = departureWeather.temp;
         document.getElementById('dispatch-dep-wind').textContent = departureWeather.wind;
-        
         document.getElementById('dispatch-arr-cond').textContent = arrivalWeather.condition;
         document.getElementById('dispatch-arr-temp').textContent = arrivalWeather.temp;
         document.getElementById('dispatch-arr-wind').textContent = arrivalWeather.wind;
-
         document.getElementById('dispatch-fic').textContent = plan.ficNumber || 'N/A';
         document.getElementById('dispatch-adc').textContent = plan.adcNumber || 'N/A';
         document.getElementById('dispatch-squawk').textContent = plan.squawkCode || '----';
-
         document.getElementById('dispatch-route-full').textContent = plan.route;
         document.getElementById('dispatch-alternates').textContent = plan.alternate || 'None';
-
         const actionsContainer = document.getElementById('dispatch-actions');
         let actionsHTML = '';
         if (plan.status === 'PLANNED') {
@@ -541,12 +519,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>`;
         }
         actionsContainer.innerHTML = actionsHTML;
+        // --- End of DOM population ---
 
         manualDispatchContainer.style.display = 'none';
         dispatchDisplay.style.display = 'block';
-
-        plotDispatchMap('dispatch-map', fullOfpData?.origin, fullOfpData?.destination, fullOfpData?.navlog?.fix);
+        
+        // **MODIFICATION**: Use saved map data if available, otherwise fetch as a fallback.
+        if (plan.mapData && plan.mapData.origin && plan.mapData.navlog) {
+            // Use the compact data saved with the flight plan
+            plotDispatchMap('dispatch-map', plan.mapData.origin, plan.mapData.destination, plan.mapData.navlog);
+        } else {
+            // Fallback for older flight plans: fetch the full data
+            console.warn("Compact map data not found, falling back to full OFP fetch.");
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/flightplans/${plan._id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const detailedPlan = await res.json();
+                    const mapData = detailedPlan.mapData || {}; 
+                    plotDispatchMap('dispatch-map', mapData.origin, mapData.destination, mapData.navlog);
+                } else {
+                    plotDispatchMap('dispatch-map', null, null, null); // Clear map on failed fetch
+                }
+            } catch (e) {
+                console.error("Could not fetch full OFP for active flight:", e);
+                plotDispatchMap('dispatch-map', null, null, null); // Clear map on error
+            }
+        }
     };
+
 
     // --- Other Data Display Functions ---
     const renderLeaderboardList = (title, data, valueKey) => {
@@ -1038,8 +1040,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     vref: `${vref} kts`,
                     departureWeather: ofpData.weather.orig_metar,
                     arrivalWeather: ofpData.weather.dest_metar,
-                    ofpData: ofpData // Send the full OFP data to the backend
+                    // **MODIFICATION**: Add a compact object for map plotting
+                    mapData: {
+                        origin: ofpData.origin,
+                        destination: ofpData.destination,
+                        navlog: ofpData.navlog?.fix || []
+                    }
+                    // The full ofpData object is no longer sent
                 };
+
+                // **** CONSOLE.LOG ADDED HERE FOR DEBUGGING ****
+                console.log('Sending this flight plan body to server:', JSON.stringify(body, null, 2));
 
                 const res = await fetch(`${API_BASE_URL}/api/flightplans`, {
                     method: 'POST',
