@@ -1392,6 +1392,19 @@ roster-item {
     border-top-right-radius: 10px;
 }
 
+/* Adjust header-left to accommodate the logo */
+.dispatch-header .header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px; /* Space between logo and text */
+}
+
+.dispatch-header-logo {
+    height: 40px; /* Adjust as needed */
+    width: auto;
+    filter: drop-shadow(0 0 5px rgba(0,0,0,0.3)); /* Optional: subtle shadow for the logo */
+}
+
 .dispatch-header h2 {
     margin: 0;
     font-size: 1.5rem;
