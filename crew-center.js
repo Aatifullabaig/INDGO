@@ -3,7 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const token = localStorage.getItem('authToken');
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
     // NEW: URL for your live flights microservice, including the correct path.
-    const LIVE_FLIGHTS_API_URL = 'https://acars-backend-uxln.onrender.com/live-flights';
+    const LIVE_FLIGHTS_API_URL = 'https://acars-backend-uxln.onrender.com/flights';
+    const TARGET_SERVER_NAME = 'Expert Server'; // or Training/Casual as needed
+
 
     let crewRestInterval = null; // To manage the countdown timer
     let dispatchMap = null; // To hold the Leaflet map instance
@@ -336,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!liveFlightsInterval) {
                 // Run once immediately, then start the interval
                 updateLiveFlights();
-                liveFlightsInterval = setInterval(updateLiveFlights, 40000); // 40 seconds
+                liveFlightsInterval = setInterval(updateLiveFlights, 20000); // 40 seconds
             }
         } else {
             // User has left the Pilot Hub, stop polling to save resources
@@ -432,14 +434,21 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!liveFlightsMap) return;
 
   try {
-    const response = await fetch(LIVE_FLIGHTS_API_URL);
-    if (!response.ok) {
-      console.error('Failed to fetch live flights data.');
+    // 1. Get sessions
+    const sessionsRes = await fetch('https://acars-backend-uxln.onrender.com/if-sessions');
+    const sessionsJson = await sessionsRes.json();
+    const expertSession = sessionsJson.sessions.find(s => s.name.toLowerCase().includes('expert'));
+
+    if (!expertSession) {
+      console.error('No Expert Server session found.');
       return;
     }
 
+    const sessionId = expertSession.id;
+
+    // 2. Get flights with callsign ending in GO
+    const response = await fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}?callsignEndsWith=GO`);
     const json = await response.json();
-    // Accept either an array or { flights: [...] }
     const flights = Array.isArray(json) ? json : (Array.isArray(json.flights) ? json.flights : []);
 
     const activeFlightIds = new Set();
@@ -451,9 +460,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     flights.forEach(f => {
-      // Normalize keys coming from the service
       const flightId = f.flightId || f.id || f.userId || Math.random().toString(36).slice(2);
-      const lat = f.latitude, lon = f.longitude;
+      const lat = f.position?.lat, lon = f.position?.lon;
       if (lat == null || lon == null) return;
 
       activeFlightIds.add(String(flightId));
@@ -462,28 +470,28 @@ document.addEventListener('DOMContentLoaded', () => {
       if (pilotMarkers[flightId]) {
         const marker = pilotMarkers[flightId];
         marker.setLatLng(latLng);
-        if (typeof marker.setRotationAngle === 'function' && f.heading != null) {
-          marker.setRotationAngle(f.heading);
+        if (typeof marker.setRotationAngle === 'function' && f.position?.track_deg != null) {
+          marker.setRotationAngle(f.position.track_deg);
         }
       } else {
-        const marker = L.marker(latLng, { icon: planeIcon, rotationAngle: f.heading ?? 0 }).addTo(liveFlightsMap);
+        const marker = L.marker(latLng, { icon: planeIcon, rotationAngle: f.position?.track_deg ?? 0 }).addTo(liveFlightsMap);
         marker.bindPopup(`
           <b>${f.callsign ?? 'N/A'}</b><br>
-          Aircraft: ${f.aircraftName ?? f.aircraftId ?? 'N/A'}<br>
-          Speed: ${f.speed != null ? Math.round(f.speed) : '—'} kts<br>
-          Altitude: ${f.altitude != null ? Math.round(f.altitude) : '—'} ft
+          Aircraft: ${f.aircraft?.aircraftId ?? 'N/A'}<br>
+          Speed: ${f.position?.gs_kt != null ? Math.round(f.position.gs_kt) : '—'} kts<br>
+          Altitude: ${f.position?.alt_ft != null ? Math.round(f.position.alt_ft) : '—'} ft
         `);
         pilotMarkers[flightId] = marker;
       }
     });
 
-    // Remove stale markers
     Object.keys(pilotMarkers).forEach(fid => {
       if (!activeFlightIds.has(String(fid))) {
         pilotMarkers[fid].remove();
         delete pilotMarkers[fid];
       }
     });
+
   } catch (err) {
     console.error('Error updating live flights:', err);
   }
