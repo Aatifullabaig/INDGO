@@ -526,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pilot.dutyStatus === 'ON_DUTY') {
             dutyStatusHTML = await renderOnDutyContent(pilot);
         } else {
-            dutyStatusHTML = renderOnRestContent(pilot);
+            dutyStatusHTML = await renderOnRestContent(pilot);
         }
 
         dutyStatusView.innerHTML = `${pendingBanner}${dutyStatusHTML}${leaderboardsHTML}`;
@@ -550,7 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const renderOnRestContent = (pilot) => {
+    const renderOnRestContent = async (pilot) => {
         let content = '';
         let title = '';
 
@@ -564,7 +564,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>`;
         } else {
             title = '<i class="fa-solid fa-user-clock"></i> Current Status: 🔴 On Rest';
-            content = `<p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>`;
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!response.ok) throw new Error('Could not fetch recommended roster.');
+                
+                const data = await response.json();
+                const topRoster = data.rosters && data.rosters[0];
+
+                if (topRoster) {
+                    const firstLeg = topRoster.legs[0];
+                    const lastLeg = topRoster.legs[topRoster.legs.length - 1];
+                    const fullRoute = `${firstLeg.departure} → ${lastLeg.arrival}`;
+                    const location = data.searchCriteria?.searched?.[0] || 'your last location';
+
+                    content = `
+                        <div class="next-step-card" style="margin-top: 1.5rem; padding: 1.5rem; background-color: rgba(0, 27, 148, 0.1); border-left: 3px solid var(--accent-color); border-radius: 5px;">
+                            <h4 style="margin-top: 0;">Ready for Your Next Assignment?</h4>
+                            <p>Based on your last arrival at <strong>${location}</strong>, we recommend this roster:</p>
+                            <div class="featured-roster-summary" style="background-color: rgba(13, 16, 28, 0.5); padding: 1rem; border-radius: 5px; margin: 1rem 0; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong style="display: block; font-size: 1.2rem;">${topRoster.name}</strong>
+                                    <span style="color: var(--dashboard-text-muted);">${fullRoute}</span>
+                                </div>
+                                <span style="font-size: 1.1rem; font-weight: bold;">${(topRoster.totalFlightTime || 0).toFixed(1)} hrs</span>
+                            </div>
+                            <button class="cta-button" id="go-to-roster-btn" data-roster-id="${topRoster._id}">View Roster</button>
+                        </div>
+                    `;
+                } else {
+                     content = `<p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>`;
+                }
+            } catch (error) {
+                console.error("Failed to fetch top roster for hub:", error);
+                content = `<p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>`;
+            }
         }
         
         return `
@@ -938,6 +971,10 @@ document.addEventListener('DOMContentLoaded', () => {
    mainContentContainer.addEventListener('click', async (e) => {
     const target = e.target;
     
+    if (target.id === 'go-to-roster-btn') {
+        switchView('view-rosters');
+    }
+
     const summary = target.closest('.active-flight-summary');
     if (summary) {
         const item = summary.closest('.active-flight-item');
