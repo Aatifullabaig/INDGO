@@ -1713,3 +1713,113 @@ roster-item {
 /* ================================================== */
 /* END: NEW STYLES FOR MANUAL DISPATCH FORM           */
 /* ================================================== */
+
+/* ================================================== */
+/* START: NEW STYLES FOR ACTIVE FLIGHTS SECTION       */
+/* ================================================== */
+
+.active-flights-section {
+    margin-bottom: 2rem;
+}
+
+#active-flights-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.active-flight-item {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    background-color: rgba(13, 16, 28, 0.5);
+}
+
+.active-flight-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.active-flight-summary:hover {
+    background-color: var(--accent-color);
+}
+
+.flight-summary-info {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-grow: 1;
+}
+
+.flight-summary-info strong {
+    font-size: 1.2rem;
+    color: #fff;
+    min-width: 100px;
+}
+
+.flight-summary-info span {
+    font-size: 1rem;
+    color: var(--dashboard-text-muted);
+}
+
+.flight-summary-toggle i {
+    font-size: 1.2rem;
+    transition: transform 0.3s ease-in-out;
+}
+
+.active-flight-item.expanded .flight-summary-toggle i {
+    transform: rotate(180deg);
+}
+
+.active-flight-details {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.5s ease-in-out;
+    background-color: #fff;
+}
+
+.active-flight-item.expanded .active-flight-details {
+    max-height: 2000px; /* Large enough value for content */
+}
+
+/* Re-skinning dispatch-pass for dark mode when embedded */
+.active-flight-details .dispatch-pass-container {
+    border-radius: 0;
+    box-shadow: none;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Styles for the form lockout */
+#manual-dispatch-container {
+    position: relative;
+    margin-top: 2rem;
+}
+
+.dispatch-form-lockout {
+    position: absolute;
+    inset: 0;
+    background-color: rgba(13, 16, 28, 0.95);
+    border-radius: 10px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--dashboard-text-color);
+    padding: 2rem;
+}
+
+.dispatch-form-lockout h3 {
+    color: var(--warning-color);
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+}
+/* ================================================== */
+/* END: NEW STYLES FOR ACTIVE FLIGHTS SECTION         */
+/* ================================================== */

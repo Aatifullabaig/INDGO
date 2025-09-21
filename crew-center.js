@@ -143,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Global state
     let CURRENT_PILOT = null;
-    let ACTIVE_FLIGHT_PLAN = null;
+    let ACTIVE_FLIGHT_PLANS = []; // MODIFIED: Changed to an array for multiple flights
     let CURRENT_OFP_DATA = null; // To hold SimBrief data temporarily
 
     // --- Auth & Initial Setup ---
@@ -190,34 +190,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Map Plotting ---
     const plotDispatchMap = (mapContainerId, origin, dest, navlogFixes) => {
-        if (dispatchMap) {
-            dispatchMap.remove();
-            dispatchMap = null;
+        const mapContainer = document.getElementById(mapContainerId);
+        if (!mapContainer) return;
+
+        // Use a map instance stored on the element itself to avoid global conflicts
+        if (mapContainer.mapInstance) {
+            mapContainer.mapInstance.remove();
+            mapContainer.mapInstance = null;
         }
 
         if (!origin || !dest || !navlogFixes || navlogFixes.length === 0) {
-            document.getElementById(mapContainerId).innerHTML = '<p style="text-align: center; padding-top: 2rem;">Route data not available for map display.</p>';
+            mapContainer.innerHTML = '<p style="text-align: center; padding-top: 2rem;">Route data not available for map display.</p>';
             return;
         }
 
-        dispatchMap = L.map(mapContainerId, {
+        const newMap = L.map(mapContainerId, {
             scrollWheelZoom: false,
             zoomControl: true
         });
+        mapContainer.mapInstance = newMap;
+
 
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
             subdomains: 'abcd',
             maxZoom: 20
-        }).addTo(dispatchMap);
+        }).addTo(newMap);
 
         const latlngs = navlogFixes.map(fix => [parseFloat(fix.pos_lat), parseFloat(fix.pos_long)]);
-        const routeLine = L.polyline(latlngs, { color: '#00a8ff', weight: 3 }).addTo(dispatchMap);
+        const routeLine = L.polyline(latlngs, { color: '#00a8ff', weight: 3 }).addTo(newMap);
 
-        L.marker([origin.pos_lat, origin.pos_long]).addTo(dispatchMap).bindPopup(`<b>Departure:</b> ${origin.icao_code}`);
-        L.marker([dest.pos_lat, dest.pos_long]).addTo(dispatchMap).bindPopup(`<b>Arrival:</b> ${dest.icao_code}`);
+        L.marker([origin.pos_lat, origin.pos_long]).addTo(newMap).bindPopup(`<b>Departure:</b> ${origin.icao_code}`);
+        L.marker([dest.pos_lat, dest.pos_long]).addTo(newMap).bindPopup(`<b>Arrival:</b> ${dest.icao_code}`);
 
-        dispatchMap.fitBounds(routeLine.getBounds().pad(0.1));
+        newMap.fitBounds(routeLine.getBounds().pad(0.1));
     };
 
     // --- Main Data Fetch & Render Cycle ---
@@ -235,7 +241,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const pilot = await response.json();
             CURRENT_PILOT = pilot;
-            ACTIVE_FLIGHT_PLAN = pilot.currentFlightPlan;
+            
+            // MODIFICATION: Handle both single object and array for currentFlightPlan
+            if (pilot.currentFlightPlan) {
+                ACTIVE_FLIGHT_PLANS = Array.isArray(pilot.currentFlightPlan) ? pilot.currentFlightPlan : [pilot.currentFlightPlan];
+            } else {
+                ACTIVE_FLIGHT_PLANS = [];
+            }
+
 
             pilotNameElem.textContent = pilot.name || 'N/A';
             pilotCallsignElem.textContent = pilot.callsign || 'N/A';
@@ -434,72 +447,163 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Flight Plan View ---
+    // MODIFICATION: Rewritten to handle the new layout
     const renderFlightPlanView = async (pilot) => {
-        const manualDispatchContainer = document.getElementById('manual-dispatch-container');
-        const dispatchDisplay = document.getElementById('dispatch-pass-display');
         const viewContainer = document.getElementById('view-flight-plan');
+        const manualDispatchContainer = document.getElementById('manual-dispatch-container');
+        const simbriefDisplay = document.getElementById('dispatch-pass-display');
 
-        manualDispatchContainer.style.display = 'none';
-        dispatchDisplay.style.display = 'none';
+        // Hide the simbrief-only display by default
+        simbriefDisplay.style.display = 'none';
 
         if (pilot.promotionStatus === 'PENDING_TEST') {
             viewContainer.innerHTML = `<div class="content-card">${getPendingTestBannerHTML()}</div>`;
             return;
         }
 
-        if (ACTIVE_FLIGHT_PLAN) {
-            await populateDispatchFromActivePlan(ACTIVE_FLIGHT_PLAN);
+        renderActiveFlights();
+        updateDispatchFormState();
+
+        const aircraftSelect = document.getElementById('fp-aircraft');
+        if (aircraftSelect) {
+            const allowed = getAllowedFleet(pilot.rank);
+            aircraftSelect.innerHTML = `
+                <option value="" disabled selected>-- Select Aircraft --</option>
+                ${allowed.map(ac => `<option value="${ac.code}">${ac.name} (${ac.code})</option>`).join('')}
+            `;
+        }
+    };
+
+    // NEW FUNCTION: Renders the list of active flights
+    const renderActiveFlights = () => {
+        const listContainer = document.getElementById('active-flights-list');
+        const header = document.getElementById('active-flights-header');
+
+        header.innerHTML = `<i class="fa-solid fa-plane-up"></i> Active Flights (${ACTIVE_FLIGHT_PLANS.length})`;
+        
+        if (ACTIVE_FLIGHT_PLANS.length === 0) {
+            listContainer.innerHTML = '<p class="muted">You have no active flights.</p>';
+            return;
+        }
+
+        listContainer.innerHTML = ACTIVE_FLIGHT_PLANS.map(plan => {
+            const aircraft = FLEET.find(a => a.code === plan.aircraft) || { name: plan.aircraft };
+            return `
+            <div class="active-flight-item" data-plan-id="${plan._id}">
+                <div class="active-flight-summary">
+                    <div class="flight-summary-info">
+                        <strong>${plan.flightNumber}</strong>
+                        <span>${plan.departure} → ${plan.arrival}</span>
+                        <span>${aircraft.name}</span>
+                    </div>
+                    <div class="flight-summary-toggle">
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                </div>
+                <div class="active-flight-details">
+                    <div class="dispatch-pass-container">
+                        </div>
+                </div>
+            </div>`;
+        }).join('');
+    };
+
+    // NEW FUNCTION: Controls the dispatch form state
+    const updateDispatchFormState = () => {
+        const formContainer = document.getElementById('manual-dispatch-container');
+        const formLockout = document.getElementById('dispatch-form-lockout');
+        const form = document.getElementById('file-flight-plan-form');
+
+        if (ACTIVE_FLIGHT_PLANS.length >= 2) {
+            formLockout.style.display = 'flex';
+            form.style.opacity = '0.3';
+            form.style.pointerEvents = 'none';
         } else {
-            const aircraftSelect = document.getElementById('fp-aircraft');
-            if (aircraftSelect) {
-                const allowed = getAllowedFleet(pilot.rank);
-                aircraftSelect.innerHTML = `
-                    <option value="" disabled selected>-- Select Aircraft --</option>
-                    ${allowed.map(ac => `<option value="${ac.code}">${ac.name} (${ac.code})</option>`).join('')}
-                `;
-            }
-            manualDispatchContainer.style.display = 'block';
+            formLockout.style.display = 'none';
+            form.style.opacity = '1';
+            form.style.pointerEvents = 'auto';
         }
     };
     
-    const populateDispatchFromActivePlan = async (plan) => {
-        const dispatchDisplay = document.getElementById('dispatch-pass-display');
-        const manualDispatchContainer = document.getElementById('manual-dispatch-container');
+    // NEW REUSABLE FUNCTION: Fills a dispatch pass container with flight data.
+    const populateDispatchPass = async (container, plan) => {
+        if (!container || !plan) return;
+        
+        // This structure is a self-contained dispatch pass that can be injected anywhere.
+        container.innerHTML = `
+            <div class="dispatch-body">
+                <div class="dispatch-left-panel">
+                    <div class="dispatch-core-info">
+                        <div class="data-item"><strong>Callsign:</strong> <span>${CURRENT_PILOT?.callsign || 'N/A'}</span></div>
+                        <div class="data-item"><strong>Aircraft:</strong> <span>${plan.aircraft || 'N/A'}</span></div>
+                        <div class="data-item"><strong>ETD:</strong> <span>${formatTimeFromTimestamp(plan.etd)}</span> | <strong>ETA:</strong> <span>${formatTimeFromTimestamp(plan.eta)}</span></div>
+                        <div class="data-item"><strong>Duration:</strong> <span>${formatDuration(plan.eet * 3600)}</span></div>
+                    </div>
+                    <div class="dispatch-route-panel data-card">
+                         <div class="route-info">
+                            <strong>Route:</strong> <span>${plan.route || '---'}</span>
+                        </div>
+                        <div class="alternates-info">
+                            <strong>Alternates:</strong> <span>${plan.alternate || 'None'}</span>
+                        </div>
+                    </div>
+                    <div id="dispatch-map-${plan._id}" class="dispatch-map-container"></div>
+                </div>
+                <div class="dispatch-right-panel">
+                    <div class="data-card">
+                        <h3><i class="fa-solid fa-weight-hanging"></i> Weights & Payload</h3>
+                        <div class="data-item"><strong>ZFW:</strong> <span>${formatWeight(plan.zfw)}</span></div>
+                        <div class="data-item"><strong>TOW:</strong> <span>${formatWeight(plan.tow)}</span></div>
+                        <div class="data-item"><strong>Passengers:</strong> <span>${plan.pob || '---'}</span></div>
+                        <div class="data-item"><strong>Cargo:</strong> <span>${formatWeight(plan.cargo)}</span></div>
+                    </div>
+                    <div class="data-card">
+                        <h3><i class="fa-solid fa-gas-pump"></i> Fuel</h3>
+                        <div class="data-item"><strong>Taxi Fuel:</strong> <span>${formatWeight(plan.fuelTaxi)}</span></div>
+                        <div class="data-item"><strong>Trip Fuel:</strong> <span>${formatWeight(plan.fuelTrip)}</span></div>
+                        <div class="data-item"><strong>Total Fuel:</strong> <span>${formatWeight(plan.fuelTotal)}</span></div>
+                    </div>
+                     <div class="data-card">
+                        <h3><i class="fa-solid fa-tower-broadcast"></i> ATC Information</h3>
+                        <div class="data-item"><strong>FIC #:</strong> <span>${plan.ficNumber || 'N/A'}</span></div>
+                        <div class="data-item"><strong>ADC #:</strong> <span>${plan.adcNumber || 'N/A'}</span></div>
+                        <div class="data-item"><strong>Squawk:</strong> <span>${plan.squawkCode || '----'}</span></div>
+                    </div>
+                    <div class="data-card">
+                        <h3><i class="fa-solid fa-gauge-high"></i> Critical Speeds</h3>
+                        <div class="speeds-grid">
+                            <div class="speed-item"><label>V1</label><span>${plan.v1 || '---'}</span></div>
+                            <div class="speed-item"><label>VR</label><span>${plan.vr || '---'}</span></div>
+                            <div class="speed-item"><label>V2</label><span>${plan.v2 || '---'}</span></div>
+                            <div class="speed-item landing-speed"><label>VREF</label><span>${plan.vref || '---'}</span></div>
+                        </div>
+                    </div>
+                    <div class="data-card">
+                        <h3><i class="fa-solid fa-cloud-sun"></i> Weather</h3>
+                        <div class="weather-container">
+                            <div class="weather-sub-card">
+                                <h4><i class="fa-solid fa-plane-departure"></i> Departure</h4>
+                                <div class="data-item"><span>Cond:</span> <span>${parseMetar(plan.departureWeather).condition}</span></div>
+                                <div class="data-item"><span>Temp:</span> <span>${parseMetar(plan.departureWeather).temp}</span></div>
+                                <div class="data-item"><span>Wind:</span> <span>${parseMetar(plan.departureWeather).wind}</span></div>
+                            </div>
+                            <div class="weather-sub-card">
+                                <h4><i class="fa-solid fa-plane-arrival"></i> Arrival</h4>
+                                <div class="data-item"><span>Cond:</span> <span>${parseMetar(plan.arrivalWeather).condition}</span></div>
+                                <div class="data-item"><span>Temp:</span> <span>${parseMetar(plan.arrivalWeather).temp}</span></div>
+                                <div class="data-item"><span>Wind:</span> <span>${parseMetar(plan.arrivalWeather).wind}</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="dispatch-footer">
+                <div class="dispatch-actions-wrapper">
+                    </div>
+            </div>
+        `;
 
-        // --- DOM population remains the same ---
-        document.getElementById('dispatch-flight-number').textContent = plan.flightNumber || 'N/A';
-        document.getElementById('dispatch-route-short').textContent = `${plan.departure} → ${plan.arrival}`;
-        document.getElementById('dispatch-date').textContent = new Date(plan.etd).toLocaleDateString();
-        document.getElementById('dispatch-callsign').textContent = CURRENT_PILOT?.callsign || 'N/A';
-        document.getElementById('dispatch-aircraft').textContent = plan.aircraft || 'N/A';
-        document.getElementById('dispatch-etd').textContent = formatTimeFromTimestamp(plan.etd);
-        document.getElementById('dispatch-eta').textContent = formatTimeFromTimestamp(plan.eta);
-        document.getElementById('dispatch-duration').textContent = formatDuration(plan.eet * 3600);
-        document.getElementById('dispatch-zfw').textContent = formatWeight(plan.zfw);
-        document.getElementById('dispatch-tow').textContent = formatWeight(plan.tow);
-        document.getElementById('dispatch-pax').textContent = plan.pob || '---';
-        document.getElementById('dispatch-cargo').textContent = formatWeight(plan.cargo);
-        document.getElementById('dispatch-fuel-taxi').textContent = formatWeight(plan.fuelTaxi);
-        document.getElementById('dispatch-fuel-trip').textContent = formatWeight(plan.fuelTrip);
-        document.getElementById('dispatch-fuel-total').textContent = formatWeight(plan.fuelTotal);
-        document.getElementById('dispatch-v1').textContent = plan.v1 || '--- kts';
-        document.getElementById('dispatch-v2').textContent = plan.v2 || '--- kts';
-        document.getElementById('dispatch-vr').textContent = plan.vr || '--- kts';
-        document.getElementById('dispatch-vref').textContent = plan.vref || '--- kts';
-        const departureWeather = parseMetar(plan.departureWeather);
-        const arrivalWeather = parseMetar(plan.arrivalWeather);
-        document.getElementById('dispatch-dep-cond').textContent = departureWeather.condition;
-        document.getElementById('dispatch-dep-temp').textContent = departureWeather.temp;
-        document.getElementById('dispatch-dep-wind').textContent = departureWeather.wind;
-        document.getElementById('dispatch-arr-cond').textContent = arrivalWeather.condition;
-        document.getElementById('dispatch-arr-temp').textContent = arrivalWeather.temp;
-        document.getElementById('dispatch-arr-wind').textContent = arrivalWeather.wind;
-        document.getElementById('dispatch-fic').textContent = plan.ficNumber || 'N/A';
-        document.getElementById('dispatch-adc').textContent = plan.adcNumber || 'N/A';
-        document.getElementById('dispatch-squawk').textContent = plan.squawkCode || '----';
-        document.getElementById('dispatch-route-full').textContent = plan.route;
-        document.getElementById('dispatch-alternates').textContent = plan.alternate || 'None';
-        const actionsContainer = document.getElementById('dispatch-actions');
+        const actionsContainer = container.querySelector('.dispatch-actions-wrapper');
         let actionsHTML = '';
         if (plan.status === 'PLANNED') {
              actionsHTML = `
@@ -519,34 +623,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>`;
         }
         actionsContainer.innerHTML = actionsHTML;
-        // --- End of DOM population ---
 
-        manualDispatchContainer.style.display = 'none';
-        dispatchDisplay.style.display = 'block';
-        
-        // **MODIFICATION**: Use saved map data if available, otherwise fetch as a fallback.
-        if (plan.mapData && plan.mapData.origin && plan.mapData.navlog) {
-            // Use the compact data saved with the flight plan
-            plotDispatchMap('dispatch-map', plan.mapData.origin, plan.mapData.destination, plan.mapData.navlog);
-        } else {
-            // Fallback for older flight plans: fetch the full data
-            console.warn("Compact map data not found, falling back to full OFP fetch.");
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/flightplans/${plan._id}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    const detailedPlan = await res.json();
-                    const mapData = detailedPlan.mapData || {}; 
-                    plotDispatchMap('dispatch-map', mapData.origin, mapData.destination, mapData.navlog);
-                } else {
-                    plotDispatchMap('dispatch-map', null, null, null); // Clear map on failed fetch
-                }
-            } catch (e) {
-                console.error("Could not fetch full OFP for active flight:", e);
-                plotDispatchMap('dispatch-map', null, null, null); // Clear map on error
+        // Use a timeout to ensure the map container is in the DOM and visible before plotting
+        setTimeout(() => {
+            const mapContainerId = `dispatch-map-${plan._id}`;
+            if (plan.mapData && plan.mapData.origin && plan.mapData.navlog) {
+                plotDispatchMap(mapContainerId, plan.mapData.origin, plan.mapData.destination, plan.mapData.navlog);
+            } else {
+                plotDispatchMap(mapContainerId, null, null, null);
             }
-        }
+        }, 100); // A small delay is usually enough
     };
 
 
@@ -788,6 +874,26 @@ document.addEventListener('DOMContentLoaded', () => {
     mainContentContainer.addEventListener('click', async (e) => {
         const target = e.target;
         
+        // NEW: Listener for expanding/collapsing active flights
+        const summary = target.closest('.active-flight-summary');
+        if (summary) {
+            const item = summary.closest('.active-flight-item');
+            const details = item.querySelector('.active-flight-details');
+            const isExpanded = item.classList.contains('expanded');
+
+            if (!isExpanded) {
+                const planId = item.dataset.planId;
+                const plan = ACTIVE_FLIGHT_PLANS.find(p => p._id === planId);
+                const passContainer = details.querySelector('.dispatch-pass-container');
+
+                // Populate the dispatch pass only if it hasn't been populated before
+                if (plan && !passContainer.hasChildNodes()) {
+                    await populateDispatchPass(passContainer, plan);
+                }
+            }
+            item.classList.toggle('expanded');
+        }
+
         if (target.classList.contains('details-button') && target.dataset.rosterId && !target.classList.contains('view-roster-on-map-btn')) {
             const rosterId = target.dataset.rosterId;
             const detailsContainer = document.getElementById(`details-${rosterId}`);

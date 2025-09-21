@@ -77,13 +77,27 @@
     <div id="view-duty-status" class="content-view active">
         </div>
     <div id="view-flight-plan" class="content-view">
-        <div id="manual-dispatch-container" class="dispatch-pass-container" style="display: none;">
-            <div class="dispatch-header">
+
+        <div class="active-flights-section content-card">
+            <h2 id="active-flights-header"><i class="fa-solid fa-plane-up"></i> Active Flights (0)</h2>
+            <div id="active-flights-list">
+                <p class="muted">You have no active flights.</p>
+            </div>
+        </div>
+
+        <div id="manual-dispatch-container" class="dispatch-pass-container" style="display: block;">
+             <div class="dispatch-header">
                 <div class="header-left">
-                    <h2>File a Dispatch Plan</h2>
-                    <p>Complete the fields below to log a flight.</p>
+                    <h2>File a New Flight</h2>
+                    <p>Use SimBrief for accuracy or fill out the form manually.</p>
                 </div>
             </div>
+            
+            <div id="dispatch-form-lockout" class="dispatch-form-lockout" style="display: none;">
+                <h3><i class="fa-solid fa-lock"></i> Maximum Flights Reached</h3>
+                <p>You have reached the maximum of 2 active flights. Please arrive or cancel an existing flight to file a new one.</p>
+            </div>
+
             <form id="file-flight-plan-form">
                 <div class="dispatch-body">
                     <div class="dispatch-column-grid" style="padding-left: 0; grid-template-columns: 1fr 1fr; gap: 2rem;">
