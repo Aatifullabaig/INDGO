@@ -412,17 +412,21 @@ document.addEventListener('DOMContentLoaded', () => {
      * Initializes the Leaflet map for live flights if it doesn't exist yet.
      */
     function initializeLiveMap() {
+
+        const bounds = L.latLngBounds( L.latLng(-85, -180), L.latLng(85, 180) );
         // Only initialize if the map container exists and map isn't already created
         if (document.getElementById('live-flights-map-container') && !liveFlightsMap) {
             liveFlightsMap = L.map('live-flights-map-container', {
-                scrollWheelZoom: true,
-                zoomControl: true
-            }).setView([20.5937, 78.9629], 4); // Centered on India
+                zoomControl: false,
+                minZoom: 3,
+                maxBounds: bounds,
+                maxBoundsViscosity: 1.0
+            }).setView([22.5937, 78.9629], 5); 
 
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
                 subdomains: 'abcd',
-                maxZoom: 20
+                maxZoom: 19
             }).addTo(liveFlightsMap);
         }
         if (!liveFlightsInterval) {

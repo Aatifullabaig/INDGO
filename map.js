@@ -28,45 +28,29 @@ document.addEventListener('DOMContentLoaded', () => {
         fillOpacity: 1
     };
 
-    function initializeLiveMap() {
-    // Return if the map object already exists
-    if (liveFlightsMap) return;
-    
-    // Return if the map's container isn't on the page
-    if (!document.getElementById('live-flights-map-container')) return;
+    function initializeMap() {
+        if (window.leafletMap) return;
+        
+        window.leafletMap = L.map('map', { worldCopyJump: true }).setView([20, 0], 2);
 
-    // Initialize the map with options for world-wrapping and zoom
-    liveFlightsMap = L.map('live-flights-map-container', {
-        scrollWheelZoom: true,
-        zoomControl: true,
-        worldCopyJump: true // Allows the map to wrap horizontally
-    }).setView([20.5937, 78.9629], 4);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20,
+            minZoom: 2
+        }).addTo(window.leafletMap);
 
-    // Add the dark-themed tile layer
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 20,
-        minZoom: 2 // Prevents zooming out too far
-    }).addTo(liveFlightsMap);
+        const southWest = L.latLng(-85, -180);
+        const northEast = L.latLng(85, 180);
+        const bounds = L.latLngBounds(southWest, northEast);
+        window.leafletMap.setMaxBounds(bounds);
+        window.leafletMap.on('drag', function() {
+            window.leafletMap.panInsideBounds(bounds, { animate: false });
+        });
 
-    // Define the maximum boundaries to prevent vertical panning off the map
-    const southWest = L.latLng(-85, -180);
-    const northEast = L.latLng(85, 180);
-    const bounds = L.latLngBounds(southWest, northEast);
-    liveFlightsMap.setMaxBounds(bounds);
-    
-    // Keep the map centered within the bounds when dragging
-    liveFlightsMap.on('drag', function() {
-        liveFlightsMap.panInsideBounds(bounds, { animate: false });
-    });
-
-    // Start polling for live flight data now that the map is ready
-    if (!liveFlightsInterval) {
-        updateLiveFlights(); // Fetch flights immediately
-        liveFlightsInterval = setInterval(updateLiveFlights, 20000); // Poll every 20 seconds
+        // Initialize the layer group for our custom labels
+        routeInfoLayerGroup = L.layerGroup().addTo(window.leafletMap);
     }
-}
 
     async function loadAirportsData() {
         if (airportsData) return;
