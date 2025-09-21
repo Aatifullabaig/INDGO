@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const token = localStorage.getItem('authToken');
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
     // NEW: URL for your live flights microservice, including the correct path.
-    const LIVE_FLIGHTS_API_URL = 'https://acars-backend-uxln.onrender.com/api/live-flights';
+    const LIVE_FLIGHTS_API_URL = 'https://acars-backend-uxln.onrender.com/live-flights';
 
     let crewRestInterval = null; // To manage the countdown timer
     let dispatchMap = null; // To hold the Leaflet map instance
