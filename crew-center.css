@@ -535,8 +535,8 @@ input, textarea, select {
 }
 
 .leg-badges-footer {
-    margin-top: 0.25rem;
-    align-self: flex-end;
+    margin-top: 0.75rem;
+    align-self: flex-start;
 }
 
 
