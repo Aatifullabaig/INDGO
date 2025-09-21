@@ -523,114 +523,127 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     // NEW REUSABLE FUNCTION: Fills a dispatch pass container with flight data.
-    const populateDispatchPass = async (container, plan) => {
-        if (!container || !plan) return;
-        
-        // This structure is a self-contained dispatch pass that can be injected anywhere.
-        container.innerHTML = `
-            <div class="dispatch-body">
-                <div class="dispatch-left-panel">
-                    <div class="dispatch-core-info">
-                        <div class="data-item"><strong>Callsign:</strong> <span>${CURRENT_PILOT?.callsign || 'N/A'}</span></div>
-                        <div class="data-item"><strong>Aircraft:</strong> <span>${plan.aircraft || 'N/A'}</span></div>
-                        <div class="data-item"><strong>ETD:</strong> <span>${formatTimeFromTimestamp(plan.etd)}</span> | <strong>ETA:</strong> <span>${formatTimeFromTimestamp(plan.eta)}</span></div>
-                        <div class="data-item"><strong>Duration:</strong> <span>${formatDuration(plan.eet * 3600)}</span></div>
-                    </div>
-                    <div class="dispatch-route-panel data-card">
-                         <div class="route-info">
-                            <strong>Route:</strong> <span>${plan.route || '---'}</span>
-                        </div>
-                        <div class="alternates-info">
-                            <strong>Alternates:</strong> <span>${plan.alternate || 'None'}</span>
-                        </div>
-                    </div>
-                    <div id="dispatch-map-${plan._id}" class="dispatch-map-container"></div>
-                </div>
-                <div class="dispatch-right-panel">
-                    <div class="data-card">
-                        <h3><i class="fa-solid fa-weight-hanging"></i> Weights & Payload</h3>
-                        <div class="data-item"><strong>ZFW:</strong> <span>${formatWeight(plan.zfw)}</span></div>
-                        <div class="data-item"><strong>TOW:</strong> <span>${formatWeight(plan.tow)}</span></div>
-                        <div class="data-item"><strong>Passengers:</strong> <span>${plan.pob || '---'}</span></div>
-                        <div class="data-item"><strong>Cargo:</strong> <span>${formatWeight(plan.cargo)}</span></div>
-                    </div>
-                    <div class="data-card">
-                        <h3><i class="fa-solid fa-gas-pump"></i> Fuel</h3>
-                        <div class="data-item"><strong>Taxi Fuel:</strong> <span>${formatWeight(plan.fuelTaxi)}</span></div>
-                        <div class="data-item"><strong>Trip Fuel:</strong> <span>${formatWeight(plan.fuelTrip)}</span></div>
-                        <div class="data-item"><strong>Total Fuel:</strong> <span>${formatWeight(plan.fuelTotal)}</span></div>
-                    </div>
-                     <div class="data-card">
-                        <h3><i class="fa-solid fa-tower-broadcast"></i> ATC Information</h3>
-                        <div class="data-item"><strong>FIC #:</strong> <span>${plan.ficNumber || 'N/A'}</span></div>
-                        <div class="data-item"><strong>ADC #:</strong> <span>${plan.adcNumber || 'N/A'}</span></div>
-                        <div class="data-item"><strong>Squawk:</strong> <span>${plan.squawkCode || '----'}</span></div>
-                    </div>
-                    <div class="data-card">
-                        <h3><i class="fa-solid fa-gauge-high"></i> Critical Speeds</h3>
-                        <div class="speeds-grid">
-                            <div class="speed-item"><label>V1</label><span>${plan.v1 || '---'}</span></div>
-                            <div class="speed-item"><label>VR</label><span>${plan.vr || '---'}</span></div>
-                            <div class="speed-item"><label>V2</label><span>${plan.v2 || '---'}</span></div>
-                            <div class="speed-item landing-speed"><label>VREF</label><span>${plan.vref || '---'}</span></div>
-                        </div>
-                    </div>
-                    <div class="data-card">
-                        <h3><i class="fa-solid fa-cloud-sun"></i> Weather</h3>
-                        <div class="weather-container">
-                            <div class="weather-sub-card">
-                                <h4><i class="fa-solid fa-plane-departure"></i> Departure</h4>
-                                <div class="data-item"><span>Cond:</span> <span>${parseMetar(plan.departureWeather).condition}</span></div>
-                                <div class="data-item"><span>Temp:</span> <span>${parseMetar(plan.departureWeather).temp}</span></div>
-                                <div class="data-item"><span>Wind:</span> <span>${parseMetar(plan.departureWeather).wind}</span></div>
-                            </div>
-                            <div class="weather-sub-card">
-                                <h4><i class="fa-solid fa-plane-arrival"></i> Arrival</h4>
-                                <div class="data-item"><span>Cond:</span> <span>${parseMetar(plan.arrivalWeather).condition}</span></div>
-                                <div class="data-item"><span>Temp:</span> <span>${parseMetar(plan.arrivalWeather).temp}</span></div>
-                                <div class="data-item"><span>Wind:</span> <span>${parseMetar(plan.arrivalWeather).wind}</span></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="dispatch-footer">
-                <div class="dispatch-actions-wrapper">
-                    </div>
-            </div>
-        `;
+const populateDispatchPass = async (container, plan) => {
+  if (!container || !plan) return;
 
-        const actionsContainer = container.querySelector('.dispatch-actions-wrapper');
-        let actionsHTML = '';
-        if (plan.status === 'PLANNED') {
-             actionsHTML = `
-                <div class="dispatch-action-group">
-                    <button id="cancel-btn" class="end-duty-btn" data-plan-id="${plan._id}">Cancel Flight Plan</button>
-                    <p class="dispatch-action-description">Removes this flight plan. You can then file a new one.</p>
-                </div>
-                <div class="dispatch-action-group">
-                    <button id="depart-btn" class="cta-button" data-plan-id="${plan._id}">Depart</button>
-                    <p class="dispatch-action-description">Starts the flight timer and officially begins your flight.</p>
-                </div>`;
-        } else if (plan.status === 'FLYING') {
-            actionsHTML = `
-                <div class="dispatch-action-group">
-                    <button id="arrive-btn" class="cta-button" data-plan-id="${plan._id}">Arrive & File PIREP</button>
-                    <p class="dispatch-action-description">Ends the flight and opens the PIREP submission form.</p>
-                </div>`;
-        }
-        actionsContainer.innerHTML = actionsHTML;
+  // Build a self-contained dispatch pass (NO global IDs)
+  container.innerHTML = `
+    <div class="dispatch-pass-container">
+      <div class="dispatch-header">
+        <div class="header-left">
+          <img src="images/indgo.png" alt="Logo" class="dispatch-header-logo" />
+          <div>
+            <h2>${plan.departure} → ${plan.arrival}</h2>
+            <p>Flight: <strong>${plan.flightNumber}</strong></p>
+          </div>
+        </div>
+        <div class="header-right">
+          <h2>${plan.aircraft || ''}</h2>
+          <p>ETD: <strong>${new Date(plan.etd).toLocaleString()}</strong></p>
+        </div>
+      </div>
 
-        // Use a timeout to ensure the map container is in the DOM and visible before plotting
-        setTimeout(() => {
-            const mapContainerId = `dispatch-map-${plan._id}`;
-            if (plan.mapData && plan.mapData.origin && plan.mapData.navlog) {
-                plotDispatchMap(mapContainerId, plan.mapData.origin, plan.mapData.destination, plan.mapData.navlog);
-            } else {
-                plotDispatchMap(mapContainerId, null, null, null);
-            }
-        }, 100); // A small delay is usually enough
-    };
+      <div class="dispatch-body">
+        <div class="dispatch-left-panel">
+          <div class="dispatch-core-info data-card">
+            <div class="data-item"><strong>FIC</strong><span>${plan.ficNumber || '—'}</span></div>
+            <div class="data-item"><strong>ADC</strong><span>${plan.adcNumber || '—'}</span></div>
+            <div class="data-item"><strong>Squawk</strong><span>${plan.squawkCode || '—'}</span></div>
+            <div class="data-item"><strong>EET (h)</strong><span>${plan.eet ?? '—'}</span></div>
+            <div class="data-item"><strong>PAX</strong><span>${plan.pob ?? 0}</span></div>
+          </div>
+
+          <div class="dispatch-right-panel">
+            <div class="data-card">
+              <h3>Weights & Fuel</h3>
+              <div class="data-item"><strong>ZFW</strong><span>${plan.zfw ?? '—'}</span></div>
+              <div class="data-item"><strong>TOW</strong><span>${plan.tow ?? '—'}</span></div>
+              <div class="data-item"><strong>Cargo</strong><span>${plan.cargo ?? '—'}</span></div>
+              <div class="data-item"><strong>Taxi Fuel</strong><span>${plan.fuelTaxi ?? '—'}</span></div>
+              <div class="data-item"><strong>Trip Fuel</strong><span>${plan.fuelTrip ?? '—'}</span></div>
+              <div class="data-item"><strong>Total Fuel</strong><span>${plan.fuelTotal ?? '—'}</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dispatch-route-panel data-card">
+          <h3>Route</h3>
+          <p class="route-info"><strong>Cleared Route</strong><span>${plan.route || '—'}</span></p>
+          ${plan.alternate ? `<p class="alternates-info"><strong>Alternate</strong><span>${plan.alternate}</span></p>` : ''}
+        </div>
+      </div>
+
+      <div class="dispatch-footer">
+        <div class="dispatch-actions-wrapper">
+          <div class="dispatch-action-group">
+            <button class="cta-button btn-depart" data-plan-id="${plan._id}">
+              <i class="fa-solid fa-plane-departure"></i> Confirm Departure
+            </button>
+            <div class="dispatch-action-description">Mark this flight as FLYING.</div>
+          </div>
+          <div class="dispatch-action-group">
+            <button class="details-button btn-arrive" data-plan-id="${plan._id}">
+              <i class="fa-solid fa-plane-arrival"></i> Confirm Arrival
+            </button>
+            <div class="dispatch-action-description">Uploads required afterwards.</div>
+          </div>
+          <div class="dispatch-action-group">
+            <button class="details-button btn-cancel" data-plan-id="${plan._id}">
+              <i class="fa-solid fa-ban"></i> Cancel Flight
+            </button>
+            <div class="dispatch-action-description">Deletes the plan.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Wire up actions for THIS specific plan
+  const token = localStorage.getItem('token');
+
+  const btnDepart = container.querySelector('.btn-depart');
+  btnDepart?.addEventListener('click', async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/flightplans/${plan._id}/depart`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to confirm departure.');
+      showNotification(data.message, 'success');
+      await fetchPilotData();        // refresh ACTIVE_FLIGHT_PLANS
+      renderActiveFlights();         // re-paint list with updated status
+    } catch (e) {
+      showNotification(e.message, 'error');
+    }
+  });
+
+  const btnArrive = container.querySelector('.btn-arrive');
+  btnArrive?.addEventListener('click', () => {
+    // If you already have an arrival modal/uploader, open it here.
+    // Otherwise you can navigate or show a notice.
+    showNotification('Open your arrival workflow to upload verification.', 'info');
+  });
+
+  const btnCancel = container.querySelector('.btn-cancel');
+  btnCancel?.addEventListener('click', async () => {
+    if (!confirm('Cancel and delete this flight plan?')) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/flightplans/${plan._id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to cancel flight plan.');
+      showNotification(data.message, 'success');
+      await fetchPilotData();
+      renderActiveFlights();
+    } catch (e) {
+      showNotification(e.message, 'error');
+    }
+  });
+};
+
 
 
     // --- Other Data Display Functions ---
