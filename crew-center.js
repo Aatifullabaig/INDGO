@@ -454,7 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeFlightIds = new Set();
 
     const planeIcon = L.icon({
-      iconUrl: 'images/plane-icon.png',
+      iconUrl: 'images/whiteplane.png',
       iconSize: [30, 30],
       iconAnchor: [15, 15],
     });
