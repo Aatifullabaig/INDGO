@@ -349,9 +349,6 @@ body::before {
     border: 1px solid var(--border-color);
 }
 
-
-.on-duty-header { display: flex; justify-content: space-between; align-items: center; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
-.on-duty-header h2 { margin: 0; border-bottom: none; padding-bottom: 0; }
 .roster-checklist { display: flex; flex-direction: column; gap: 0.75rem; }
 .roster-leg-item { background-color: rgba(13, 16, 28, 0.5); border: 1px solid var(--border-color); padding: 0.75rem 1rem; border-radius: 5px; display: flex; align-items: center; gap: 1rem; transition: background-color 0.2s, border-color 0.2s; }
 .roster-leg-item.completed { border-left: 4px solid var(--success-color); background-color: rgba(40, 167, 69, 0.1); }
@@ -802,22 +799,6 @@ roster-item {
     width: auto;
 }
 
-.hub-stat-item > span {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-}
-
-.hub-stat-item .rank-badge-img {
-    height: 32px;
-}
-
-.hub-stat-item .rank-badge-name {
-    font-size: 1.4rem;
-    font-weight: bold;
-}
-
 /* Style for the pill-shaped badge in the roster header */
 .rank-display-pill {
     display: inline-flex;
@@ -986,50 +967,215 @@ roster-item {
     vertical-align: middle;
 }
 
-/* --- NEW: PILOT HUB CARD STYLES --- */
-.pilot-hub-card {
+/* --- [REDESIGNED] PILOT HUB --- */
+
+/* Welcome Header */
+.pilot-hub-welcome-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start; /* Align items to the top */
+    gap: 2rem;
+    flex-wrap: wrap; /* Allow stacking on smaller screens */
+    margin-bottom: 2rem;
+    padding: 1.5rem 2rem;
     background: var(--primary-glass);
     border: 1px solid var(--border-color);
     border-radius: 10px;
-    padding: 1.5rem 2rem 2rem 2rem; /* More padding */
 }
-.hub-header {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 1.5rem;
-    margin-bottom: 1.5rem;
+
+.pilot-info-block h1 {
+    margin: 0 0 0.5rem 0;
+    font-size: 2rem;
+    color: #fff;
+    font-weight: 600;
 }
-.hub-header h2 {
+
+.pilot-info-block p {
     margin: 0;
-    padding: 0;
-    border: none;
-    font-size: 1.5rem;
+    font-size: 1rem;
+    color: var(--dashboard-text-muted);
+    max-width: 450px;
 }
-.hub-stats-grid {
+
+.pilot-stats-block {
     display: flex;
-    gap: 1.5rem;
-    text-align: right;
+    gap: 1rem;
+    flex-shrink: 0; /* Prevent stat cards from shrinking */
 }
-.hub-stat-item {
-    line-height: 1.2;
+
+.stat-card {
+    background-color: rgba(13, 16, 28, 0.7);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    min-width: 200px;
+    text-align: left;
 }
-.hub-stat-item strong {
+
+.stat-label {
     display: block;
     font-size: 0.8rem;
     text-transform: uppercase;
-    opacity: 0.7;
-}
-.hub-stat-item span {
-    font-size: 1.4rem;
-    font-weight: bold;
-    color: var(--dashboard-text-color);
+    color: var(--dashboard-text-muted);
+    margin-bottom: 0.5rem;
 }
 
-/* --- NEW: CREW REST TIMER STYLES (IMPROVED) --- */
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #fff;
+    display: flex;
+    align-items: center;
+}
+
+.stat-rank-badge-img {
+    height: 32px;
+}
+.stat-rank-badge-container {
+    gap: 10px !important;
+}
+.stat-rank-badge-container .rank-badge-name {
+    font-size: 1.5rem;
+}
+
+/* Main Grid Layout */
+.pilot-hub-grid {
+    display: grid;
+    grid-template-columns: 2fr 1.25fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+.hub-main-col, .hub-sidebar-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+/* Generic Content Card for the Hub */
+.hub-content-card {
+    background: var(--primary-glass);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 2rem;
+}
+
+.hub-content-card h2 {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 1.5rem;
+}
+
+/* "On Duty" Card Specifics */
+.on-duty-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background-color: rgba(13, 16, 28, 0.5);
+    border-radius: 8px;
+}
+.summary-label {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--dashboard-text-muted);
+    text-transform: uppercase;
+}
+.summary-value {
+    margin: 0.25rem 0 0 0;
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #fff;
+}
+.roster-checklist .roster-leg-item {
+    gap: 1.5rem;
+    padding: 1rem;
+}
+.roster-checklist .status-icon {
+    font-size: 1.5rem;
+    color: var(--dashboard-text-muted);
+}
+.roster-checklist .roster-leg-item.completed .status-icon {
+    color: var(--success-color);
+}
+.roster-checklist .leg-info {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+.roster-checklist .leg-info .route {
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+/* "Next Assignment" Card Specifics */
+.next-assignment-card p {
+    margin-bottom: 1rem;
+}
+.featured-roster-summary {
+    background-color: rgba(13, 16, 28, 0.7);
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    margin: 1.5rem 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 3px solid var(--accent-color);
+}
+.featured-roster-summary .roster-name {
+    display: block;
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: #fff;
+}
+.featured-roster-summary .roster-route {
+    color: var(--dashboard-text-muted);
+}
+.featured-roster-summary .roster-hours {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #fff;
+    flex-shrink: 0;
+    margin-left: 1rem;
+}
+.location-weather-info {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+.location-weather-info h4 {
+    margin: 0 0 1rem 0;
+    font-size: 1.1rem;
+}
+.weather-grid {
+    display: flex;
+    justify-content: space-around;
+    gap: 1rem;
+    text-align: center;
+    margin-bottom: 1rem;
+}
+.weather-grid span {
+    background-color: rgba(13, 16, 28, 0.5);
+    padding: 0.75rem;
+    border-radius: 5px;
+    flex: 1;
+}
+.metar-raw {
+    font-family: monospace;
+    opacity: 0.7;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+/* --- CREW REST TIMER STYLES (IMPROVED) --- */
 .crew-rest-notice {
     margin-top: 1.5rem;
     padding: 1rem 1.5rem;
