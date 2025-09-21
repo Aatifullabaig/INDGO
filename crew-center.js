@@ -531,6 +531,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
             await renderAllViews(pilot);
 
+            if (document.getElementById('view-duty-status').classList.contains('active')) {
+                if (!liveFlightsInterval) {
+                    updateLiveFlights();
+                    liveFlightsInterval = setInterval(updateLiveFlights, 20000);
+                }
+            }
+
             if (oldRank && pilot.rank !== oldRank && rankIndex(pilot.rank) > rankIndex(oldRank)) {
                 showPromotionModal(pilot.rank);
             }
