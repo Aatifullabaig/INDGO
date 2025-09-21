@@ -883,311 +883,313 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    mainContentContainer.addEventListener('click', async (e) => {
-        const target = e.target;
-        
-        const summary = target.closest('.active-flight-summary');
-        if (summary) {
-            const item = summary.closest('.active-flight-item');
-            if (!item) return;
+   mainContentContainer.addEventListener('click', async (e) => {
+    const target = e.target;
+    
+    const summary = target.closest('.active-flight-summary');
+    if (summary) {
+        const item = summary.closest('.active-flight-item');
+        if (!item) return;
 
-            item.classList.toggle('expanded');
-            const isNowExpanded = item.classList.contains('expanded');
+        item.classList.toggle('expanded');
+        const isNowExpanded = item.classList.contains('expanded');
 
-            if (isNowExpanded) {
-                const details = item.querySelector('.active-flight-details');
-                const passContainer = details.querySelector('.dispatch-pass-container');
+        if (isNowExpanded) {
+            const details = item.querySelector('.active-flight-details');
+            const passContainer = details.querySelector('.dispatch-pass-container');
 
-                if (!passContainer.hasChildNodes()) {
-                    const planId = item.dataset.planId;
-                    const plan = ACTIVE_FLIGHT_PLANS.find(p => p._id === planId);
-                    if (plan) {
-                        populateDispatchPass(passContainer, plan);
-                    } else {
-                        passContainer.innerHTML = '<p style="padding: 2rem; text-align: center; color: var(--error-color);">Error: Flight plan data not found.</p>';
-                    }
+            if (!passContainer.hasChildNodes()) {
+                const planId = item.dataset.planId;
+                const plan = ACTIVE_FLIGHT_PLANS.find(p => p._id === planId);
+                if (plan) {
+                    populateDispatchPass(passContainer, plan);
+                } else {
+                    passContainer.innerHTML = '<p style="padding: 2rem; text-align: center; color: var(--error-color);">Error: Flight plan data not found.</p>';
                 }
             }
         }
+    }
 
-        if (target.classList.contains('details-button') && target.dataset.rosterId && !target.classList.contains('view-roster-on-map-btn')) {
-            const rosterId = target.dataset.rosterId;
-            const detailsContainer = document.getElementById(`details-${rosterId}`);
+    if (target.classList.contains('details-button') && target.dataset.rosterId && !target.classList.contains('view-roster-on-map-btn')) {
+        const rosterId = target.dataset.rosterId;
+        const detailsContainer = document.getElementById(`details-${rosterId}`);
 
-            document.querySelectorAll('.roster-leg-details.visible').forEach(openDetail => {
-                if (openDetail.id !== `details-${rosterId}`) {
-                    openDetail.classList.remove('visible');
-                    const otherId = openDetail.id.replace('details-', '');
-                    document.querySelector(`.details-button[data-roster-id="${otherId}"]`).setAttribute('aria-expanded', 'false');
-                }
-            });
-
-            const isVisible = detailsContainer.classList.toggle('visible');
-            target.setAttribute('aria-expanded', isVisible);
-
-            if (isVisible) {
-                if (window.focusOnRoster) window.focusOnRoster(rosterId);
-            } else {
-                if (window.showAllRosters) window.showAllRosters();
+        document.querySelectorAll('.roster-leg-details.visible').forEach(openDetail => {
+            if (openDetail.id !== `details-${rosterId}`) {
+                openDetail.classList.remove('visible');
+                const otherId = openDetail.id.replace('details-', '');
+                document.querySelector(`.details-button[data-roster-id="${otherId}"]`).setAttribute('aria-expanded', 'false');
             }
+        });
 
-            if (isVisible && !detailsContainer.innerHTML.trim()) {
-                detailsContainer.innerHTML = '<p>Loading details...</p>';
-                try {
-                    const res = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
-                    if (!res.ok) throw new Error('Could not fetch roster details.');
-                    const rosterData = await res.json();
-                    const allRosters = rosterData.rosters || [];
-                    const roster = allRosters.find(r => r._id === rosterId);
+        const isVisible = detailsContainer.classList.toggle('visible');
+        target.setAttribute('aria-expanded', isVisible);
+
+        if (isVisible) {
+            if (window.focusOnRoster) window.focusOnRoster(rosterId);
+        } else {
+            if (window.showAllRosters) window.showAllRosters();
+        }
+
+        if (isVisible && !detailsContainer.innerHTML.trim()) {
+            detailsContainer.innerHTML = '<p>Loading details...</p>';
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error('Could not fetch roster details.');
+                const rosterData = await res.json();
+                const allRosters = rosterData.rosters || [];
+                const roster = allRosters.find(r => r._id === rosterId);
+                
+                if (roster && roster.legs) {
+                    // Check for multiple aircraft to apply a specific class, but don't prevent image rendering
                     const isMultiAircraft = roster.legs.some((leg, i, arr) => i > 0 && leg.aircraft !== arr[0].aircraft);
-
-                    if (roster && roster.legs) {
-                        detailsContainer.innerHTML = `
-                            <div class="roster-details-actions">
-                                <button class="details-button view-roster-on-map-btn" data-roster-id="${rosterId}">
-                                    <i class="fa-solid fa-map-location-dot"></i> View Route on Map
-                                </button>
-                            </div>
-                            <ul>
-                                ${roster.legs.map(leg => {
-                                    const airlineCode = extractAirlineCode(leg.flightNumber);
-                                    const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : 'images/default-airline.png';
-                                    let legAircraftImageHTML = '';
-                                    if (isMultiAircraft) {
-                                        const legAircraftCode = leg.aircraft;
-                                        const legAirlineCode = extractAirlineCode(leg.flightNumber);
-                                        const liveryImagePath = `Images/liveries/${legAirlineCode}_${legAircraftCode}.png`;
-                                        const genericImagePath = `Images/planesForCC/${legAircraftCode}.png`;
-                                        legAircraftImageHTML = `
-                                        <div class="leg-aircraft-image-container">
-                                            <img src="${liveryImagePath}" 
-                                                 alt="${legAirlineCode} ${legAircraftCode}" 
-                                                 class="leg-aircraft-image"
-                                                 onerror="this.onerror=null; this.src='${genericImagePath}'; this.alt='${legAircraftCode}';">
-                                        </div>`;
-                                    }
-                                    return `
-                                    <li class="${isMultiAircraft ? 'multi-aircraft-leg' : ''}">
-                                        <div class="leg-main-content">
-                                            <div class="leg-header">
-                                                <img src="${logoPath}" class="leg-airline-logo" alt="${airlineCode}" onerror="this.style.display='none'">
-                                                <span class="leg-airline-name">${leg.operator} (${leg.flightNumber})</span>
-                                            </div>
-                                            <div class="leg-body">
-                                                <div class="leg-departure">
-                                                    <span class="leg-label">Departure</span>
-                                                    <div class="leg-airport">
-                                                        ${leg.departureCountry ? `<img src="https://flagcdn.com/w20/${leg.departureCountry.toLowerCase()}.png" class="country-flag" alt="${leg.departureCountry}">` : ''}
-                                                        <span class="leg-icao">${leg.departure}</span>
-                                                    </div>
-                                                    <small class="leg-details-meta">Aircraft: ${leg.aircraft}</small>
+                    
+                    detailsContainer.innerHTML = `
+                        <div class="roster-details-actions">
+                            <button class="details-button view-roster-on-map-btn" data-roster-id="${rosterId}">
+                                <i class="fa-solid fa-map-location-dot"></i> View Route on Map
+                            </button>
+                        </div>
+                        <ul>
+                            ${roster.legs.map(leg => {
+                                const airlineCode = extractAirlineCode(leg.flightNumber);
+                                const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : 'images/default-airline.png';
+                                
+                                // FIX: This block now runs for every leg, not just for multi-aircraft rosters.
+                                const legAircraftCode = leg.aircraft;
+                                const legAirlineCode = extractAirlineCode(leg.flightNumber);
+                                const liveryImagePath = `Images/liveries/${legAirlineCode}_${legAircraftCode}.png`;
+                                const genericImagePath = `Images/planesForCC/${legAircraftCode}.png`;
+                                const legAircraftImageHTML = `
+                                <div class="leg-aircraft-image-container">
+                                    <img src="${liveryImagePath}" 
+                                         alt="${legAirlineCode} ${legAircraftCode}" 
+                                         class="leg-aircraft-image"
+                                         onerror="this.onerror=null; this.src='${genericImagePath}'; this.alt='${legAircraftCode}';">
+                                </div>`;
+                                
+                                return `
+                                <li class="${isMultiAircraft ? 'multi-aircraft-leg' : ''}">
+                                    <div class="leg-main-content">
+                                        <div class="leg-header">
+                                            <img src="${logoPath}" class="leg-airline-logo" alt="${airlineCode}" onerror="this.style.display='none'">
+                                            <span class="leg-airline-name">${leg.operator} (${leg.flightNumber})</span>
+                                        </div>
+                                        <div class="leg-body">
+                                            <div class="leg-departure">
+                                                <span class="leg-label">Departure</span>
+                                                <div class="leg-airport">
+                                                    ${leg.departureCountry ? `<img src="https://flagcdn.com/w20/${leg.departureCountry.toLowerCase()}.png" class="country-flag" alt="${leg.departureCountry}">` : ''}
+                                                    <span class="leg-icao">${leg.departure}</span>
                                                 </div>
-                                                <div class="leg-icon"><i class="fa-solid fa-plane"></i></div>
-                                                <div class="leg-arrival">
-                                                    <span class="leg-label">Arrival</span>
-                                                    <div class="leg-airport">
-                                                        ${leg.arrivalCountry ? `<img src="https://flagcdn.com/w20/${leg.arrivalCountry.toLowerCase()}.png" class="country-flag" alt="${leg.arrivalCountry}">` : ''}
-                                                        <span class="leg-icao">${leg.arrival}</span>
-                                                    </div>
-                                                    <small class="leg-details-meta">EET: ${Number(leg.flightTime || 0).toFixed(1)} hrs</small>
-                                                </div>
+                                                <small class="leg-details-meta">Aircraft: ${leg.aircraft}</small>
                                             </div>
-                                            <div class="leg-badges-footer">
-                                                <span class="badge badge-rank" title="Minimum Rank">Req: ${leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft)}</span>
+                                            <div class="leg-icon"><i class="fa-solid fa-plane"></i></div>
+                                            <div class="leg-arrival">
+                                                <span class="leg-label">Arrival</span>
+                                                <div class="leg-airport">
+                                                    ${leg.arrivalCountry ? `<img src="https://flagcdn.com/w20/${leg.arrivalCountry.toLowerCase()}.png" class="country-flag" alt="${leg.arrivalCountry}">` : ''}
+                                                    <span class="leg-icao">${leg.arrival}</span>
+                                                </div>
+                                                <small class="leg-details-meta">EET: ${Number(leg.flightTime || 0).toFixed(1)} hrs</small>
                                             </div>
                                         </div>
-                                        ${legAircraftImageHTML}
-                                    </li>
-                                    `;
-                                }).join('')}
-                            </ul>`;
-                    } else {
-                        detailsContainer.innerHTML = '<p>Details could not be loaded.</p>';
-                    }
-                } catch (error) {
-                    console.error('Failed to fetch roster details:', error);
-                    detailsContainer.innerHTML = `<p class="error-text">${error.message}</p>`;
+                                        <div class="leg-badges-footer">
+                                            <span class="badge badge-rank" title="Minimum Rank">Req: ${leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft)}</span>
+                                        </div>
+                                    </div>
+                                    ${legAircraftImageHTML}
+                                </li>
+                                `;
+                            }).join('')}
+                        </ul>`;
+                } else {
+                    detailsContainer.innerHTML = '<p>Details could not be loaded.</p>';
                 }
+            } catch (error) {
+                console.error('Failed to fetch roster details:', error);
+                detailsContainer.innerHTML = `<p class="error-text">${error.message}</p>`;
             }
         }
+    }
 
-        if (target.classList.contains('view-roster-on-map-btn') || target.closest('.view-roster-on-map-btn')) {
-            const button = target.closest('.view-roster-on-map-btn');
-            const rosterId = button.dataset.rosterId;
-            if (window.focusOnRoster) {
-                window.focusOnRoster(rosterId);
-                document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
+    if (target.classList.contains('view-roster-on-map-btn') || target.closest('.view-roster-on-map-btn')) {
+        const button = target.closest('.view-roster-on-map-btn');
+        const rosterId = button.dataset.rosterId;
+        if (window.focusOnRoster) {
+            window.focusOnRoster(rosterId);
+            document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
+    }
 
-        if (target.classList.contains('go-on-duty-btn')) {
-            const rosterId = target.dataset.rosterId;
+    if (target.classList.contains('go-on-duty-btn')) {
+        const rosterId = target.dataset.rosterId;
+        target.disabled = true;
+        target.textContent = 'Starting...';
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/duty/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ rosterId })
+            });
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.message || 'Failed to start duty.');
+            showNotification(result.message, 'success');
+            await fetchPilotData();
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+            target.disabled = false;
+            target.textContent = 'Go On Duty';
+        }
+    }
+
+    if (target.id === 'end-duty-btn') {
+        if (confirm('Are you sure you want to complete your duty day? This will put you on mandatory crew rest.')) {
             target.disabled = true;
-            target.textContent = 'Starting...';
+            target.textContent = 'Completing...';
             try {
-                const res = await fetch(`${API_BASE_URL}/api/duty/start`, {
+                const res = await fetch(`${API_BASE_URL}/api/duty/end`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ rosterId })
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const result = await res.json();
-                if (!res.ok) throw new Error(result.message || 'Failed to start duty.');
+                if (!res.ok) throw new Error(result.message || 'Failed to end duty.');
                 showNotification(result.message, 'success');
                 await fetchPilotData();
             } catch (err) {
                 showNotification(`Error: ${err.message}`, 'error');
                 target.disabled = false;
-                target.textContent = 'Go On Duty';
+                target.textContent = 'Complete Duty Day';
             }
         }
+    }
 
-        if (target.id === 'end-duty-btn') {
-            if (confirm('Are you sure you want to complete your duty day? This will put you on mandatory crew rest.')) {
-                target.disabled = true;
-                target.textContent = 'Completing...';
-                try {
-                    const res = await fetch(`${API_BASE_URL}/api/duty/end`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    const result = await res.json();
-                    if (!res.ok) throw new Error(result.message || 'Failed to end duty.');
-                    showNotification(result.message, 'success');
-                    await fetchPilotData();
-                } catch (err) {
-                    showNotification(`Error: ${err.message}`, 'error');
-                    target.disabled = false;
-                    target.textContent = 'Complete Duty Day';
+    const planId = target.dataset.planId;
+    if (target.id === 'depart-btn') {
+        target.disabled = true;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/flightplans/${planId}/depart`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }});
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.message);
+            showNotification(result.message, 'success');
+            await fetchPilotData();
+        } catch (err) { showNotification(err.message, 'error'); target.disabled = false; }
+    }
+    if (target.id === 'cancel-btn') {
+        target.disabled = true;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/flightplans/${planId}/cancel`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }});
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.message);
+            showNotification(result.message, 'success');
+            await fetchPilotData();
+        } catch (err) { showNotification(err.message, 'error'); target.disabled = false; }
+    }
+    if (target.id === 'arrive-btn') {
+        document.getElementById('arrive-flight-form').dataset.planId = planId;
+        arriveFlightModal.classList.add('visible');
+    }
+
+    if (target.id === 'generate-with-simbrief-btn') {
+        e.preventDefault();
+
+        const flightNumber = document.getElementById('fp-flightNumber').value.toUpperCase();
+        const departure = document.getElementById('fp-departure').value.toUpperCase();
+        const arrival = document.getElementById('fp-arrival').value.toUpperCase();
+        const aircraft = document.getElementById('fp-aircraft').value;
+
+        if (!flightNumber || !departure || !arrival || !aircraft) {
+            showNotification('Please fill in Flight Number, Departure, Arrival, and Aircraft before generating.', 'error');
+            return;
+        }
+
+        const sbForm = document.getElementById('sbapiform');
+        sbForm.querySelector('input[name="orig"]').value = departure;
+        sbForm.querySelector('input[name="dest"]').value = arrival;
+        sbForm.querySelector('input[name="type"]').value = aircraft;
+        sbForm.querySelector('input[name="fltnum"]').value = flightNumber;
+
+        showNotification('Opening SimBrief planner...', 'info');
+
+        const redirectUrl = window.location.origin + window.location.pathname + '?view=view-flight-plan';
+        simbriefsubmit(redirectUrl);
+    }
+
+    if (target.id === 'dispatch-close-btn') {
+        document.getElementById('dispatch-pass-display').style.display = 'none';
+        document.getElementById('manual-dispatch-container').style.display = 'block';
+        CURRENT_OFP_DATA = null;
+    }
+
+    if (target.id === 'file-from-simbrief-btn') {
+        e.preventDefault();
+        if (!CURRENT_OFP_DATA) {
+            showNotification('Error: SimBrief data not found. Please regenerate the flight plan.', 'error');
+            return;
+        }
+
+        target.disabled = true;
+        target.textContent = 'Filing...';
+
+        try {
+            const ofpData = CURRENT_OFP_DATA;
+            const plannedRunway = ofpData.tlr?.takeoff?.conditions?.planned_runway;
+            const runwayData = ofpData.tlr?.takeoff?.runway?.find(r => r.identifier === plannedRunway);
+            const v1 = runwayData?.speeds_v1 ?? '---';
+            const vr = runwayData?.speeds_vr ?? '---';
+            const v2 = runwayData?.speeds_v2 ?? '---';
+            const vref = ofpData.tlr?.landing?.distance_dry?.speeds_vref ?? '---';
+            const cargoWeight = ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight);
+            
+            const body = {
+                flightNumber: ofpData.general.flight_number,
+                aircraft: ofpData.aircraft.icaocode,
+                departure: ofpData.origin.icao_code,
+                arrival: ofpData.destination.icao_code,
+                alternate: ofpData.alternate.icao_code,
+                route: ofpData.general.route,
+                etd: new Date(ofpData.times.sched_out * 1000).toISOString(),
+                eet: ofpData.times.est_time_enroute / 3600, 
+                pob: parseInt(ofpData.general.passengers, 10),
+                squawkCode: ofpData.atc.squawk,
+                zfw: ofpData.weights.est_zfw,
+                tow: ofpData.weights.est_tow,
+                cargo: cargoWeight,
+                fuelTaxi: ofpData.fuel.taxi,
+                fuelTrip: ofpData.fuel.enroute_burn,
+                fuelTotal: ofpData.fuel.plan_ramp,
+                v1: `${v1} kts`,
+                vr: `${vr} kts`,
+                v2: `${v2} kts`,
+                vref: `${vref} kts`,
+                departureWeather: ofpData.weather.orig_metar,
+                arrivalWeather: ofpData.weather.dest_metar,
+                mapData: {
+                    origin: ofpData.origin,
+                    destination: ofpData.destination,
+                    navlog: ofpData.navlog?.fix || []
                 }
-            }
-        }
+            };
 
-        const planId = target.dataset.planId;
-        if (target.id === 'depart-btn') {
-            target.disabled = true;
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/flightplans/${planId}/depart`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }});
-                const result = await res.json();
-                if (!res.ok) throw new Error(result.message);
-                showNotification(result.message, 'success');
-                await fetchPilotData();
-            } catch (err) { showNotification(err.message, 'error'); target.disabled = false; }
-        }
-        if (target.id === 'cancel-btn') {
-            target.disabled = true;
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/flightplans/${planId}/cancel`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }});
-                const result = await res.json();
-                if (!res.ok) throw new Error(result.message);
-                showNotification(result.message, 'success');
-                await fetchPilotData();
-            } catch (err) { showNotification(err.message, 'error'); target.disabled = false; }
-        }
-        if (target.id === 'arrive-btn') {
-            document.getElementById('arrive-flight-form').dataset.planId = planId;
-            arriveFlightModal.classList.add('visible');
-        }
-
-        if (target.id === 'generate-with-simbrief-btn') {
-            e.preventDefault();
-
-            const flightNumber = document.getElementById('fp-flightNumber').value.toUpperCase();
-            const departure = document.getElementById('fp-departure').value.toUpperCase();
-            const arrival = document.getElementById('fp-arrival').value.toUpperCase();
-            const aircraft = document.getElementById('fp-aircraft').value;
-
-            if (!flightNumber || !departure || !arrival || !aircraft) {
-                showNotification('Please fill in Flight Number, Departure, Arrival, and Aircraft before generating.', 'error');
-                return;
-            }
-
-            const sbForm = document.getElementById('sbapiform');
-            sbForm.querySelector('input[name="orig"]').value = departure;
-            sbForm.querySelector('input[name="dest"]').value = arrival;
-            sbForm.querySelector('input[name="type"]').value = aircraft;
-            sbForm.querySelector('input[name="fltnum"]').value = flightNumber;
-
-            showNotification('Opening SimBrief planner...', 'info');
-
-            const redirectUrl = window.location.origin + window.location.pathname + '?view=view-flight-plan';
-            simbriefsubmit(redirectUrl);
-        }
-
-        if (target.id === 'dispatch-close-btn') {
-            document.getElementById('dispatch-pass-display').style.display = 'none';
-            document.getElementById('manual-dispatch-container').style.display = 'block';
+            const res = await fetch(`${API_BASE_URL}/api/flightplans`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify(body)
+            });
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.message || 'Failed to file flight plan.');
+            
+            showNotification(result.message, 'success');
             CURRENT_OFP_DATA = null;
+            await fetchPilotData();
+            
+        } catch (err) {
+            showNotification(`Error: ${err.message}`, 'error');
+            target.disabled = false;
+            target.textContent = 'File This Flight Plan';
         }
-
-        if (target.id === 'file-from-simbrief-btn') {
-            e.preventDefault();
-            if (!CURRENT_OFP_DATA) {
-                showNotification('Error: SimBrief data not found. Please regenerate the flight plan.', 'error');
-                return;
-            }
-
-            target.disabled = true;
-            target.textContent = 'Filing...';
-
-            try {
-                const ofpData = CURRENT_OFP_DATA;
-                const plannedRunway = ofpData.tlr?.takeoff?.conditions?.planned_runway;
-                const runwayData = ofpData.tlr?.takeoff?.runway?.find(r => r.identifier === plannedRunway);
-                const v1 = runwayData?.speeds_v1 ?? '---';
-                const vr = runwayData?.speeds_vr ?? '---';
-                const v2 = runwayData?.speeds_v2 ?? '---';
-                const vref = ofpData.tlr?.landing?.distance_dry?.speeds_vref ?? '---';
-                const cargoWeight = ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight);
-                
-                const body = {
-                    flightNumber: ofpData.general.flight_number,
-                    aircraft: ofpData.aircraft.icaocode,
-                    departure: ofpData.origin.icao_code,
-                    arrival: ofpData.destination.icao_code,
-                    alternate: ofpData.alternate.icao_code,
-                    route: ofpData.general.route,
-                    etd: new Date(ofpData.times.sched_out * 1000).toISOString(),
-                    eet: ofpData.times.est_time_enroute / 3600, 
-                    pob: parseInt(ofpData.general.passengers, 10),
-                    squawkCode: ofpData.atc.squawk,
-                    zfw: ofpData.weights.est_zfw,
-                    tow: ofpData.weights.est_tow,
-                    cargo: cargoWeight,
-                    fuelTaxi: ofpData.fuel.taxi,
-                    fuelTrip: ofpData.fuel.enroute_burn,
-                    fuelTotal: ofpData.fuel.plan_ramp,
-                    v1: `${v1} kts`,
-                    vr: `${vr} kts`,
-                    v2: `${v2} kts`,
-                    vref: `${vref} kts`,
-                    departureWeather: ofpData.weather.orig_metar,
-                    arrivalWeather: ofpData.weather.dest_metar,
-                    mapData: {
-                        origin: ofpData.origin,
-                        destination: ofpData.destination,
-                        navlog: ofpData.navlog?.fix || []
-                    }
-                };
-
-                const res = await fetch(`${API_BASE_URL}/api/flightplans`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify(body)
-                });
-                const result = await res.json();
-                if (!res.ok) throw new Error(result.message || 'Failed to file flight plan.');
-                
-                showNotification(result.message, 'success');
-                CURRENT_OFP_DATA = null;
-                await fetchPilotData();
-                
-            } catch (err) {
-                showNotification(`Error: ${err.message}`, 'error');
-                target.disabled = false;
-                target.textContent = 'File This Flight Plan';
-            }
-        }
-    });
+    }
+});
 
     // --- Modal Handlers ---
     document.getElementById('arrive-flight-form').addEventListener('submit', async (e) => {
