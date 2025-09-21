@@ -84,9 +84,9 @@
                 <p class="muted">You have no active flights.</p>
             </div>
         </div>
-
-        <div id="manual-dispatch-container" class="dispatch-pass-container" style="display: block;">
-             <div class="dispatch-header">
+    
+        <div id="manual-dispatch-container" class="file-flight-card">
+            <div class="file-flight-header">
                 <div class="header-left">
                     <h2>File a New Flight</h2>
                     <p>Use SimBrief for accuracy or fill out the form manually.</p>
@@ -97,73 +97,76 @@
                 <h3><i class="fa-solid fa-lock"></i> Maximum Flights Reached</h3>
                 <p>You have reached the maximum of 2 active flights. Please arrive or cancel an existing flight to file a new one.</p>
             </div>
-
+    
             <form id="file-flight-plan-form">
-                <div class="dispatch-body">
-                    <div class="dispatch-column-grid" style="padding-left: 0; grid-template-columns: 1fr 1fr; gap: 2rem;">
-                        <div class="data-card">
-                            <h3><i class="fa-solid fa-circle-info"></i> Core Details (Required)</h3>
+                <div class="file-flight-body">
+                    <div class="form-section">
+                        <h3><i class="fa-solid fa-circle-info"></i> Core Details (Required)</h3>
+                        <div class="form-grid">
                             <div class="form-group">
                                 <label for="fp-flightNumber">Flight Number</label>
-                                <input type="text" id="fp-flightNumber" class="dispatch-input" required>
+                                <input type="text" id="fp-flightNumber" class="form-input" required placeholder="e.g., IDG123">
                             </div>
                              <div class="form-group">
                                 <label for="fp-aircraft">Aircraft</label>
-                                <select id="fp-aircraft" class="dispatch-input" required>
+                                <select id="fp-aircraft" class="form-input" required>
                                     </select>
                             </div>
                             <div class="form-group">
                                 <label for="fp-departure">Departure (ICAO)</label>
-                                <input type="text" id="fp-departure" class="dispatch-input" required maxlength="4">
+                                <input type="text" id="fp-departure" class="form-input" required maxlength="4" placeholder="e.g., KLAX">
                             </div>
                             <div class="form-group">
                                 <label for="fp-arrival">Arrival (ICAO)</label>
-                                <input type="text" id="fp-arrival" class="dispatch-input" required maxlength="4">
+                                <input type="text" id="fp-arrival" class="form-input" required maxlength="4" placeholder="e.g., KJFK">
                             </div>
                         </div>
-                        <div class="data-card">
-                            <h3><i class="fa-solid fa-map-route"></i> Route Details (Optional)</h3>
-                            <p class="muted" style="margin-top: -0.5rem; margin-bottom: 1rem;">Enter "N/A" if unknown. SimBrief will populate this automatically.</p>
-                            <div class="form-group">
+                    </div>
+                    <div class="form-section">
+                        <h3><i class="fa-solid fa-map-route"></i> Route Details (Optional)</h3>
+                         <p class="muted" style="margin-top: -0.75rem; margin-bottom: 1rem;">Enter "DCT" for direct, or leave blank if using SimBrief.</p>
+                        <div class="form-grid">
+                           <div class="form-group">
                                 <label for="fp-alternate">Alternate (ICAO)</label>
-                                <input type="text" id="fp-alternate" class="dispatch-input" maxlength="4">
+                                <input type="text" id="fp-alternate" class="form-input" maxlength="4" placeholder="e.g., KEWR">
                             </div>
-                            <div class="form-group">
+                            <div class="form-group form-group-span-2">
                                 <label for="fp-route">Route</label>
-                                <textarea id="fp-route" rows="2" class="dispatch-input"></textarea>
+                                <textarea id="fp-route" rows="2" class="form-input" placeholder="Your flight plan route..."></textarea>
                             </div>
                              <div class="form-group">
                                 <label for="fp-etd">ETD (Your Local Time)</label>
-                                <input type="datetime-local" id="fp-etd" class="dispatch-input">
+                                <input type="datetime-local" id="fp-etd" class="form-input">
                             </div>
-                            <div class="form-group-row">
-                                <div class="form-group">
-                                    <label for="fp-eet">EET (Hours)</label>
-                                    <input type="number" step="0.1" id="fp-eet" class="dispatch-input">
-                                </div>
-                                <div class="form-group">
-                                    <label for="fp-pob">Persons on Board</label>
-                                    <input type="number" id="fp-pob" class="dispatch-input">
-                                </div>
+                            <div class="form-group">
+                                <label for="fp-eet">EET (Hours)</label>
+                                <input type="number" step="0.1" id="fp-eet" class="form-input" placeholder="e.g., 5.5">
+                            </div>
+                            <div class="form-group">
+                                <label for="fp-pob">Persons on Board</label>
+                                <input type="number" id="fp-pob" class="form-input" placeholder="e.g., 180">
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="dispatch-footer">
-                    <div class="route-info">
-                        <strong>Note:</strong> Your flight officially begins and a timer starts once you click the 'Depart' button on the next screen.
+                <div class="file-flight-footer">
+                    <div class="footer-note">
+                        <strong>Note:</strong> Your flight officially begins once you click 'Depart' on the next screen.
                     </div>
                      <div class="dispatch-actions">
                         <button type="submit" class="details-button">File Manually</button>
-                        <button type="button" id="generate-with-simbrief-btn" class="cta-button">Generate with SimBrief</button>
+                        <button type="button" id="generate-with-simbrief-btn" class="cta-button">
+                            <svg width="20" height="20" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle; margin-right: 8px;"><path d="M128 26.3137C73.8152 26.3137 30.3333 71.0336 30.3333 128C30.3333 184.966 73.8152 229.686 128 229.686C182.185 229.686 225.667 184.966 225.667 128C225.667 71.0336 182.185 26.3137 128 26.3137ZM194.945 106.353L128 128L61.0547 149.647L82.7015 82.7015L128 61.0547L173.298 82.7015L194.945 106.353Z" fill="white"></path></svg>
+                            Generate with SimBrief
+                        </button>
                      </div>
-                     <div class="route-info" style="text-align: right; margin-top: 0.5rem;">
-                        <small>Don't have a SimBrief account? Use the 'File Manually' option.</small>
+                     <div class="footer-note" style="text-align: right; margin-top: 0.5rem;">
+                        <small>Using SimBrief is highly recommended for flight accuracy.</small>
                      </div>
                 </div>
             </form>
         </div>
-
+    
         <div id="dispatch-pass-display" class="dispatch-pass-container" style="display: none;">
             <div class="dispatch-header">
                 <div class="header-left">

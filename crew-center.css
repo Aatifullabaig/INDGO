@@ -1823,3 +1823,247 @@ roster-item {
 /* ================================================== */
 /* END: NEW STYLES FOR ACTIVE FLIGHTS SECTION         */
 /* ================================================== */
+
+/* ================================================== */
+/* START: NEW REDESIGNED DISPATCH UI STYLES           */
+/* ================================================== */
+
+/* --- Active Flights Accordion --- */
+#active-flights-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.active-flight-item {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--primary-glass);
+    transition: background-color 0.3s ease;
+}
+
+.active-flight-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    border-radius: 8px;
+}
+
+.active-flight-item.expanded .active-flight-summary {
+    background-color: var(--accent-color);
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.active-flight-summary:not(.expanded):hover {
+    background-color: rgba(0, 27, 148, 0.4);
+}
+
+.flight-summary-info {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-grow: 1;
+    flex-wrap: wrap;
+}
+
+.flight-summary-info strong {
+    font-size: 1.2rem;
+    color: #fff;
+    min-width: 100px;
+}
+
+.flight-summary-info span {
+    font-size: 1rem;
+    color: var(--dashboard-text-color); /* Brighter text color */
+}
+
+.flight-summary-toggle i {
+    font-size: 1.2rem;
+    color: #fff;
+    transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.active-flight-item.expanded .flight-summary-toggle i {
+    transform: rotate(180deg);
+}
+
+.active-flight-details {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.5s ease-in-out;
+    background-color: #0b0e19; /* Dark solid background for contrast */
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+.active-flight-item.expanded .active-flight-details {
+    max-height: 2000px; /* Large enough value for content */
+}
+
+/* Ensure embedded dispatch pass looks good */
+.active-flight-details .dispatch-pass-container {
+    border-radius: 0;
+    box-shadow: none;
+    border: none; /* No extra border needed */
+    border-top: 1px solid var(--border-color);
+    margin-top: 0;
+}
+
+
+/* --- Redesigned "File a New Flight" Form Card --- */
+.file-flight-card {
+    background: var(--primary-glass);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    margin-top: 2rem;
+    position: relative; /* For the lockout overlay */
+    overflow: hidden;
+}
+
+.file-flight-header {
+    padding: 1.5rem 2rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: rgba(13, 16, 28, 0.5);
+}
+
+.file-flight-header h2 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    color: #ffffff;
+    font-size: 1.5rem;
+}
+
+.file-flight-header p {
+    margin: 0.25rem 0 0 0;
+    color: var(--dashboard-text-muted);
+}
+
+.file-flight-body {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+}
+
+.form-section h3 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.2rem;
+    color: #ffffff;
+    margin: 0 0 1.5rem 0;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.form-group-span-2 {
+    grid-column: span 2;
+}
+
+@media (max-width: 600px) {
+    .form-group-span-2 {
+        grid-column: span 1;
+    }
+}
+
+.file-flight-card .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--dashboard-text-color); /* Brighter label text */
+    font-size: 0.9rem;
+}
+
+.form-input,
+.file-flight-card select.form-input,
+.file-flight-card textarea.form-input,
+.file-flight-card input.form-input {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border-radius: 5px;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+    color: #fff;
+    font-size: 1rem;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-input::placeholder {
+    color: #6a7382; /* Lighter placeholder text */
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px var(--glow-color);
+}
+
+.file-flight-footer {
+    background-color: rgba(13, 16, 28, 0.5);
+    padding: 1.5rem 2rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.dispatch-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.dispatch-actions .cta-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.footer-note {
+    color: var(--dashboard-text-muted);
+}
+
+/* Styles for the form lockout */
+.dispatch-form-lockout {
+    position: absolute;
+    inset: 0;
+    background-color: rgba(13, 16, 28, 0.95);
+    border-radius: 10px;
+    z-index: 10;
+    display: none; /* Initially hidden */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--dashboard-text-color);
+    padding: 2rem;
+}
+
+.dispatch-form-lockout h3 {
+    color: var(--warning-color);
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+}
+
+/* Clean up old unused selectors to avoid conflicts */
+#manual-dispatch-container .dispatch-header,
+#manual-dispatch-container .dispatch-body,
+#manual-dispatch-container .dispatch-footer,
+#manual-dispatch-container .dispatch-column-grid,
+#manual-dispatch-container .data-card {
+    display: none;
+}
+/* ================================================== */
+/* END: NEW REDESIGNED DISPATCH UI STYLES             */
+/* ================================================== */
