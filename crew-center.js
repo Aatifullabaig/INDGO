@@ -242,16 +242,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const pilot = await response.json();
             CURRENT_PILOT = pilot;
             
-            // MODIFICATION: Handle both single object and array for currentFlightPlan
-            if (pilot.currentFlightPlan) {
-                ACTIVE_FLIGHT_PLANS = Array.isArray(pilot.currentFlightPlan) ? pilot.currentFlightPlan : [pilot.currentFlightPlan];
-            } else {
-                ACTIVE_FLIGHT_PLANS = [];
-            }
+            ACTIVE_FLIGHT_PLANS = pilot.currentFlightPlans || [];
 
 
             pilotNameElem.textContent = pilot.name || 'N/A';
             pilotCallsignElem.textContent = pilot.callsign || 'N/A';
+
+
             profilePictureElem.src = pilot.imageUrl || 'images/default-avatar.png';
 
             const badge = notificationsBell.querySelector('.notification-badge');
