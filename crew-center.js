@@ -425,6 +425,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 maxZoom: 20
             }).addTo(liveFlightsMap);
         }
+        if (!liveFlightsInterval) {
+            updateLiveFlights(); // Fetch flights immediately on creation
+            liveFlightsInterval = setInterval(updateLiveFlights, 20000); // Then poll every 20 seconds
+        }
     }
 
     /**
@@ -530,13 +534,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         
             await renderAllViews(pilot);
-
-            if (document.getElementById('view-duty-status').classList.contains('active')) {
-                if (!liveFlightsInterval) {
-                    updateLiveFlights();
-                    liveFlightsInterval = setInterval(updateLiveFlights, 20000);
-                }
-            }
 
             if (oldRank && pilot.rank !== oldRank && rankIndex(pilot.rank) > rankIndex(oldRank)) {
                 showPromotionModal(pilot.rank);
