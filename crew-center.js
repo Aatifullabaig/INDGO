@@ -871,24 +871,39 @@ document.addEventListener('DOMContentLoaded', () => {
     mainContentContainer.addEventListener('click', async (e) => {
         const target = e.target;
         
-        // NEW: Listener for expanding/collapsing active flights
+        // --- FIXED: Listener for expanding/collapsing active flights ---
         const summary = target.closest('.active-flight-summary');
         if (summary) {
             const item = summary.closest('.active-flight-item');
-            const details = item.querySelector('.active-flight-details');
-            const isExpanded = item.classList.contains('expanded');
+            if (!item) return; // Safety check
 
-            if (!isExpanded) {
+            // 1. Toggle the 'expanded' class immediately for instant UI feedback.
+            item.classList.toggle('expanded');
+            const isNowExpanded = item.classList.contains('expanded');
+            const details = item.querySelector('.active-flight-details');
+            const passContainer = details.querySelector('.dispatch-pass-container');
+
+            // 2. Only try to load data if the panel is being opened AND it doesn't already have content.
+            if (isNowExpanded && !passContainer.hasChildNodes()) {
                 const planId = item.dataset.planId;
                 const plan = ACTIVE_FLIGHT_PLANS.find(p => p._id === planId);
-                const passContainer = details.querySelector('.dispatch-pass-container');
 
-                // Populate the dispatch pass only if it hasn't been populated before
-                if (plan && !passContainer.hasChildNodes()) {
-                    await populateDispatchPass(passContainer, plan);
+                // 3. Gracefully handle the data population.
+                if (plan) {
+                    try {
+                        // Display a loading message while the details are being prepared.
+                        passContainer.innerHTML = '<p style="padding: 2rem; text-align: center;">Loading flight details...</p>';
+                        await populateDispatchPass(passContainer, plan);
+                    } catch (error) {
+                        console.error("Failed to populate dispatch pass:", error);
+                        // Display an error message if loading fails.
+                        passContainer.innerHTML = '<p style="padding: 2rem; text-align: center; color: var(--error-color);">Could not load flight details.</p>';
+                    }
+                } else {
+                    // Handle the case where the flight data isn't found.
+                    passContainer.innerHTML = '<p style="padding: 2rem; text-align: center; color: var(--error-color);">Error: Flight plan data not found.</p>';
                 }
             }
-            item.classList.toggle('expanded');
         }
 
         if (target.classList.contains('details-button') && target.dataset.rosterId && !target.classList.contains('view-roster-on-map-btn')) {
