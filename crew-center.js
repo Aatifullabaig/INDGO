@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function formatWeight(kg) {
-        if (isNaN(kg)) return '--- kg';
+        if (isNaN(kg) || kg === null) return '--- kg';
         return `${Number(kg).toLocaleString()} kg`;
     }
     
@@ -44,11 +44,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const parts = metarString.split(' ');
         const wind = parts.find(p => p.endsWith('KT'));
-        const temp = parts.find(p => p.includes('/') && !p.startsWith('A') && !p.startsWith('Q'));
+        const tempMatch = metarString.match(/M?\d{2}\/M?\d{2}/);
+        const temp = tempMatch ? `${tempMatch[0].split('/')[0].replace('M', '-')}°C` : '---';
         const condition = parts.filter(p => /^(FEW|SCT|BKN|OVC|SKC|CLR|NSC)/.test(p)).join(' ');
         return {
             wind: wind || '---',
-            temp: temp ? `${temp.split('/')[0]}°C` : '---',
+            temp: temp || '---',
             condition: condition || '---'
         };
     };
@@ -62,6 +63,97 @@ document.addEventListener('DOMContentLoaded', () => {
         if (fallbackMatch && fallbackMatch[1]) return fallbackMatch[1].substring(0, 2);
         return 'UNKNOWN';
     }
+
+    // --- REUSABLE DISPATCH PASS FUNCTION [FIXED] ---
+    const populateDispatchPass = (container, plan) => {
+        if (!container || !plan) return;
+
+        const departureWeather = parseMetar(plan.departureWeather);
+        const arrivalWeather = parseMetar(plan.arrivalWeather);
+
+        container.innerHTML = `
+            <div class="dispatch-header">
+                <div class="header-left">
+                    <img src="/images/indgo.png" alt="Indigo Air Logo" class="dispatch-header-logo">
+                    <div>
+                        <h2>${plan.flightNumber}</h2>
+                        <p>Performance Dispatch Pass</p>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <h2>${plan.departure} → ${plan.arrival}</h2>
+                    <p>${new Date(plan.etd).toLocaleDateString()}</p>
+                </div>
+            </div>
+            <div class="dispatch-body">
+                <div class="dispatch-left-panel">
+                    <div id="dispatch-map-${plan._id}" class="dispatch-map-container" style="height: 350px;"></div>
+                    <div class="dispatch-route-panel data-card">
+                        <div class="route-info">
+                            <strong>Route:</strong> <span>${plan.route || 'Not Provided'}</span>
+                        </div>
+                        <div class="alternates-info">
+                            <strong>Alternates:</strong> <span>${plan.alternate || 'None'}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="dispatch-right-panel">
+                    <div class="data-card">
+                        <h3><i class="fa-solid fa-weight-hanging"></i> Weights & Payload</h3>
+                        <div class="data-item"><strong>ZFW:</strong> <span>${formatWeight(plan.zfw)}</span></div>
+                        <div class="data-item"><strong>TOW:</strong> <span>${formatWeight(plan.tow)}</span></div>
+                        <div class="data-item"><strong>Passengers:</strong> <span>${plan.pob || '---'}</span></div>
+                        <div class="data-item"><strong>Cargo:</strong> <span>${formatWeight(plan.cargo)}</span></div>
+                    </div>
+                    <div class="data-card">
+                        <h3><i class="fa-solid fa-gas-pump"></i> Fuel</h3>
+                        <div class="data-item"><strong>Taxi Fuel:</strong> <span>${formatWeight(plan.fuelTaxi)}</span></div>
+                        <div class="data-item"><strong>Trip Fuel:</strong> <span>${formatWeight(plan.fuelTrip)}</span></div>
+                        <div class="data-item"><strong>Total Fuel:</strong> <span>${formatWeight(plan.fuelTotal)}</span></div>
+                    </div>
+                    <div class="data-card">
+                        <h3><i class="fa-solid fa-cloud-sun"></i> Weather</h3>
+                        <div class="weather-container">
+                            <div class="weather-sub-card">
+                                <h4>Departure</h4>
+                                <div class="data-item"><span>Cond:</span> <span>${departureWeather.condition}</span></div>
+                                <div class="data-item"><span>Temp:</span> <span>${departureWeather.temp}</span></div>
+                                <div class="data-item"><span>Wind:</span> <span>${departureWeather.wind}</span></div>
+                            </div>
+                            <div class="weather-sub-card">
+                                <h4>Arrival</h4>
+                                <div class="data-item"><span>Cond:</span> <span>${arrivalWeather.condition}</span></div>
+                                <div class="data-item"><span>Temp:</span> <span>${arrivalWeather.temp}</span></div>
+                                <div class="data-item"><span>Wind:</span> <span>${arrivalWeather.wind}</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="dispatch-footer">
+                <div class="dispatch-actions-wrapper" id="dispatch-actions-${plan._id}"></div>
+            </div>
+        `;
+
+        const actionsContainer = container.querySelector(`#dispatch-actions-${plan._id}`);
+        if (plan.status === 'PLANNED') {
+            actionsContainer.innerHTML = `
+                <button class="cta-button" id="depart-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-plane-departure"></i> Depart</button>
+                <button class="end-duty-btn" id="cancel-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-ban"></i> Cancel Flight</button>
+            `;
+        } else if (plan.status === 'FLYING') {
+            actionsContainer.innerHTML = `
+                <button class="cta-button" id="arrive-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-plane-arrival"></i> Arrive</button>
+            `;
+        }
+
+        if (plan.mapData && plan.mapData.origin && plan.mapData.destination) {
+            setTimeout(() => {
+                plotDispatchMap(`dispatch-map-${plan._id}`, plan.mapData.origin, plan.mapData.destination, plan.mapData.navlog);
+            }, 100);
+        }
+    };
+
 
     // --- Rank & Fleet Models ---
     const PILOT_RANKS = [
@@ -143,8 +235,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Global state
     let CURRENT_PILOT = null;
-    let ACTIVE_FLIGHT_PLANS = []; // MODIFIED: Changed to an array for multiple flights
-    let CURRENT_OFP_DATA = null; // To hold SimBrief data temporarily
+    let ACTIVE_FLIGHT_PLANS = [];
+    let CURRENT_OFP_DATA = null;
 
     // --- Auth & Initial Setup ---
     if (!token) {
@@ -152,7 +244,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    // Function to switch views
     const switchView = (viewId) => {
         sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
         mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
@@ -166,7 +257,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
-    // Check for URL parameters to set the initial view
     const urlParams = new URLSearchParams(window.location.search);
     const initialView = urlParams.get('view');
     if (initialView) {
@@ -193,7 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const mapContainer = document.getElementById(mapContainerId);
         if (!mapContainer) return;
 
-        // Use a map instance stored on the element itself to avoid global conflicts
         if (mapContainer.mapInstance) {
             mapContainer.mapInstance.remove();
             mapContainer.mapInstance = null;
@@ -209,7 +298,6 @@ document.addEventListener('DOMContentLoaded', () => {
             zoomControl: true
         });
         mapContainer.mapInstance = newMap;
-
 
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
@@ -241,14 +329,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const pilot = await response.json();
             CURRENT_PILOT = pilot;
-            
             ACTIVE_FLIGHT_PLANS = pilot.currentFlightPlans || [];
-
 
             pilotNameElem.textContent = pilot.name || 'N/A';
             pilotCallsignElem.textContent = pilot.callsign || 'N/A';
-
-
             profilePictureElem.src = pilot.imageUrl || 'images/default-avatar.png';
 
             const badge = notificationsBell.querySelector('.notification-badge');
@@ -444,13 +528,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Flight Plan View ---
-    // MODIFICATION: Rewritten to handle the new layout
     const renderFlightPlanView = async (pilot) => {
         const viewContainer = document.getElementById('view-flight-plan');
         const manualDispatchContainer = document.getElementById('manual-dispatch-container');
         const simbriefDisplay = document.getElementById('dispatch-pass-display');
 
-        // Hide the simbrief-only display by default
         simbriefDisplay.style.display = 'none';
 
         if (pilot.promotionStatus === 'PENDING_TEST') {
@@ -471,7 +553,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // NEW FUNCTION: Renders the list of active flights
     const renderActiveFlights = () => {
         const listContainer = document.getElementById('active-flights-list');
         const header = document.getElementById('active-flights-header');
@@ -498,14 +579,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
                 <div class="active-flight-details">
-                    <div class="dispatch-pass-container">
-                        </div>
+                    <div class="dispatch-pass-container"></div>
                 </div>
             </div>`;
         }).join('');
     };
 
-    // NEW FUNCTION: Controls the dispatch form state
     const updateDispatchFormState = () => {
         const formContainer = document.getElementById('manual-dispatch-container');
         const formLockout = document.getElementById('dispatch-form-lockout');
@@ -521,130 +600,6 @@ document.addEventListener('DOMContentLoaded', () => {
             form.style.pointerEvents = 'auto';
         }
     };
-    
-    // NEW REUSABLE FUNCTION: Fills a dispatch pass container with flight data.
-const populateDispatchPass = async (container, plan) => {
-  if (!container || !plan) return;
-
-  // Build a self-contained dispatch pass (NO global IDs)
-  container.innerHTML = `
-    <div class="dispatch-pass-container">
-      <div class="dispatch-header">
-        <div class="header-left">
-          <img src="images/indgo.png" alt="Logo" class="dispatch-header-logo" />
-          <div>
-            <h2>${plan.departure} → ${plan.arrival}</h2>
-            <p>Flight: <strong>${plan.flightNumber}</strong></p>
-          </div>
-        </div>
-        <div class="header-right">
-          <h2>${plan.aircraft || ''}</h2>
-          <p>ETD: <strong>${new Date(plan.etd).toLocaleString()}</strong></p>
-        </div>
-      </div>
-
-      <div class="dispatch-body">
-        <div class="dispatch-left-panel">
-          <div class="dispatch-core-info data-card">
-            <div class="data-item"><strong>FIC</strong><span>${plan.ficNumber || '—'}</span></div>
-            <div class="data-item"><strong>ADC</strong><span>${plan.adcNumber || '—'}</span></div>
-            <div class="data-item"><strong>Squawk</strong><span>${plan.squawkCode || '—'}</span></div>
-            <div class="data-item"><strong>EET (h)</strong><span>${plan.eet ?? '—'}</span></div>
-            <div class="data-item"><strong>PAX</strong><span>${plan.pob ?? 0}</span></div>
-          </div>
-
-          <div class="dispatch-right-panel">
-            <div class="data-card">
-              <h3>Weights & Fuel</h3>
-              <div class="data-item"><strong>ZFW</strong><span>${plan.zfw ?? '—'}</span></div>
-              <div class="data-item"><strong>TOW</strong><span>${plan.tow ?? '—'}</span></div>
-              <div class="data-item"><strong>Cargo</strong><span>${plan.cargo ?? '—'}</span></div>
-              <div class="data-item"><strong>Taxi Fuel</strong><span>${plan.fuelTaxi ?? '—'}</span></div>
-              <div class="data-item"><strong>Trip Fuel</strong><span>${plan.fuelTrip ?? '—'}</span></div>
-              <div class="data-item"><strong>Total Fuel</strong><span>${plan.fuelTotal ?? '—'}</span></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="dispatch-route-panel data-card">
-          <h3>Route</h3>
-          <p class="route-info"><strong>Cleared Route</strong><span>${plan.route || '—'}</span></p>
-          ${plan.alternate ? `<p class="alternates-info"><strong>Alternate</strong><span>${plan.alternate}</span></p>` : ''}
-        </div>
-      </div>
-
-      <div class="dispatch-footer">
-        <div class="dispatch-actions-wrapper">
-          <div class="dispatch-action-group">
-            <button class="cta-button btn-depart" data-plan-id="${plan._id}">
-              <i class="fa-solid fa-plane-departure"></i> Confirm Departure
-            </button>
-            <div class="dispatch-action-description">Mark this flight as FLYING.</div>
-          </div>
-          <div class="dispatch-action-group">
-            <button class="details-button btn-arrive" data-plan-id="${plan._id}">
-              <i class="fa-solid fa-plane-arrival"></i> Confirm Arrival
-            </button>
-            <div class="dispatch-action-description">Uploads required afterwards.</div>
-          </div>
-          <div class="dispatch-action-group">
-            <button class="details-button btn-cancel" data-plan-id="${plan._id}">
-              <i class="fa-solid fa-ban"></i> Cancel Flight
-            </button>
-            <div class="dispatch-action-description">Deletes the plan.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // Wire up actions for THIS specific plan
-  const token = localStorage.getItem('token');
-
-  const btnDepart = container.querySelector('.btn-depart');
-  btnDepart?.addEventListener('click', async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/flightplans/${plan._id}/depart`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to confirm departure.');
-      showNotification(data.message, 'success');
-      await fetchPilotData();        // refresh ACTIVE_FLIGHT_PLANS
-      renderActiveFlights();         // re-paint list with updated status
-    } catch (e) {
-      showNotification(e.message, 'error');
-    }
-  });
-
-  const btnArrive = container.querySelector('.btn-arrive');
-  btnArrive?.addEventListener('click', () => {
-    // If you already have an arrival modal/uploader, open it here.
-    // Otherwise you can navigate or show a notice.
-    showNotification('Open your arrival workflow to upload verification.', 'info');
-  });
-
-  const btnCancel = container.querySelector('.btn-cancel');
-  btnCancel?.addEventListener('click', async () => {
-    if (!confirm('Cancel and delete this flight plan?')) return;
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/flightplans/${plan._id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to cancel flight plan.');
-      showNotification(data.message, 'success');
-      await fetchPilotData();
-      renderActiveFlights();
-    } catch (e) {
-      showNotification(e.message, 'error');
-    }
-  });
-};
-
-
 
     // --- Other Data Display Functions ---
     const renderLeaderboardList = (title, data, valueKey) => {
@@ -884,37 +839,26 @@ const populateDispatchPass = async (container, plan) => {
     mainContentContainer.addEventListener('click', async (e) => {
         const target = e.target;
         
-        // --- FIXED: Listener for expanding/collapsing active flights ---
         const summary = target.closest('.active-flight-summary');
         if (summary) {
             const item = summary.closest('.active-flight-item');
-            if (!item) return; // Safety check
+            if (!item) return;
 
-            // 1. Toggle the 'expanded' class immediately for instant UI feedback.
             item.classList.toggle('expanded');
             const isNowExpanded = item.classList.contains('expanded');
-            const details = item.querySelector('.active-flight-details');
-            const passContainer = details.querySelector('.dispatch-pass-container');
 
-            // 2. Only try to load data if the panel is being opened AND it doesn't already have content.
-            if (isNowExpanded && !passContainer.hasChildNodes()) {
-                const planId = item.dataset.planId;
-                const plan = ACTIVE_FLIGHT_PLANS.find(p => p._id === planId);
+            if (isNowExpanded) {
+                const details = item.querySelector('.active-flight-details');
+                const passContainer = details.querySelector('.dispatch-pass-container');
 
-                // 3. Gracefully handle the data population.
-                if (plan) {
-                    try {
-                        // Display a loading message while the details are being prepared.
-                        passContainer.innerHTML = '<p style="padding: 2rem; text-align: center;">Loading flight details...</p>';
-                        await populateDispatchPass(passContainer, plan);
-                    } catch (error) {
-                        console.error("Failed to populate dispatch pass:", error);
-                        // Display an error message if loading fails.
-                        passContainer.innerHTML = '<p style="padding: 2rem; text-align: center; color: var(--error-color);">Could not load flight details.</p>';
+                if (!passContainer.hasChildNodes()) {
+                    const planId = item.dataset.planId;
+                    const plan = ACTIVE_FLIGHT_PLANS.find(p => p._id === planId);
+                    if (plan) {
+                        populateDispatchPass(passContainer, plan);
+                    } else {
+                        passContainer.innerHTML = '<p style="padding: 2rem; text-align: center; color: var(--error-color);">Error: Flight plan data not found.</p>';
                     }
-                } else {
-                    // Handle the case where the flight data isn't found.
-                    passContainer.innerHTML = '<p style="padding: 2rem; text-align: center; color: var(--error-color);">Error: Flight plan data not found.</p>';
                 }
             }
         }
@@ -1171,17 +1115,12 @@ const populateDispatchPass = async (container, plan) => {
                     vref: `${vref} kts`,
                     departureWeather: ofpData.weather.orig_metar,
                     arrivalWeather: ofpData.weather.dest_metar,
-                    // **MODIFICATION**: Add a compact object for map plotting
                     mapData: {
                         origin: ofpData.origin,
                         destination: ofpData.destination,
                         navlog: ofpData.navlog?.fix || []
                     }
-                    // The full ofpData object is no longer sent
                 };
-
-                // **** CONSOLE.LOG ADDED HERE FOR DEBUGGING ****
-                console.log('Sending this flight plan body to server:', JSON.stringify(body, null, 2));
 
                 const res = await fetch(`${API_BASE_URL}/api/flightplans`, {
                     method: 'POST',
