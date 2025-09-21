@@ -437,16 +437,20 @@ input, textarea, select {
     padding: 0;
 }
 
+/* === MODIFICATION START === */
 .roster-leg-details li {
     display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+    flex-direction: row; /* Changed from column to row */
+    justify-content: space-between; /* Added to space out content and image */
+    align-items: center; /* Added to vertically align items */
+    gap: 1.5rem; /* Increased gap for better spacing */
     background-color: rgba(13, 16, 28, 0.6);
     padding: 1.25rem;
     border-radius: 8px;
     border: 1px solid var(--border-color);
     transition: background-color 0.3s;
 }
+/* === MODIFICATION END === */
 
 .roster-leg-details li:hover {
     background-color: rgba(13, 16, 28, 0.9);
@@ -537,12 +541,15 @@ input, textarea, select {
 
 
 /* --- NEW STYLES for Multi-Aircraft Roster Details --- */
+/* This is now redundant after the change above, so it can be removed */
+/*
 .roster-leg-details li.multi-aircraft-leg {
-    flex-direction: row; /* Overrides the default column direction */
+    flex-direction: row; 
     justify-content: space-between;
     align-items: center;
     gap: 1.5rem;
 }
+*/
 .multi-aircraft-leg .leg-main-content {
     flex-grow: 1;
 }
