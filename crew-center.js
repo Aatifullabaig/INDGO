@@ -66,93 +66,140 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- REUSABLE DISPATCH PASS FUNCTION [FIXED] ---
     const populateDispatchPass = (container, plan) => {
-        if (!container || !plan) return;
+    if (!container || !plan) return;
 
-        const departureWeather = parseMetar(plan.departureWeather);
-        const arrivalWeather = parseMetar(plan.arrivalWeather);
-
-        container.innerHTML = `
-            <div class="dispatch-header">
-                <div class="header-left">
-                    <img src="/images/indgo.png" alt="Indigo Air Logo" class="dispatch-header-logo">
-                    <div>
-                        <h2>${plan.flightNumber}</h2>
-                        <p>Performance Dispatch Pass</p>
-                    </div>
-                </div>
-                <div class="header-right">
-                    <h2>${plan.departure} → ${plan.arrival}</h2>
-                    <p>${new Date(plan.etd).toLocaleDateString()}</p>
-                </div>
-            </div>
-            <div class="dispatch-body">
-                <div class="dispatch-left-panel">
-                    <div id="dispatch-map-${plan._id}" class="dispatch-map-container" style="height: 350px;"></div>
-                    <div class="dispatch-route-panel data-card">
-                        <div class="route-info">
-                            <strong>Route:</strong> <span>${plan.route || 'Not Provided'}</span>
-                        </div>
-                        <div class="alternates-info">
-                            <strong>Alternates:</strong> <span>${plan.alternate || 'None'}</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="dispatch-right-panel">
-                    <div class="data-card">
-                        <h3><i class="fa-solid fa-weight-hanging"></i> Weights & Payload</h3>
-                        <div class="data-item"><strong>ZFW:</strong> <span>${formatWeight(plan.zfw)}</span></div>
-                        <div class="data-item"><strong>TOW:</strong> <span>${formatWeight(plan.tow)}</span></div>
-                        <div class="data-item"><strong>Passengers:</strong> <span>${plan.pob || '---'}</span></div>
-                        <div class="data-item"><strong>Cargo:</strong> <span>${formatWeight(plan.cargo)}</span></div>
-                    </div>
-                    <div class="data-card">
-                        <h3><i class="fa-solid fa-gas-pump"></i> Fuel</h3>
-                        <div class="data-item"><strong>Taxi Fuel:</strong> <span>${formatWeight(plan.fuelTaxi)}</span></div>
-                        <div class="data-item"><strong>Trip Fuel:</strong> <span>${formatWeight(plan.fuelTrip)}</span></div>
-                        <div class="data-item"><strong>Total Fuel:</strong> <span>${formatWeight(plan.fuelTotal)}</span></div>
-                    </div>
-                    <div class="data-card">
-                        <h3><i class="fa-solid fa-cloud-sun"></i> Weather</h3>
-                        <div class="weather-container">
-                            <div class="weather-sub-card">
-                                <h4>Departure</h4>
-                                <div class="data-item"><span>Cond:</span> <span>${departureWeather.condition}</span></div>
-                                <div class="data-item"><span>Temp:</span> <span>${departureWeather.temp}</span></div>
-                                <div class="data-item"><span>Wind:</span> <span>${departureWeather.wind}</span></div>
-                            </div>
-                            <div class="weather-sub-card">
-                                <h4>Arrival</h4>
-                                <div class="data-item"><span>Cond:</span> <span>${arrivalWeather.condition}</span></div>
-                                <div class="data-item"><span>Temp:</span> <span>${arrivalWeather.temp}</span></div>
-                                <div class="data-item"><span>Wind:</span> <span>${arrivalWeather.wind}</span></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="dispatch-footer">
-                <div class="dispatch-actions-wrapper" id="dispatch-actions-${plan._id}"></div>
-            </div>
-        `;
-
-        const actionsContainer = container.querySelector(`#dispatch-actions-${plan._id}`);
-        if (plan.status === 'PLANNED') {
-            actionsContainer.innerHTML = `
-                <button class="cta-button" id="depart-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-plane-departure"></i> Depart</button>
-                <button class="end-duty-btn" id="cancel-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-ban"></i> Cancel Flight</button>
-            `;
-        } else if (plan.status === 'FLYING') {
-            actionsContainer.innerHTML = `
-                <button class="cta-button" id="arrive-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-plane-arrival"></i> Arrive</button>
-            `;
-        }
-
-        if (plan.mapData && plan.mapData.origin && plan.mapData.destination) {
-            setTimeout(() => {
-                plotDispatchMap(`dispatch-map-${plan._id}`, plan.mapData.origin, plan.mapData.destination, plan.mapData.navlog);
-            }, 100);
-        }
+    // These helpers are already defined globally, but we ensure they're here for clarity.
+    const formatWeight = (kg) => (isNaN(kg) || kg === null ? '---' : `${Number(kg).toLocaleString()} kg`);
+    const formatTimeFromTimestamp = (ts) => (ts ? new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) : '----');
+    const formatDuration = (hours) => {
+        if (isNaN(hours) || hours < 0) return '00:00';
+        const h = Math.floor(hours);
+        const m = Math.round((hours - h) * 60);
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
     };
+    const parseMetar = (metarString) => {
+        if (!metarString || typeof metarString !== 'string') {
+            return { wind: '---', temp: '---', condition: '---' };
+        }
+        const parts = metarString.split(' ');
+        const wind = parts.find(p => p.endsWith('KT'));
+        const tempMatch = metarString.match(/M?\d{2}\/M?\d{2}/);
+        const temp = tempMatch ? `${tempMatch[0].split('/')[0].replace('M', '-')}°C` : '---';
+        const condition = parts.filter(p => /^(FEW|SCT|BKN|OVC|SKC|CLR|NSC)/.test(p)).join(' ');
+        return {
+            wind: wind || '---',
+            temp: temp || '---',
+            condition: condition || '---'
+        };
+    };
+    
+    const departureWeather = parseMetar(plan.departureWeather);
+    const arrivalWeather = parseMetar(plan.arrivalWeather);
+
+    // Build the complete HTML for the dispatch pass
+    container.innerHTML = `
+        <div class="dispatch-header">
+            <div class="header-left">
+                <img src="/images/indgo.png" alt="Indigo Air Logo" class="dispatch-header-logo">
+                <div>
+                    <h2>${plan.flightNumber}</h2>
+                    <p>Performance Dispatch Pass</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <h2>${plan.departure} → ${plan.arrival}</h2>
+                <p>${new Date(plan.etd).toLocaleDateString()}</p>
+            </div>
+        </div>
+
+        <div class="dispatch-body">
+            <div class="dispatch-left-panel">
+                <div class="dispatch-core-info">
+                    <div class="data-item"><strong>Aircraft:</strong> <span>${plan.aircraft || '---'}</span></div>
+                    <div class="data-item"><strong>ETD:</strong> <span>${formatTimeFromTimestamp(plan.etd)}</span> | <strong>ETA:</strong> <span>${formatTimeFromTimestamp(plan.eta)}</span></div>
+                    <div class="data-item"><strong>Duration:</strong> <span>${formatDuration(plan.eet)}</span></div>
+                </div>
+                <div id="dispatch-map-${plan._id}" class="dispatch-map-container" style="height: 350px;"></div>
+                 <div class="dispatch-route-panel data-card">
+                    <div class="route-info">
+                        <strong>Route:</strong> <span>${plan.route || 'Not Provided'}</span>
+                    </div>
+                    <div class="alternates-info">
+                        <strong>Alternates:</strong> <span>${plan.alternate || 'None'}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="dispatch-right-panel">
+                <div class="data-card">
+                    <h3><i class="fa-solid fa-weight-hanging"></i> Weights & Payload</h3>
+                    <div class="data-item"><strong>ZFW:</strong> <span>${formatWeight(plan.zfw)}</span></div>
+                    <div class="data-item"><strong>TOW:</strong> <span>${formatWeight(plan.tow)}</span></div>
+                    <div class="data-item"><strong>Passengers:</strong> <span>${plan.pob || '---'}</span></div>
+                    <div class="data-item"><strong>Cargo:</strong> <span>${formatWeight(plan.cargo)}</span></div>
+                </div>
+                <div class="data-card">
+                    <h3><i class="fa-solid fa-gas-pump"></i> Fuel</h3>
+                    <div class="data-item"><strong>Taxi Fuel:</strong> <span>${formatWeight(plan.fuelTaxi)}</span></div>
+                    <div class="data-item"><strong>Trip Fuel:</strong> <span>${formatWeight(plan.fuelTrip)}</span></div>
+                    <div class="data-item"><strong>Total Fuel:</strong> <span>${formatWeight(plan.fuelTotal)}</span></div>
+                </div>
+                <div class="data-card">
+                    <h3><i class="fa-solid fa-tower-broadcast"></i> ATC Information</h3>
+                    <div class="data-item"><strong>FIC #:</strong> <span>${plan.ficNumber || '---'}</span></div>
+                    <div class="data-item"><strong>ADC #:</strong> <span>${plan.adcNumber || '---'}</span></div>
+                    <div class="data-item"><strong>Squawk:</strong> <span>${plan.squawkCode || '----'}</span></div>
+                </div>
+                <div class="data-card">
+                    <h3><i class="fa-solid fa-gauge-high"></i> Critical Speeds</h3>
+                    <div class="speeds-grid">
+                        <div class="speed-item"><label>V1</label><span>${plan.v1 || '---'}</span></div>
+                        <div class="speed-item"><label>VR</label><span>${plan.vr || '---'}</span></div>
+                        <div class="speed-item"><label>V2</label><span>${plan.v2 || '---'}</span></div>
+                        <div class="speed-item landing-speed"><label>VREF</label><span>${plan.vref || '---'}</span></div>
+                    </div>
+                </div>
+                <div class="data-card">
+                    <h3><i class="fa-solid fa-cloud-sun"></i> Weather</h3>
+                    <div class="weather-container">
+                        <div class="weather-sub-card">
+                            <h4>Departure</h4>
+                            <div class="data-item"><span>Cond:</span> <span>${departureWeather.condition}</span></div>
+                            <div class="data-item"><span>Temp:</span> <span>${departureWeather.temp}</span></div>
+                            <div class="data-item"><span>Wind:</span> <span>${departureWeather.wind}</span></div>
+                        </div>
+                        <div class="weather-sub-card">
+                            <h4>Arrival</h4>
+                             <div class="data-item"><span>Cond:</span> <span>${arrivalWeather.condition}</span></div>
+                            <div class="data-item"><span>Temp:</span> <span>${arrivalWeather.temp}</span></div>
+                            <div class="data-item"><span>Wind:</span> <span>${arrivalWeather.wind}</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="dispatch-footer">
+            <div class="dispatch-actions-wrapper" id="dispatch-actions-${plan._id}"></div>
+        </div>
+    `;
+
+    const actionsContainer = container.querySelector(`#dispatch-actions-${plan._id}`);
+    if (plan.status === 'PLANNED') {
+        actionsContainer.innerHTML = `
+            <button class="cta-button" id="depart-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-plane-departure"></i> Depart</button>
+            <button class="end-duty-btn" id="cancel-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-ban"></i> Cancel Flight</button>
+        `;
+    } else if (plan.status === 'FLYING') {
+        actionsContainer.innerHTML = `
+             <button class="cta-button" id="arrive-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-plane-arrival"></i> Arrive</button>
+        `;
+    }
+
+    if (plan.mapData && plan.mapData.origin && plan.mapData.destination) {
+        setTimeout(() => {
+            plotDispatchMap(`dispatch-map-${plan._id}`, plan.mapData.origin, plan.mapData.destination, plan.mapData.navlog);
+        }, 100);
+    }
+};
 
 
     // --- Rank & Fleet Models ---
