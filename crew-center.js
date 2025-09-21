@@ -87,22 +87,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isNaN(kg) || kg === null) return '--- kg';
         return `${Number(kg).toLocaleString()} kg`;
     }
-    
-    const parseMetar = (metarString) => {
-        if (!metarString || typeof metarString !== 'string') {
-            return { wind: '---', temp: '---', condition: '---' };
-        }
-        const parts = metarString.split(' ');
-        const wind = parts.find(p => p.endsWith('KT'));
-        const tempMatch = metarString.match(/M?\d{2}\/M?\d{2}/);
-        const temp = tempMatch ? `${tempMatch[0].split('/')[0].replace('M', '-')}°C` : '---';
-        const condition = parts.filter(p => /^(FEW|SCT|BKN|OVC|SKC|CLR|NSC)/.test(p)).join(' ');
-        return {
-            wind: wind || '---',
-            temp: temp || '---',
-            condition: condition || '---'
-        };
-    };
 
     function extractAirlineCode(flightNumber) {
         if (!flightNumber || typeof flightNumber !== 'string') return 'UNKNOWN';
@@ -127,24 +111,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const m = Math.round((hours - h) * 60);
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
     };
-    const parseMetar = (metarString) => {
-        if (!metarString || typeof metarString !== 'string') {
-            return { wind: '---', temp: '---', condition: '---' };
-        }
-        const parts = metarString.split(' ');
-        const wind = parts.find(p => p.endsWith('KT'));
-        const tempMatch = metarString.match(/M?\d{2}\/M?\d{2}/);
-        const temp = tempMatch ? `${tempMatch[0].split('/')[0].replace('M', '-')}°C` : '---';
-        const condition = parts.filter(p => /^(FEW|SCT|BKN|OVC|SKC|CLR|NSC)/.test(p)).join(' ');
-        return {
-            wind: wind || '---',
-            temp: temp || '---',
-            condition: condition || '---'
-        };
-    };
     
-    const departureWeather = parseMetar(plan.departureWeather);
-    const arrivalWeather = parseMetar(plan.arrivalWeather);
+    const departureWeather = window.WeatherService.parseMetar(plan.departureWeather);
+    const arrivalWeather = window.WeatherService.parseMetar(plan.arrivalWeather);
 
     // Build the complete HTML for the dispatch pass
     container.innerHTML = `
@@ -565,22 +534,42 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             title = '<i class="fa-solid fa-user-clock"></i> Current Status: 🔴 On Rest';
             try {
-                const response = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
-                if (!response.ok) throw new Error('Could not fetch recommended roster.');
+                // Fetch recommended roster and weather data in parallel
+                const rosterResponse = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!rosterResponse.ok) throw new Error('Could not fetch recommended roster.');
                 
-                const data = await response.json();
-                const topRoster = data.rosters && data.rosters[0];
+                const rosterData = await rosterResponse.json();
+                const topRoster = rosterData.rosters?.[0];
+                const locationICAO = rosterData.searchCriteria?.searched?.[0];
 
+                const weather = await window.WeatherService.fetchAndParseMetar(locationICAO);
+
+                let locationCardHTML = '';
+                if (locationICAO) {
+                    locationCardHTML = `
+                        <div class="location-card" style="flex: 1; min-width: 280px; background-color: rgba(13, 16, 28, 0.5); padding: 1.5rem; border-radius: 8px;">
+                            <h4 style="margin-top:0; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-location-dot"></i> Current Location</h4>
+                            <strong style="font-size: 1.8rem; font-family: monospace;">${locationICAO}</strong>
+                            <div class="weather-details" style="margin-top: 1rem; font-size: 0.9rem;">
+                                <p><strong>Wind:</strong> ${weather.wind}</p>
+                                <p><strong>Temp:</strong> ${weather.temp}</p>
+                                <p><strong>Cond:</strong> ${weather.condition}</p>
+                                <p style="font-family: monospace; opacity: 0.7; margin-top: 0.5rem;">${weather.raw}</p>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                let rosterCardHTML = '';
                 if (topRoster) {
                     const firstLeg = topRoster.legs[0];
                     const lastLeg = topRoster.legs[topRoster.legs.length - 1];
                     const fullRoute = `${firstLeg.departure} → ${lastLeg.arrival}`;
-                    const location = data.searchCriteria?.searched?.[0] || 'your last location';
 
-                    content = `
-                        <div class="next-step-card" style="margin-top: 1.5rem; padding: 1.5rem; background-color: rgba(0, 27, 148, 0.1); border-left: 3px solid var(--accent-color); border-radius: 5px;">
+                    rosterCardHTML = `
+                        <div class="next-step-card" style="flex: 1.5; min-width: 300px; background-color: rgba(0, 27, 148, 0.1); padding: 1.5rem; border-radius: 8px; border-left: 3px solid var(--accent-color);">
                             <h4 style="margin-top: 0;">Ready for Your Next Assignment?</h4>
-                            <p>Based on your last arrival at <strong>${location}</strong>, we recommend this roster:</p>
+                            <p>Based on your location, we recommend this roster:</p>
                             <div class="featured-roster-summary" style="background-color: rgba(13, 16, 28, 0.5); padding: 1rem; border-radius: 5px; margin: 1rem 0; display: flex; justify-content: space-between; align-items: center;">
                                 <div>
                                     <strong style="display: block; font-size: 1.2rem;">${topRoster.name}</strong>
@@ -588,14 +577,23 @@ document.addEventListener('DOMContentLoaded', () => {
                                 </div>
                                 <span style="font-size: 1.1rem; font-weight: bold;">${(topRoster.totalFlightTime || 0).toFixed(1)} hrs</span>
                             </div>
-                            <button class="cta-button" id="go-to-roster-btn" data-roster-id="${topRoster._id}">View Roster</button>
+                            <button class="cta-button" id="go-to-roster-btn">View Roster</button>
                         </div>
                     `;
                 } else {
-                     content = `<p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>`;
+                     rosterCardHTML = `<p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>`;
                 }
+
+                // Combine the cards into a flex container
+                content = `
+                    <div class="hub-action-grid" style="display: flex; flex-wrap: wrap; gap: 1.5rem; margin-top: 1.5rem;">
+                        ${locationCardHTML}
+                        ${rosterCardHTML}
+                    </div>
+                `;
+
             } catch (error) {
-                console.error("Failed to fetch top roster for hub:", error);
+                console.error("Failed to fetch hub details:", error);
                 content = `<p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>`;
             }
         }
@@ -1425,8 +1423,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const cargoWeight = ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight);
                 document.getElementById('dispatch-cargo').textContent = formatWeight(cargoWeight);
                 
-                const departureWeather = parseMetar(ofpData.weather.orig_metar);
-                const arrivalWeather = parseMetar(ofpData.weather.dest_metar);
+                const departureWeather = window.WeatherService.parseMetar(ofpData.weather.orig_metar);
+                const arrivalWeather = window.WeatherService.parseMetar(ofpData.weather.dest_metar);
 
                 document.getElementById('dispatch-dep-cond').textContent = departureWeather.condition;
                 document.getElementById('dispatch-dep-temp').textContent = departureWeather.temp;
