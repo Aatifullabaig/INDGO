@@ -2,9 +2,16 @@
 document.addEventListener('DOMContentLoaded', () => {
     const token = localStorage.getItem('authToken');
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
+    // NEW: URL for your live flights microservice, including the correct path.
+    const LIVE_FLIGHTS_API_URL = 'https://acars-backend-uxln.onrender.com/api/live-flights';
 
     let crewRestInterval = null; // To manage the countdown timer
     let dispatchMap = null; // To hold the Leaflet map instance
+
+    // --- NEW: Live Map Globals ---
+    let liveFlightsMap = null; // To hold the live map instance
+    let pilotMarkers = {}; // To store pilot markers by flightId { flightId: marker }
+    let liveFlightsInterval = null; // To manage the 40-second polling
 
     // --- Helper Functions ---
 
@@ -310,6 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    // MODIFIED: Added live flights polling control to switchView
     const switchView = (viewId) => {
         sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
         mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
@@ -320,6 +328,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (newLink && newView) {
             newLink.classList.add('active');
             newView.classList.add('active');
+        }
+
+        // --- NEW: Control the live flights polling interval ---
+        if (viewId === 'view-duty-status') {
+            // User is on the Pilot Hub, start the polling if it's not already running
+            if (!liveFlightsInterval) {
+                // Run once immediately, then start the interval
+                updateLiveFlights();
+                liveFlightsInterval = setInterval(updateLiveFlights, 40000); // 40 seconds
+            }
+        } else {
+            // User has left the Pilot Hub, stop polling to save resources
+            if (liveFlightsInterval) {
+                clearInterval(liveFlightsInterval);
+                liveFlightsInterval = null; // Clear the interval ID
+            }
         }
     };
     
@@ -379,6 +403,94 @@ document.addEventListener('DOMContentLoaded', () => {
 
         newMap.fitBounds(routeLine.getBounds().pad(0.1));
     };
+
+
+    // --- NEW: Live Map Functions ---
+    /**
+     * Initializes the Leaflet map for live flights if it doesn't exist yet.
+     */
+    function initializeLiveMap() {
+        // Only initialize if the map container exists and map isn't already created
+        if (document.getElementById('live-flights-map-container') && !liveFlightsMap) {
+            liveFlightsMap = L.map('live-flights-map-container', {
+                scrollWheelZoom: true,
+                zoomControl: true
+            }).setView([20.5937, 78.9629], 4); // Centered on India
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
+            }).addTo(liveFlightsMap);
+        }
+    }
+
+    /**
+     * Fetches live flight data and updates the markers on the map.
+     */
+    async function updateLiveFlights() {
+        if (!liveFlightsMap) return; // Don't run if map isn't visible/initialized
+
+        try {
+            const response = await fetch(LIVE_FLIGHTS_API_URL);
+            if (!response.ok) {
+                console.error('Failed to fetch live flights data.');
+                return;
+            }
+            const liveFlights = await response.json();
+            
+            const activeFlightIds = new Set();
+
+            // IMPORTANT: Make sure you have an image at this path in your project directory.
+            const planeIcon = L.icon({
+                iconUrl: 'images/plane-icon.png', 
+                iconSize: [30, 30],
+                iconAnchor: [15, 15],
+            });
+
+            liveFlights.forEach(flight => {
+                activeFlightIds.add(flight.flightId);
+                const latLng = [flight.latitude, flight.longitude];
+                
+                if (pilotMarkers[flight.flightId]) {
+                    // Marker exists, update its position and rotation
+                    const marker = pilotMarkers[flight.flightId];
+                    marker.setLatLng(latLng);
+                    // L.RotatedMarker provides the setRotationAngle method
+                    if (typeof marker.setRotationAngle === 'function') {
+                        marker.setRotationAngle(flight.heading);
+                    }
+                } else {
+                    // Marker is new, create it using the RotatedMarker plugin
+                    const marker = L.marker(latLng, { 
+                        icon: planeIcon,
+                        rotationAngle: flight.heading 
+                    }).addTo(liveFlightsMap);
+                    
+                    marker.bindPopup(`
+                        <b>${flight.callsign}</b><br>
+                        Aircraft: ${flight.aircraftName}<br>
+                        Speed: ${Math.round(flight.speed)} kts<br>
+                        Altitude: ${Math.round(flight.altitude)} ft
+                    `);
+                    
+                    pilotMarkers[flight.flightId] = marker;
+                }
+            });
+
+            // Clean up: Remove markers for flights that are no longer active
+            Object.keys(pilotMarkers).forEach(flightId => {
+                if (!activeFlightIds.has(flightId.toString())) { // Ensure comparison is correct type
+                    pilotMarkers[flightId].remove(); // Remove from map
+                    delete pilotMarkers[flightId];   // Remove from our tracker
+                }
+            });
+
+        } catch (error) {
+            console.error('Error updating live flights:', error);
+        }
+    }
+
 
     // --- Main Data Fetch & Render Cycle ---
     const fetchPilotData = async () => {
@@ -485,6 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     `;
 
+    // MODIFIED: Added map initialization to renderPilotHubView
     const renderPilotHubView = async (pilot, leaderboardsHTML) => {
         const dutyStatusView = document.getElementById('view-duty-status');
         if (crewRestInterval) clearInterval(crewRestInterval);
@@ -499,6 +612,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         dutyStatusView.innerHTML = `${pendingBanner}${dutyStatusHTML}${leaderboardsHTML}`;
+
+        // NEW: Initialize the map after the HTML is rendered.
+        // Use a small timeout to ensure the DOM is ready for the map.
+        setTimeout(initializeLiveMap, 100);
 
         if (pilot.dutyStatus === 'ON_REST' && pilot.timeUntilNextDutyMs > 0) {
             const timerElement = document.getElementById('crew-rest-timer');
@@ -518,7 +635,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-
+    
+    // MODIFIED: renderOnRestContent now includes the live map HTML
     const renderOnRestContent = async (pilot) => {
         let content = '';
         let title = '';
@@ -598,13 +716,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
+        // NEW: Live map container to be added before the leaderboards
+        const liveMapHTML = `
+            <div class="content-card live-map-section" style="margin-top: 1.5rem;">
+                <h2><i class="fa-solid fa-tower-broadcast"></i> Live Operations Map</h2>
+                <div id="live-flights-map-container" style="height: 450px; border-radius: 8px; margin-top: 1rem; background-color: #333;">
+                    <p class="map-loader" style="text-align: center; padding-top: 2rem; color: #ccc;">Loading Live Map...</p>
+                </div>
+            </div>
+        `;
+        
         return `
             <div class="pilot-hub-card">
                 ${createHubHeaderHTML(pilot, title)}
                 ${content}
-            </div>`;
+            </div>
+            ${liveMapHTML}`; // Appended the map HTML
     };
 
+    // MODIFIED: renderOnDutyContent now includes the live map HTML
     const renderOnDutyContent = async (pilot) => {
         if (!pilot.currentRoster) return `<div class="content-card"><p>Error: On duty but no roster data found.</p></div>`;
 
@@ -623,6 +753,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const filedFlightNumbers = new Set(filedPirepsForRoster.map(p => p.flightNumber));
 
             const headerTitle = '<i class="fa-solid fa-plane-departure"></i> Current Status: 🟢 On Duty';
+
+            // NEW: Define the map HTML
+            const liveMapHTML = `
+                <div class="content-card live-map-section" style="margin-top: 1.5rem;">
+                    <h2><i class="fa-solid fa-tower-broadcast"></i> Live Operations Map</h2>
+                    <div id="live-flights-map-container" style="height: 450px; border-radius: 8px; margin-top: 1rem; background-color: #333;">
+                        <p class="map-loader" style="text-align: center; padding-top: 2rem; color: #ccc;">Loading Live Map...</p>
+                    </div>
+                </div>
+            `;
 
             return `
                 <div class="pilot-hub-card">
@@ -649,11 +789,13 @@ document.addEventListener('DOMContentLoaded', () => {
                               </div>`;
                         }).join('')}
                     </div>
-                </div>`;
+                </div>
+                ${liveMapHTML}`; // Appended map HTML
         } catch (error) {
             return `<div class="content-card"><p class="error-text">${error.message}</p></div>`;
         }
     };
+
 
     // --- Flight Plan View ---
     const renderFlightPlanView = async (pilot) => {
