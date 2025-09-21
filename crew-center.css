@@ -778,11 +778,80 @@ roster-item {
     color: #92d5f1; /* Lighter Sky Blue */
 }
 
-.badge-rank {
-    background-color: rgba(0, 220, 150, 0.25);
-    border-color: rgba(0, 220, 150, 0.6);
-    color: #79e0bc; /* Lighter Aquamarine */
+/* ===== NEW STYLES for Rank Badges ===== */
+.rank-badge-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px; /* Space between badge and name */
+    vertical-align: middle;
 }
+
+.rank-badge-img {
+    height: 28px;
+    width: auto;
+    vertical-align: middle;
+}
+
+.rank-badge-name {
+    font-weight: bold;
+    color: var(--dashboard-text-color);
+}
+
+.roster-req-rank-badge {
+    height: 32px; /* A good size for roster lists */
+    width: auto;
+}
+
+.hub-stat-item > span {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.hub-stat-item .rank-badge-img {
+    height: 32px;
+}
+
+.hub-stat-item .rank-badge-name {
+    font-size: 1.4rem;
+    font-weight: bold;
+}
+
+/* Style for the pill-shaped badge in the roster header */
+.rank-display-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background-color: rgba(0, 220, 150, 0.25);
+    border: 1px solid rgba(0, 220, 150, 0.6);
+    padding: 0.3rem 0.8rem;
+    border-radius: 15px;
+}
+.rank-display-pill .rank-badge-name {
+    color: #79e0bc;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+}
+.rank-display-pill .rank-badge-img {
+    height: 18px;
+}
+
+/* Alignment for badges in PIREP history */
+.pirep-chips {
+    margin-top: 0.4rem;
+    display: flex;
+    gap: .5rem;
+    flex-wrap: wrap;
+    align-items: center; /* Vertically align items */
+}
+.roster-leg-item .leg-badges {
+    margin-left: auto; /* Push badge to the right */
+}
+
+
 .ml-8 { margin-left: .5rem; }
 
 

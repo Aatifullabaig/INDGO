@@ -7,6 +7,56 @@ document.addEventListener('DOMContentLoaded', () => {
     let dispatchMap = null; // To hold the Leaflet map instance
 
     // --- Helper Functions ---
+
+    /**
+     * NEW: Generates HTML for a rank badge.
+     * @param {string} rankName - The name of the rank, e.g., "Blue Eagle".
+     * @param {object} options - Configuration for display.
+     * @param {boolean} options.showImage - Whether to show the badge image.
+     * @param {boolean} options.showName - Whether to show the rank name text.
+     * @param {string} options.imageClass - CSS class for the image.
+     * @param {string} options.containerClass - CSS class for the container when both are shown.
+     * @returns {string} The generated HTML string.
+     */
+    function getRankBadgeHTML(rankName, options = {}) {
+        const defaults = {
+            showImage: true,
+            showName: false,
+            imageClass: 'rank-badge-img',
+            containerClass: 'rank-badge-container',
+        };
+        const config = { ...defaults, ...options };
+
+        if (!rankName) return `<span>Unknown Rank</span>`;
+
+        // Create the filename from the rank name (e.g., "Blue Eagle" -> "blue_eagle_badge.png")
+        const fileName = rankName.toLowerCase().replace(/\s+/g, '_') + '_badge.png';
+        const imagePath = `images/badges/${fileName}`;
+        
+        let imageHtml = '';
+        let nameHtml = '';
+
+        if (config.showImage) {
+            // onerror will replace the img with just the text name if the image fails to load.
+            imageHtml = `<img src="${imagePath}" alt="${rankName}" title="${rankName}" class="${config.imageClass}" onerror="this.outerHTML='<span>${rankName}</span>'">`;
+        }
+
+        if (config.showName) {
+            nameHtml = `<span class="rank-badge-name">${rankName}</span>`;
+        }
+        
+        if (config.showImage && !config.showName) {
+            return imageHtml;
+        }
+
+        if (config.showImage && config.showName) {
+            return `<span class="${config.containerClass}">${imageHtml} ${nameHtml}</span>`;
+        }
+
+        return `<span>${rankName}</span>`; // Fallback
+    }
+
+
     function formatTime(ms) {
         if (ms < 0) ms = 0;
         let seconds = Math.floor(ms / 1000);
@@ -456,7 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="hub-stats-grid">
                 <div class="hub-stat-item">
                     <strong>Rank</strong>
-                    <span>${pilot.rank || '---'}</span>
+                    <span>${getRankBadgeHTML(pilot.rank, { showImage: true, showName: true })}</span>
                 </div>
                 <div class="hub-stat-item">
                     <strong>Flight Hours</strong>
@@ -563,7 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <strong class="flight-number">${leg.flightNumber}</strong>
                                 <span class="route">${leg.departure} - ${leg.arrival}</span>
                                 <span class="leg-badges">
-                                    <span class="badge badge-rank" title="Required Rank">Req: ${reqRank}</span>
+                                    ${getRankBadgeHTML(reqRank, { showImage: true, showName: false, imageClass: 'roster-req-rank-badge' })}
                                 </span>
                               </div>`;
                         }).join('')}
@@ -725,7 +775,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 header.innerHTML = `
                     <div class="roster-header-info">
                         Showing rosters for <strong>${criteria.searched.join(' & ')}</strong>
-                        <span class="badge badge-rank ml-8">Your rank: ${CURRENT_PILOT?.rank || 'Unknown'}</span>
+                        <span class="rank-display-pill ml-8">
+                            ${getRankBadgeHTML(CURRENT_PILOT?.rank, { showImage: true, showName: true })}
+                        </span>
                     </div>
                 `;
                 if (window.plotRosters) window.plotRosters(criteria.searched[0], rosters);
@@ -808,7 +860,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <strong>${p.flightNumber}</strong> (${p.departure} - ${p.arrival})
                         <small>${created}</small>
                         <div class="pirep-chips">
-                           <span class="badge badge-rank">Req: ${reqRank}</span>
+                           ${getRankBadgeHTML(reqRank, { showImage: true, showName: false, imageClass: 'roster-req-rank-badge' })}
                         </div>
                     </div>
                     <div class="pirep-details">
@@ -984,7 +1036,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                                 </div>
                                                 <small class="leg-details-meta">Aircraft: ${leg.aircraft}</small>
                                                 <div class="leg-badges-footer">
-                                                    <span class="badge badge-rank" title="Minimum Rank">Req: ${leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft)}</span>
+                                                    ${getRankBadgeHTML(leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft), { showImage: true, showName: false, imageClass: 'roster-req-rank-badge' })}
                                                 </div>
                                             </div>
                                             <div class="leg-icon"><i class="fa-solid fa-plane"></i></div>
