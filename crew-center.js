@@ -429,67 +429,67 @@ document.addEventListener('DOMContentLoaded', () => {
      * Fetches live flight data and updates the markers on the map.
      */
     async function updateLiveFlights() {
-        if (!liveFlightsMap) return; // Don't run if map isn't visible/initialized
+  if (!liveFlightsMap) return;
 
-        try {
-            const response = await fetch(LIVE_FLIGHTS_API_URL);
-            if (!response.ok) {
-                console.error('Failed to fetch live flights data.');
-                return;
-            }
-            const liveFlights = await response.json();
-            
-            const activeFlightIds = new Set();
-
-            // IMPORTANT: Make sure you have an image at this path in your project directory.
-            const planeIcon = L.icon({
-                iconUrl: 'images/plane-icon.png', 
-                iconSize: [30, 30],
-                iconAnchor: [15, 15],
-            });
-
-            liveFlights.forEach(flight => {
-                activeFlightIds.add(flight.flightId);
-                const latLng = [flight.latitude, flight.longitude];
-                
-                if (pilotMarkers[flight.flightId]) {
-                    // Marker exists, update its position and rotation
-                    const marker = pilotMarkers[flight.flightId];
-                    marker.setLatLng(latLng);
-                    // L.RotatedMarker provides the setRotationAngle method
-                    if (typeof marker.setRotationAngle === 'function') {
-                        marker.setRotationAngle(flight.heading);
-                    }
-                } else {
-                    // Marker is new, create it using the RotatedMarker plugin
-                    const marker = L.marker(latLng, { 
-                        icon: planeIcon,
-                        rotationAngle: flight.heading 
-                    }).addTo(liveFlightsMap);
-                    
-                    marker.bindPopup(`
-                        <b>${flight.callsign}</b><br>
-                        Aircraft: ${flight.aircraftName}<br>
-                        Speed: ${Math.round(flight.speed)} kts<br>
-                        Altitude: ${Math.round(flight.altitude)} ft
-                    `);
-                    
-                    pilotMarkers[flight.flightId] = marker;
-                }
-            });
-
-            // Clean up: Remove markers for flights that are no longer active
-            Object.keys(pilotMarkers).forEach(flightId => {
-                if (!activeFlightIds.has(flightId.toString())) { // Ensure comparison is correct type
-                    pilotMarkers[flightId].remove(); // Remove from map
-                    delete pilotMarkers[flightId];   // Remove from our tracker
-                }
-            });
-
-        } catch (error) {
-            console.error('Error updating live flights:', error);
-        }
+  try {
+    const resp = await fetch(LIVE_FLIGHTS_API_URL);
+    if (!resp.ok) {
+      console.error('Failed to fetch live flights data.');
+      return;
     }
+    const json = await resp.json();
+
+    // Accept either an array (old FE expectation) or an object with .flights (new BE)
+    const flights = Array.isArray(json) ? json : (Array.isArray(json.flights) ? json.flights : []);
+
+    const activeFlightIds = new Set();
+
+    const planeIcon = L.icon({
+      iconUrl: 'images/plane-icon.png',
+      iconSize: [30, 30],
+      iconAnchor: [15, 15],
+    });
+
+    flights.forEach(f => {
+      // Normalize field names
+      const flightId = f.flightId || f.id || f.userId || Math.random().toString(36).slice(2);
+      const lat = f.latitude, lon = f.longitude;
+
+      if (lat == null || lon == null) return;
+
+      activeFlightIds.add(String(flightId));
+      const latLng = [lat, lon];
+
+      if (pilotMarkers[flightId]) {
+        const m = pilotMarkers[flightId];
+        m.setLatLng(latLng);
+        if (typeof m.setRotationAngle === 'function' && f.heading != null) {
+          m.setRotationAngle(f.heading);
+        }
+      } else {
+        const m = L.marker(latLng, { icon: planeIcon, rotationAngle: f.heading ?? 0 }).addTo(liveFlightsMap);
+        m.bindPopup(`
+          <b>${f.callsign ?? 'N/A'}</b><br>
+          Aircraft: ${f.aircraftName ?? f.aircraftId ?? 'N/A'}<br>
+          Speed: ${f.speed != null ? Math.round(f.speed) : '—'} kts<br>
+          Altitude: ${f.altitude != null ? Math.round(f.altitude) : '—'} ft
+        `);
+        pilotMarkers[flightId] = m;
+      }
+    });
+
+    // cleanup stale markers
+    Object.keys(pilotMarkers).forEach(fid => {
+      if (!activeFlightIds.has(String(fid))) {
+        pilotMarkers[fid].remove();
+        delete pilotMarkers[fid];
+      }
+    });
+  } catch (err) {
+    console.error('Error updating live flights:', err);
+  }
+}
+
 
 
     // --- Main Data Fetch & Render Cycle ---
