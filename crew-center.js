@@ -765,7 +765,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const currentRoster = allRosters.find(r => r._id === pilot.currentRoster);
             if (!currentRoster) throw new Error('Could not find your assigned roster.');
 
-            const filedPirepsForRoster = allPireps.filter(p => p.rosterLeg?.rosterId === currentRoster._id);
+            const filedPirepsForRoster = allPireps.filter(p => p.rosterLeg?.rosterId === currentRoster.rosterId);
             const filedFlightNumbers = new Set(filedPirepsForRoster.map(p => p.flightNumber));
 
             const headerTitle = '<i class="fa-solid fa-plane-departure"></i> Current Status: 🟢 On Duty';
@@ -993,7 +993,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const pathString = [roster.legs[0].departure, ...roster.legs.map(leg => leg.arrival)].join(' → ');
 
                 return `
-                <div class="roster-item" data-roster-id="${roster._id}">
+                <div class="roster-item" data-roster-id="${roster.rosterId}">
                     <div class="roster-card-header">
                         <div class="roster-airlines">${airlineLogosHTML}</div>
                         <div class="roster-title-info">
@@ -1017,11 +1017,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="roster-card-footer">
                         <div class="roster-path-display">${pathString}</div>
                         <div class="roster-actions">
-                            <button class="details-button" data-roster-id="${roster._id}" aria-expanded="false">Details</button>
-                            <button class="cta-button go-on-duty-btn" data-roster-id="${roster._id}" ${dutyDisabled}>Go On Duty</button>
+                            <button class="details-button" data-roster-id="${roster.rosterId}" aria-expanded="false">Details</button>
+                            <button class="cta-button go-on-duty-btn" data-roster-id="${roster.rosterId}" ${dutyDisabled}>Go On Duty</button>
                         </div>
                     </div>
-                    <div class="roster-leg-details" id="details-${roster._id}"></div>
+                    <div class="roster-leg-details" id="details-${roster.rosterId}"></div>
                 </div>`;
             }).join('');
         } catch (error) {
@@ -1183,7 +1183,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!res.ok) throw new Error('Could not fetch roster details.');
                 const rosterData = await res.json();
                 const allRosters = rosterData.rosters || [];
-                const roster = allRosters.find(r => r._id === rosterId);
+                const roster = allRosters.find(r => r.rosterId === rosterId);
                 
                 if (roster && roster.legs) {
                     // Check for multiple aircraft to apply a specific class, but don't prevent image rendering
