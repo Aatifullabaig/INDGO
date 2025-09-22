@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- NEW: DISCORD OAUTH CONFIGURATION ---
     // IMPORTANT: Replace this with your actual Discord Application Client ID.
-    const DISCORD_CLIENT_ID = '1088424681572188160';
+    const DISCORD_CLIENT_ID = '1419795297101676654';
     // This must match EXACTLY what you've set in your Discord Developer Portal.
     const DISCORD_REDIRECT_URI = `${API_BASE_URL}/api/auth/discord/callback`;
 
