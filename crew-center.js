@@ -681,8 +681,7 @@ async function updateLiveFlights() {
         <div class="hub-header redesigned">
             <div class="hub-main-info">
                 <div class="hub-rank-display">
-                    <span class="rank-label">Rank</span>
-                    <h1>${pilot.rank}</h1>
+                    ${getRankBadgeHTML(pilot.rank, { showImage: true, showName: true, containerClass: 'rank-badge hub-rank-badge' })}
                 </div>
                 <div class="hub-hours-display">
                     <span class="hours-label">Flight Hours</span>
