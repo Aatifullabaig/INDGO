@@ -677,21 +677,24 @@ async function updateLiveFlights() {
         </div>
     `;
 
-    const createHubHeaderHTML = (pilot, title) => `
-        <div class="hub-header">
-            <h2>${title}</h2>
-            <div class="hub-stats-grid">
-                <div class="hub-stat-item">
-                    <strong>Rank</strong>
-                    <span>${getRankBadgeHTML(pilot.rank, { showImage: true, showName: true })}</span>
+    const createHubHeaderHTML = (pilot, statusText) => `
+        <div class="hub-header redesigned">
+            <div class="hub-main-info">
+                <div class="hub-rank-display">
+                    <span class="rank-label">Rank</span>
+                    <h1>${pilot.rank}</h1>
                 </div>
-                <div class="hub-stat-item">
-                    <strong>Flight Hours</strong>
-                    <span>${(pilot.flightHours || 0).toFixed(1)}</span>
+                <div class="hub-hours-display">
+                    <span class="hours-label">Flight Hours</span>
+                    <span class="hours-value">${(pilot.flightHours || 0).toFixed(1)}</span>
                 </div>
+            </div>
+            <div class="hub-status-bar">
+                ${statusText}
             </div>
         </div>
     `;
+
 
     // MODIFIED: Added map initialization to renderPilotHubView
     const renderPilotHubView = async (pilot, leaderboardsHTML) => {
@@ -708,6 +711,25 @@ async function updateLiveFlights() {
         }
 
         dutyStatusView.innerHTML = `${pendingBanner}${dutyStatusHTML}${leaderboardsHTML}`;
+
+        // --- NEW: DYNAMICALLY STYLE THE HUB CARD BASED ON RANK ---
+        const hubCard = dutyStatusView.querySelector('.pilot-hub-card');
+        if (hubCard && pilot.rank) {
+            const rankSlug = 'rank-' + pilot.rank.toLowerCase().replace(/\s+/g, '-');
+            
+            // Clean up any old rank classes to handle promotions correctly
+            const classList = Array.from(hubCard.classList);
+            for (const c of classList) {
+                if (c.startsWith('rank-')) {
+                    hubCard.classList.remove(c);
+                }
+            }
+            
+            // Add the new class
+            hubCard.classList.add(rankSlug);
+        }
+        // --- END NEW SECTION ---
+
 
         // NEW: Initialize the map after the HTML is rendered.
         // Use a small timeout to ensure the DOM is ready for the map.
