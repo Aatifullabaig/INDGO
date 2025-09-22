@@ -441,11 +441,15 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     // crew-center.js
 
+let activePathLayers = {
+    flown: null,
+    planned: null
+};
+
 async function updateLiveFlights() {
     if (!liveFlightsMap) return;
 
     try {
-        // --- 1. Fetch Live Flight Data (same as before) ---
         const sessionsRes = await fetch('https://acars-backend-uxln.onrender.com/if-sessions');
         const sessionsJson = await sessionsRes.json();
         const expertSession = sessionsJson.sessions.find(s => s.name.toLowerCase().includes('expert'));
@@ -460,42 +464,31 @@ async function updateLiveFlights() {
         const flights = Array.isArray(json.flights) ? json.flights : [];
         const activeFlightIds = new Set();
 
-        // --- 2. Create a lookup for the user's active flight plans ---
-        const userFlightPlans = new Map(
-            (ACTIVE_FLIGHT_PLANS || []).map(p => [p.flightNumber.toUpperCase(), p])
-        );
-
         const planeIcon = L.icon({
             iconUrl: 'images/whiteplane.png',
             iconSize: [30, 30],
             iconAnchor: [15, 15],
         });
 
-        // --- 3. Process Each Flight ---
         flights.forEach(f => {
             const flightId = f.flightId;
-            const callsign = (f.callsign || '').toUpperCase();
             const pos = f.position;
             if (!flightId || !pos || pos.lat == null || pos.lon == null) return;
 
             activeFlightIds.add(flightId);
             const latLng = [pos.lat, pos.lon];
-            
-            const isUserFlight = userFlightPlans.has(callsign);
-            const plan = isUserFlight ? userFlightPlans.get(callsign) : null;
 
             if (!pilotMarkers[flightId]) {
                 pilotMarkers[flightId] = {
                     marker: null,
-                    history: [],
-                    flownPathLayer: null,
-                    plannedPathLayer: null
+                    // NOTE: Local history is no longer used for the heat map but can be kept for other potential features.
+                    history: [] 
                 };
             }
-            
-            const flightData = pilotMarkers[flightId];
 
-            // --- 4. Update Marker (for all flights) ---
+            const flightData = pilotMarkers[flightId];
+            flightData.history.push([pos.lat, pos.lon, pos.alt_ft]);
+
             if (flightData.marker) {
                 flightData.marker.setLatLng(latLng);
                 if (typeof flightData.marker.setRotationAngle === 'function' && pos.track_deg != null) {
@@ -504,111 +497,82 @@ async function updateLiveFlights() {
             } else {
                 flightData.marker = L.marker(latLng, { icon: planeIcon, rotationAngle: pos.track_deg ?? 0 }).addTo(liveFlightsMap);
                 
+                // --- MODIFIED CLICK HANDLER ---
                 flightData.marker.on('click', async () => {
+                    // 1. Clear any previously displayed path layers
+                    if (activePathLayers.flown) activePathLayers.flown.remove();
+                    if (activePathLayers.planned) activePathLayers.planned.remove();
+
                     const popup = L.popup()
                         .setLatLng(latLng)
-                        .setContent(`<b>${f.callsign}</b><br><i>Loading flight plan...</i>`)
+                        .setContent(`<b>${f.callsign}</b><br><i>Loading flight data...</i>`)
                         .openOn(liveFlightsMap);
-
-                    if (displayedFlightPlanLayer) {
-                        displayedFlightPlanLayer.remove();
-                        displayedFlightPlanLayer = null;
-                    }
                     
                     try {
-                        const planRes = await fetch(`https://acars-backend-uxln.onrender.com/flights/${sessionId}/${flightId}/plan`);
+                        // 2. NEW: Fetch both the PLANNED route and the FLOWN route in parallel.
+                        const [planRes, routeRes] = await Promise.all([
+                            fetch(`https://acars-backend-uxln.onrender.com/flights/${sessionId}/${flightId}/plan`),
+                            fetch(`https://acars-backend-uxln.onrender.com/flights/${sessionId}/${flightId}/route`) // This fetches the heat map data
+                        ]);
+
                         const planJson = await planRes.json();
+                        const routeJson = await routeRes.json(); // Data for the flown path
+
+                        // 3. Process the FLOWN path for the heat map
+                        const flownRouteData = (routeRes.ok && routeJson.ok && Array.isArray(routeJson.route)) ? routeJson.route : [];
                         
-                        if (!planRes.ok || !planJson.ok || !planJson.plan?.waypoints || planJson.plan.waypoints.length === 0) {
-                            popup.setContent(`<b>${f.callsign}</b><br>No flight plan filed.`);
-                            return;
+                        if (flownRouteData.length > 1) {
+                            // Convert API data to the format L.hotline needs: [lat, lon, altitude]
+                            const hotlineData = flownRouteData.map(p => [p.lat, p.lon, p.alt_ft]);
+                            
+                            activePathLayers.flown = L.hotline(hotlineData, { // WAS: L.hotline(flightData.history, ...)
+                                palette: { 0.0: '#0088ff', 0.5: '#00ff00', 1.0: '#ff0000' },
+                                weight: 4, outlineColor: '#000', outlineWidth: 1, min: 0, max: 45000
+                            }).addTo(liveFlightsMap);
                         }
 
-                        const waypoints = planJson.plan.waypoints.map(wp => [wp.lat, wp.lon]);
-                        
-                        displayedFlightPlanLayer = L.polyline(waypoints, {
-                            color: '#e84393',
-                            weight: 3,
-                            opacity: 0.8,
-                            dashArray: '8, 8'
-                        }).addTo(liveFlightsMap);
+                        // 4. Process the PLANNED path for the remaining segment (no changes to this logic)
+                        if (planRes.ok && planJson.ok && planJson.plan?.waypoints?.length > 0) {
+                            const plannedWaypoints = planJson.plan.waypoints.map(wp => [wp.lat, wp.lon]);
+                            let nextWaypointIndex = 0;
+                            let minDistance = Infinity;
+                            
+                            plannedWaypoints.forEach((wp, index) => {
+                                const distance = L.latLng(latLng).distanceTo(wp);
+                                if (distance < minDistance) {
+                                    minDistance = distance;
+                                    nextWaypointIndex = index;
+                                }
+                            });
 
-                        popup.setContent(`<b>${f.callsign}</b><br>Flight plan loaded.`);
+                            const remainingPath = [latLng, ...plannedWaypoints.slice(nextWaypointIndex)];
+                            activePathLayers.planned = L.polyline(remainingPath, {
+                                color: '#e84393', weight: 3, opacity: 0.8, dashArray: '8, 8'
+                            }).addTo(liveFlightsMap);
+                             popup.setContent(`<b>${f.callsign}</b> (${f.username || 'N/A'})<br>Route and flight plan loaded.`);
+                        } else {
+                            popup.setContent(`<b>${f.callsign}</b> (${f.username || 'N/A'})<br>No flight plan filed.`);
+                        }
                         
                     } catch (err) {
-                        console.error("Failed to fetch flight plan:", err);
-                        popup.setContent(`<b>${f.callsign}</b><br>Could not load flight plan.`);
+                        console.error("Failed to fetch or render flight paths:", err);
+                        popup.setContent(`<b>${f.callsign}</b> (${f.username || 'N/A'})<br>Could not load flight data.`);
                     }
                 });
-            }
-
-            // --- 5. [MODIFIED] Logic for the User's Active Flight ---
-            if (isUserFlight && plan && plan.mapData) {
-                // Add current position and altitude to the history. The history is an array of [lat, lon, altitude].
-                flightData.history.push([pos.lat, pos.lon, pos.alt_ft]);
-
-                // Draw the flown path (the "heat map")
-                if (flightData.history.length > 1) {
-                    if (flightData.flownPathLayer) {
-                        // If the layer exists, just update its data points
-                        flightData.flownPathLayer.setLatLngs(flightData.history);
-                    } else {
-                        // Create the hotline layer for the first time
-                        flightData.flownPathLayer = L.hotline(flightData.history, {
-                            // Define the color palette based on normalized altitude (0.0 to 1.0)
-                            palette: {
-                                0.0: '#0088ff', // Blue for low altitude
-                                0.5: '#00ff00', // Green for medium altitude
-                                1.0: '#ff0000'  // Red for high altitude
-                            },
-                            weight: 4,
-                            outlineColor: '#000000',
-                            outlineWidth: 1,
-                            min: 0,      // Corresponds to 0 ft
-                            max: 45000   // Corresponds to 45,000 ft
-                        }).addTo(liveFlightsMap);
-                    }
-                }
-
-                // Logic to find the next waypoint and draw the remaining dashed line
-                const plannedWaypoints = plan.mapData.navlog.map(fix => [parseFloat(fix.pos_lat), parseFloat(fix.pos_long)]);
-                let nextWaypointIndex = -1;
-                let minDistance = Infinity;
-
-                plannedWaypoints.forEach((wp, index) => {
-                    const distance = L.latLng(latLng).distanceTo(wp);
-                    if(distance < minDistance){
-                         minDistance = distance;
-                         nextWaypointIndex = index;
-                    }
-                });
-
-                if (nextWaypointIndex !== -1) {
-                    // The remaining path starts from the current position to the rest of the waypoints
-                    const remainingPath = [latLng, ...plannedWaypoints.slice(nextWaypointIndex)];
-                    if (flightData.plannedPathLayer) {
-                        // Update the existing dashed line
-                        flightData.plannedPathLayer.setLatLngs(remainingPath);
-                    } else {
-                        // Create the dashed line for the first time
-                        flightData.plannedPathLayer = L.polyline(remainingPath, {
-                            color: '#5a6a9c',
-                            weight: 2,
-                            opacity: 0.8,
-                            dashArray: '5, 10' // This creates the dashed effect
-                        }).addTo(liveFlightsMap);
-                    }
-                }
             }
         });
 
-        // --- 6. Clean up old markers and their layers ---
+        // Cleanup logic remains the same
         Object.keys(pilotMarkers).forEach(fid => {
             if (!activeFlightIds.has(String(fid))) {
                 const data = pilotMarkers[fid];
                 if (data.marker) data.marker.remove();
-                if (data.flownPathLayer) data.flownPathLayer.remove();
-                if (data.plannedPathLayer) data.plannedPathLayer.remove();
+                
+                // Clean up path if the plane that was displaying it disappears
+                if (activePathLayers.flown && flightData.marker === data.marker) {
+                    activePathLayers.flown.remove();
+                    if(activePathLayers.planned) activePathLayers.planned.remove();
+                }
                 delete pilotMarkers[fid];
             }
         });
@@ -616,9 +580,7 @@ async function updateLiveFlights() {
     } catch (err) {
         console.error('Error updating live flights:', err);
     }
-}
-
-
+  }
 
 
     // --- Main Data Fetch & Render Cycle ---
