@@ -1365,8 +1365,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             } else {
-                // Handle Link - Redirect to Discord
-                window.location.href = `${API_BASE_URL}/auth/discord/start`;
+                try {
+    // 1. Make an authenticated call to the backend using safeFetch
+    const data = await safeFetch(`${API_BASE_URL}/auth/discord/start`);
+
+    // 2. If we get a URL back, redirect the user's browser to it
+    if (data.redirectUrl) {
+        window.location.href = data.redirectUrl;
+    } else {
+        showNotification('Could not start Discord linking process.', 'error');
+    }
+} catch (error) {
+    showNotification(`Error: ${error.message}`, 'error');
+}
             }
         }
         // --- END: NEW DISCORD LINKING EVENT HANDLER ---
