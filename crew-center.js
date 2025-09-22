@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let liveFlightsMap = null; // To hold the live map instance
     let pilotMarkers = {}; // To store pilot markers by flightId { flightId: marker }
     let liveFlightsInterval = null; // To manage the 40-second polling
+    let displayedFlightPlanLayer = null; // To hold the currently displayed flight plan layer
 
     // --- Helper Functions ---
 
@@ -486,17 +487,15 @@ document.addEventListener('DOMContentLoaded', () => {
             activeFlightIds.add(flightId);
             const latLng = [pos.lat, pos.lon];
             
-            // Check if this live flight is one of the user's active flights
             const isUserFlight = userFlightPlans.has(callsign);
             const plan = isUserFlight ? userFlightPlans.get(callsign) : null;
 
-            // Initialize storage for this flight if it's new
             if (!pilotMarkers[flightId]) {
                 pilotMarkers[flightId] = {
                     marker: null,
-                    history: [],       // To store [lat, lon, altitude]
-                    flownPathLayer: null, // The "hotline" layer
-                    plannedPathLayer: null // The dashed line layer
+                    history: [],
+                    flownPathLayer: null,
+                    plannedPathLayer: null
                 };
             }
             
@@ -510,59 +509,87 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } else {
                 flightData.marker = L.marker(latLng, { icon: planeIcon, rotationAngle: pos.track_deg ?? 0 }).addTo(liveFlightsMap);
-                flightData.marker.bindPopup(`<b>${f.callsign ?? 'N/A'}</b><br>Speed: ${Math.round(pos.gs_kt ?? 0)} kts<br>Altitude: ${Math.round(pos.alt_ft ?? 0)} ft`);
+                
+                // --- NEW: Attach a dynamic click handler instead of a static popup ---
+                flightData.marker.on('click', async () => {
+                    // Show a loading message immediately
+                    const popup = L.popup()
+                        .setLatLng(latLng)
+                        .setContent(`<b>${f.callsign}</b><br><i>Loading flight plan...</i>`)
+                        .openOn(liveFlightsMap);
+
+                    // Clear the previously displayed flight plan line
+                    if (displayedFlightPlanLayer) {
+                        displayedFlightPlanLayer.remove();
+                        displayedFlightPlanLayer = null;
+                    }
+                    
+                    try {
+                        const planRes = await fetch(`https://acars-backend-uxln.onrender.com/flights/${sessionId}/${flightId}/plan`);
+                        const planJson = await planRes.json();
+                        
+                        if (!planRes.ok || !planJson.ok || !planJson.plan?.waypoints || planJson.plan.waypoints.length === 0) {
+                            popup.setContent(`<b>${f.callsign}</b><br>No flight plan filed.`);
+                            return;
+                        }
+
+                        const waypoints = planJson.plan.waypoints.map(wp => [wp.lat, wp.lon]);
+                        
+                        // Create and add the new flight plan line to the map
+                        displayedFlightPlanLayer = L.polyline(waypoints, {
+                            color: '#e84393', // A distinct color for clicked plans
+                            weight: 3,
+                            opacity: 0.8,
+                            dashArray: '8, 8'
+                        }).addTo(liveFlightsMap);
+
+                        // Update the popup content to confirm
+                        popup.setContent(`<b>${f.callsign}</b><br>Flight plan loaded.`);
+                        
+                    } catch (err) {
+                        console.error("Failed to fetch flight plan:", err);
+                        popup.setContent(`<b>${f.callsign}</b><br>Could not load flight plan.`);
+                    }
+                });
             }
 
-            // --- 5. [NEW] Logic for the User's Active Flight ---
+            // --- 5. [UNCHANGED] Logic for the User's Active Flight ---
             if (isUserFlight && plan && plan.mapData) {
-                // Add current position to history
                 flightData.history.push([pos.lat, pos.lon, pos.alt_ft]);
-
-                // A) Update the flown "hotline" path
                 if (flightData.history.length > 1) {
                     if (flightData.flownPathLayer) {
-                        // Update existing layer
                         flightData.flownPathLayer.setLatLngs(flightData.history);
                     } else {
-                        // Create new layer
                         flightData.flownPathLayer = L.hotline(flightData.history, {
-                            palette: { 0.0: '#0000FF', 0.5: '#00FF00', 1.0: '#FF0000' }, // Blue -> Green -> Red
+                            palette: { 0.0: '#0000FF', 0.5: '#00FF00', 1.0: '#FF0000' },
                             weight: 3,
                             outlineColor: '#000',
                             outlineWidth: 1,
-                            min: 0, // Min altitude for color scale
-                            max: 45000 // Max altitude
+                            min: 0,
+                            max: 45000
                         }).addTo(liveFlightsMap);
                     }
                 }
-                
-                // B) Update the remaining planned path (dashed line)
                 const plannedWaypoints = plan.mapData.navlog.map(fix => [parseFloat(fix.pos_lat), parseFloat(fix.pos_long)]);
-                
-                // Find the index of the next waypoint
                 let nextWaypointIndex = -1;
                 let minDistance = Infinity;
                 plannedWaypoints.forEach((wp, index) => {
                     const distance = L.latLng(latLng).distanceTo(wp);
-                    // A simple logic: find the closest point ahead. More complex logic could be used here.
                     if(distance < minDistance){
                          minDistance = distance;
                          nextWaypointIndex = index;
                     }
                 });
-
                 if (nextWaypointIndex !== -1) {
-                    // Create the path from current position to the end of the plan
                     const remainingPath = [latLng, ...plannedWaypoints.slice(nextWaypointIndex)];
-                    
                     if (flightData.plannedPathLayer) {
                         flightData.plannedPathLayer.setLatLngs(remainingPath);
                     } else {
                         flightData.plannedPathLayer = L.polyline(remainingPath, {
-                            color: '#5a6a9c', // Soft blue from your map.js
+                            color: '#5a6a9c',
                             weight: 2,
                             opacity: 0.8,
-                            dashArray: '5, 10' // This creates the dashed effect
+                            dashArray: '5, 10'
                         }).addTo(liveFlightsMap);
                     }
                 }
