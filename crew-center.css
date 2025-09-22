@@ -730,36 +730,6 @@ roster-item {
     width: auto; /* Override any full-width settings */
 }
 
-/* Override mobile styles for the old design */
-@media (max-width: 768px) {
-    .roster-card-footer {
-        justify-content: center; /* Center items when they stack */
-    }
-    .roster-path-display, .roster-actions {
-        width: 100%;
-    }
-    .roster-path-display {
-        text-align: center;
-    }
-}
-
-/* --- Responsive Adjustments for Roster Item on Mobile --- */
-@media (max-width: 768px) {
-    .roster-right-panel {
-        width: 100%;
-        flex-direction: column; /* Stacks the image on top of the action buttons */
-        gap: 1rem;
-    }
-
-    .roster-aircraft-container {
-        width: 100%;
-        height: 120px;
-        background-color: rgba(0,0,0,0.15); /* Adds a subtle background */
-        border-radius: 5px;
-        margin-top: 0.5rem;
-    }
-}
-
 /* ===== Rank/Operator badges (IMPROVED LEGIBILITY) ===== */
 .badge {
     display: inline-flex;
@@ -1224,13 +1194,14 @@ roster-item {
     border-bottom: 1px solid var(--border-color);
 }
 
-/* --- MOBILE RESPONSIVE STYLES --- */
-/* Apply these styles only on screens 768px or smaller */
+/* ========================================================== */
+/* START: MOBILE RESPONSIVE STYLES (ENHANCED FOR PHONE UI)   */
+/* ========================================================== */
 @media (max-width: 768px) {
 
     /* --- Main Layout --- */
     .dashboard-container {
-        /* Stack sidebar on top of main content instead of side-by-side */
+        /* Stack sidebar (now nav) on top of main content */
         flex-direction: column;
     }
 
@@ -1240,6 +1211,7 @@ roster-item {
         height: auto;
         position: relative; /* Override sticky positioning */
         padding: 1rem;
+        border-right: none;
     }
 
     /* Don't allow sidebar to be collapsed on mobile */
@@ -1263,9 +1235,10 @@ roster-item {
     
     /* --- REFINED Mobile Navigation Bar --- */
     .sidebar-nav {
-        /* Remove any extra padding from the container */
         padding: 0;
         margin: 0;
+        border-top: 1px solid var(--border-color);
+        border-bottom: 1px solid var(--border-color);
     }
     
     .sidebar-nav ul {
@@ -1291,10 +1264,11 @@ roster-item {
         align-items: center;
         justify-content: center;
         padding: 0.75rem 0.5rem;
-        gap: 4px; /* Reset the gap for a compact look */
-        margin: 0; /* Reset margins */
-        border-radius: 0; /* Remove rounded corners for a tab bar look */
+        gap: 4px;
+        margin: 0;
+        border-radius: 0;
         border-bottom: 3px solid transparent; /* Prepare for active state */
+        transition: color 0.3s, border-color 0.3s;
     }
 
     .sidebar-nav .nav-link:hover {
@@ -1302,9 +1276,8 @@ roster-item {
     }
 
     .sidebar-nav .nav-link.active {
-        /* Clear the ugly blocky background */
+        /* Clear the blocky background and use a border indicator */
         background-color: transparent;
-        /* Make the icon white and add a border indicator */
         color: #ffffff; 
         border-bottom-color: var(--rank-accent-color, var(--accent-color));
     }
@@ -1338,32 +1311,50 @@ roster-item {
     .content-card h2 {
         font-size: 1.25rem; /* Slightly smaller headings */
     }
-
-    /* Stack form elements that were in a row */
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+    .form-group-span-2 {
+        grid-column: span 1;
+    }
     .form-group-row {
         flex-direction: column;
         gap: 0;
     }
-
-    /* --- Roster & PIREP Lists --- */
-    .roster-item, .pirep-history-item {
-        /* Stack content vertically */
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 1rem;
+    .dispatch-actions {
+        flex-direction: column-reverse; /* Puts primary CTA on bottom */
+        align-items: stretch;
     }
-
-    .roster-actions {
-        width: 100%; /* Make action buttons take full width */
-    }
-    
-    .roster-actions .cta-button, .roster-actions .details-button {
+    .dispatch-actions button {
         width: 100%;
         text-align: center;
     }
 
+    /* --- Roster & PIREP Lists --- */
+    .roster-item, .pirep-history-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    .roster-card-footer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .roster-actions {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    .roster-path-display {
+        width: 100%;
+        text-align: center;
+    }
+    .roster-actions .cta-button, .roster-actions .details-button {
+        width: 100%;
+        text-align: center;
+    }
     .pirep-details {
-        /* Stack PIREP details and align them left */
         flex-direction: column;
         align-items: flex-start;
         gap: 0.5rem;
@@ -1373,21 +1364,41 @@ roster-item {
 
     /* --- Specific Components --- */
     #map {
-        /* Make the map shorter on mobile */
         height: 300px;
     }
-
-    /* Stack leaderboard cards vertically */
     .leaderboards-container {
         grid-template-columns: 1fr;
     }
-
     .flight-plan-details {
-        grid-template-columns: 1fr; /* Stack all flight plan details */
+        grid-template-columns: 1fr;
     }
-    
     .fp-detail-item[style*="grid-column"] {
-        grid-column: auto !important; /* Reset the full-width override for the 'route' field */
+        grid-column: auto !important;
+    }
+
+    /* --- Dispatch Pass --- */
+    .dispatch-body {
+        grid-template-columns: 1fr;
+    }
+    .dispatch-header, .dispatch-footer {
+        padding: 1rem 1.5rem;
+    }
+    .dispatch-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    .dispatch-header .header-right {
+        text-align: left;
+    }
+    .dispatch-actions-wrapper {
+        justify-content: center;
+        flex-direction: column;
+    }
+    .dispatch-action-group .cta-button,
+    .dispatch-action-group .end-duty-btn,
+    .dispatch-action-group .details-button {
+        width: 100%;
     }
 
     /* --- Modals --- */
@@ -1396,6 +1407,9 @@ roster-item {
         padding: 1.5rem;
     }
 }
+/* ========================================================== */
+/* END: MOBILE RESPONSIVE STYLES                              */
+/* ========================================================== */
 
 
 /* ======================================== */
