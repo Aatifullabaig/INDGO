@@ -1149,8 +1149,8 @@ async function updateLiveFlights() {
         if (viewId) {
             switchView(viewId);
             if (viewId === 'view-rosters' && window.leafletMap) {
-                setTimeout(() => window.leafletMap.invalidateSize(), 150);
-            }
+            setTimeout(() => window.leafletMap.invalidateSize(), 150);
+          }
         }
     });
 
