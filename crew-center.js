@@ -439,16 +439,10 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Fetches live flight data and updates the markers on the map.
      */
-    async function updateLiveFlights() {
-    if (!liveFlightsMap) return;
+    // crew-center.js
 
-    // Helper function to map altitude to a color for the hotline.
-    // Goes from Blue (low) -> Green -> Yellow -> Red (high)
-    const getAltitudeColor = (altitudeFt) => {
-        const alt = Math.max(0, Math.min(45000, altitudeFt)); // Clamp altitude between 0 and 45k ft
-        const h = (1 - (alt / 45000)) * 240; // Hue: 240 (blue) at 0ft, to 0 (red) at 45k ft
-        return `hsl(${h}, 100%, 50%)`;
-    };
+async function updateLiveFlights() {
+    if (!liveFlightsMap) return;
 
     try {
         // --- 1. Fetch Live Flight Data (same as before) ---
@@ -466,7 +460,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const flights = Array.isArray(json.flights) ? json.flights : [];
         const activeFlightIds = new Set();
 
-        // --- 2. [NEW] Create a lookup for the user's active flight plans ---
+        // --- 2. Create a lookup for the user's active flight plans ---
         const userFlightPlans = new Map(
             (ACTIVE_FLIGHT_PLANS || []).map(p => [p.flightNumber.toUpperCase(), p])
         );
@@ -510,15 +504,12 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 flightData.marker = L.marker(latLng, { icon: planeIcon, rotationAngle: pos.track_deg ?? 0 }).addTo(liveFlightsMap);
                 
-                // --- NEW: Attach a dynamic click handler instead of a static popup ---
                 flightData.marker.on('click', async () => {
-                    // Show a loading message immediately
                     const popup = L.popup()
                         .setLatLng(latLng)
                         .setContent(`<b>${f.callsign}</b><br><i>Loading flight plan...</i>`)
                         .openOn(liveFlightsMap);
 
-                    // Clear the previously displayed flight plan line
                     if (displayedFlightPlanLayer) {
                         displayedFlightPlanLayer.remove();
                         displayedFlightPlanLayer = null;
@@ -535,15 +526,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         const waypoints = planJson.plan.waypoints.map(wp => [wp.lat, wp.lon]);
                         
-                        // Create and add the new flight plan line to the map
                         displayedFlightPlanLayer = L.polyline(waypoints, {
-                            color: '#e84393', // A distinct color for clicked plans
+                            color: '#e84393',
                             weight: 3,
                             opacity: 0.8,
                             dashArray: '8, 8'
                         }).addTo(liveFlightsMap);
 
-                        // Update the popup content to confirm
                         popup.setContent(`<b>${f.callsign}</b><br>Flight plan loaded.`);
                         
                     } catch (err) {
@@ -553,26 +542,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            // --- 5. [UNCHANGED] Logic for the User's Active Flight ---
+            // --- 5. [MODIFIED] Logic for the User's Active Flight ---
             if (isUserFlight && plan && plan.mapData) {
+                // Add current position and altitude to the history. The history is an array of [lat, lon, altitude].
                 flightData.history.push([pos.lat, pos.lon, pos.alt_ft]);
+
+                // Draw the flown path (the "heat map")
                 if (flightData.history.length > 1) {
                     if (flightData.flownPathLayer) {
+                        // If the layer exists, just update its data points
                         flightData.flownPathLayer.setLatLngs(flightData.history);
                     } else {
+                        // Create the hotline layer for the first time
                         flightData.flownPathLayer = L.hotline(flightData.history, {
-                            palette: { 0.0: '#0000FF', 0.5: '#00FF00', 1.0: '#FF0000' },
-                            weight: 3,
-                            outlineColor: '#000',
+                            // Define the color palette based on normalized altitude (0.0 to 1.0)
+                            palette: {
+                                0.0: '#0088ff', // Blue for low altitude
+                                0.5: '#00ff00', // Green for medium altitude
+                                1.0: '#ff0000'  // Red for high altitude
+                            },
+                            weight: 4,
+                            outlineColor: '#000000',
                             outlineWidth: 1,
-                            min: 0,
-                            max: 45000
+                            min: 0,      // Corresponds to 0 ft
+                            max: 45000   // Corresponds to 45,000 ft
                         }).addTo(liveFlightsMap);
                     }
                 }
+
+                // Logic to find the next waypoint and draw the remaining dashed line
                 const plannedWaypoints = plan.mapData.navlog.map(fix => [parseFloat(fix.pos_lat), parseFloat(fix.pos_long)]);
                 let nextWaypointIndex = -1;
                 let minDistance = Infinity;
+
                 plannedWaypoints.forEach((wp, index) => {
                     const distance = L.latLng(latLng).distanceTo(wp);
                     if(distance < minDistance){
@@ -580,23 +582,27 @@ document.addEventListener('DOMContentLoaded', () => {
                          nextWaypointIndex = index;
                     }
                 });
+
                 if (nextWaypointIndex !== -1) {
+                    // The remaining path starts from the current position to the rest of the waypoints
                     const remainingPath = [latLng, ...plannedWaypoints.slice(nextWaypointIndex)];
                     if (flightData.plannedPathLayer) {
+                        // Update the existing dashed line
                         flightData.plannedPathLayer.setLatLngs(remainingPath);
                     } else {
+                        // Create the dashed line for the first time
                         flightData.plannedPathLayer = L.polyline(remainingPath, {
                             color: '#5a6a9c',
                             weight: 2,
                             opacity: 0.8,
-                            dashArray: '5, 10'
+                            dashArray: '5, 10' // This creates the dashed effect
                         }).addTo(liveFlightsMap);
                     }
                 }
             }
         });
 
-        // --- 6. [MODIFIED] Clean up old markers and their layers ---
+        // --- 6. Clean up old markers and their layers ---
         Object.keys(pilotMarkers).forEach(fid => {
             if (!activeFlightIds.has(String(fid))) {
                 const data = pilotMarkers[fid];
@@ -610,7 +616,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
         console.error('Error updating live flights:', err);
     }
- }
+}
 
 
 
