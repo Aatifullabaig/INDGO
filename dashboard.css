@@ -76,10 +76,10 @@ body {
     overflow-x: hidden;
 }
 
-/* --- NEW: CUSTOM SCROLLBAR STYLES --- */
+/* --- NEW: CUSTOM SCROLLBAR STYLES (WITH RANK THEME) --- */
 .sidebar-nav {
     scrollbar-width: thin; /* For Firefox */
-    scrollbar-color: var(--accent-color) transparent; /* For Firefox */
+    scrollbar-color: var(--rank-accent-color, var(--accent-color)) transparent; /* For Firefox */
 }
 /* For Webkit Browsers (Chrome, Safari, Edge) */
 .sidebar-nav::-webkit-scrollbar {
@@ -89,12 +89,12 @@ body {
     background: transparent;
 }
 .sidebar-nav::-webkit-scrollbar-thumb {
-    background-color: var(--accent-color);
+    background-color: var(--rank-accent-color, var(--accent-color));
     border-radius: 10px;
     border: 2px solid var(--secondary-bg);
 }
 .sidebar-nav::-webkit-scrollbar-thumb:hover {
-    background-color: #0025c4;
+    filter: brightness(1.2);
 }
 
 
@@ -111,8 +111,8 @@ body {
     transition: background-color 0.3s, color 0.3s;
 }
 .sidebar-nav .nav-link i { width: 20px; font-size: 1.1rem; text-align: center; }
-.sidebar-nav .nav-link:hover { background-color: var(--accent-color); color: #fff; }
-.sidebar-nav .nav-link.active { background-color: var(--accent-color); color: #fff; font-weight: 500; }
+.sidebar-nav .nav-link:hover { background-color: var(--rank-accent-color, var(--accent-color)); color: #fff; }
+.sidebar-nav .nav-link.active { background-color: var(--rank-accent-color, var(--accent-color)); color: #fff; font-weight: 500; }
 .nav-text { transition: opacity 0.3s ease; white-space: nowrap; }
 
 .sidebar-footer {
@@ -135,8 +135,9 @@ body {
     height: 45px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid var(--accent-color);
+    border: 2px solid var(--rank-accent-color, var(--accent-color));
     flex-shrink: 0;
+    transition: border-color 0.4s ease;
 }
 .profile-details { flex-grow: 1; transition: opacity 0.3s ease; white-space: nowrap; overflow: hidden; }
 #pilot-name { font-weight: 600; color: #ffffff; font-size: 1.1rem; }
@@ -162,7 +163,7 @@ body {
     background-color: rgba(255,255,255,0.05);
 }
 .dashboard-link:hover {
-    background-color: var(--accent-color);
+    background-color: var(--rank-accent-color, var(--accent-color));
     color: #fff;
 }
 
@@ -276,12 +277,13 @@ body {
 .content-card h2 {
     margin-top: 0;
     margin-bottom: 1.5rem;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--rank-accent-color, var(--border-color));
     padding-bottom: 1rem;
-    color: #ffffff;
+    color: var(--rank-text-color, #ffffff);
     display: flex;
     align-items: center;
     gap: 12px;
+    transition: all 0.4s ease;
 }
 /* Spacing for multiple cards inside a tab */
 .content-card .content-card {
@@ -304,9 +306,27 @@ body {
 .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; }
 input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; border: 1px solid var(--border-color); background-color: var(--bg-color); color: #fff; font-size: 1rem; }
 
-.cta-button { display: inline-block; padding: 0.8rem 1.5rem; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; transition: all 0.3s; background-color: var(--accent-color); color: white; }
-.cta-button:hover { background: #0025c4; }
-.cta-button:disabled { background: #555; cursor: not-allowed; }
+.cta-button { 
+    display: inline-block; 
+    padding: 0.8rem 1.5rem; 
+    border: none; 
+    border-radius: 5px; 
+    font-weight: bold; 
+    cursor: pointer; 
+    transition: all 0.3s; 
+    background-color: var(--rank-accent-color, var(--accent-color)); 
+    color: white; 
+}
+.cta-button:hover { 
+    filter: brightness(1.2); 
+    box-shadow: 0 4px 15px var(--rank-glow-color, var(--glow-color));
+}
+.cta-button:disabled { 
+    background: #555; 
+    cursor: not-allowed; 
+    filter: none;
+    box-shadow: none;
+}
 
 /* **UPDATED**: PIREP Card Actions Layout */
 .card-actions {
@@ -347,7 +367,7 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
 .view-image-btn {
     display: inline-block;
     padding: 0.4rem 0.8rem;
-    background-color: var(--accent-color);
+    background-color: var(--rank-accent-color, var(--accent-color));
     color: white;
     text-decoration: none;
     border-radius: 4px;
@@ -356,7 +376,7 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
 }
 
 .view-image-btn:hover {
-    background-color: #0025c4;
+    filter: brightness(1.2);
 }
 
 .user-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -375,7 +395,7 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
     transition: all 0.3s;
 }
 .ftpl-toggle-btn:hover {
-    border-color: var(--accent-color);
+    border-color: var(--rank-accent-color, var(--accent-color));
     color: #fff;
 }
 .ftpl-toggle-btn[data-exempt="true"] {
@@ -384,7 +404,7 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
     border-color: var(--warning-color);
 }
 
-/* --- NEW: FIXED NOTIFICATION BELL STYLES --- */
+/* --- NEW: FIXED NOTIFICATION BELL STYLES (WITH RANK THEME) --- */
 .notification-container {
     position: fixed;
     bottom: 2rem;
@@ -399,17 +419,17 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
     align-items: center;
     width: 60px;
     height: 60px;
-    background-color: var(--accent-color);
+    background-color: var(--rank-accent-color, var(--accent-color));
     color: #fff;
     border-radius: 50%;
-    box-shadow: 0 4px 12px rgba(0, 27, 148, 0.5);
+    box-shadow: 0 4px 12px var(--rank-glow-color, rgba(0, 27, 148, 0.5));
     font-size: 1.5rem;
     text-decoration: none;
     transition: transform 0.3s ease, background-color 0.3s ease;
 }
 .notification-button:hover {
     transform: scale(1.1);
-    background-color: #0025c4;
+    filter: brightness(1.2);
 }
 
 .notification-button .badge {
@@ -555,3 +575,162 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
 .nav-submenu .nav-link {
     padding-left: 2.1rem; /* Align text with category header text */
 }
+
+/* ================================================== */
+/* START: PROGRESSIVE RANK BADGE STYLES (NEW)         */
+/* ================================================== */
+
+/* --- Base Badge Style --- */
+/* This is the foundation for all rank displays that show image and text */
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px; /* Fully rounded pill shape */
+    font-size: 1rem;
+    font-weight: 700;
+    border: 1px solid var(--border-color);
+    background-color: var(--primary-glass);
+    transition: all 0.3s ease;
+    vertical-align: middle; /* Ensures alignment with other text */
+}
+
+.rank-badge .rank-badge-img {
+    height: 20px;
+    width: auto;
+}
+
+.rank-badge .rank-badge-name {
+    color: var(--dashboard-text-muted);
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+/* --- Tier 1: Entry Ranks (Clean & Simple) --- */
+.rank-indgo-cadet,
+.rank-skyline-observer {
+    background-color: rgba(13, 16, 28, 0.7);
+}
+
+.rank-indgo-cadet .rank-badge-name,
+.rank-skyline-observer .rank-badge-name {
+    color: #aeb9e1;
+}
+
+/* --- Tier 2: Mid-Level Ranks (A Splash of Color) --- */
+.rank-route-explorer,
+.rank-skyline-officer,
+.rank-command-captain {
+    background-color: rgba(0, 27, 148, 0.3); /* Uses accent color */
+    border-color: rgba(0, 27, 148, 0.7);
+}
+
+.rank-route-explorer .rank-badge-name,
+.rank-skyline-officer .rank-badge-name,
+.rank-command-captain .rank-badge-name {
+    color: #92d5f1; /* Lighter Sky Blue */
+}
+
+/* --- Tier 3: Senior Ranks (Prestigious & Bright) --- */
+.rank-elite-captain,
+.rank-blue-eagle {
+    background-color: rgba(240, 173, 78, 0.15); /* Soft Gold */
+    border-color: rgba(240, 173, 78, 0.6);
+    box-shadow: 0 0 8px rgba(240, 173, 78, 0.2);
+}
+
+.rank-elite-captain .rank-badge-name,
+.rank-blue-eagle .rank-badge-name {
+    color: var(--warning-color); /* Bright Gold/Yellow */
+    text-shadow: 0 0 5px rgba(240, 173, 78, 0.3);
+}
+
+/* --- Tier 4: Command Staff (Elite & Distinct) --- */
+.rank-line-instructor,
+.rank-chief-flight-instructor,
+.rank-indgo-skymaster,
+.rank-blue-legacy-commander {
+    /* A subtle gradient for the highest ranks */
+    background-image: linear-gradient(45deg, var(--accent-color), #2c3e50);
+    border-color: #92d5f1;
+    color: #ffffff;
+    /* A stronger glow to make it stand out */
+    box-shadow: 0 0 12px var(--glow-color);
+}
+
+.rank-line-instructor .rank-badge-name,
+.rank-chief-flight-instructor .rank-badge-name,
+.rank-indgo-skymaster .rank-badge-name,
+.rank-blue-legacy-commander .rank-badge-name {
+    color: #ffffff;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+/* Add a subtle hover effect to all badges */
+.rank-badge:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px var(--glow-color);
+}
+
+/* ================================================== */
+/* END: PROGRESSIVE RANK BADGE STYLES                 */
+/* ================================================== */
+
+/* ================================================== */
+/* START: GLOBAL RANK-BASED THEME STYLES (NEW)        */
+/* ================================================== */
+
+/* --- Tier 1: Entry Ranks (Clean & Simple) --- */
+.dashboard-container.rank-indgo-cadet,
+.dashboard-container.rank-skyline-observer {
+    --rank-accent-color: #aeb9e1;
+    --rank-glow-color: rgba(174, 185, 225, 0.15);
+    --rank-text-color: #aeb9e1;
+}
+
+/* --- Tier 2: Mid-Level Ranks (A Splash of Color) --- */
+.dashboard-container.rank-route-explorer,
+.dashboard-container.rank-skyline-officer,
+.dashboard-container.rank-command-captain {
+    --rank-accent-color: #00a8ff;
+    --rank-glow-color: rgba(0, 168, 255, 0.25);
+    --rank-text-color: #92d5f1;
+}
+
+/* --- Tier 3: Senior Ranks (Prestigious & Bright) --- */
+.dashboard-container.rank-elite-captain,
+.dashboard-container.rank-blue-eagle {
+    --rank-accent-color: var(--warning-color);
+    --rank-glow-color: rgba(240, 173, 78, 0.3);
+    --rank-text-color: var(--warning-color);
+}
+
+/* --- Tier 4: Command Staff (Elite & Distinct) --- */
+.dashboard-container.rank-line-instructor,
+.dashboard-container.rank-chief-flight-instructor,
+.dashboard-container.rank-indgo-skymaster,
+.dashboard-container.rank-blue-legacy-commander {
+    --rank-accent-color: #e0e0e0;
+    --rank-glow-color: rgba(224, 224, 224, 0.3);
+    --rank-text-color: #ffffff;
+}
+/* Special override for command staff buttons */
+.dashboard-container.rank-line-instructor .cta-button,
+.dashboard-container.rank-chief-flight-instructor .cta-button,
+.dashboard-container.rank-indgo-skymaster .cta-button,
+.dashboard-container.rank-blue-legacy-commander .cta-button {
+    background-image: linear-gradient(45deg, #bdc3c7, #2c3e50);
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+.dashboard-container.rank-line-instructor .cta-button:hover,
+.dashboard-container.rank-chief-flight-instructor .cta-button:hover,
+.dashboard-container.rank-indgo-skymaster .cta-button:hover,
+.dashboard-container.rank-blue-legacy-commander .cta-button:hover {
+    filter: brightness(1.1);
+}
+
+/* ================================================== */
+/* END: GLOBAL RANK-BASED THEME STYLES                */
+/* ================================================== */

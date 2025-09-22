@@ -87,6 +87,36 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // =========================================================
+    // START: NEW FUNCTION TO APPLY RANK-BASED THEME
+    // =========================================================
+    /**
+     * Applies the correct CSS class to the dashboard container based on the user's rank.
+     * This function will remove any previous rank theme classes before applying the new one.
+     * @param {string | null} rank - The rank of the user (e.g., "Blue Eagle").
+     */
+    function applyRankTheme(rank) {
+        if (!dashboardContainer) return;
+
+        // Remove any existing rank classes to prevent conflicts
+        const existingClasses = Array.from(dashboardContainer.classList);
+        for (const cls of existingClasses) {
+            if (cls.startsWith('rank-')) {
+                dashboardContainer.classList.remove(cls);
+            }
+        }
+
+        // If a rank is provided, create and add the new theme class
+        if (rank) {
+            const rankClassName = 'rank-' + rank.toLowerCase().replace(/\s+/g, '-');
+            dashboardContainer.classList.add(rankClassName);
+        }
+    }
+    // =========================================================
+    // END: NEW FUNCTION
+    // =========================================================
+
+
     // --- SAFE FETCH WRAPPER ---
     async function safeFetch(url, options = {}) {
         options.headers = options.headers || {};
@@ -144,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Pre-loading dashboard data...");
         if (adminTabLink && adminTabLink.style.display !== 'none') {
             populateAdminTools();
-            populateInvites(); 
+            populateInvites();
         }
         if (pilotTabLink && pilotTabLink.style.display !== 'none') {
             populatePilotDatabase();
@@ -169,6 +199,15 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const user = await safeFetch(`${API_BASE_URL}/api/me`);
             currentUserId = user._id;
+
+            // =========================================================
+            // START: ADDED LOGIC TO APPLY THEME
+            // =========================================================
+            // Apply the dynamic rank-based theme to the entire dashboard
+            applyRankTheme(user.rank);
+            // =========================================================
+            // END: ADDED LOGIC
+            // =========================================================
 
             if (welcomeMessage) welcomeMessage.textContent = `Welcome, ${user.name || 'Pilot'}!`;
 
@@ -219,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (routeManagerRoles.includes(user.role)) {
                 showTab(rosterTabLink);
             }
-            
+
             preloadDashboardData();
 
         } catch (error) {
@@ -228,23 +267,23 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = 'login.html';
         }
     }
-    
+
     // --- PERFORMANCE OPTIMIZATION: Generic function to render lists efficiently ---
     function renderList(container, items, itemRenderer, emptyMessage) {
         if (!container) return;
-        container.innerHTML = ''; 
+        container.innerHTML = '';
 
         if (!items || items.length === 0) {
             container.innerHTML = `<p>${emptyMessage}</p>`;
             return;
         }
-        
+
         const fragment = document.createDocumentFragment();
         items.forEach(item => {
             const element = itemRenderer(item);
             if (element) fragment.appendChild(element);
         });
-        
+
         container.appendChild(fragment);
     }
 
@@ -280,7 +319,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     await safeFetch(`${API_BASE_URL}/api/me/notifications/read`, {
                         method: 'POST',
-                        body: JSON.stringify({ notificationIds: idsToMarkRead })
+                        body: JSON.stringify({
+                            notificationIds: idsToMarkRead
+                        })
                     });
                     unreadNotifications = [];
                     setTimeout(() => {
@@ -309,9 +350,9 @@ document.addEventListener('DOMContentLoaded', () => {
         card.className = 'pirep-review-card';
         card.id = `pirep-${p._id}`;
 
-        const verificationLinkHtml = p.verificationImageUrl
-            ? `<p><strong>Verification:</strong> <a href="${p.verificationImageUrl}" target="_blank" class="view-image-btn">View Submitted Image</a></p>`
-            : '<p><strong>Verification:</strong> No image submitted.</p>';
+        const verificationLinkHtml = p.verificationImageUrl ?
+            `<p><strong>Verification:</strong> <a href="${p.verificationImageUrl}" target="_blank" class="view-image-btn">View Submitted Image</a></p>` :
+            '<p><strong>Verification:</strong> No image submitted.</p>';
 
         card.innerHTML = `
             <div class="card-header">
@@ -353,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target.classList.contains('btn-approve')) {
                 e.target.disabled = true;
                 e.target.textContent = 'Approving...';
-                
+
                 const correctedTimeInput = document.getElementById(`correct-time-${pirepId}`);
                 const correctedFlightTime = correctedTimeInput ? correctedTimeInput.value : null;
 
@@ -371,7 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const pirepCard = document.getElementById(`pirep-${pirepId}`);
                     if (pirepCard) pirepCard.remove();
                     if (pendingPirepsContainer.children.length === 0) {
-                         pendingPirepsContainer.innerHTML = '<p>There are no pending PIREPs to review. 🎉</p>';
+                        pendingPirepsContainer.innerHTML = '<p>There are no pending PIREPs to review. 🎉</p>';
                     }
                 } catch (error) {
                     showNotification(`Error: ${error.message}`, 'error');
@@ -523,13 +564,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    
+
     async function loadAndRenderRosters(fetchAll = false) {
         const container = document.getElementById('manage-rosters-container');
         try {
-            const url = fetchAll 
-                ? `${API_BASE_URL}/api/rosters?all=true`
-                : `${API_BASE_URL}/api/rosters`;
+            const url = fetchAll ?
+                `${API_BASE_URL}/api/rosters?all=true` :
+                `${API_BASE_URL}/api/rosters`;
             const rosters = await safeFetch(url);
             renderList(container, rosters, createRosterCardElement, 'No rosters have been created yet.');
         } catch (error) {
@@ -604,7 +645,7 @@ document.addEventListener('DOMContentLoaded', () => {
         navLinks.forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
-                
+
                 if (link.classList.contains('active')) return;
 
                 navLinks.forEach(item => item.classList.remove('active'));
@@ -656,14 +697,13 @@ document.addEventListener('DOMContentLoaded', () => {
             renderUserList(users);
             renderLiveOperations(users);
             renderLogList(logs);
-        } catch (error)
-        {
+        } catch (error) {
             console.error('Failed to populate admin tools:', error);
             if (userListContainer) userListContainer.innerHTML = '<p style="color: red;">Could not load users.</p>';
             if (logContainer) logContainer.innerHTML = '<p style="color: red;">Could not load logs.</p>';
         }
     }
-    
+
     // --- ADMIN: INVITATION MANAGEMENT ---
     async function populateInvites() {
         if (!inviteListContainer) return;
@@ -735,11 +775,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = document.createElement('div');
         card.className = 'user-manage-card';
         card.setAttribute('data-userid', user._id);
-        
-        const statusBadge = user.promotionStatus === 'PENDING_TEST'
-            ? '<span class="status-badge warning">Pending Test</span>'
-            : '';
-        
+
+        const statusBadge = user.promotionStatus === 'PENDING_TEST' ?
+            '<span class="status-badge warning">Pending Test</span>' :
+            '';
+
         card.innerHTML = `
             <div class="user-info">
                 <strong>${user.name}</strong> ${statusBadge}
@@ -765,7 +805,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         return card;
     }
-    
+
     function renderUserList(users) {
         renderList(userListContainer, users, createUserCardElement, 'No users found.');
     }
@@ -781,7 +821,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         return entry;
     }
-    
+
     function renderLogList(logs) {
         renderList(logContainer, logs.slice(0, 50), createLogEntryElement, 'No administrative actions have been logged yet.');
     }
@@ -822,7 +862,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 safeFetch(`${API_BASE_URL}/api/events`),
                 safeFetch(`${API_BASE_URL}/api/highlights`)
             ]);
-            
+
             renderManagementList(events, manageEventsContainer, 'event');
             renderManagementList(highlights, manageHighlightsContainer, 'highlight');
         } catch (error) {
@@ -831,7 +871,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (manageHighlightsContainer) manageHighlightsContainer.innerHTML = '<p style="color:red;">Could not load highlights.</p>';
         }
     }
-    
+
     function createManagementItemElement(item, type) {
         const card = document.createElement('div');
         card.className = 'user-manage-card';
@@ -862,7 +902,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const users = await safeFetch(`${API_BASE_URL}/api/users`);
             const pilots = (users || []).filter(u => u.role === 'pilot' || Boolean(u.callsign));
-            
+
             const renderer = (p) => {
                 const card = document.createElement('div');
                 card.className = 'user-manage-card';
@@ -881,7 +921,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
                 return card;
             };
-            
+
             renderList(container, pilots, renderer, 'No pilots found.');
 
         } catch (error) {
@@ -907,17 +947,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 `<option value="${rank}" ${rank === currentRank ? 'selected' : ''}>${rank}</option>`
             ).join('');
         };
-        
+
         const renderer = (pilot) => {
-             const card = document.createElement('div');
-             card.className = 'user-manage-card';
-             card.setAttribute('data-userid', pilot._id);
+            const card = document.createElement('div');
+            card.className = 'user-manage-card';
+            card.setAttribute('data-userid', pilot._id);
 
-             const statusBadge = pilot.promotionStatus === 'PENDING_TEST'
-                ? '<span class="status-badge warning">Pending Test</span>'
-                : '';
+            const statusBadge = pilot.promotionStatus === 'PENDING_TEST' ?
+                '<span class="status-badge warning">Pending Test</span>' :
+                '';
 
-             card.innerHTML = `
+            card.innerHTML = `
                 <div class="user-info">
                     <strong>${pilot.name}</strong> (${pilot.callsign || 'No Callsign'}) ${statusBadge}
                     <small>${pilot.email}</small>
@@ -933,7 +973,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             return card;
         };
-        
+
         renderList(pilotManagementContainer, pilots, renderer, 'No pilots found in the roster.');
     }
 
@@ -1107,7 +1147,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!userId || !confirm(`WARNING: Are you sure you want to delete ${userName}? This action cannot be undone.`)) return;
 
                 try {
-                    await safeFetch(`${API_BASE_URL}/api/users/${userId}`, { method: 'DELETE' });
+                    await safeFetch(`${API_BASE_URL}/api/users/${userId}`, {
+                        method: 'DELETE'
+                    });
                     showNotification('User deleted successfully.', 'success');
                     deleteUserBtn.closest('.user-manage-card').remove();
                 } catch (error) {
@@ -1119,9 +1161,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 const userId = ftplBtn.dataset.userid;
                 if (!userId || !confirm('Are you sure you want to change the FTPL status for this user?')) return;
-                
+
                 try {
-                    const result = await safeFetch(`${API_BASE_URL}/api/users/${userId}/toggle-ftpl`, { method: 'PUT' });
+                    const result = await safeFetch(`${API_BASE_URL}/api/users/${userId}/toggle-ftpl`, {
+                        method: 'PUT'
+                    });
                     showNotification(result.message, 'success');
                     ftplBtn.dataset.exempt = result.isFtplExempt;
                     ftplBtn.textContent = `FTPL: ${result.isFtplExempt ? 'Exempt' : 'Active'}`;
@@ -1143,7 +1187,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     await safeFetch(`${API_BASE_URL}/api/users/${userId}/callsign`, {
                         method: 'PUT',
-                        body: JSON.stringify({ callsign })
+                        body: JSON.stringify({
+                            callsign
+                        })
                     });
                     showNotification(`Callsign ${callsign} assigned.`, 'success');
                     if (document.getElementById('pilot-db-container')) populatePilotDatabase();
@@ -1151,13 +1197,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     showNotification(`Failed to set callsign: ${error.message}`, 'error');
                 }
             }
-            
+
             if (createInviteBtn) {
                 e.preventDefault();
                 createInviteBtn.disabled = true;
                 createInviteBtn.textContent = 'Creating...';
                 try {
-                    await safeFetch(`${API_BASE_URL}/api/invites`, { method: 'POST' });
+                    await safeFetch(`${API_BASE_URL}/api/invites`, {
+                        method: 'POST'
+                    });
                     showNotification('New invite code created successfully!', 'success');
                     populateInvites();
                 } catch (error) {
@@ -1167,14 +1215,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     createInviteBtn.textContent = 'Create New Invite Code';
                 }
             }
-            
+
             if (deleteInviteBtn) {
                 e.preventDefault();
                 const inviteId = deleteInviteBtn.dataset.id;
                 if (!inviteId || !confirm('Are you sure you want to delete this invite code?')) return;
 
                 try {
-                    await safeFetch(`${API_BASE_URL}/api/invites/${inviteId}`, { method: 'DELETE' });
+                    await safeFetch(`${API_BASE_URL}/api/invites/${inviteId}`, {
+                        method: 'DELETE'
+                    });
                     showNotification('Invite code deleted.', 'success');
                     deleteInviteBtn.closest('.user-manage-card').remove();
                 } catch (error) {
@@ -1193,7 +1243,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     await safeFetch(`${API_BASE_URL}/api/users/${userId}/role`, {
                         method: 'PUT',
-                        body: JSON.stringify({ newRole })
+                        body: JSON.stringify({
+                            newRole
+                        })
                     });
                     showNotification('User role updated successfully.', 'success');
                     Array.from(select.options).forEach(opt => opt.defaultSelected = false);
@@ -1241,16 +1293,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const originalRank = Array.from(selectElement.options).find(opt => opt.defaultSelected)?.value;
 
                 if (!confirm(`Are you sure you want to change this pilot's rank to ${newRank}? This is irreversible and will complete their promotion test if they are pending one.`)) {
-                    selectElement.value = originalRank; 
+                    selectElement.value = originalRank;
                     return;
                 }
                 try {
                     await safeFetch(`${API_BASE_URL}/api/users/${userId}/rank`, {
                         method: 'PUT',
-                        body: JSON.stringify({ newRank })
+                        body: JSON.stringify({
+                            newRank
+                        })
                     });
                     showNotification('Pilot rank updated successfully!', 'success');
-                    populatePilotManagement(); 
+                    populatePilotManagement();
                     fetchUserData();
                 } catch (error) {
                     showNotification(`Failed to update rank: ${error.message}`, 'error');
@@ -1275,7 +1329,9 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 await safeFetch(`${API_BASE_URL}/api/users/${userId}/callsign`, {
                     method: 'PUT',
-                    body: JSON.stringify({ callsign })
+                    body: JSON.stringify({
+                        callsign
+                    })
                 });
                 showNotification('Callsign updated successfully.', 'success');
                 if (document.getElementById('tab-admin')) populateAdminTools();
