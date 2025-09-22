@@ -696,7 +696,7 @@ async function updateLiveFlights() {
     `;
 
 
-    // MODIFIED: Added map initialization to renderPilotHubView
+    // MODIFIED: Added map initialization and global rank styling to renderPilotHubView
     const renderPilotHubView = async (pilot, leaderboardsHTML) => {
         const dutyStatusView = document.getElementById('view-duty-status');
         if (crewRestInterval) clearInterval(crewRestInterval);
@@ -712,24 +712,23 @@ async function updateLiveFlights() {
 
         dutyStatusView.innerHTML = `${pendingBanner}${dutyStatusHTML}${leaderboardsHTML}`;
 
-        // --- NEW: DYNAMICALLY STYLE THE HUB CARD BASED ON RANK ---
-        const hubCard = dutyStatusView.querySelector('.pilot-hub-card');
-        if (hubCard && pilot.rank) {
+        // --- MODIFIED: DYNAMICALLY STYLE THE ENTIRE UI BASED ON RANK ---
+        const dashboardContainer = document.querySelector('.dashboard-container');
+        if (dashboardContainer && pilot.rank) {
             const rankSlug = 'rank-' + pilot.rank.toLowerCase().replace(/\s+/g, '-');
             
             // Clean up any old rank classes to handle promotions correctly
-            const classList = Array.from(hubCard.classList);
+            const classList = Array.from(dashboardContainer.classList);
             for (const c of classList) {
                 if (c.startsWith('rank-')) {
-                    hubCard.classList.remove(c);
+                    dashboardContainer.classList.remove(c);
                 }
             }
             
-            // Add the new class
-            hubCard.classList.add(rankSlug);
+            // Add the new class to the main container
+            dashboardContainer.classList.add(rankSlug);
         }
-        // --- END NEW SECTION ---
-
+        // --- END MODIFICATION ---
 
         // NEW: Initialize the map after the HTML is rendered.
         // Use a small timeout to ensure the DOM is ready for the map.
@@ -803,7 +802,7 @@ async function updateLiveFlights() {
                     const fullRoute = `${firstLeg.departure} → ${lastLeg.arrival}`;
 
                     rosterCardHTML = `
-                        <div class="next-step-card" style="flex: 1.5; min-width: 300px; background-color: rgba(0, 27, 148, 0.1); padding: 1.5rem; border-radius: 8px; border-left: 3px solid var(--accent-color);">
+                        <div class="next-step-card" style="flex: 1.5; min-width: 300px; background-color: rgba(0, 27, 148, 0.1); padding: 1.5rem; border-radius: 8px; border-left: 3px solid var(--rank-accent-color, var(--accent-color));">
                             <h4 style="margin-top: 0;">Ready for Your Next Assignment?</h4>
                             <p>Based on your location, we recommend this roster:</p>
                             <div class="featured-roster-summary" style="background-color: rgba(13, 16, 28, 0.5); padding: 1rem; border-radius: 5px; margin: 1rem 0; display: flex; justify-content: space-between; align-items: center;">

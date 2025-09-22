@@ -117,7 +117,7 @@ body::before {
 /* --- NEW: CUSTOM SCROLLBAR STYLES --- */
 .sidebar-nav {
     scrollbar-width: thin; /* For Firefox */
-    scrollbar-color: var(--accent-color) transparent; /* For Firefox */
+    scrollbar-color: var(--rank-accent-color, var(--accent-color)) transparent; /* For Firefox */
 }
 /* For Webkit Browsers (Chrome, Safari, Edge) */
 .sidebar-nav::-webkit-scrollbar {
@@ -127,12 +127,12 @@ body::before {
     background: transparent;
 }
 .sidebar-nav::-webkit-scrollbar-thumb {
-    background-color: var(--accent-color);
+    background-color: var(--rank-accent-color, var(--accent-color));
     border-radius: 10px;
     border: 2px solid var(--secondary-bg);
 }
 .sidebar-nav::-webkit-scrollbar-thumb:hover {
-    background-color: #0025c4;
+    filter: brightness(1.2);
 }
 
 .sidebar-nav ul { list-style: none; }
@@ -143,8 +143,8 @@ body::before {
     transition: background-color 0.3s, color 0.3s;
 }
 .sidebar-nav .nav-link i { width: 20px; font-size: 1.1rem; text-align: center; }
-.sidebar-nav .nav-link:hover { background-color: var(--accent-color); color: #fff; }
-.sidebar-nav .nav-link.active { background-color: var(--accent-color); color: #fff; font-weight: 500; }
+.sidebar-nav .nav-link:hover { background-color: var(--rank-accent-color, var(--accent-color)); color: #fff; }
+.sidebar-nav .nav-link.active { background-color: var(--rank-accent-color, var(--accent-color)); color: #fff; font-weight: 500; }
 .nav-text { transition: opacity 0.3s ease; white-space: nowrap; }
 
 /* Footer and Profile Section at the Bottom (REDESIGNED) */
@@ -165,7 +165,8 @@ body::before {
 }
 .profile-img {
     width: 45px; height: 45px; border-radius: 50%;
-    object-fit: cover; border: 2px solid var(--accent-color); flex-shrink: 0;
+    object-fit: cover; border: 2px solid var(--rank-accent-color, var(--accent-color)); flex-shrink: 0;
+    transition: border-color 0.4s ease;
 }
 .profile-details { flex-grow: 1; transition: opacity 0.3s ease; white-space: nowrap; overflow: hidden; }
 #pilot-name { font-weight: 600; color: #ffffff; font-size: 1.1rem; }
@@ -195,7 +196,7 @@ body::before {
     background-color: rgba(255,255,255,0.05);
 }
 .dashboard-link:hover {
-    background-color: var(--accent-color);
+    background-color: var(--rank-accent-color, var(--accent-color));
     color: #fff;
 }
 
@@ -285,8 +286,9 @@ body::before {
 }
 .content-card h2 {
     margin-top: 0; margin-bottom: 1.5rem;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 1rem; color: #ffffff; display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid var(--rank-accent-color, var(--border-color));
+    padding-bottom: 1rem; color: var(--rank-text-color, #ffffff); display: flex; align-items: center; gap: 12px;
+    transition: all 0.4s ease;
 }
 
 .content-card + .content-card { margin-top: 2rem; }
@@ -317,7 +319,7 @@ body::before {
 
 .roster-item:hover {
     transform: translateY(-5px);
-    box-shadow: 0 8px 25px var(--glow-color);
+    box-shadow: 0 8px 25px var(--rank-glow-color, var(--glow-color));
     background-color: rgba(26, 35, 63, 0.7);
 }
 
@@ -379,13 +381,13 @@ input, textarea, select {
 }
 .cta-button, .end-duty-btn {
     display: inline-block; padding: 0.8rem 1.5rem; border: none; border-radius: 5px;
-    font-weight: bold; cursor: pointer; transition: background-color 0.2s;
+    font-weight: bold; cursor: pointer; transition: all 0.3s;
 }
-.cta-button { background-color: var(--accent-color); color: white; }
-.cta-button:hover { background: #0025c4; }
+.cta-button { background-color: var(--rank-accent-color, var(--accent-color)); color: white; }
+.cta-button:hover { filter: brightness(1.2); box-shadow: 0 4px 15px var(--rank-glow-color, var(--glow-color));}
 .end-duty-btn { background-color: var(--error-color); color: white; }
 .end-duty-btn:hover { background: #9b2c2c; }
-.cta-button:disabled, .end-duty-btn:disabled { background: #555; cursor: not-allowed; }
+.cta-button:disabled, .end-duty-btn:disabled { background: #555; cursor: not-allowed; filter: none; box-shadow: none;}
 
 /* --- NEW STYLES FOR FILE INPUT --- */
 .file-input {
@@ -397,11 +399,11 @@ input, textarea, select {
     cursor: pointer;
 }
 .file-input::file-selector-button {
-    background-color: var(--accent-color);
+    background-color: var(--rank-accent-color, var(--accent-color));
     color: #fff; border: none; padding: 0.6rem 1rem; border-radius: 4px; cursor: pointer; margin-right: 1rem;
     transition: background-color 0.2s;
 }
-.file-input::file-selector-button:hover { background-color: #0025c4; }
+.file-input::file-selector-button:hover { filter: brightness(1.2); }
 
 /* --- Roster Details Drawer --- */
 .roster-actions { display: flex; gap: 0.75rem; align-items: center; }
@@ -412,7 +414,7 @@ input, textarea, select {
     background-color: rgba(255, 255, 255, 0.05); color: var(--dashboard-text-muted);
     transition: background-color 0.2s, color 0.2s, border-color 0.2s;
 }
-.details-button:hover { background-color: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+.details-button:hover { background-color: var(--rank-accent-color, var(--accent-color)); color: #fff; border-color: var(--rank-accent-color, var(--accent-color)); }
 
 /* --- REDESIGNED Roster Leg Details --- */
 .roster-leg-details {
@@ -910,7 +912,7 @@ roster-item {
 .leaderboard-card.redesigned h4 {
     margin-top: 1.5rem;
     margin-bottom: 1rem;
-    color: var(--accent-color);
+    color: var(--rank-accent-color, var(--accent-color));
     font-size: 1.1rem;
     font-weight: 700;
     padding-bottom: 0.5rem;
@@ -960,7 +962,7 @@ roster-item {
 .leaderboard-entry .score {
     font-weight: bold;
     font-size: 1.2rem;
-    color: var(--accent-color);
+    color: var(--rank-accent-color, var(--accent-color));
 }
 .leaderboard-entry .score .unit {
     font-size: 0.8rem;
@@ -992,6 +994,8 @@ roster-item {
     border: 1px solid var(--border-color);
     border-radius: 10px;
     padding: 1.5rem 2rem 2rem 2rem; /* More padding */
+    border-top: 5px solid transparent;
+    transition: border-color 0.5s ease, box-shadow 0.5s ease;
 }
 
 /* --- NEW: CREW REST TIMER STYLES (IMPROVED) --- */
@@ -1085,7 +1089,7 @@ roster-item {
     background-color: var(--primary-glass);
     padding: 1rem;
     border-radius: 5px;
-    border-left: 3px solid var(--accent-color);
+    border-left: 3px solid var(--rank-accent-color, var(--accent-color));
 }
 .notification-item p { margin: 0; }
 .notification-item small { opacity: 0.7; font-size: 0.8rem; }
@@ -1302,7 +1306,7 @@ roster-item {
         background-color: transparent;
         /* Make the icon white and add a border indicator */
         color: #ffffff; 
-        border-bottom-color: var(--accent-color);
+        border-bottom-color: var(--rank-accent-color, var(--accent-color));
     }
     
     .sidebar-nav .nav-link i {
@@ -1418,7 +1422,7 @@ roster-item {
 
 
 .dispatch-header {
-    background-color: var(--accent-color);
+    background-color: var(--rank-accent-color, var(--accent-color));
     color: #fff;
     padding: 1rem 2rem;
     display: flex;
@@ -1426,6 +1430,7 @@ roster-item {
     align-items: center;
     border-top-left-radius: 10px;
     border-top-right-radius: 10px;
+    transition: background-color 0.4s ease;
 }
 
 /* Adjust header-left to accommodate the logo */
@@ -1614,8 +1619,9 @@ roster-item {
 .speed-item span {
     font-size: 1.5rem;
     font-weight: bold;
-    color: var(--accent-color);
+    color: var(--rank-accent-color, var(--accent-color));
     line-height: 1.2;
+    transition: color 0.4s ease;
 }
 .speed-item.landing-speed span {
     color: var(--success-color);
@@ -1719,16 +1725,16 @@ roster-item {
 
 .dispatch-input:focus {
     outline: none;
-    border-color: var(--accent-color);
-    box-shadow: 0 0 0 2px rgba(0, 27, 148, 0.2);
+    border-color: var(--rank-accent-color, var(--accent-color));
+    box-shadow: 0 0 0 2px var(--rank-glow-color, var(--glow-color));
 }
 
 .dispatch-pass-container .dispatch-actions .cta-button {
-    background-color: var(--accent-color);
+    background-color: var(--rank-accent-color, var(--accent-color));
     color: white;
 }
 .dispatch-pass-container .dispatch-actions .cta-button:hover {
-    background-color: #0025c4;
+    filter: brightness(1.2);
 }
 
 .dispatch-pass-container .dispatch-actions .details-button {
@@ -1782,7 +1788,7 @@ roster-item {
 }
 
 .active-flight-summary:hover {
-    background-color: var(--accent-color);
+    background-color: var(--rank-accent-color, var(--accent-color));
 }
 
 .flight-summary-info {
@@ -1890,7 +1896,7 @@ roster-item {
 }
 
 .active-flight-item.expanded .active-flight-summary {
-    background-color: var(--accent-color);
+    background-color: var(--rank-accent-color, var(--accent-color));
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
 }
@@ -2043,8 +2049,8 @@ roster-item {
 
 .form-input:focus {
     outline: none;
-    border-color: var(--accent-color);
-    box-shadow: 0 0 0 3px var(--glow-color);
+    border-color: var(--rank-accent-color, var(--accent-color));
+    box-shadow: 0 0 0 3px var(--rank-glow-color, var(--glow-color));
 }
 
 .file-flight-footer {
@@ -2105,7 +2111,7 @@ roster-item {
 /* ================================================== */
 
 /* ================================================== */
-/* START: NEW PROGRESSIVE RANK BADGE STYLES           */
+/* START: PROGRESSIVE RANK BADGE STYLES               */
 /* ================================================== */
 
 /* --- Base Badge Style --- */
@@ -2202,7 +2208,71 @@ roster-item {
 }
 
 /* ================================================== */
-/* END: NEW PROGRESSIVE RANK BADGE STYLES             */
+/* END: PROGRESSIVE RANK BADGE STYLES                 */
+/* ================================================== */
+
+/* ================================================== */
+/* START: GLOBAL RANK-BASED THEME STYLES              */
+/* ================================================== */
+
+/* --- Tier 1: Entry Ranks (Clean & Simple) --- */
+.dashboard-container.rank-indgo-cadet,
+.dashboard-container.rank-skyline-observer {
+    --rank-accent-color: #aeb9e1;
+    --rank-glow-color: rgba(174, 185, 225, 0.15);
+    --rank-text-color: #aeb9e1;
+}
+
+/* --- Tier 2: Mid-Level Ranks (A Splash of Color) --- */
+.dashboard-container.rank-route-explorer,
+.dashboard-container.rank-skyline-officer,
+.dashboard-container.rank-command-captain {
+    --rank-accent-color: #00a8ff;
+    --rank-glow-color: rgba(0, 168, 255, 0.25);
+    --rank-text-color: #92d5f1;
+}
+
+/* --- Tier 3: Senior Ranks (Prestigious & Bright) --- */
+.dashboard-container.rank-elite-captain,
+.dashboard-container.rank-blue-eagle {
+    --rank-accent-color: var(--warning-color);
+    --rank-glow-color: rgba(240, 173, 78, 0.3);
+    --rank-text-color: var(--warning-color);
+}
+
+/* --- Tier 4: Command Staff (Elite & Distinct) --- */
+.dashboard-container.rank-line-instructor,
+.dashboard-container.rank-chief-flight-instructor,
+.dashboard-container.rank-indgo-skymaster,
+.dashboard-container.rank-blue-legacy-commander {
+    --rank-accent-color: #e0e0e0;
+    --rank-glow-color: rgba(224, 224, 224, 0.3);
+    --rank-text-color: #ffffff;
+}
+/* Special override for command staff buttons */
+.dashboard-container.rank-line-instructor .cta-button,
+.dashboard-container.rank-chief-flight-instructor .cta-button,
+.dashboard-container.rank-indgo-skymaster .cta-button,
+.dashboard-container.rank-blue-legacy-commander .cta-button {
+    background-image: linear-gradient(45deg, #bdc3c7, #2c3e50);
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+.dashboard-container.rank-line-instructor .cta-button:hover,
+.dashboard-container.rank-chief-flight-instructor .cta-button:hover,
+.dashboard-container.rank-indgo-skymaster .cta-button:hover,
+.dashboard-container.rank-blue-legacy-commander .cta-button:hover {
+    filter: brightness(1.1);
+}
+
+/* --- Apply the rank theme to the Pilot Hub Card --- */
+.pilot-hub-card {
+    border-top-color: var(--rank-accent-color, transparent);
+    box-shadow: 0 0 25px var(--rank-glow-color, rgba(0,0,0,0));
+}
+
+/* ================================================== */
+/* END: GLOBAL RANK-BASED THEME STYLES                */
 /* ================================================== */
 
 
@@ -2236,7 +2306,7 @@ roster-item {
 .hub-rank-display h1 {
     font-size: 2.8rem;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--rank-text-color, #ffffff);
     margin: 0;
     line-height: 1.1;
     text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
@@ -2282,56 +2352,5 @@ roster-item {
 }
 
 
-/* --- NEW: Dynamic Rank-Based Hub Card Styling --- */
-.pilot-hub-card {
-    border-top: 5px solid transparent;
-    transition: border-color 0.5s ease, box-shadow 0.5s ease;
-}
-
-/* Tier 1: Entry Ranks (Clean & Simple) */
-.pilot-hub-card.rank-indgo-cadet,
-.pilot-hub-card.rank-skyline-observer {
-    border-top-color: #aeb9e1;
-}
-
-/* Tier 2: Mid-Level Ranks (A Splash of Color) */
-.pilot-hub-card.rank-route-explorer,
-.pilot-hub-card.rank-skyline-officer,
-.pilot-hub-card.rank-command-captain {
-    border-top-color: #00a8ff; /* A bright blue */
-    box-shadow: 0 0 25px rgba(0, 168, 255, 0.15);
-}
-
-.pilot-hub-card.rank-route-explorer h1,
-.pilot-hub-card.rank-skyline-officer h1,
-.pilot-hub-card.rank-command-captain h1 {
-    color: #92d5f1;
-}
-
-/* Tier 3: Senior Ranks (Prestigious & Bright) */
-.pilot-hub-card.rank-elite-captain,
-.pilot-hub-card.rank-blue-eagle {
-    border-top-color: var(--warning-color);
-    box-shadow: 0 0 30px rgba(240, 173, 78, 0.2);
-}
-
-.pilot-hub-card.rank-elite-captain h1,
-.pilot-hub-card.rank-blue-eagle h1 {
-    color: var(--warning-color);
-}
-
-/* Tier 4: Command Staff (Elite & Distinct) */
-.pilot-hub-card.rank-line-instructor,
-.pilot-hub-card.rank-chief-flight-instructor,
-.pilot-hub-card.rank-indgo-skymaster,
-.pilot-hub-card.rank-blue-legacy-commander {
-    border-top-color: #e0e0e0;
-    box-shadow: 0 0 35px rgba(224, 224, 224, 0.25);
-}
-
-.pilot-hub-card.rank-line-instructor h1,
-.pilot-hub-card.rank-chief-flight-instructor h1,
-.pilot-hub-card.rank-indgo-skymaster h1,
-.pilot-hub-card.rank-blue-legacy-commander h1 {
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
-}
+/* --- REMOVED Redundant Dynamic Rank-Based Hub Card Styling --- */
+/* This is now handled by the global theme system */
