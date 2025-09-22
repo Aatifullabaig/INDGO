@@ -235,25 +235,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // --- START: UPDATED DISCORD LINKING UI ---
             const discordStatus = document.getElementById('discord-status');
-            const linkDiscordBtn = document.getElementById('link-discord-btn');
+const linkDiscordBtn = document.getElementById('link-discord-btn');
 
-            if (user.discordUsername) {
-                discordStatus.textContent = `Linked as ${user.discordUsername}`;
-                discordStatus.style.color = 'var(--success-color)';
-                linkDiscordBtn.textContent = 'Unlink';
-                linkDiscordBtn.classList.add('unlink-btn');
-            } else {
-                discordStatus.textContent = 'Not Linked. Click to connect.';
-                discordStatus.style.color = 'inherit';
-                linkDiscordBtn.textContent = 'Link Discord';
-                linkDiscordBtn.classList.remove('unlink-btn');
-            }
-            // --- END: UPDATED DISCORD LINKING UI ---
+const discordEntry = (user.connectedAccounts || []).find(
+  a => a.provider === 'discord' && (a.verified === true || a.verified === undefined)
+);
+const discordName = discordEntry?.username || user.discord;
 
-            if (user.unreadNotifications && user.unreadNotifications.length > 0) {
-                unreadNotifications = user.unreadNotifications;
-                updateNotificationUI();
-            }
+if (discordName) {
+  discordStatus.textContent = `Linked as ${discordName}`;
+  discordStatus.style.color = 'var(--success-color)';
+  linkDiscordBtn.textContent = 'Unlink';
+  linkDiscordBtn.classList.add('unlink-btn');
+} else {
+  discordStatus.textContent = 'Not Linked. Click to connect.';
+  discordStatus.style.color = 'inherit';
+  linkDiscordBtn.textContent = 'Link Discord';
+  linkDiscordBtn.classList.remove('unlink-btn');
+}
 
             // --- ROLE-BASED TAB VISIBILITY ---
             const showTab = (element) => {
@@ -1357,7 +1356,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Handle Unlink
                 if (confirm('Are you sure you want to unlink your Discord account?')) {
                     try {
-                        await safeFetch(`${API_BASE_URL}/api/me/discord`, { method: 'DELETE' });
+                        await safeFetch(`${API_BASE_URL}/api/me/links/discord`, { method: 'DELETE' });
                         showNotification('Discord account unlinked successfully.', 'success');
                         fetchUserData(); // Refresh user data to update the UI
                     } catch (error) {
