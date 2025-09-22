@@ -1366,8 +1366,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } else {
                 // Handle Link - Redirect to Discord
-                const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(DISCORD_REDIRECT_URI)}&response_type=code&scope=identify`;
-                window.location.href = discordAuthUrl;
+                window.location.href = `${API_BASE_URL}/auth/discord/start`;
             }
         }
         // --- END: NEW DISCORD LINKING EVENT HANDLER ---
