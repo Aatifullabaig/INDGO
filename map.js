@@ -165,12 +165,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // MODIFIED: highlightRoster is now focusOnRoster
-    window.focusOnRoster = function(rosterId) {
+    window.focusOnRoster = function(roster.rosterId) {
     if (!window.leafletMap) return;
     resetHighlights();
     routeInfoLayerGroup.clearLayers(); // Clear any existing route labels
 
-    const rosterData = rosterLayers[rosterId];
+    const rosterData = rosterLayers[roster.rosterId];
     if (!rosterData) return;
 
     // Hide all markers and polylines first
