@@ -9,6 +9,30 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css" rel="stylesheet">
     <link rel="icon" href="/images/indgo.png" type="image/x-icon">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Added for the new link button layout */
+        .account-link-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background-color: var(--secondary-bg);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        .account-link-container span {
+            flex-grow: 1;
+            color: var(--dashboard-text-muted);
+        }
+        .account-link-container .cta-button {
+            margin: 0; /* Override default button margin */
+            padding: 0.5rem 1rem;
+            flex-shrink: 0;
+        }
+        .account-link-container .unlink-btn {
+            background-color: var(--error-color);
+        }
+    </style>
 </head>
 <body>
     <div class="dashboard-container">
@@ -118,8 +142,11 @@
                         <small class="form-text" style="color: var(--dashboard-text-muted); font-size: 0.8em; display: block; margin-top: 5px;">You can find this on your SimBrief Account Settings page.</small>
                     </div>
                     <div class="form-group">
-                        <label for="profile-discord">Discord Username</label>
-                        <input type="text" id="profile-discord" placeholder="e.g., username#0000">
+                        <label>Discord Account</label>
+                        <div class="account-link-container">
+                            <span id="discord-status">Checking status...</span>
+                            <button type="button" id="link-discord-btn" class="cta-button">Link Discord</button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="profile-ifc">Infinite Flight Community Profile URL</label>
@@ -133,7 +160,6 @@
                         <label for="profile-preferred">Preferred Contact Method</label>
                         <select id="profile-preferred">
                             <option value="none">None</option>
-                            <option value="discord">Discord</option>
                             <option value="ifc">IFC</option>
                             <option value="youtube">YouTube</option>
                         </select>

@@ -3,6 +3,13 @@
 document.addEventListener('DOMContentLoaded', () => {
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
 
+    // --- NEW: DISCORD OAUTH CONFIGURATION ---
+    // IMPORTANT: Replace this with your actual Discord Application Client ID.
+    const DISCORD_CLIENT_ID = '1088424681572188160';
+    // This must match EXACTLY what you've set in your Discord Developer Portal.
+    const DISCORD_REDIRECT_URI = `${API_BASE_URL}/api/auth/discord/callback`;
+
+
     // --- NEW: LOADER ELEMENT ---
     const loadingOverlay = document.getElementById('loading-overlay');
 
@@ -127,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
             options.headers.Authorization = `Bearer ${token}`;
         }
 
-        if (!(options.body instanceof FormData) && !options.headers['Content-Type']) {
+        if (!(options.body instanceof FormData) && !options.headers['Content-Type'] && options.method !== 'DELETE') {
             options.headers['Content-Type'] = 'application/json';
         }
 
@@ -140,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             const text = await res.text();
             data = {
-                message: text
+                message: text || (res.ok ? 'Success' : 'Error')
             };
         }
 
@@ -222,10 +229,26 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('profile-name').value = user.name;
             document.getElementById('profile-bio').value = user.bio || '';
             document.getElementById('profile-simbrief-userid').value = user.simbriefUserId || '';
-            document.getElementById('profile-discord').value = user.discord || '';
             document.getElementById('profile-ifc').value = user.ifc || '';
             document.getElementById('profile-youtube').value = user.youtube || '';
             document.getElementById('profile-preferred').value = user.preferredContact || 'none';
+
+            // --- START: UPDATED DISCORD LINKING UI ---
+            const discordStatus = document.getElementById('discord-status');
+            const linkDiscordBtn = document.getElementById('link-discord-btn');
+
+            if (user.discordUsername) {
+                discordStatus.textContent = `Linked as ${user.discordUsername}`;
+                discordStatus.style.color = 'var(--success-color)';
+                linkDiscordBtn.textContent = 'Unlink';
+                linkDiscordBtn.classList.add('unlink-btn');
+            } else {
+                discordStatus.textContent = 'Not Linked. Click to connect.';
+                discordStatus.style.color = 'inherit';
+                linkDiscordBtn.textContent = 'Link Discord';
+                linkDiscordBtn.classList.remove('unlink-btn');
+            }
+            // --- END: UPDATED DISCORD LINKING UI ---
 
             if (user.unreadNotifications && user.unreadNotifications.length > 0) {
                 unreadNotifications = user.unreadNotifications;
@@ -1046,7 +1069,6 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('name', document.getElementById('profile-name').value);
             formData.append('bio', document.getElementById('profile-bio').value || '');
             formData.append('simbriefUserId', document.getElementById('profile-simbrief-userid').value || '');
-            formData.append('discord', document.getElementById('profile-discord').value || '');
             formData.append('ifc', document.getElementById('profile-ifc').value || '');
             formData.append('youtube', document.getElementById('profile-youtube').value || '');
             formData.append('preferredContact', document.getElementById('profile-preferred').value || 'none');
@@ -1327,6 +1349,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- BODY-WIDE EVENT LISTENER FOR DYNAMICALLY CREATED BUTTONS ---
     document.body.addEventListener('click', async (e) => {
+        // --- START: NEW DISCORD LINKING EVENT HANDLER ---
+        const linkDiscordBtn = e.target.closest('#link-discord-btn');
+        if (linkDiscordBtn) {
+            e.preventDefault();
+            if (linkDiscordBtn.classList.contains('unlink-btn')) {
+                // Handle Unlink
+                if (confirm('Are you sure you want to unlink your Discord account?')) {
+                    try {
+                        await safeFetch(`${API_BASE_URL}/api/me/discord`, { method: 'DELETE' });
+                        showNotification('Discord account unlinked successfully.', 'success');
+                        fetchUserData(); // Refresh user data to update the UI
+                    } catch (error) {
+                        showNotification(`Failed to unlink Discord: ${error.message}`, 'error');
+                    }
+                }
+            } else {
+                // Handle Link - Redirect to Discord
+                const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&redirect_uri=${encodeURIComponent(DISCORD_REDIRECT_URI)}&response_type=code&scope=identify`;
+                window.location.href = discordAuthUrl;
+            }
+        }
+        // --- END: NEW DISCORD LINKING EVENT HANDLER ---
+
+
         const pilotSetCsBtn = e.target.closest('.pilot-set-callsign-btn');
         if (pilotSetCsBtn) {
             const userId = pilotSetCsBtn.dataset.userid;
