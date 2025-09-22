@@ -3,6 +3,9 @@
 document.addEventListener('DOMContentLoaded', () => {
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
 
+    // --- NEW: LOADER ELEMENT ---
+    const loadingOverlay = document.getElementById('loading-overlay');
+
     // --- CROPPER VARIABLES AND ELEMENTS ---
     const cropperModal = document.getElementById('cropper-modal');
     const imageToCrop = document.getElementById('image-to-crop');
@@ -259,10 +262,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 showTab(rosterTabLink);
             }
 
+            // Hide the main loader now that the core UI is ready
+            if (loadingOverlay) {
+                loadingOverlay.classList.add('hidden');
+            }
+
             preloadDashboardData();
 
         } catch (error) {
             console.error('Error fetching user data:', error);
+            if (loadingOverlay) {
+                loadingOverlay.classList.add('hidden');
+            }
             localStorage.removeItem('authToken');
             window.location.href = 'login.html';
         }
