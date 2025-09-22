@@ -2138,3 +2138,104 @@ roster-item {
 /* ================================================== */
 /* END: NEW REDESIGNED DISPATCH UI STYLES             */
 /* ================================================== */
+
+/* ================================================== */
+/* START: NEW PROGRESSIVE RANK BADGE STYLES           */
+/* ================================================== */
+
+/* --- Base Badge Style --- */
+/* This is the foundation for all rank displays that show image and text */
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px; /* Fully rounded pill shape */
+    font-size: 1rem;
+    font-weight: 700;
+    border: 1px solid var(--border-color);
+    background-color: var(--primary-glass);
+    transition: all 0.3s ease;
+    vertical-align: middle; /* Ensures alignment with other text */
+}
+
+.rank-badge .rank-badge-img {
+    height: 20px;
+    width: auto;
+}
+
+.rank-badge .rank-badge-name {
+    color: var(--dashboard-text-muted);
+    font-size: 0.9rem;
+    font-weight: bold;
+}
+
+/* --- Tier 1: Entry Ranks (Clean & Simple) --- */
+.rank-indgo-cadet,
+.rank-skyline-observer {
+    background-color: rgba(13, 16, 28, 0.7);
+}
+
+.rank-indgo-cadet .rank-badge-name,
+.rank-skyline-observer .rank-badge-name {
+    color: #aeb9e1;
+}
+
+/* --- Tier 2: Mid-Level Ranks (A Splash of Color) --- */
+.rank-route-explorer,
+.rank-skyline-officer,
+.rank-command-captain {
+    background-color: rgba(0, 27, 148, 0.3); /* Uses accent color */
+    border-color: rgba(0, 27, 148, 0.7);
+}
+
+.rank-route-explorer .rank-badge-name,
+.rank-skyline-officer .rank-badge-name,
+.rank-command-captain .rank-badge-name {
+    color: #92d5f1; /* Lighter Sky Blue */
+}
+
+/* --- Tier 3: Senior Ranks (Prestigious & Bright) --- */
+.rank-elite-captain,
+.rank-blue-eagle {
+    background-color: rgba(240, 173, 78, 0.15); /* Soft Gold */
+    border-color: rgba(240, 173, 78, 0.6);
+    box-shadow: 0 0 8px rgba(240, 173, 78, 0.2);
+}
+
+.rank-elite-captain .rank-badge-name,
+.rank-blue-eagle .rank-badge-name {
+    color: var(--warning-color); /* Bright Gold/Yellow */
+    text-shadow: 0 0 5px rgba(240, 173, 78, 0.3);
+}
+
+/* --- Tier 4: Command Staff (Elite & Distinct) --- */
+.rank-line-instructor,
+.rank-chief-flight-instructor,
+.rank-indgo-skymaster,
+.rank-blue-legacy-commander {
+    /* A subtle gradient for the highest ranks */
+    background-image: linear-gradient(45deg, var(--accent-color), #2c3e50);
+    border-color: #92d5f1;
+    color: #ffffff;
+    /* A stronger glow to make it stand out */
+    box-shadow: 0 0 12px var(--glow-color);
+}
+
+.rank-line-instructor .rank-badge-name,
+.rank-chief-flight-instructor .rank-badge-name,
+.rank-indgo-skymaster .rank-badge-name,
+.rank-blue-legacy-commander .rank-badge-name {
+    color: #ffffff;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+/* Add a subtle hover effect to all badges */
+.rank-badge:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px var(--glow-color);
+}
+
+/* ================================================== */
+/* END: NEW PROGRESSIVE RANK BADGE STYLES             */
+/* ================================================== */

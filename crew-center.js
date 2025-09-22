@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {boolean} options.showImage - Whether to show the badge image.
      * @param {boolean} options.showName - Whether to show the rank name text.
      * @param {string} options.imageClass - CSS class for the image.
-     * @param {string} options.containerClass - CSS class for the container when both are shown.
+     * @param {string} options.containerClass - Base CSS class for the container.
      * @returns {string} The generated HTML string.
      */
     function getRankBadgeHTML(rankName, options = {}) {
@@ -33,36 +33,41 @@ document.addEventListener('DOMContentLoaded', () => {
             showImage: true,
             showName: false,
             imageClass: 'rank-badge-img',
-            containerClass: 'rank-badge-container',
+            containerClass: 'rank-badge', // Use a more generic base class
         };
         const config = { ...defaults, ...options };
-
+    
         if (!rankName) return `<span>Unknown Rank</span>`;
-
-        // Create the filename from the rank name (e.g., "Blue Eagle" -> "blue_eagle_badge.png")
+    
+        // Create a CSS-friendly slug from the rank name (e.g., "Blue Eagle" -> "rank-blue-eagle")
+        const rankSlug = 'rank-' + rankName.toLowerCase().replace(/\s+/g, '-');
+        
+        // Create the filename for the image
         const fileName = rankName.toLowerCase().replace(/\s+/g, '_') + '_badge.png';
         const imagePath = `images/badges/${fileName}`;
         
         let imageHtml = '';
         let nameHtml = '';
-
+    
         if (config.showImage) {
             // onerror will replace the img with just the text name if the image fails to load.
             imageHtml = `<img src="${imagePath}" alt="${rankName}" title="${rankName}" class="${config.imageClass}" onerror="this.outerHTML='<span>${rankName}</span>'">`;
         }
-
+    
         if (config.showName) {
             nameHtml = `<span class="rank-badge-name">${rankName}</span>`;
         }
         
+        // If we only want the image, return just that.
         if (config.showImage && !config.showName) {
             return imageHtml;
         }
-
+    
+        // For combined displays, wrap them in a container that has both the base class AND the rank-specific slug class.
         if (config.showImage && config.showName) {
-            return `<span class="${config.containerClass}">${imageHtml} ${nameHtml}</span>`;
+            return `<span class="${config.containerClass} ${rankSlug}">${imageHtml} ${nameHtml}</span>`;
         }
-
+    
         return `<span>${rankName}</span>`; // Fallback
     }
 
