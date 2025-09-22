@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         rosters.forEach(roster => {
             // MODIFIED: Store leg data along with layers
-            rosterLayers[roster._id] = { polylines: [], airportMarkers: [], legs: [] };
+            rosterLayers[roster.rosterId] = { polylines: [], airportMarkers: [], legs: [] };
             const rosterUniqueIcaos = new Set();
 
             roster.legs.forEach(leg => {
@@ -102,9 +102,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (dep && arr) {
                     const latlngs = [[dep.lat, dep.lon], [arr.lat, arr.lon]];
                     const polyline = L.polyline(latlngs, defaultLineStyle).addTo(window.leafletMap);
-                    rosterLayers[roster._id].polylines.push(polyline);
+                    rosterLayers[roster.rosterId].polylines.push(polyline);
                     // NEW: Store detailed leg info for later use
-                    rosterLayers[roster._id].legs.push({
+                    rosterLayers[roster.rosterId].legs.push({
                         ...leg,
                         depCoords: [dep.lat, dep.lon],
                         arrCoords: [arr.lat, arr.lon]
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         allAirportMarkers[icao] = marker;
                     }
                     marker = allAirportMarkers[icao];
-                    rosterLayers[roster._id].airportMarkers.push(marker);
+                    rosterLayers[roster.rosterId].airportMarkers.push(marker);
                 }
             });
         });
