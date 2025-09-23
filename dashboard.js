@@ -825,7 +825,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const partnerMap = new Map(codesharePartners.map(p => [p.name, p.logo]));
-        const defaultLogo = 'https://i.imgur.com/83N2o4M.png'; // A generic logo for IndGo
+        const defaultLogo = 'Images/indgo.png'; // A generic logo for IndGo
 
         const renderer = (route) => {
             const card = document.createElement('div');

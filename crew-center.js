@@ -221,10 +221,12 @@ document.addEventListener('DOMContentLoaded', () => {
         actionsContainer.innerHTML = `
             <button class="cta-button" id="depart-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-plane-departure"></i> Depart</button>
             <button class="end-duty-btn" id="cancel-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-ban"></i> Cancel Flight</button>
+            <button class="details-button" id="test-acars-btn" data-plan-id="${plan._id}" style="margin-left: 10px;"><i class="fa-solid fa-satellite-dish"></i> Start ACARS Test</button>
         `;
     } else if (plan.status === 'FLYING') {
         actionsContainer.innerHTML = `
              <button class="cta-button" id="arrive-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-plane-arrival"></i> Arrive</button>
+             <button class="details-button" id="test-acars-btn" data-plan-id="${plan._id}" style="margin-left: 10px;"><i class="fa-solid fa-satellite-dish"></i> Start ACARS Test</button>
         `;
     }
 
@@ -1433,6 +1435,37 @@ async function updateLiveFlights() {
     if (target.id === 'arrive-btn') {
         document.getElementById('arrive-flight-form').dataset.planId = planId;
         arriveFlightModal.classList.add('visible');
+    }
+
+    if (target.id === 'test-acars-btn') {
+        const planId = target.dataset.planId;
+        if (!planId) return;
+
+        target.disabled = true;
+        target.innerHTML = '<i class="fa-solid fa-satellite-dish"></i> Starting...';
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/acars/track/start/${planId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({}) // Send empty body to use server default
+            });
+
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.message || 'Failed to start ACARS test.');
+            
+            showNotification(result.message, 'success');
+            target.textContent = 'ACARS Active';
+            // Leave it disabled as the test has started.
+
+        } catch (err) {
+            showNotification(`ACARS Test Error: ${err.message}`, 'error');
+            target.disabled = false; // Re-enable on error
+            target.innerHTML = '<i class="fa-solid fa-satellite-dish"></i> Start ACARS Test';
+        }
     }
 
     if (target.id === 'generate-with-simbrief-btn') {
