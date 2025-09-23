@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pirepTabLink = document.getElementById('pirep-tab-link');
     const rosterTabLink = document.getElementById('roster-tab-link');
     const pilotTabLink = document.getElementById('pilot-tab-link');
+    const routeManagerTabLink = document.getElementById('route-manager-tab-link'); // NEW
 
     // --- PROFILE CARD ELEMENTS (UPDATED) ---
     const profilePictureElem = document.getElementById('profile-picture');
@@ -65,6 +66,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- APP STATE & CONFIG ---
     const token = localStorage.getItem('authToken');
     let currentUserId = null;
+    let allRoutes = []; // NEW: To store routes for filtering
+    let codesharePartners = JSON.parse(localStorage.getItem('codesharePartners')) || []; // NEW: For codeshare management
     const allRoles = {
         "General Roles": ["staff", "pilot", "admin"],
         "Leadership & Management": ["Chief Executive Officer (CEO)", "Chief Operating Officer (COO)", "PIREP Manager (PM)", "Pilot Relations & Recruitment Manager (PR)", "Technology & Design Manager (TDM)", "Head of Training (COT)", "Chief Marketing Officer (CMO)", "Route Manager (RM)", "Events Manager (EM)"],
@@ -201,6 +204,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (communityTabLink && communityTabLink.style.display !== 'none') {
             populateCommunityManagement();
         }
+        if (routeManagerTabLink && routeManagerTabLink.style.display !== 'none') { // NEW
+            populateRouteManager();
+        }
     }
 
 
@@ -235,24 +241,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // --- START: UPDATED DISCORD LINKING UI ---
             const discordStatus = document.getElementById('discord-status');
-const linkDiscordBtn = document.getElementById('link-discord-btn');
+            const linkDiscordBtn = document.getElementById('link-discord-btn');
 
-const discordEntry = (user.connectedAccounts || []).find(
-  a => a.provider === 'discord' && (a.verified === true || a.verified === undefined)
-);
-const discordName = discordEntry?.username || user.discord;
+            const discordEntry = (user.connectedAccounts || []).find(
+                a => a.provider === 'discord' && (a.verified === true || a.verified === undefined)
+            );
+            const discordName = discordEntry?.username || user.discord;
 
-if (discordName) {
-  discordStatus.textContent = `Linked as ${discordName}`;
-  discordStatus.style.color = 'var(--success-color)';
-  linkDiscordBtn.textContent = 'Unlink';
-  linkDiscordBtn.classList.add('unlink-btn');
-} else {
-  discordStatus.textContent = 'Not Linked. Click to connect.';
-  discordStatus.style.color = 'inherit';
-  linkDiscordBtn.textContent = 'Link Discord';
-  linkDiscordBtn.classList.remove('unlink-btn');
-}
+            if (discordName) {
+                discordStatus.textContent = `Linked as ${discordName}`;
+                discordStatus.style.color = 'var(--success-color)';
+                linkDiscordBtn.textContent = 'Unlink';
+                linkDiscordBtn.classList.add('unlink-btn');
+            } else {
+                discordStatus.textContent = 'Not Linked. Click to connect.';
+                discordStatus.style.color = 'inherit';
+                linkDiscordBtn.textContent = 'Link Discord';
+                linkDiscordBtn.classList.remove('unlink-btn');
+            }
 
             // --- ROLE-BASED TAB VISIBILITY ---
             const showTab = (element) => {
@@ -282,6 +288,7 @@ if (discordName) {
             const routeManagerRoles = ['admin', 'Chief Executive Officer (CEO)', 'Chief Operating Officer (COO)', 'Route Manager (RM)'];
             if (routeManagerRoles.includes(user.role)) {
                 showTab(rosterTabLink);
+                showTab(routeManagerTabLink); // UPDATED: Show both roster and route manager
             }
 
             // Hide the main loader now that the core UI is ready
@@ -669,6 +676,215 @@ if (discordName) {
             }
         });
     }
+
+    // =========================================================
+    // START: NEW ROUTE MANAGER SECTION
+    // =========================================================
+    function populateRouteManager() {
+        const container = document.getElementById('tab-route-manager');
+        if (!container) return;
+
+        container.innerHTML = `
+            <h2><i class="fas fa-route"></i> Route Network Manager</h2>
+            <p>Manage the airline's route network, including IndGo and codeshare partner flights.</p>
+            <div class="route-manager-grid">
+                <div class="left-column">
+                    <div id="codeshare-management-panel" class="mb-4" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <h3><i class="fas fa-handshake"></i> Codeshare Partners</h3>
+                        <p style="font-size: 0.9em; color: var(--dashboard-text-muted);">Partners added here will be available in the 'Operator' dropdown. Data is saved in your browser.</p>
+                        <form id="add-codeshare-form" class="dashboard-form">
+                            <div class="form-group"><input type="text" id="codeshare-name" placeholder="Airline Name (e.g., Qatar Airways)" required></div>
+                            <div class="form-group"><input type="url" id="codeshare-logo" placeholder="Logo URL" required></div>
+                            <button type="submit" class="cta-button">Add Partner</button>
+                        </form>
+                        <hr>
+                        <div id="codeshare-list-container"></div>
+                    </div>
+                </div>
+                <div class="right-column">
+                    <div id="add-route-panel" class="mb-4" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <h3><i class="fas fa-plus-circle"></i> Add New Route</h3>
+                        <form id="add-route-form" class="dashboard-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                            <div class="form-group"><label for="route-flightnumber">Flight Number</label><input type="text" id="route-flightnumber" required></div>
+                            <div class="form-group"><label for="route-departure">Departure ICAO</label><input type="text" id="route-departure" maxlength="4" required></div>
+                            <div class="form-group"><label for="route-arrival">Arrival ICAO</label><input type="text" id="route-arrival" maxlength="4" required></div>
+                            <div class="form-group"><label for="route-aircraft">Aircraft</label><input type="text" id="route-aircraft" required></div>
+                            <div class="form-group"><label for="route-flighttime">Flight Time (Hours)</label><input type="number" id="route-flighttime" step="0.1" min="0.1" required></div>
+                            <div class="form-group"><label for="route-operator">Operator / Livery</label><select id="route-operator" required></select></div>
+                            <button type="submit" class="cta-button" style="grid-column: 1 / -1;">Add Route</button>
+                        </form>
+                    </div>
+                    <div id="view-routes-panel" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <h3><i class="fas fa-plane-departure"></i> Current Route Database</h3>
+                        <div id="route-filters" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                            <input type="text" id="filter-icao" placeholder="Filter by Departure ICAO..." class="form-control">
+                            <input type="text" id="filter-aircraft" placeholder="Filter by Aircraft..." class="form-control">
+                            <select id="filter-operator" class="form-control"></select>
+                        </div>
+                        <div id="route-list-container"><p>Loading routes...</p></div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        loadAndRenderCodeshares();
+        loadAndRenderRoutes();
+
+        // Event Listeners for the new forms
+        document.getElementById('add-codeshare-form').addEventListener('submit', handleAddCodeshare);
+        document.getElementById('add-route-form').addEventListener('submit', handleAddRoute);
+
+        // Event Listeners for filters
+        document.getElementById('filter-icao').addEventListener('input', renderFilteredRoutes);
+        document.getElementById('filter-aircraft').addEventListener('input', renderFilteredRoutes);
+        document.getElementById('filter-operator').addEventListener('change', renderFilteredRoutes);
+
+        // Event Delegation for delete buttons
+        container.addEventListener('click', e => {
+            if (e.target.closest('.delete-codeshare-btn')) {
+                handleDeleteCodeshare(e.target.closest('.delete-codeshare-btn').dataset.name);
+            }
+            if (e.target.closest('.delete-route-btn')) {
+                handleDeleteRoute(e.target.closest('.delete-route-btn').dataset.flightnumber);
+            }
+        });
+    }
+
+    function loadAndRenderCodeshares() {
+        const container = document.getElementById('codeshare-list-container');
+        const operatorSelect = document.getElementById('route-operator');
+        const filterOperatorSelect = document.getElementById('filter-operator');
+
+        renderList(container, codesharePartners, item => {
+            const div = document.createElement('div');
+            div.className = 'codeshare-item';
+            div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--border-color);';
+            div.innerHTML = `
+                <div><img src="${item.logo}" alt="${item.name} logo" style="height: 20px; width: auto; margin-right: 10px; vertical-align: middle;"> <span>${item.name}</span></div>
+                <button class="delete-user-btn delete-codeshare-btn" data-name="${item.name}">&times;</button>
+            `;
+            return div;
+        }, 'No codeshare partners added.');
+
+        // Populate dropdowns
+        let optionsHtml = `<option value="IndGo Air Virtual">IndGo Air Virtual</option>`;
+        codesharePartners.forEach(p => {
+            optionsHtml += `<option value="${p.name}">${p.name}</option>`;
+        });
+        if (operatorSelect) operatorSelect.innerHTML = optionsHtml;
+
+        let filterOptionsHtml = `<option value="">All Operators</option>` + optionsHtml;
+        if (filterOperatorSelect) filterOperatorSelect.innerHTML = filterOptionsHtml;
+    }
+
+    function handleAddCodeshare(e) {
+        e.preventDefault();
+        const name = document.getElementById('codeshare-name').value.trim();
+        const logo = document.getElementById('codeshare-logo').value.trim();
+        if (name && logo && !codesharePartners.some(p => p.name === name)) {
+            codesharePartners.push({
+                name,
+                logo
+            });
+            localStorage.setItem('codesharePartners', JSON.stringify(codesharePartners));
+            showNotification('Codeshare partner added.', 'success');
+            document.getElementById('add-codeshare-form').reset();
+            loadAndRenderCodeshares();
+        } else {
+            showNotification('Partner already exists or form is incomplete.', 'error');
+        }
+    }
+
+    function handleDeleteCodeshare(name) {
+        codesharePartners = codesharePartners.filter(p => p.name !== name);
+        localStorage.setItem('codesharePartners', JSON.stringify(codesharePartners));
+        showNotification('Codeshare partner removed.', 'success');
+        loadAndRenderCodeshares();
+    }
+
+    async function loadAndRenderRoutes() {
+        try {
+            allRoutes = await safeFetch(`${API_BASE_URL}/api/routes`);
+            renderFilteredRoutes();
+        } catch (error) {
+            const container = document.getElementById('route-list-container');
+            if (container) container.innerHTML = `<p style="color:red;">Error loading routes: ${error.message}</p>`;
+        }
+    }
+
+    function renderFilteredRoutes() {
+        const filterIcao = document.getElementById('filter-icao').value.toUpperCase().trim();
+        const filterAircraft = document.getElementById('filter-aircraft').value.toUpperCase().trim();
+        const filterOperator = document.getElementById('filter-operator').value;
+
+        const filtered = allRoutes.filter(route => {
+            const icaoMatch = !filterIcao || (route.departure && route.departure.toUpperCase().includes(filterIcao));
+            const aircraftMatch = !filterAircraft || (route.aircraft && route.aircraft.toUpperCase().includes(filterAircraft));
+            const operatorMatch = !filterOperator || route.operator === filterOperator;
+            return icaoMatch && aircraftMatch && operatorMatch;
+        });
+
+        const partnerMap = new Map(codesharePartners.map(p => [p.name, p.logo]));
+        const defaultLogo = 'https://i.imgur.com/83N2o4M.png'; // A generic logo for IndGo
+
+        const renderer = (route) => {
+            const card = document.createElement('div');
+            card.className = 'route-card';
+            card.style.cssText = 'display: grid; grid-template-columns: 50px 1fr 1fr 1fr auto; gap: 1rem; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);';
+            const operatorLogoUrl = partnerMap.get(route.operator) || defaultLogo;
+            card.innerHTML = `
+                <img src="${operatorLogoUrl}" alt="${route.operator}" class="operator-logo" title="${route.operator}" style="height: 24px; width: auto;">
+                <div><strong>${route.flightNumber}</strong><br><small style="color: var(--dashboard-text-muted);">${route.operator}</small></div>
+                <div>${route.departure} &rarr; ${route.arrival}<br><small style="color: var(--dashboard-text-muted);">${route.flightTime} hrs</small></div>
+                <div>${route.aircraft}<br><small style="color: var(--dashboard-text-muted);">Rank: ${route.rankUnlock || 'N/A'}</small></div>
+                <button class="delete-user-btn delete-route-btn" data-flightnumber="${route.flightNumber}"><i class="fas fa-trash-alt"></i></button>
+            `;
+            return card;
+        };
+
+        renderList(document.getElementById('route-list-container'), filtered.sort((a, b) => a.flightNumber.localeCompare(b.flightNumber)), renderer, 'No routes match the current filters.');
+    }
+
+    async function handleAddRoute(e) {
+        e.preventDefault();
+        const routeData = {
+            flightNumber: document.getElementById('route-flightnumber').value.trim().toUpperCase(),
+            departure: document.getElementById('route-departure').value.trim().toUpperCase(),
+            arrival: document.getElementById('route-arrival').value.trim().toUpperCase(),
+            aircraft: document.getElementById('route-aircraft').value.trim(),
+            flightTime: parseFloat(document.getElementById('route-flighttime').value),
+            operator: document.getElementById('route-operator').value,
+        };
+
+        try {
+            await safeFetch(`${API_BASE_URL}/api/routes`, {
+                method: 'POST',
+                body: JSON.stringify(routeData)
+            });
+            showNotification(`Route ${routeData.flightNumber} added successfully!`, 'success');
+            document.getElementById('add-route-form').reset();
+            loadAndRenderRoutes(); // Refresh the list
+        } catch (error) {
+            showNotification(`Error adding route: ${error.message}`, 'error');
+        }
+    }
+
+    async function handleDeleteRoute(flightNumber) {
+        if (!confirm(`Are you sure you want to delete route ${flightNumber}? This cannot be undone.`)) return;
+        try {
+            await safeFetch(`${API_BASE_URL}/api/routes/${flightNumber}`, {
+                method: 'DELETE'
+            });
+            showNotification(`Route ${flightNumber} deleted.`, 'success');
+            loadAndRenderRoutes(); // Refresh the list by re-fetching
+        } catch (error) {
+            showNotification(`Error deleting route: ${error.message}`, 'error');
+        }
+    }
+    // =========================================================
+    // END: NEW ROUTE MANAGER SECTION
+    // =========================================================
+
 
     // --- TAB SWITCHING LOGIC ---
     function attachTabListeners() {
@@ -1356,7 +1572,9 @@ if (discordName) {
                 // Handle Unlink
                 if (confirm('Are you sure you want to unlink your Discord account?')) {
                     try {
-                        await safeFetch(`${API_BASE_URL}/api/me/links/discord`, { method: 'DELETE' });
+                        await safeFetch(`${API_BASE_URL}/api/me/links/discord`, {
+                            method: 'DELETE'
+                        });
                         showNotification('Discord account unlinked successfully.', 'success');
                         fetchUserData(); // Refresh user data to update the UI
                     } catch (error) {
@@ -1365,18 +1583,18 @@ if (discordName) {
                 }
             } else {
                 try {
-    // 1. Make an authenticated call to the backend using safeFetch
-    const data = await safeFetch(`${API_BASE_URL}/auth/discord/start`);
+                    // 1. Make an authenticated call to the backend using safeFetch
+                    const data = await safeFetch(`${API_BASE_URL}/auth/discord/start`);
 
-    // 2. If we get a URL back, redirect the user's browser to it
-    if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
-    } else {
-        showNotification('Could not start Discord linking process.', 'error');
-    }
-} catch (error) {
-    showNotification(`Error: ${error.message}`, 'error');
-}
+                    // 2. If we get a URL back, redirect the user's browser to it
+                    if (data.redirectUrl) {
+                        window.location.href = data.redirectUrl;
+                    } else {
+                        showNotification('Could not start Discord linking process.', 'error');
+                    }
+                } catch (error) {
+                    showNotification(`Error: ${error.message}`, 'error');
+                }
             }
         }
         // --- END: NEW DISCORD LINKING EVENT HANDLER ---
