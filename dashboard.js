@@ -39,7 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const pirepTabLink = document.getElementById('pirep-tab-link');
     const rosterTabLink = document.getElementById('roster-tab-link');
     const pilotTabLink = document.getElementById('pilot-tab-link');
-    const routeManagerTabLink = document.getElementById('route-manager-tab-link'); // NEW
+    const routeManagerTabLink = document.getElementById('route-manager-tab-link');
+    const aircraftManagerTabLink = document.getElementById('aircraft-manager-tab-link'); // NEW
 
     // --- PROFILE CARD ELEMENTS (UPDATED) ---
     const profilePictureElem = document.getElementById('profile-picture');
@@ -66,7 +67,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- APP STATE & CONFIG ---
     const token = localStorage.getItem('authToken');
     let currentUserId = null;
-    let allRoutes = []; // To store routes for filtering
     let codesharePartners = []; // For codeshare management, now fetched from API
     const allRoles = {
         "General Roles": ["staff", "pilot", "admin"],
@@ -204,8 +204,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (communityTabLink && communityTabLink.style.display !== 'none') {
             populateCommunityManagement();
         }
-        if (routeManagerTabLink && routeManagerTabLink.style.display !== 'none') { // NEW
+        if (routeManagerTabLink && routeManagerTabLink.style.display !== 'none') {
             populateRouteManager();
+        }
+        // NEW: Preload Aircraft Manager
+        if (aircraftManagerTabLink && aircraftManagerTabLink.style.display !== 'none') {
+            populateAircraftManager();
         }
     }
 
@@ -216,14 +220,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const user = await safeFetch(`${API_BASE_URL}/api/me`);
             currentUserId = user._id;
 
-            // =========================================================
-            // START: ADDED LOGIC TO APPLY THEME
-            // =========================================================
             // Apply the dynamic rank-based theme to the entire dashboard
             applyRankTheme(user.rank);
-            // =========================================================
-            // END: ADDED LOGIC
-            // =========================================================
 
             if (welcomeMessage) welcomeMessage.textContent = `Welcome, ${user.name || 'Pilot'}!`;
 
@@ -288,7 +286,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const routeManagerRoles = ['admin', 'Chief Executive Officer (CEO)', 'Chief Operating Officer (COO)', 'Route Manager (RM)'];
             if (routeManagerRoles.includes(user.role)) {
                 showTab(rosterTabLink);
-                showTab(routeManagerTabLink); // UPDATED: Show both roster and route manager
+                showTab(routeManagerTabLink);
+                showTab(aircraftManagerTabLink); // NEW: Show Aircraft Manager tab
             }
 
             // Hide the main loader now that the core UI is ready
@@ -678,9 +677,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================================
-    // START: MERGED & UPDATED ROUTE MANAGER SECTION
+    // START: MERGED & REBUILT ROUTE MANAGER SECTION
     // =========================================================
-    function populateRouteManager() {
+    async function populateRouteManager() {
         const container = document.getElementById('tab-route-manager');
         if (!container) return;
 
@@ -717,10 +716,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div id="view-routes-panel" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
                         <h3><i class="fas fa-plane-departure"></i> Current Route Database</h3>
-                        <div id="route-filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
-                            <input type="text" id="filter-icao" placeholder="Filter by ICAO..." class="form-control" style="flex: 1;">
-                            <input type="text" id="filter-aircraft" placeholder="Filter by Aircraft..." class="form-control" style="flex: 1;">
-                            <select id="filter-operator" class="form-control" style="flex: 1;"></select>
+                         <div id="route-filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: flex-end;">
+                            <div style="flex: 1;"><label for="filter-operator">Operator</label><select id="filter-operator" class="form-control"></select></div>
+                            <div style="flex: 1;"><label for="filter-icao">ICAO (Dep/Arr)</label><input type="text" id="filter-icao" placeholder="e.g., VABB" class="form-control"></div>
+                            <div style="flex: 1;"><label for="filter-aircraft-by-codeshare">Aircraft</label><select id="filter-aircraft-by-codeshare" class="form-control"><option value="">All Aircraft</option></select></div>
                         </div>
                         <div id="route-list-container"><p>Loading routes...</p></div>
                     </div>
@@ -729,14 +728,13 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         // Load data and set up event listeners
-        loadAndRenderCodeshares().then(loadAndRenderRoutes);
+        await loadAndRenderCodeshares();
+        hookInstallRouteFilters();
+        await populateAircraftOptionsForOperator(); // Initial population for dropdown
+        renderFilteredRoutes(); // Initial render
 
         document.getElementById('add-codeshare-form').addEventListener('submit', handleAddCodeshare);
         document.getElementById('add-route-form').addEventListener('submit', handleAddRoute);
-
-        document.getElementById('filter-icao').addEventListener('input', renderFilteredRoutes);
-        document.getElementById('filter-aircraft').addEventListener('input', renderFilteredRoutes);
-        document.getElementById('filter-operator').addEventListener('change', renderFilteredRoutes);
 
         container.addEventListener('click', e => {
             const deleteCodeshareBtn = e.target.closest('.delete-codeshare-btn');
@@ -827,30 +825,67 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function loadAndRenderRoutes() {
+    function hookInstallRouteFilters() {
+        const operatorSel = document.getElementById('filter-operator');
+        const icaoInput = document.getElementById('filter-icao');
+        const acByCsSel = document.getElementById('filter-aircraft-by-codeshare');
+
+        if (operatorSel) {
+            operatorSel.addEventListener('change', async () => {
+                await populateAircraftOptionsForOperator();
+                renderFilteredRoutes();
+            });
+        }
+        if (icaoInput) icaoInput.addEventListener('input', () => renderFilteredRoutes());
+        if (acByCsSel) acByCsSel.addEventListener('change', () => renderFilteredRoutes());
+    }
+
+    async function populateAircraftOptionsForOperator() {
+        const operator = (document.getElementById('filter-operator')?.value || '').trim();
+        const sel = document.getElementById('filter-aircraft-by-codeshare');
+        if (!sel) return;
+        if (!operator) {
+            sel.innerHTML = '<option value="">All aircraft</option>';
+            return;
+        }
         try {
-            allRoutes = await safeFetch(`${API_BASE_URL}/api/routes`);
-            renderFilteredRoutes();
+            const ac = await safeFetch(`${API_BASE_URL}/api/aircrafts?codeshare=${encodeURIComponent(operator)}`);
+            const opts = ['<option value="">All aircraft</option>'].concat(
+                (ac || []).map(a => `<option value="${a.icao}">${a.icao} — ${a.name}</option>`)
+            );
+            sel.innerHTML = opts.join('');
         } catch (error) {
-            const container = document.getElementById('route-list-container');
-            if (container) container.innerHTML = `<p style="color:red;">Error loading routes: ${error.message}</p>`;
+            showNotification(`Could not load aircraft for operator: ${error.message}`, 'error');
+            sel.innerHTML = '<option value="">All aircraft</option>';
         }
     }
 
-    function renderFilteredRoutes() {
-        const filterIcao = document.getElementById('filter-icao').value.toUpperCase().trim();
-        const filterAircraft = document.getElementById('filter-aircraft').value.toUpperCase().trim();
-        const filterOperator = document.getElementById('filter-operator').value;
 
-        const filtered = allRoutes.filter(route => {
-            const icaoMatch = !filterIcao || (route.departure && route.departure.toUpperCase().includes(filterIcao));
-            const aircraftMatch = !filterAircraft || (route.aircraft && route.aircraft.toUpperCase().includes(filterAircraft));
-            const operatorMatch = !filterOperator || route.operator === filterOperator;
-            return icaoMatch && aircraftMatch && operatorMatch;
-        });
+    async function renderFilteredRoutes() {
+        const container = document.getElementById('route-list-container');
+        if (!container) return;
+
+        const operator = document.getElementById('filter-operator')?.value || '';
+        const acPick = document.getElementById('filter-aircraft-by-codeshare')?.value || '';
+        const icao = document.getElementById('filter-icao')?.value.trim() || '';
+
+        const params = new URLSearchParams();
+        if (operator) params.set('operator', operator);
+        if (acPick) params.set('aircraft', acPick);
+        if (icao) params.set('icao', icao.toUpperCase());
+
+        let routes = [];
+        try {
+            container.innerHTML = `<p>Loading routes...</p>`;
+            routes = await safeFetch(`${API_BASE_URL}/api/routes?${params.toString()}`);
+        } catch (e) {
+            showNotification(`Error loading routes: ${e.message}`, 'error');
+            container.innerHTML = `<p style="color:red;">Error loading routes: ${e.message}</p>`;
+            return;
+        }
 
         const partnerMap = new Map(codesharePartners.map(p => [p.name, p.logoUrl]));
-        const defaultLogo = 'Images/indgo.png'; // A generic logo for IndGo
+        const defaultLogo = 'Images/indgo.png';
 
         const renderer = (route) => {
             const card = document.createElement('div');
@@ -867,7 +902,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return card;
         };
 
-        renderList(document.getElementById('route-list-container'), filtered.sort((a, b) => a.flightNumber.localeCompare(b.flightNumber)), renderer, 'No routes match the current filters.');
+        renderList(container, routes.sort((a, b) => a.flightNumber.localeCompare(b.flightNumber)), renderer, 'No routes match the current filters.');
     }
 
     async function handleAddRoute(e) {
@@ -881,7 +916,7 @@ document.addEventListener('DOMContentLoaded', () => {
             operator: document.getElementById('route-operator').value,
             livery: document.getElementById('route-livery').value.trim()
         };
-        
+
         if (Object.values(routeData).some(val => !val && val !== 0)) {
             showNotification('Please fill all route fields.', 'error');
             return;
@@ -894,7 +929,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             showNotification(`Route ${routeData.flightNumber} added successfully!`, 'success');
             document.getElementById('add-route-form').reset();
-            await loadAndRenderRoutes(); // Refresh the list
+            renderFilteredRoutes(); // Refresh the list
         } catch (error) {
             showNotification(`Error adding route: ${error.message}`, 'error');
         }
@@ -907,13 +942,179 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'DELETE'
             });
             showNotification(`Route ${flightNumber} deleted.`, 'success');
-            await loadAndRenderRoutes(); // Refresh the list by re-fetching
+            renderFilteredRoutes(); // Refresh the list by re-fetching
         } catch (error) {
             showNotification(`Error deleting route: ${error.message}`, 'error');
         }
     }
     // =========================================================
-    // END: MERGED & UPDATED ROUTE MANAGER SECTION
+    // END: ROUTE MANAGER SECTION
+    // =========================================================
+
+    // =========================================================
+    // START: NEW AIRCRAFT MANAGER SECTION
+    // =========================================================
+    async function populateAircraftManager() {
+        const container = document.getElementById('tab-aircraft-manager');
+        if (!container) return;
+
+        container.innerHTML = `
+            <h2><i class="fas fa-plane"></i> Aircraft Manager</h2>
+            <p>Add and manage aircraft available to the airline and its codeshare partners. Each aircraft can be assigned a minimum rank required for pilots to fly it.</p>
+
+            <div class="dashboard-form" id="aircraft-form" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                <h3>Add New Aircraft</h3>
+                <div class="form-grid-two-col">
+                     <div class="form-group"><label for="ac-name">Name</label><input id="ac-name" required placeholder="Airbus A320-200"></div>
+                     <div class="form-group"><label for="ac-icao">ICAO Code</label><input id="ac-icao" required maxlength="4" placeholder="A320"></div>
+                     <div class="form-group"><label for="ac-type">Type</label>
+                        <select id="ac-type" class="form-control">
+                            <option value="narrowbody">Narrowbody</option>
+                            <option value="widebody">Widebody</option>
+                            <option value="turboprop">Turboprop</option>
+                            <option value="regional jet">Regional Jet</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                     <div class="form-group"><label for="ac-rank">Rank Unlock</label>
+                        <select id="ac-rank" class="form-control">
+                            ${pilotRanks.map(r => `<option value="${r}">${r}</option>`).join('')}
+                        </select>
+                    </div>
+                     <div class="form-group"><label for="ac-codeshare">Operator / Codeshare</label>
+                        <select id="ac-codeshare" class="form-control"></select>
+                    </div>
+                </div>
+                <p style="font-size: 0.9em; color: var(--dashboard-text-muted); margin-top: 1rem;">Use either a link or upload a file for the aircraft image; uploading is preferred.</p>
+                 <div class="form-grid-two-col">
+                    <div class="form-group"><label for="ac-image-url">Picture URL (Optional)</label><input id="ac-image-url" type="url" placeholder="https://example.com/image.png"></div>
+                    <div class="form-group"><label for="ac-image-file">Or Upload Picture (Optional)</label><input id="ac-image-file" type="file" accept="image/*" class="form-control"></div>
+                </div>
+                <button id="ac-save" class="cta-button">Save Aircraft</button>
+            </div>
+
+            <hr>
+            <h3>Existing Aircraft Fleet</h3>
+            <div id="aircraft-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;"><p>Loading aircraft…</p></div>
+        `;
+
+        await ensureCodeshareOptions('#ac-codeshare');
+        await renderAircraftList();
+
+        document.getElementById('ac-save').addEventListener('click', handleSaveAircraft);
+        container.addEventListener('click', async (e) => {
+            const del = e.target.closest('.delete-aircraft-btn');
+            if (del) {
+                const id = del.dataset.id;
+                const name = del.dataset.name;
+                if (confirm(`Are you sure you want to delete the aircraft "${name}"?`)) {
+                    try {
+                        await safeFetch(`${API_BASE_URL}/api/aircrafts/${id}`, {
+                            method: 'DELETE'
+                        });
+                        showNotification('Aircraft deleted.', 'success');
+                        await renderAircraftList();
+                    } catch (error) {
+                        showNotification(`Error deleting aircraft: ${error.message}`, 'error');
+                    }
+                }
+            }
+        });
+
+        async function ensureCodeshareOptions(selectSel) {
+            const sel = document.querySelector(selectSel);
+            if (!sel) return;
+            // Use the globally loaded codeshare partners if available
+            const partners = (codesharePartners.length > 0) ? codesharePartners : await safeFetch(`${API_BASE_URL}/api/codeshares`);
+            const opts = [{
+                name: 'IndGo Air Virtual'
+            }, ...partners]; // include main brand
+            sel.innerHTML = opts.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
+        }
+
+        async function handleSaveAircraft() {
+            const name = document.getElementById('ac-name').value.trim();
+            const icao = document.getElementById('ac-icao').value.trim().toUpperCase();
+            const type = document.getElementById('ac-type').value;
+            const rankUnlock = document.getElementById('ac-rank').value;
+            const codeshare = document.getElementById('ac-codeshare').value;
+            const imageUrl = document.getElementById('ac-image-url').value.trim();
+            const file = document.getElementById('ac-image-file').files[0];
+
+            if (!name || !icao || !type || !rankUnlock || !codeshare) {
+                showNotification('Please fill in name, ICAO, type, rank, and operator.', 'error');
+                return;
+            }
+
+            try {
+                if (file) {
+                    const fd = new FormData();
+                    fd.append('name', name);
+                    fd.append('icao', icao);
+                    fd.append('type', type);
+                    fd.append('rankUnlock', rankUnlock);
+                    fd.append('codeshare', codeshare);
+                    fd.append('aircraftImage', file);
+                    // Use safeFetch which handles FormData and auth token correctly
+                    await safeFetch(`${API_BASE_URL}/api/aircrafts`, {
+                        method: 'POST',
+                        body: fd
+                    });
+                } else {
+                    await safeFetch(`${API_BASE_URL}/api/aircrafts`, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            name,
+                            icao,
+                            type,
+                            rankUnlock,
+                            codeshare,
+                            imageUrl: imageUrl || null
+                        })
+                    });
+                }
+                showNotification('Aircraft saved successfully!', 'success');
+                // Reset form fields
+                document.getElementById('ac-name').value = '';
+                document.getElementById('ac-icao').value = '';
+                document.getElementById('ac-image-url').value = '';
+                document.getElementById('ac-image-file').value = '';
+                await renderAircraftList();
+            } catch (error) {
+                showNotification(`Failed to save aircraft: ${error.message}`, 'error');
+            }
+        }
+
+        async function renderAircraftList() {
+            const listEl = document.getElementById('aircraft-list');
+            try {
+                const items = await safeFetch(`${API_BASE_URL}/api/aircrafts`);
+                if (!items || items.length === 0) {
+                    listEl.innerHTML = '<p>No aircraft have been added to the fleet yet.</p>';
+                    return;
+                }
+                const html = items.map(a => `
+                    <div class="user-manage-card" style="display: flex; gap: 1rem; align-items: center;">
+                        <img src="${a.imageUrl || 'Images/aircraft-placeholder.png'}" alt="${a.name}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">
+                        <div class="user-info" style="flex-grow: 1;">
+                            <strong>${a.name}</strong> <small>(${a.icao})</small><br>
+                            <small>${a.codeshare} • ${a.type} • Unlocks at: ${a.rankUnlock}</small>
+                        </div>
+                        <div class="user-controls">
+                            <button class="delete-user-btn delete-aircraft-btn" data-id="${a._id}" data-name="${a.name}" title="Delete Aircraft">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+                listEl.innerHTML = html;
+            } catch (error) {
+                listEl.innerHTML = `<p style="color:red">Failed to load aircraft list: ${error.message}</p>`;
+            }
+        }
+    }
+    // =========================================================
+    // END: AIRCRAFT MANAGER SECTION
     // =========================================================
 
 
