@@ -66,8 +66,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- APP STATE & CONFIG ---
     const token = localStorage.getItem('authToken');
     let currentUserId = null;
-    let allRoutes = []; // NEW: To store routes for filtering
-    let codesharePartners = JSON.parse(localStorage.getItem('codesharePartners')) || []; // NEW: For codeshare management
+    let allRoutes = []; // To store routes for filtering
+    let codesharePartners = []; // For codeshare management, now fetched from API
     const allRoles = {
         "General Roles": ["staff", "pilot", "admin"],
         "Leadership & Management": ["Chief Executive Officer (CEO)", "Chief Operating Officer (COO)", "PIREP Manager (PM)", "Pilot Relations & Recruitment Manager (PR)", "Technology & Design Manager (TDM)", "Head of Training (COT)", "Chief Marketing Officer (CMO)", "Route Manager (RM)", "Events Manager (EM)"],
@@ -678,7 +678,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================================
-    // START: NEW ROUTE MANAGER SECTION
+    // START: MERGED & UPDATED ROUTE MANAGER SECTION
     // =========================================================
     function populateRouteManager() {
         const container = document.getElementById('tab-route-manager');
@@ -691,14 +691,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="left-column">
                     <div id="codeshare-management-panel" class="mb-4" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
                         <h3><i class="fas fa-handshake"></i> Codeshare Partners</h3>
-                        <p style="font-size: 0.9em; color: var(--dashboard-text-muted);">Partners added here will be available in the 'Operator' dropdown. Data is saved in your browser.</p>
+                        <p style="font-size: 0.9em; color: var(--dashboard-text-muted);">Partners added here will be saved to the database and available globally.</p>
                         <form id="add-codeshare-form" class="dashboard-form">
                             <div class="form-group"><input type="text" id="codeshare-name" placeholder="Airline Name (e.g., Qatar Airways)" required></div>
                             <div class="form-group"><input type="url" id="codeshare-logo" placeholder="Logo URL" required></div>
                             <button type="submit" class="cta-button">Add Partner</button>
                         </form>
                         <hr>
-                        <div id="codeshare-list-container"></div>
+                        <div id="codeshare-list-container"><p>Loading partners...</p></div>
                     </div>
                 </div>
                 <div class="right-column">
@@ -710,16 +710,17 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="form-group"><label for="route-arrival">Arrival ICAO</label><input type="text" id="route-arrival" maxlength="4" required></div>
                             <div class="form-group"><label for="route-aircraft">Aircraft</label><input type="text" id="route-aircraft" required></div>
                             <div class="form-group"><label for="route-flighttime">Flight Time (Hours)</label><input type="number" id="route-flighttime" step="0.1" min="0.1" required></div>
-                            <div class="form-group"><label for="route-operator">Operator / Livery</label><select id="route-operator" required></select></div>
+                            <div class="form-group"><label for="route-operator">Operator</label><select id="route-operator" required></select></div>
+                            <div class="form-group"><label for="route-livery">Livery</label><input type="text" id="route-livery" placeholder="e.g., Oneworld" required></div>
                             <button type="submit" class="cta-button" style="grid-column: 1 / -1;">Add Route</button>
                         </form>
                     </div>
                     <div id="view-routes-panel" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
                         <h3><i class="fas fa-plane-departure"></i> Current Route Database</h3>
-                        <div id="route-filters" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
-                            <input type="text" id="filter-icao" placeholder="Filter by Departure ICAO..." class="form-control">
-                            <input type="text" id="filter-aircraft" placeholder="Filter by Aircraft..." class="form-control">
-                            <select id="filter-operator" class="form-control"></select>
+                        <div id="route-filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                            <input type="text" id="filter-icao" placeholder="Filter by ICAO..." class="form-control" style="flex: 1;">
+                            <input type="text" id="filter-aircraft" placeholder="Filter by Aircraft..." class="form-control" style="flex: 1;">
+                            <select id="filter-operator" class="form-control" style="flex: 1;"></select>
                         </div>
                         <div id="route-list-container"><p>Loading routes...</p></div>
                     </div>
@@ -727,46 +728,60 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
 
-        loadAndRenderCodeshares();
-        loadAndRenderRoutes();
+        // Load data and set up event listeners
+        loadAndRenderCodeshares().then(loadAndRenderRoutes);
 
-        // Event Listeners for the new forms
         document.getElementById('add-codeshare-form').addEventListener('submit', handleAddCodeshare);
         document.getElementById('add-route-form').addEventListener('submit', handleAddRoute);
 
-        // Event Listeners for filters
         document.getElementById('filter-icao').addEventListener('input', renderFilteredRoutes);
         document.getElementById('filter-aircraft').addEventListener('input', renderFilteredRoutes);
         document.getElementById('filter-operator').addEventListener('change', renderFilteredRoutes);
 
-        // Event Delegation for delete buttons
         container.addEventListener('click', e => {
-            if (e.target.closest('.delete-codeshare-btn')) {
-                handleDeleteCodeshare(e.target.closest('.delete-codeshare-btn').dataset.name);
+            const deleteCodeshareBtn = e.target.closest('.delete-codeshare-btn');
+            if (deleteCodeshareBtn) {
+                const name = deleteCodeshareBtn.dataset.name;
+                if (confirm(`Are you sure you want to delete the codeshare partner "${name}"?`)) {
+                    handleDeleteCodeshare(name);
+                }
             }
-            if (e.target.closest('.delete-route-btn')) {
-                handleDeleteRoute(e.target.closest('.delete-route-btn').dataset.flightnumber);
+
+            const deleteRouteBtn = e.target.closest('.delete-route-btn');
+            if (deleteRouteBtn) {
+                const flightNumber = deleteRouteBtn.dataset.flightnumber;
+                handleDeleteRoute(flightNumber);
             }
         });
     }
 
-    function loadAndRenderCodeshares() {
+    async function loadAndRenderCodeshares() {
         const container = document.getElementById('codeshare-list-container');
         const operatorSelect = document.getElementById('route-operator');
         const filterOperatorSelect = document.getElementById('filter-operator');
+
+        try {
+            codesharePartners = await safeFetch(`${API_BASE_URL}/api/codeshares`);
+        } catch (error) {
+            console.error('Failed to load codeshares:', error);
+            showNotification(`Error loading codeshares: ${error.message}`, 'error');
+            codesharePartners = [];
+        }
 
         renderList(container, codesharePartners, item => {
             const div = document.createElement('div');
             div.className = 'codeshare-item';
             div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--border-color);';
             div.innerHTML = `
-                <div><img src="${item.logo}" alt="${item.name} logo" style="height: 20px; width: auto; margin-right: 10px; vertical-align: middle;"> <span>${item.name}</span></div>
-                <button class="delete-user-btn delete-codeshare-btn" data-name="${item.name}">&times;</button>
+                <div>
+                    <img src="${item.logoUrl}" alt="${item.name} logo" style="height: 20px; width: auto; margin-right: 10px; vertical-align: middle;"> 
+                    <span>${item.name}</span>
+                </div>
+                <button class="delete-user-btn delete-codeshare-btn" data-name="${item.name}" title="Delete">&times;</button>
             `;
             return div;
         }, 'No codeshare partners added.');
 
-        // Populate dropdowns
         let optionsHtml = `<option value="IndGo Air Virtual">IndGo Air Virtual</option>`;
         codesharePartners.forEach(p => {
             optionsHtml += `<option value="${p.name}">${p.name}</option>`;
@@ -777,29 +792,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if (filterOperatorSelect) filterOperatorSelect.innerHTML = filterOptionsHtml;
     }
 
-    function handleAddCodeshare(e) {
+    async function handleAddCodeshare(e) {
         e.preventDefault();
         const name = document.getElementById('codeshare-name').value.trim();
-        const logo = document.getElementById('codeshare-logo').value.trim();
-        if (name && logo && !codesharePartners.some(p => p.name === name)) {
-            codesharePartners.push({
-                name,
-                logo
+        const logoUrl = document.getElementById('codeshare-logo').value.trim();
+        if (!name || !logoUrl) {
+            showNotification('Partner name and logo URL are required.', 'error');
+            return;
+        }
+
+        try {
+            await safeFetch(`${API_BASE_URL}/api/codeshares`, {
+                method: 'POST',
+                body: JSON.stringify({ name, logoUrl })
             });
-            localStorage.setItem('codesharePartners', JSON.stringify(codesharePartners));
             showNotification('Codeshare partner added.', 'success');
             document.getElementById('add-codeshare-form').reset();
-            loadAndRenderCodeshares();
-        } else {
-            showNotification('Partner already exists or form is incomplete.', 'error');
+            await loadAndRenderCodeshares();
+        } catch (error) {
+            showNotification(`Failed to add partner: ${error.message}`, 'error');
         }
     }
 
-    function handleDeleteCodeshare(name) {
-        codesharePartners = codesharePartners.filter(p => p.name !== name);
-        localStorage.setItem('codesharePartners', JSON.stringify(codesharePartners));
-        showNotification('Codeshare partner removed.', 'success');
-        loadAndRenderCodeshares();
+    async function handleDeleteCodeshare(name) {
+        if (!name) return;
+        try {
+            await safeFetch(`${API_BASE_URL}/api/codeshares/${encodeURIComponent(name)}`, {
+                method: 'DELETE'
+            });
+            showNotification('Codeshare partner removed.', 'success');
+            await loadAndRenderCodeshares();
+        } catch (error) {
+            showNotification(`Failed to remove partner: ${error.message}`, 'error');
+        }
     }
 
     async function loadAndRenderRoutes() {
@@ -824,7 +849,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return icaoMatch && aircraftMatch && operatorMatch;
         });
 
-        const partnerMap = new Map(codesharePartners.map(p => [p.name, p.logo]));
+        const partnerMap = new Map(codesharePartners.map(p => [p.name, p.logoUrl]));
         const defaultLogo = 'Images/indgo.png'; // A generic logo for IndGo
 
         const renderer = (route) => {
@@ -836,7 +861,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <img src="${operatorLogoUrl}" alt="${route.operator}" class="operator-logo" title="${route.operator}" style="height: 24px; width: auto;">
                 <div><strong>${route.flightNumber}</strong><br><small style="color: var(--dashboard-text-muted);">${route.operator}</small></div>
                 <div>${route.departure} &rarr; ${route.arrival}<br><small style="color: var(--dashboard-text-muted);">${route.flightTime} hrs</small></div>
-                <div>${route.aircraft}<br><small style="color: var(--dashboard-text-muted);">Rank: ${route.rankUnlock || 'N/A'}</small></div>
+                <div>${route.aircraft}<br><small style="color: var(--dashboard-text-muted);">Livery: ${route.livery || 'Standard'} • Rank: ${route.rankUnlock || 'N/A'}</small></div>
                 <button class="delete-user-btn delete-route-btn" data-flightnumber="${route.flightNumber}"><i class="fas fa-trash-alt"></i></button>
             `;
             return card;
@@ -854,7 +879,13 @@ document.addEventListener('DOMContentLoaded', () => {
             aircraft: document.getElementById('route-aircraft').value.trim(),
             flightTime: parseFloat(document.getElementById('route-flighttime').value),
             operator: document.getElementById('route-operator').value,
+            livery: document.getElementById('route-livery').value.trim()
         };
+        
+        if (Object.values(routeData).some(val => !val && val !== 0)) {
+            showNotification('Please fill all route fields.', 'error');
+            return;
+        }
 
         try {
             await safeFetch(`${API_BASE_URL}/api/routes`, {
@@ -863,7 +894,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             showNotification(`Route ${routeData.flightNumber} added successfully!`, 'success');
             document.getElementById('add-route-form').reset();
-            loadAndRenderRoutes(); // Refresh the list
+            await loadAndRenderRoutes(); // Refresh the list
         } catch (error) {
             showNotification(`Error adding route: ${error.message}`, 'error');
         }
@@ -876,13 +907,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'DELETE'
             });
             showNotification(`Route ${flightNumber} deleted.`, 'success');
-            loadAndRenderRoutes(); // Refresh the list by re-fetching
+            await loadAndRenderRoutes(); // Refresh the list by re-fetching
         } catch (error) {
             showNotification(`Error deleting route: ${error.message}`, 'error');
         }
     }
     // =========================================================
-    // END: NEW ROUTE MANAGER SECTION
+    // END: MERGED & UPDATED ROUTE MANAGER SECTION
     // =========================================================
 
 
