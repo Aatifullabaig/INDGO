@@ -717,8 +717,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <input type="url" id="import-sheet-url" required placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv">
                             </div>
                             <div class="form-group">
-                                <label for="import-sheet-operator">Operator Name</label>
-                                <input type="text" id="import-sheet-operator" required placeholder="e.g., Emirates Virtual">
+                                <label for="import-sheet-operator-select">Operator</label>
+                                <select id="import-sheet-operator-select" required class="form-control"></select>
                             </div>
                             <button type="submit" id="import-sheet-btn" class="cta-button">Import Routes</button>
                         </form>
@@ -782,6 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('codeshare-list-container');
         const operatorSelect = document.getElementById('route-operator');
         const filterOperatorSelect = document.getElementById('filter-operator');
+        const importOperatorSelect = document.getElementById('import-sheet-operator-select'); // NEW
 
         try {
             codesharePartners = await safeFetch(`${API_BASE_URL}/api/codeshares`);
@@ -805,14 +806,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return div;
         }, 'No codeshare partners added.');
 
-        let optionsHtml = `<option value="IndGo Air Virtual">IndGo Air Virtual</option>`;
+        // Build the core list of operators
+        let coreOptionsHtml = `<option value="IndGo Air Virtual">IndGo Air Virtual</option>`;
         codesharePartners.forEach(p => {
-            optionsHtml += `<option value="${p.name}">${p.name}</option>`;
+            coreOptionsHtml += `<option value="${p.name}">${p.name}</option>`;
         });
-        if (operatorSelect) operatorSelect.innerHTML = optionsHtml;
 
-        let filterOptionsHtml = `<option value="">All Operators</option>` + optionsHtml;
-        if (filterOperatorSelect) filterOperatorSelect.innerHTML = filterOptionsHtml;
+        // Populate the three dropdowns using the core list
+        if (operatorSelect) operatorSelect.innerHTML = coreOptionsHtml;
+        if (filterOperatorSelect) filterOperatorSelect.innerHTML = `<option value="">All Operators</option>` + coreOptionsHtml;
+        if (importOperatorSelect) importOperatorSelect.innerHTML = `<option value="" disabled selected>Select an Operator</option>` + coreOptionsHtml;
     }
 
     async function handleAddCodeshare(e) {
@@ -827,7 +830,10 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             await safeFetch(`${API_BASE_URL}/api/codeshares`, {
                 method: 'POST',
-                body: JSON.stringify({ name, logoUrl })
+                body: JSON.stringify({
+                    name,
+                    logoUrl
+                })
             });
             showNotification('Codeshare partner added.', 'success');
             document.getElementById('add-codeshare-form').reset();
@@ -966,10 +972,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const form = document.getElementById('import-sheet-form');
         const button = document.getElementById('import-sheet-btn');
         const sheetUrl = document.getElementById('import-sheet-url').value.trim();
-        const operator = document.getElementById('import-sheet-operator').value.trim();
+        const operator = document.getElementById('import-sheet-operator-select').value;
 
         if (!sheetUrl || !operator) {
-            showNotification('Please provide both a Sheet URL and an Operator name.', 'error');
+            showNotification('Please provide a Sheet URL and select an Operator.', 'error');
             return;
         }
 
@@ -979,9 +985,12 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const result = await safeFetch(`${API_BASE_URL}/api/routes/import-sheet`, {
                 method: 'POST',
-                body: JSON.stringify({ sheetUrl, operator })
+                body: JSON.stringify({
+                    sheetUrl,
+                    operator
+                })
             });
-            
+
             // Show detailed success message
             const successMsg = `
                 <p>${result.message}</p>
@@ -991,10 +1000,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 </ul>
             `;
             showNotification(successMsg, 'success', 10000);
-            
+
             form.reset();
             renderFilteredRoutes(); // Refresh the route list
-            
+
             // If new aircraft were added, refresh the aircraft manager if it's visible
             if (result.newAircraftCreated > 0 && aircraftManagerTabLink.style.display !== 'none') {
                 populateAircraftManager();
