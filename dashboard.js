@@ -684,7 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================================
-    // START: MERGED & REBUILT ROUTE MANAGER SECTION
+    // START: MODIFIED ROUTE MANAGER SECTION
     // =========================================================
     async function populateRouteManager() {
         const container = document.getElementById('tab-route-manager');
@@ -708,8 +708,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
                 <div class="right-column">
+                    <div id="import-sheet-panel" class="mb-4" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <h3><i class="fas fa-file-import"></i> Import Routes from Google Sheet</h3>
+                        <p style="font-size: 0.9em; color: var(--dashboard-text-muted);">Paste a published Google Sheet CSV link to bulk-add routes for an operator.</p>
+                        <form id="import-sheet-form" class="dashboard-form">
+                            <div class="form-group">
+                                <label for="import-sheet-url">Google Sheet CSV URL</label>
+                                <input type="url" id="import-sheet-url" required placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv">
+                            </div>
+                            <div class="form-group">
+                                <label for="import-sheet-operator">Operator Name</label>
+                                <input type="text" id="import-sheet-operator" required placeholder="e.g., Emirates Virtual">
+                            </div>
+                            <button type="submit" id="import-sheet-btn" class="cta-button">Import Routes</button>
+                        </form>
+                    </div>
+
                     <div id="add-route-panel" class="mb-4" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                        <h3><i class="fas fa-plus-circle"></i> Add New Route</h3>
+                        <h3><i class="fas fa-plus-circle"></i> Add New Route (Manual)</h3>
                         <form id="add-route-form" class="dashboard-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
                             <div class="form-group"><label for="route-flightnumber">Flight Number</label><input type="text" id="route-flightnumber" required></div>
                             <div class="form-group"><label for="route-departure">Departure ICAO</label><input type="text" id="route-departure" maxlength="4" required></div>
@@ -742,6 +758,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('add-codeshare-form').addEventListener('submit', handleAddCodeshare);
         document.getElementById('add-route-form').addEventListener('submit', handleAddRoute);
+        // NEW: Event listener for the import form
+        document.getElementById('import-sheet-form').addEventListener('submit', handleImportSheet);
 
         container.addEventListener('click', e => {
             const deleteCodeshareBtn = e.target.closest('.delete-codeshare-btn');
@@ -939,6 +957,54 @@ document.addEventListener('DOMContentLoaded', () => {
             renderFilteredRoutes(); // Refresh the list
         } catch (error) {
             showNotification(`Error adding route: ${error.message}`, 'error');
+        }
+    }
+
+    // --- NEW: Handler for Sheet Import ---
+    async function handleImportSheet(e) {
+        e.preventDefault();
+        const form = document.getElementById('import-sheet-form');
+        const button = document.getElementById('import-sheet-btn');
+        const sheetUrl = document.getElementById('import-sheet-url').value.trim();
+        const operator = document.getElementById('import-sheet-operator').value.trim();
+
+        if (!sheetUrl || !operator) {
+            showNotification('Please provide both a Sheet URL and an Operator name.', 'error');
+            return;
+        }
+
+        button.disabled = true;
+        button.textContent = 'Importing...';
+
+        try {
+            const result = await safeFetch(`${API_BASE_URL}/api/routes/import-sheet`, {
+                method: 'POST',
+                body: JSON.stringify({ sheetUrl, operator })
+            });
+            
+            // Show detailed success message
+            const successMsg = `
+                <p>${result.message}</p>
+                <ul>
+                    <li><strong>Routes Added:</strong> ${result.routesAdded}</li>
+                    <li><strong>New Aircraft Created:</strong> ${result.newAircraftCreated}</li>
+                </ul>
+            `;
+            showNotification(successMsg, 'success', 10000);
+            
+            form.reset();
+            renderFilteredRoutes(); // Refresh the route list
+            
+            // If new aircraft were added, refresh the aircraft manager if it's visible
+            if (result.newAircraftCreated > 0 && aircraftManagerTabLink.style.display !== 'none') {
+                populateAircraftManager();
+            }
+
+        } catch (error) {
+            showNotification(`Import failed: ${error.message}`, 'error');
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Import Routes';
         }
     }
 
