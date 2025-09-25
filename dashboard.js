@@ -389,9 +389,16 @@ document.addEventListener('DOMContentLoaded', () => {
         card.className = 'pirep-review-card';
         card.id = `pirep-${p._id}`;
 
-        const verificationLinkHtml = p.verificationImageUrl ?
-            `<p><strong>Verification:</strong> <a href="${p.verificationImageUrl}" target="_blank" class="view-image-btn">View Submitted Image</a></p>` :
-            '<p><strong>Verification:</strong> No image submitted.</p>';
+        let verificationLinkHtml = '';
+        if (p.source === 'ACARS') {
+            verificationLinkHtml = '<p><strong>Verification:</strong> <span style="color: var(--success-color);">Not Required (ACARS)</span></p>';
+        } else if (p.verificationImageUrl) {
+            verificationLinkHtml = `<p><strong>Verification:</strong> <a href="${p.verificationImageUrl}" target="_blank" class="view-image-btn">View Submitted Image</a></p>`;
+        } else {
+            verificationLinkHtml = '<p><strong>Verification:</strong> No image submitted.</p>';
+        }
+
+        const sourceText = p.source === 'ACARS' ? 'ACARS' : 'Manual';
 
         card.innerHTML = `
             <div class="card-header">
@@ -405,7 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <p><strong>Flight Time:</strong> ${p.flightTime.toFixed(1)} hours</p>
                 <p><strong>Remarks:</strong> ${p.remarks || 'None'}</p>
                 ${verificationLinkHtml}
-                <p><small>Filed on: ${new Date(p.createdAt).toLocaleString()}</small></p>
+                <p><small>Filed on: ${new Date(p.createdAt).toLocaleString()} via <strong>${sourceText}</strong></small></p>
             </div>
             <div class="card-actions">
                 <div class="pirep-actions-left">
