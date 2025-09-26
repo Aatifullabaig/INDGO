@@ -29,7 +29,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const addMemberForm = document.getElementById('add-member-form');
     const sidebarLogoutBtn = document.getElementById('sidebar-logout-btn');
     const dashboardContainer = document.querySelector('.dashboard-container');
+    
+    // --- FIXED: Sidebar Toggle Buttons ---
     const sidebarToggleBtn = document.getElementById('sidebar-toggle');
+    const desktopSidebarToggleBtn = document.getElementById('desktop-sidebar-toggle');
 
 
     // --- TAB LINKS ---
@@ -84,21 +87,32 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    // --- SIDEBAR TOGGLE LOGIC ---
-    if (sidebarToggleBtn && dashboardContainer) {
+    // --- FIXED: SIDEBAR TOGGLE LOGIC ---
+    if (dashboardContainer) {
         const sidebarState = localStorage.getItem('sidebarState');
         if (sidebarState === 'collapsed') {
             dashboardContainer.classList.add('sidebar-collapsed');
         }
-        sidebarToggleBtn.addEventListener('click', () => {
+
+        // Reusable function to handle the toggle action
+        const toggleSidebar = () => {
             dashboardContainer.classList.toggle('sidebar-collapsed');
             if (dashboardContainer.classList.contains('sidebar-collapsed')) {
                 localStorage.setItem('sidebarState', 'collapsed');
             } else {
                 localStorage.setItem('sidebarState', 'expanded');
             }
-        });
+        };
+
+        // Attach the event listener to BOTH buttons
+        if (sidebarToggleBtn) {
+            sidebarToggleBtn.addEventListener('click', toggleSidebar);
+        }
+        if (desktopSidebarToggleBtn) {
+            desktopSidebarToggleBtn.addEventListener('click', toggleSidebar);
+        }
     }
+
 
     const mobileLogo = document.getElementById('mobile-scroll-logo');
 

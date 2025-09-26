@@ -836,6 +836,53 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
     display: none; /* Hidden on desktop by default */
 }
 
+/* --- Desktop-Only Sidebar Toggle Button --- */
+.desktop-toggle-btn {
+    display: flex; /* Visible by default on desktop */
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--dashboard-text-muted);
+    height: 35px;
+    width: 35px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.desktop-toggle-btn:hover {
+    background-color: var(--accent-color);
+    color: #fff;
+}
+
+.desktop-toggle-btn i {
+    transition: transform 0.4s ease;
+}
+
+/* Rotate icon when sidebar is collapsed */
+.dashboard-container.sidebar-collapsed .desktop-toggle-btn i {
+    transform: rotate(180deg);
+}
+
+/* Keep the original mobile button hidden on desktop */
+.sidebar-toggle-btn {
+    display: none;
+}
+
+/* --- Media Query Adjustments --- */
+@media (max-width: 768px) {
+    /* Hide the new desktop button on mobile */
+    .desktop-toggle-btn {
+        display: none;
+    }
+
+    /* Make the original mobile button visible on mobile */
+    .sidebar-toggle-btn {
+        display: flex; 
+    }
+}
+
 
 /************************************************************/
 /* --- MOBILE RESPONSIVE STYLES ---                */
