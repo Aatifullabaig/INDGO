@@ -5,70 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const LIVE_FLIGHTS_API_URL = 'https://acars-backend-uxln.onrender.com/flights';
     const TARGET_SERVER_NAME = 'Expert Server'; // or Training/Casual as needed
 
-    // === ROSTER DEBUGGER ===
-    let ROSTER_DEBUG_ENABLED = true; // turn on by default; toggle with window.disableRosterDebug()
-    function mountRosterDebugUI() {
-      if (document.getElementById('roster-debug-toggle')) return;
-      const btn = document.createElement('button');
-      btn.id = 'roster-debug-toggle';
-      btn.textContent = '🧪 Roster Debug';
-      Object.assign(btn.style, {
-        position: 'fixed', right: '14px', bottom: '14px', zIndex: 99999,
-        padding: '10px 12px', borderRadius: '10px', border: 'none',
-        background: '#001B94', color: '#fff', cursor: 'pointer', boxShadow: '0 4px 18px rgba(0,0,0,0.3)'
-      });
-      const panel = document.createElement('div');
-      panel.id = 'roster-debug-panel';
-      Object.assign(panel.style, {
-        position: 'fixed', right: '14px', bottom: '64px', width: '360px', maxHeight: '55vh',
-        overflow: 'auto', background: 'rgba(13,16,28,0.95)', color: '#e8ecff', borderRadius: '12px',
-        padding: '10px', display: 'none', zIndex: 99998, border: '1px solid rgba(255,255,255,0.08)'
-      });
-      panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <strong>Roster Debug Logs</strong>
-        <div>
-          <button id="roster-debug-clear" style="margin-right:6px">Clear</button>
-          <button id="roster-debug-close">Close</button>
-        </div>
-      </div>
-      <div id="roster-debug-body" style="font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; line-height:1.35"></div>`;
-      document.body.appendChild(btn);
-      document.body.appendChild(panel);
-      const dbgBody = panel.querySelector('#roster-debug-body');
-      function addLog(html) {
-        const row = document.createElement('div');
-        row.innerHTML = html;
-        row.style.padding = '6px 0';
-        row.style.borderBottom = '1px dashed rgba(255,255,255,0.1)';
-        dbgBody.prepend(row);
-      }
-      btn.onclick = () => { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; };
-      panel.querySelector('#roster-debug-close').onclick = () => { panel.style.display = 'none'; };
-      panel.querySelector('#roster-debug-clear').onclick = () => { dbgBody.innerHTML = ''; };
-      window.__rosterDebugAdd = addLog;
-      window.enableRosterDebug = () => { ROSTER_DEBUG_ENABLED = true; panel.style.display = 'block'; };
-      window.disableRosterDebug = () => { ROSTER_DEBUG_ENABLED = false; };
-    }
-    function rosterDebugLog(kind, data = {}) {
-      if (!ROSTER_DEBUG_ENABLED || !window.__rosterDebugAdd) return;
-      const ts = new Date().toLocaleTimeString();
-      const safe = (v) => typeof v === 'string' ? v.replace(/</g,'&lt;') : v;
-      const pretty = `<div><span style="opacity:.7">${ts}</span> <strong>${safe(kind)}</strong></div>
-        <div style="opacity:.9">${safe(JSON.stringify(data, null, 2))}</div>`;
-      window.__rosterDebugAdd(pretty);
-      console.log('[RosterDebug]', kind, data);
-    }
-    function ensureRosterDebuggerMounted() {
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', mountRosterDebugUI);
-      } else {
-        mountRosterDebugUI();
-      }
-    }
-    ensureRosterDebuggerMounted();
-    // === END ROSTER DEBUGGER ===
-
-
     let crewRestInterval = null; // To manage the countdown timer
     let dispatchMap = null; // To hold the Leaflet map instance
 
@@ -764,11 +700,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             title = '<i class="fa-solid fa-user-clock"></i> Current Status: 🔴 On Rest';
             try {
-                rosterDebugLog('REQUEST /my-rosters');
-const rosterResponse = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
-                
-{ try { const __res = rosterResponse; const __cl = __res.clone(); let __tx = ''; try { __tx = await __cl.text(); } catch {} rosterDebugLog('RESPONSE /my-rosters', { ok: __res.ok, status: __res.status, approxBytes: __tx ? new Blob([__tx]).size : 0 }); } catch(e) { rosterDebugLog('ERROR /my-rosters', { message: e.message }); } }
-if (!rosterResponse.ok) throw new Error('Could not fetch recommended roster.');
+                const rosterResponse = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!rosterResponse.ok) throw new Error('Could not fetch recommended roster.');
                 
                 const rosterData = await rosterResponse.json();
                 const topRoster = rosterData.rosters?.[0];
@@ -1052,11 +985,8 @@ if (!rosterResponse.ok) throw new Error('Could not fetch recommended roster.');
         container.innerHTML = '<p>Loading available rosters...</p>';
         header.innerHTML = '<p>Finding rosters for your location...</p>';
         try {
-            rosterDebugLog('REQUEST /my-rosters');
-const response = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
-            
-{ try { const __res = response; const __cl = __res.clone(); let __tx = ''; try { __tx = await __cl.text(); } catch {} rosterDebugLog('RESPONSE /my-rosters', { ok: __res.ok, status: __res.status, approxBytes: __tx ? new Blob([__tx]).size : 0 }); } catch(e) { rosterDebugLog('ERROR /my-rosters', { message: e.message }); } }
-if (!response.ok) throw new Error('Could not fetch personalized rosters.');
+            const response = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!response.ok) throw new Error('Could not fetch personalized rosters.');
             const data = await response.json();
             const rosters = data.rosters || [];
             const criteria = data.searchCriteria || {};
@@ -1280,11 +1210,8 @@ if (!response.ok) throw new Error('Could not fetch personalized rosters.');
         if (isVisible && !detailsContainer.innerHTML.trim()) {
             detailsContainer.innerHTML = '<p>Loading details...</p>';
             try {
-                rosterDebugLog('REQUEST /my-rosters');
-const res = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
-                
-{ try { const __res = res; const __cl = __res.clone(); let __tx = ''; try { __tx = await __cl.text(); } catch {} rosterDebugLog('RESPONSE /my-rosters', { ok: __res.ok, status: __res.status, approxBytes: __tx ? new Blob([__tx]).size : 0 }); } catch(e) { rosterDebugLog('ERROR /my-rosters', { message: e.message }); } }
-if (!res.ok) throw new Error('Could not fetch roster details.');
+                const res = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error('Could not fetch roster details.');
                 const rosterData = await res.json();
                 const allRosters = rosterData.rosters || [];
                 const roster = allRosters.find(r => r.rosterId === rosterId);
