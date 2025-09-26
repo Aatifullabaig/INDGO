@@ -1034,67 +1034,143 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================
 
     // =========================================================
-    // START: 🌟 MODIFIED AIRCRAFT MANAGER SECTION 🌟
+    // START: 🌟 REBUILT AIRCRAFT MANAGER SECTION with MODAL 🌟
     // =========================================================
     async function populateAircraftManager() {
         const container = document.getElementById('tab-aircraft-manager');
         if (!container) return;
 
-        // This variable will hold the fetched aircraft data to avoid re-fetching
+        // State variable to hold fleet data, preventing re-fetches
         let aircraftFleet = [];
 
+        // --- MODAL ELEMENTS ---
+        const modal = document.getElementById('aircraft-modal');
+        const modalForm = document.getElementById('aircraft-modal-form');
+        const modalTitle = document.getElementById('aircraft-modal-title');
+        const modalCloseBtn = document.getElementById('aircraft-modal-close-btn');
+        const modalCancelBtn = document.getElementById('modal-ac-cancel-btn');
+
+        // --- MODAL FORM FIELDS ---
+        const editIdInput = document.getElementById('modal-ac-edit-id');
+        const nameInput = document.getElementById('modal-ac-name');
+        const icaoInput = document.getElementById('modal-ac-icao');
+        const typeSelect = document.getElementById('modal-ac-type');
+        const rankSelect = document.getElementById('modal-ac-rank');
+        const codeshareSelect = document.getElementById('modal-ac-codeshare');
+        const imageUrlInput = document.getElementById('modal-ac-image-url');
+        const imageFileInput = document.getElementById('modal-ac-image-file');
+
+        // --- INITIAL UI SETUP ---
         container.innerHTML = `
-            <h2><i class="fas fa-plane"></i> Aircraft Manager</h2>
-    <p>Add, update, and manage aircraft available to the airline and its codeshare partners. Each aircraft can be assigned a minimum rank required for pilots to fly it.</p>
-
-    {/* FIX: Changed <div> to <form> */}
-    <form class="dashboard-form" id="aircraft-form" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
-        <h3 id="aircraft-form-title">Add New Aircraft</h3>
-        <input type="hidden" id="ac-edit-id">
-        <div class="form-grid-two-col">
-             <div class="form-group"><label for="ac-name">Name</label><input id="ac-name" required placeholder="Airbus A320-200"></div>
-             <div class="form-group"><label for="ac-icao">ICAO Code</label><input id="ac-icao" required maxlength="4" placeholder="A320"></div>
-             <div class="form-group"><label for="ac-type">Type</label>
-                <select id="ac-type" class="form-control">
-                    <option value="narrowbody">Narrowbody</option>
-                    <option value="widebody">Widebody</option>
-                    <option value="turboprop">Turboprop</option>
-                    <option value="regional jet">Regional Jet</option>
-                    <option value="other">Other</option>
-                </select>
+            <h2><i class="fas fa-plane"></i> Aircraft Fleet Manager</h2>
+            <p>Add, update, and manage aircraft available to the airline and its codeshare partners. Each aircraft can be assigned a minimum rank required for pilots to fly it.</p>
+            <div style="margin: 1.5rem 0;">
+                <button id="add-new-aircraft-btn" class="cta-button"><i class="fas fa-plus"></i> Add New Aircraft</button>
             </div>
-             <div class="form-group"><label for="ac-rank">Rank Unlock</label>
-                <select id="ac-rank" class="form-control">
-                    ${pilotRanks.map(r => `<option value="${r}">${r}</option>`).join('')}
-                </select>
-            </div>
-             <div class="form-group"><label for="ac-codeshare">Operator / Codeshare</label>
-                <select id="ac-codeshare" class="form-control"></select>
-            </div>
-        </div>
-        <p style="font-size: 0.9em; color: var(--dashboard-text-muted); margin-top: 1rem;">Use a link or upload a file for the aircraft image. Uploading a new file will override any existing image.</p>
-         <div class="form-grid-two-col">
-            <div class="form-group"><label for="ac-image-url">Picture URL (Optional)</label><input id="ac-image-url" type="url" placeholder="https://example.com/image.png"></div>
-            <div class="form-group"><label for="ac-image-file">Or Upload Picture (Optional)</label><input id="ac-image-file" type="file" accept="image/*" class="form-control"></div>
-        </div>
-        <div style="display: flex; gap: 1rem;">
-            {/* FIX: Added type="button" to prevent default form submission */}
-            <button id="ac-save" type="button" class="cta-button">Save Aircraft</button>
-            <button id="ac-cancel-edit" type="button" class="cta-button" style="display: none; background-color: #555;">Cancel Edit</button>
-        </div>
-    </form> {/* FIX: Changed </div> to </form> */}
+            <hr>
+            <h3>Existing Aircraft Fleet</h3>
+            <div id="aircraft-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;"><p>Loading aircraft…</p></div>
+        `;
 
-    <hr>
-    <h3>Existing Aircraft Fleet</h3>
-    <div id="aircraft-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;"><p>Loading aircraft…</p></div>
-`;
+        // --- HELPER FUNCTIONS ---
+        const openAircraftModal = (aircraft = null) => {
+            modalForm.reset();
+            if (aircraft) {
+                // EDIT MODE
+                modalTitle.textContent = `Editing: ${aircraft.name}`;
+                editIdInput.value = aircraft._id;
+                nameInput.value = aircraft.name;
+                icaoInput.value = aircraft.icao;
+                typeSelect.value = aircraft.type;
+                rankSelect.value = aircraft.rankUnlock;
+                codeshareSelect.value = aircraft.codeshare;
+                imageUrlInput.value = aircraft.imageUrl || '';
+            } else {
+                // ADD MODE
+                modalTitle.textContent = 'Add New Aircraft';
+                editIdInput.value = '';
+            }
+            modal.classList.add('active');
+        };
 
-        await ensureCodeshareOptions('#ac-codeshare');
-        await renderAircraftList();
+        const closeAircraftModal = () => {
+            modal.classList.remove('active');
+        };
 
-        // Event listeners
-        document.getElementById('ac-save').addEventListener('click', handleSaveAircraft);
-        document.getElementById('ac-cancel-edit').addEventListener('click', resetAircraftForm);
+        const renderAircraftList = async () => {
+            const listEl = document.getElementById('aircraft-list');
+            try {
+                aircraftFleet = await safeFetch(`${API_BASE_URL}/api/aircrafts`); // Refresh and store data
+                
+                if (!aircraftFleet || aircraftFleet.length === 0) {
+                    listEl.innerHTML = '<p>No aircraft have been added to the fleet yet.</p>';
+                    return;
+                }
+                const html = aircraftFleet.sort((a,b) => a.name.localeCompare(b.name)).map(a => `
+                    <div class="user-manage-card" style="display: flex; gap: 1rem; align-items: center; padding: 1rem;">
+                        <img src="${a.imageUrl || 'Images/aircraft-placeholder.png'}" alt="${a.name}" style="width: 100px; height: 80px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background-color: var(--secondary-bg);">
+                        <div class="user-info" style="flex-grow: 1;">
+                            <strong>${a.name}</strong> <small>(${a.icao})</small><br>
+                            <small>${a.codeshare} • ${a.type}</small><br>
+                            <small>Unlocks at: ${a.rankUnlock}</small>
+                        </div>
+                        <div class="user-controls" style="display: flex; flex-direction: column; gap: 0.5rem; align-self: flex-start;">
+                             <button class="edit-aircraft-btn" data-id="${a._id}" title="Edit Aircraft" style="background: var(--info-color); border: none; color: white; border-radius: 5px; padding: 0.5rem;">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="delete-user-btn delete-aircraft-btn" data-id="${a._id}" data-name="${a.name}" title="Delete Aircraft">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+                listEl.innerHTML = html;
+            } catch (error) {
+                listEl.innerHTML = `<p style="color:red">Failed to load aircraft list: ${error.message}</p>`;
+            }
+        };
+
+        const handleSaveAircraft = async (e) => {
+            e.preventDefault();
+            const editId = editIdInput.value;
+            const isEditing = !!editId;
+
+            const formData = new FormData();
+            formData.append('name', nameInput.value.trim());
+            formData.append('icao', icaoInput.value.trim().toUpperCase());
+            formData.append('type', typeSelect.value);
+            formData.append('rankUnlock', rankSelect.value);
+            formData.append('codeshare', codeshareSelect.value);
+            
+            const file = imageFileInput.files[0];
+            if (file) {
+                formData.append('aircraftImage', file);
+            } else if (imageUrlInput.value.trim()) {
+                 formData.append('imageUrl', imageUrlInput.value.trim());
+            }
+
+            if (!formData.get('name') || !formData.get('icao')) {
+                showNotification('Please fill in at least Name and ICAO.', 'error');
+                return;
+            }
+
+            try {
+                const url = isEditing ? `${API_BASE_URL}/api/aircrafts/${editId}` : `${API_BASE_URL}/api/aircrafts`;
+                const method = isEditing ? 'PUT' : 'POST';
+
+                await safeFetch(url, { method, body: formData });
+                
+                showNotification(`Aircraft ${isEditing ? 'updated' : 'saved'} successfully!`, 'success');
+                closeAircraftModal();
+                await renderAircraftList(); // Refresh list with new data
+
+            } catch (error) {
+                showNotification(`Failed to save aircraft: ${error.message}`, 'error');
+            }
+        };
+
+        // --- EVENT LISTENERS ---
+        document.getElementById('add-new-aircraft-btn').addEventListener('click', () => openAircraftModal());
 
         container.addEventListener('click', async (e) => {
             const deleteBtn = e.target.closest('.delete-aircraft-btn');
@@ -1113,128 +1189,34 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             }
-
             if (editBtn) {
                 const id = editBtn.dataset.id;
                 const aircraftToEdit = aircraftFleet.find(ac => ac._id === id);
                 if (aircraftToEdit) {
-                    populateAircraftFormForEdit(aircraftToEdit);
+                    openAircraftModal(aircraftToEdit);
                 }
             }
         });
 
-        // Helper functions scoped to the aircraft manager
-        async function ensureCodeshareOptions(selectSel) {
-            const sel = document.querySelector(selectSel);
-            if (!sel) return;
-            const partners = (codesharePartners.length > 0) ? codesharePartners : await safeFetch(`${API_BASE_URL}/api/codeshares`);
-            const opts = [{ name: 'IndGo Air Virtual' }, ...partners];
-            sel.innerHTML = opts.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
-        }
-        
-        function resetAircraftForm() {
-            const form = document.getElementById('aircraft-form');
-            form.reset();
-            document.getElementById('ac-edit-id').value = '';
-            document.getElementById('aircraft-form-title').textContent = 'Add New Aircraft';
-            document.getElementById('ac-save').textContent = 'Save Aircraft';
-            document.getElementById('ac-cancel-edit').style.display = 'none';
-        }
-
-        function populateAircraftFormForEdit(aircraft) {
-            document.getElementById('ac-edit-id').value = aircraft._id;
-            document.getElementById('ac-name').value = aircraft.name;
-            document.getElementById('ac-icao').value = aircraft.icao;
-            document.getElementById('ac-type').value = aircraft.type;
-            document.getElementById('ac-rank').value = aircraft.rankUnlock;
-            document.getElementById('ac-codeshare').value = aircraft.codeshare;
-            document.getElementById('ac-image-url').value = aircraft.imageUrl || '';
-            
-            document.getElementById('aircraft-form-title').textContent = `Editing: ${aircraft.name}`;
-            document.getElementById('ac-save').textContent = 'Update Aircraft';
-            document.getElementById('ac-cancel-edit').style.display = 'inline-block';
-            
-            // Scroll to form for better UX
-            document.getElementById('aircraft-form').scrollIntoView({ behavior: 'smooth' });
-        }
-
-        async function handleSaveAircraft() {
-            const editId = document.getElementById('ac-edit-id').value;
-            const isEditing = !!editId;
-
-            const name = document.getElementById('ac-name').value.trim();
-            const icao = document.getElementById('ac-icao').value.trim().toUpperCase();
-            const type = document.getElementById('ac-type').value;
-            const rankUnlock = document.getElementById('ac-rank').value;
-            const codeshare = document.getElementById('ac-codeshare').value;
-            const imageUrl = document.getElementById('ac-image-url').value.trim();
-            const file = document.getElementById('ac-image-file').files[0];
-
-            if (!name || !icao || !type || !rankUnlock || !codeshare) {
-                showNotification('Please fill in name, ICAO, type, rank, and operator.', 'error');
-                return;
+        // Modal-specific event listeners
+        modalForm.addEventListener('submit', handleSaveAircraft);
+        modalCloseBtn.addEventListener('click', closeAircraftModal);
+        modalCancelBtn.addEventListener('click', closeAircraftModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) { // Close if clicking on the overlay
+                closeAircraftModal();
             }
+        });
 
-            const formData = new FormData();
-            formData.append('name', name);
-            formData.append('icao', icao);
-            formData.append('type', type);
-            formData.append('rankUnlock', rankUnlock);
-            formData.append('codeshare', codeshare);
-            
-            // Only append image data if a file is selected or a URL is provided
-            if (file) {
-                formData.append('aircraftImage', file);
-            } else if (imageUrl) {
-                 formData.append('imageUrl', imageUrl);
-            }
+        // --- INITIAL DATA LOAD ---
+        // Populate dropdowns in the modal
+        rankSelect.innerHTML = pilotRanks.map(r => `<option value="${r}">${r}</option>`).join('');
+        const partners = (codesharePartners.length > 0) ? codesharePartners : await safeFetch(`${API_BASE_URL}/api/codeshares`);
+        const operators = [{ name: 'IndGo Air Virtual' }, ...partners];
+        codeshareSelect.innerHTML = operators.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
 
-            try {
-                const url = isEditing ? `${API_BASE_URL}/api/aircrafts/${editId}` : `${API_BASE_URL}/api/aircrafts`;
-                const method = isEditing ? 'PUT' : 'POST';
-
-                await safeFetch(url, { method: method, body: formData });
-                
-                showNotification(`Aircraft ${isEditing ? 'updated' : 'saved'} successfully!`, 'success');
-                resetAircraftForm();
-                await renderAircraftList();
-
-            } catch (error) {
-                showNotification(`Failed to save aircraft: ${error.message}`, 'error');
-            }
-        }
-
-        async function renderAircraftList() {
-            const listEl = document.getElementById('aircraft-list');
-            try {
-                aircraftFleet = await safeFetch(`${API_BASE_URL}/api/aircrafts`); // Store fetched data
-                
-                if (!aircraftFleet || aircraftFleet.length === 0) {
-                    listEl.innerHTML = '<p>No aircraft have been added to the fleet yet.</p>';
-                    return;
-                }
-                const html = aircraftFleet.sort((a,b) => a.name.localeCompare(b.name)).map(a => `
-                    <div class="user-manage-card" style="display: flex; gap: 1rem; align-items: center;">
-                        <img src="${a.imageUrl || 'Images/aircraft-placeholder.png'}" alt="${a.name}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">
-                        <div class="user-info" style="flex-grow: 1;">
-                            <strong>${a.name}</strong> <small>(${a.icao})</small><br>
-                            <small>${a.codeshare} • ${a.type} • Unlocks at: ${a.rankUnlock}</small>
-                        </div>
-                        <div class="user-controls" style="display: flex; flex-direction: column; gap: 0.5rem;">
-                             <button class="edit-aircraft-btn" data-id="${a._id}" title="Edit Aircraft" style="background: var(--info-color); border: none; color: white; border-radius: 5px; padding: 0.5rem;">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="delete-user-btn delete-aircraft-btn" data-id="${a._id}" data-name="${a.name}" title="Delete Aircraft">
-                                <i class="fas fa-trash-alt"></i>
-                            </button>
-                        </div>
-                    </div>
-                `).join('');
-                listEl.innerHTML = html;
-            } catch (error) {
-                listEl.innerHTML = `<p style="color:red">Failed to load aircraft list: ${error.message}</p>`;
-            }
-        }
+        // Render the initial list
+        await renderAircraftList();
     }
     // =========================================================
     // END: AIRCRAFT MANAGER SECTION

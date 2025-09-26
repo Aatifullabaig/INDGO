@@ -32,6 +32,51 @@
         .account-link-container .unlink-btn {
             background-color: var(--error-color);
         }
+
+        /* --- NEW: STYLES FOR AIRCRAFT EDIT MODAL --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: var(--main-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            position: relative;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+        .modal-close-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--dashboard-text-muted);
+        }
+        /* --- END: MODAL STYLES --- */
     </style>
 </head>
 <body>
@@ -210,9 +255,7 @@
                  </div>
 
             <div id="tab-aircraft-manager" class="content-card">
-                <div class="skeleton-card"><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
-                <div class="skeleton-card"><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
-            </div>
+                </div>
 
             <div id="tab-pilot-management" class="content-card">
                 <h2><i class="fas fa-user-cog"></i> Pilot Roster Management</h2>
@@ -400,6 +443,45 @@
             </div>
         </div>
     </div>
+
+    <div id="aircraft-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 id="aircraft-modal-title">Manage Aircraft</h2>
+            <button id="aircraft-modal-close-btn" class="modal-close-btn" title="Close">&times;</button>
+            <form id="aircraft-modal-form" class="dashboard-form">
+                <input type="hidden" id="modal-ac-edit-id">
+                <div class="form-grid-two-col">
+                     <div class="form-group"><label for="modal-ac-name">Name</label><input id="modal-ac-name" required placeholder="Airbus A320-200"></div>
+                     <div class="form-group"><label for="modal-ac-icao">ICAO Code</label><input id="modal-ac-icao" required maxlength="4" placeholder="A320"></div>
+                     <div class="form-group"><label for="modal-ac-type">Type</label>
+                        <select id="modal-ac-type" class="form-control">
+                            <option value="narrowbody">Narrowbody</option>
+                            <option value="widebody">Widebody</option>
+                            <option value="turboprop">Turboprop</option>
+                            <option value="regional jet">Regional Jet</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                     <div class="form-group"><label for="modal-ac-rank">Rank Unlock</label>
+                        <select id="modal-ac-rank" class="form-control"></select>
+                    </div>
+                     <div class="form-group" style="grid-column: 1 / -1;"><label for="modal-ac-codeshare">Operator / Codeshare</label>
+                        <select id="modal-ac-codeshare" class="form-control"></select>
+                    </div>
+                </div>
+                <p style="font-size: 0.9em; color: var(--dashboard-text-muted); margin-top: 1rem;">Use a link or upload a file for the aircraft image. Uploading a new file will override any existing link or image.</p>
+                 <div class="form-grid-two-col">
+                    <div class="form-group"><label for="modal-ac-image-url">Picture URL (Optional)</label><input id="modal-ac-image-url" type="url" placeholder="https://example.com/image.png"></div>
+                    <div class="form-group"><label for="modal-ac-image-file">Or Upload Picture (Optional)</label><input id="modal-ac-image-file" type="file" accept="image/*" class="form-control"></div>
+                </div>
+                <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                    <button id="modal-ac-save-btn" type="submit" class="cta-button">Save Aircraft</button>
+                    <button id="modal-ac-cancel-btn" type="button" class="cta-button" style="background-color: #555;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 
     <div id="notification-bell-container" class="notification-container">
         <a href="#" id="notification-bell" class="notification-button">
