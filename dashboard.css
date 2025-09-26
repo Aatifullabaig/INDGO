@@ -892,28 +892,42 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
 
     /* --- Mobile Scroll Logo --- */
     #mobile-scroll-logo {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        position: fixed;
-        top: 1rem;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 2000; /* Below side buttons (2001) but above content */
-        transition: opacity 0.4s ease;
-        opacity: 1;
-        pointer-events: none; /* To not interfere with touch events */
-    }
+    /* Core positioning and logic (unchanged) */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    z-index: 2000;
+    pointer-events: none; /* Allows clicks to pass through */
+    
+    /* NEW styling to match the other buttons */
+    width: 45px;
+    height: 45px;
+    background-color: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 50%; /* This makes the container a circle */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 
-    #mobile-scroll-logo img {
-        height: 40px;
-        width: auto;
-    }
+    /* Updated transition for a smoother effect */
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    transform: translateX(-50%); /* Initial transform */
+    opacity: 1;
+}
 
-    /* This class will be added by JavaScript on scroll */
-    #mobile-scroll-logo.scrolled {
-        opacity: 0;
-    }
+#mobile-scroll-logo img {
+    /* Resize the logo to fit nicely inside the new circle */
+    height: 60%;
+    width: auto;
+}
+
+/* This class is still added by JavaScript on scroll */
+#mobile-scroll-logo.scrolled {
+    opacity: 0;
+    /* BONUS: Add a subtle slide-up animation as it fades */
+    transform: translateX(-50%) translateY(-20px);
+}
 
 
     /* --- Main Layout & Sidebar --- */
