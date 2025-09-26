@@ -544,6 +544,10 @@ document.addEventListener('DOMContentLoaded', () => {
             CURRENT_PILOT = pilot;
             ACTIVE_FLIGHT_PLANS = pilot.currentFlightPlans || [];
 
+            if (typeof window.initializeGlobalDebugger === 'function') {
+              window.initializeGlobalDebugger(pilot.role);
+            }
+
             pilotNameElem.textContent = pilot.name || 'N/A';
             pilotCallsignElem.textContent = pilot.callsign || 'N/A';
             profilePictureElem.src = pilot.imageUrl || 'images/default-avatar.png';

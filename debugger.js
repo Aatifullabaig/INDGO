@@ -1,6 +1,6 @@
 // debugger.js (UPDATED - EXTRA POTENT + REDACTION + OPTIONAL ENCRYPTION)
 // Drop this in to replace your previous debugger.js
-(function () {
+function initializeGlobalDebugger(userRole) {
   if (window.globalDebugger) return;
 
   /*********************************************
@@ -711,7 +711,5 @@
   }
 
   // expose toggle
-  window.globalDebugger = {
-    toggle: () => { DEBUG_ENABLED = !DEBUG_ENABLED; console.log('Global Debugger', DEBUG_ENABLED ? 'ON' : 'OFF'); }
-  };
-})();
+  window.initializeGlobalDebugger = initializeGlobalDebugger;
+}
