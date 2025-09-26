@@ -1034,7 +1034,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // =========================================================
 
     // =========================================================
-    // START: 🌟 REBUILT AIRCRAFT MANAGER SECTION with MODAL 🌟
+    // START: 🌟 REBUILT & REDESIGNED AIRCRAFT MANAGER SECTION 🌟
     // =========================================================
     async function populateAircraftManager() {
         const container = document.getElementById('tab-aircraft-manager');
@@ -1069,7 +1069,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <hr>
             <h3>Existing Aircraft Fleet</h3>
-            <div id="aircraft-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;"><p>Loading aircraft…</p></div>
+            <div id="aircraft-list"><p>Loading aircraft…</p></div>
         `;
 
         // --- HELPER FUNCTIONS ---
@@ -1107,18 +1107,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 const html = aircraftFleet.sort((a,b) => a.name.localeCompare(b.name)).map(a => `
-                    <div class="user-manage-card" style="display: flex; gap: 1rem; align-items: center; padding: 1rem;">
-                        <img src="${a.imageUrl || 'Images/aircraft-placeholder.png'}" alt="${a.name}" style="width: 100px; height: 80px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background-color: var(--secondary-bg);">
-                        <div class="user-info" style="flex-grow: 1;">
-                            <strong>${a.name}</strong> <small>(${a.icao})</small><br>
-                            <small>${a.codeshare} • ${a.type}</small><br>
-                            <small>Unlocks at: ${a.rankUnlock}</small>
+                    <div class="aircraft-card" data-id="${a._id}">
+                        <img src="${a.imageUrl || 'Images/aircraft-placeholder.png'}" alt="${a.name}" class="aircraft-card-image">
+                        <div class="aircraft-card-info">
+                            <strong>${a.name}</strong>
+                            <small>ICAO: ${a.icao} | Type: ${a.type}</small>
+                            <small>Operator: ${a.codeshare}</small>
+                            <small>Rank Unlock: ${a.rankUnlock}</small>
                         </div>
-                        <div class="user-controls" style="display: flex; flex-direction: column; gap: 0.5rem; align-self: flex-start;">
-                             <button class="edit-aircraft-btn" data-id="${a._id}" title="Edit Aircraft" style="background: var(--info-color); border: none; color: white; border-radius: 5px; padding: 0.5rem;">
-                                <i class="fas fa-edit"></i>
+                        <div class="aircraft-card-controls">
+                            <button class="aircraft-card-btn edit-btn edit-aircraft-btn" data-id="${a._id}" title="Edit Aircraft">
+                                <i class="fas fa-pencil-alt"></i>
                             </button>
-                            <button class="delete-user-btn delete-aircraft-btn" data-id="${a._id}" data-name="${a.name}" title="Delete Aircraft">
+                            <button class="aircraft-card-btn delete-btn delete-aircraft-btn" data-id="${a._id}" data-name="${a.name}" title="Delete Aircraft">
                                 <i class="fas fa-trash-alt"></i>
                             </button>
                         </div>

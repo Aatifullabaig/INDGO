@@ -33,7 +33,7 @@
             background-color: var(--error-color);
         }
 
-        /* --- NEW: STYLES FOR AIRCRAFT EDIT MODAL --- */
+        /* --- STYLES FOR AIRCRAFT EDIT MODAL & CARDS --- */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -58,7 +58,7 @@
             padding: 2rem;
             border-radius: 12px;
             width: 90%;
-            max-width: 600px;
+            max-width: 700px; /* Increased width for better form layout */
             position: relative;
             transform: scale(0.9);
             transition: transform 0.3s ease;
@@ -76,7 +76,108 @@
             cursor: pointer;
             color: var(--dashboard-text-muted);
         }
-        /* --- END: MODAL STYLES --- */
+        
+        /* New Form Grid Layout */
+        .form-grid-two-col {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+        .modal-form-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            justify-content: flex-end; /* Align buttons to the right */
+        }
+        .cta-button.secondary-btn {
+            background-color: #555;
+            border-color: #555;
+        }
+        .cta-button.secondary-btn:hover {
+             background-color: #666;
+        }
+        
+        /* New Aircraft Card Styles */
+        #aircraft-list {
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); 
+            gap: 1.5rem;
+        }
+        .aircraft-card {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            background-color: var(--secondary-bg);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .aircraft-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .aircraft-card-image {
+            width: 100px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+            flex-shrink: 0;
+            background-color: var(--main-bg);
+        }
+        .aircraft-card-info {
+            flex-grow: 1;
+            line-height: 1.5;
+        }
+        .aircraft-card-info strong {
+            font-size: 1.1em;
+            color: var(--dashboard-text);
+        }
+        .aircraft-card-info small {
+            color: var(--dashboard-text-muted);
+            display: block;
+            font-size: 0.85em;
+        }
+        .aircraft-card-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .aircraft-card-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--dashboard-text-muted);
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9em;
+        }
+        .aircraft-card-btn.edit-btn {
+            border-color: var(--info-color);
+            color: var(--info-color);
+        }
+        .aircraft-card-btn.edit-btn:hover {
+            background-color: var(--info-color);
+            color: white;
+        }
+        .aircraft-card-btn.delete-btn {
+            border-color: var(--error-color);
+            color: var(--error-color);
+        }
+        .aircraft-card-btn.delete-btn:hover {
+            background-color: var(--error-color);
+            color: white;
+        }
+        /* --- END: AIRCRAFT STYLES --- */
+
     </style>
 </head>
 <body>
@@ -465,18 +566,19 @@
                      <div class="form-group"><label for="modal-ac-rank">Rank Unlock</label>
                         <select id="modal-ac-rank" class="form-control"></select>
                     </div>
-                     <div class="form-group" style="grid-column: 1 / -1;"><label for="modal-ac-codeshare">Operator / Codeshare</label>
+                     <div class="form-group full-width"><label for="modal-ac-codeshare">Operator / Codeshare</label>
                         <select id="modal-ac-codeshare" class="form-control"></select>
                     </div>
                 </div>
-                <p style="font-size: 0.9em; color: var(--dashboard-text-muted); margin-top: 1rem;">Use a link or upload a file for the aircraft image. Uploading a new file will override any existing link or image.</p>
+                <hr style="margin: 1.5rem 0; border-color: var(--border-color);">
+                <p style="font-size: 0.9em; color: var(--dashboard-text-muted);">Use a link or upload a file for the aircraft image. Uploading a file will override any URL provided.</p>
                  <div class="form-grid-two-col">
                     <div class="form-group"><label for="modal-ac-image-url">Picture URL (Optional)</label><input id="modal-ac-image-url" type="url" placeholder="https://example.com/image.png"></div>
                     <div class="form-group"><label for="modal-ac-image-file">Or Upload Picture (Optional)</label><input id="modal-ac-image-file" type="file" accept="image/*" class="form-control"></div>
                 </div>
-                <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <div class="modal-form-actions">
+                    <button id="modal-ac-cancel-btn" type="button" class="cta-button secondary-btn">Cancel</button>
                     <button id="modal-ac-save-btn" type="submit" class="cta-button">Save Aircraft</button>
-                    <button id="modal-ac-cancel-btn" type="button" class="cta-button" style="background-color: #555;">Cancel</button>
                 </div>
             </form>
         </div>
