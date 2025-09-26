@@ -1303,40 +1303,67 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function createInviteCardElement(invite) {
-        const card = document.createElement('div');
-        card.className = 'user-manage-card';
-        card.setAttribute('data-inviteid', invite._id);
 
-        let statusHtml;
-        switch (invite.status) {
-            case 'PENDING':
-                statusHtml = `Status: <span style="color: var(--warning-color);">Pending</span>`;
-                break;
-            case 'ACCEPTED':
-                statusHtml = `Status: <span style="color: var(--success-color);">Accepted</span> by ${invite.usedBy?.name || 'N/A'}`;
-                break;
-            case 'EXPIRED':
-                statusHtml = `Status: <span style="color: var(--dashboard-text-muted);">Expired</span>`;
-                break;
-            default:
-                statusHtml = `Status: ${invite.status}`;
-        }
 
-        card.innerHTML = `
-            <div class="user-info">
-                <strong><code>${invite.code}</code></strong>
-                <small>Expires: ${new Date(invite.expiresAt).toLocaleString()}</small>
-                <div><small>${statusHtml}</small></div>
-            </div>
-            <div class="user-controls">
-                <button class="delete-user-btn delete-invite-btn" data-id="${invite._id}" ${invite.status !== 'PENDING' ? 'disabled' : ''}>
-                    <i class="fas fa-trash-alt"></i> Delete
-                </button>
-            </div>
-        `;
-        return card;
+function createInviteCardElement(invite) {
+    const card = document.createElement('div');
+    card.className = 'user-manage-card';
+    card.setAttribute('data-inviteid', invite._id);
+
+    // --- START: MODIFICATION ---
+    // Define the base URL of your registration page.
+    // IMPORTANT: Make sure this URL is correct for your live website.
+    const registrationUrl = `https://indgo-va.netlify.app/register.html?invite=${invite.code}`;
+
+    let statusHtml;
+    switch (invite.status) {
+        case 'PENDING':
+            statusHtml = `Status: <span style="color: var(--warning-color);">Pending</span>`;
+            break;
+        case 'ACCEPTED':
+            statusHtml = `Status: <span style="color: var(--success-color);">Accepted</span> by ${invite.usedBy?.name || 'N/A'}`;
+            break;
+        case 'EXPIRED':
+            statusHtml = `Status: <span style="color: var(--dashboard-text-muted);">Expired</span>`;
+            break;
+        default:
+            statusHtml = `Status: ${invite.status}`;
     }
+
+    // Updated card layout with a "Copy Link" button
+    card.innerHTML = `
+        <div class="user-info">
+            <strong>Invite Code: <code>${invite.code}</code></strong>
+            <small>Expires: ${new Date(invite.expiresAt).toLocaleString()}</small>
+            <div><small>${statusHtml}</small></div>
+        </div>
+        <div class="user-controls" style="flex-direction: column; align-items: flex-end; gap: 8px;">
+            <button class="cta-button copy-invite-link-btn" data-link="${registrationUrl}" ${invite.status !== 'PENDING' ? 'disabled' : ''}>
+                <i class="fas fa-copy"></i> Copy Link
+            </button>
+            <button class="delete-user-btn delete-invite-btn" data-id="${invite._id}" ${invite.status !== 'PENDING' ? 'disabled' : ''}>
+                <i class="fas fa-trash-alt"></i> Delete Code
+            </button>
+        </div>
+    `;
+
+    // Add event listener for the new "Copy Link" button
+    const copyBtn = card.querySelector('.copy-invite-link-btn');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', (e) => {
+            const linkToCopy = e.currentTarget.dataset.link;
+            navigator.clipboard.writeText(linkToCopy).then(() => {
+                showNotification('Registration link copied to clipboard!', 'success');
+            }).catch(err => {
+                showNotification('Failed to copy link.', 'error');
+                console.error('Copy failed', err);
+            });
+        });
+    }
+    // --- END: MODIFICATION ---
+
+    return card;
+}
 
     function renderInviteList(invites) {
         renderList(inviteListContainer, invites, createInviteCardElement, 'No invite codes have been created yet.');

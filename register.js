@@ -1,6 +1,27 @@
-// register.js
-
 document.addEventListener('DOMContentLoaded', () => {
+    // --- START: New code to handle invite links ---
+    // This part runs as soon as the page loads.
+    
+    // 1. Get the URL parameters from the address bar.
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    // 2. Look for a parameter named 'invite'.
+    const inviteCode = urlParams.get('invite');
+
+    // 3. Find the invite code input field in your form.
+    const inviteInput = document.getElementById('invite-code');
+
+    // 4. If an invite code is found in the URL and the input field exists...
+    if (inviteCode && inviteInput) {
+        // ...set the value of the input field to the code from the URL.
+        inviteInput.value = inviteCode;
+        
+        // ...and make it read-only so the user can't accidentally change it.
+        inviteInput.setAttribute('readonly', true);
+    }
+    // --- END: New code ---
+
+
     const registerForm = document.getElementById('register-form');
     const registerButton = document.getElementById('register-button');
 
@@ -18,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const confirmPassword = document.getElementById('confirm-password').value;
-            const inviteCode = document.getElementById('invite-code').value;
+            const inviteCode = document.getElementById('invite-code').value; // This will now correctly get the pre-filled code
             const agreement = document.getElementById('agreement').checked;
 
             // --- Client-Side Validation ---
