@@ -54,15 +54,16 @@
             visibility: visible;
         }
         .modal-content {
-            background-color: var(--main-bg);
-            padding: 2rem;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 700px; /* Increased width for better form layout */
-            position: relative;
-            transform: scale(0.9);
-            transition: transform 0.3s ease;
-        }
+    background-color: var(--secondary-bg); /* This is the corrected line */
+    padding: 2rem;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 700px;
+    position: relative;
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+    border: 1px solid var(--border-color); /* Added a border for better definition */
+}
         .modal-overlay.active .modal-content {
             transform: scale(1);
         }
