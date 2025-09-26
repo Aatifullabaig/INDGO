@@ -2,7 +2,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const token = localStorage.getItem('authToken');
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
-    // NEW: URL for your live flights microservice, including the correct path.
     const LIVE_FLIGHTS_API_URL = 'https://acars-backend-uxln.onrender.com/flights';
     const TARGET_SERVER_NAME = 'Expert Server'; // or Training/Casual as needed
 
@@ -10,39 +9,32 @@ document.addEventListener('DOMContentLoaded', () => {
     let crewRestInterval = null; // To manage the countdown timer
     let dispatchMap = null; // To hold the Leaflet map instance
 
-    // --- NEW: Live Map Globals ---
     let liveFlightsMap = null; // To hold the live map instance
     let pilotMarkers = {}; // To store pilot markers by flightId { flightId: marker }
     let liveFlightsInterval = null; // To manage the 40-second polling
     let displayedFlightPlanLayer = null; // To hold the currently displayed flight plan layer
 
-    // --- Helper Functions ---
+    // --- MODIFICATION START: Dynamic Fleet & Data Globals ---
+    let DYNAMIC_FLEET = []; // Will store aircraft data fetched from the backend.
+    let CURRENT_PILOT = null;
+    let ACTIVE_FLIGHT_PLANS = [];
+    let CURRENT_OFP_DATA = null;
+    // --- MODIFICATION END ---
 
-    /**
-     * NEW: Generates HTML for a rank badge.
-     * @param {string} rankName - The name of the rank, e.g., "Blue Eagle".
-     * @param {object} options - Configuration for display.
-     * @param {boolean} options.showImage - Whether to show the badge image.
-     * @param {boolean} options.showName - Whether to show the rank name text.
-     * @param {string} options.imageClass - CSS class for the image.
-     * @param {string} options.containerClass - Base CSS class for the container.
-     * @returns {string} The generated HTML string.
-     */
+
+    // --- Helper Functions ---
     function getRankBadgeHTML(rankName, options = {}) {
         const defaults = {
             showImage: true,
             showName: false,
             imageClass: 'rank-badge-img',
-            containerClass: 'rank-badge', // Use a more generic base class
+            containerClass: 'rank-badge',
         };
         const config = { ...defaults, ...options };
     
         if (!rankName) return `<span>Unknown Rank</span>`;
     
-        // Create a CSS-friendly slug from the rank name (e.g., "Blue Eagle" -> "rank-blue-eagle")
         const rankSlug = 'rank-' + rankName.toLowerCase().replace(/\s+/g, '-');
-        
-        // Create the filename for the image
         const fileName = rankName.toLowerCase().replace(/\s+/g, '_') + '_badge.png';
         const imagePath = `images/badges/${fileName}`;
         
@@ -50,7 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let nameHtml = '';
     
         if (config.showImage) {
-            // onerror will replace the img with just the text name if the image fails to load.
             imageHtml = `<img src="${imagePath}" alt="${rankName}" title="${rankName}" class="${config.imageClass}" onerror="this.outerHTML='<span>${rankName}</span>'">`;
         }
     
@@ -58,19 +49,16 @@ document.addEventListener('DOMContentLoaded', () => {
             nameHtml = `<span class="rank-badge-name">${rankName}</span>`;
         }
         
-        // If we only want the image, return just that.
         if (config.showImage && !config.showName) {
             return imageHtml;
         }
     
-        // For combined displays, wrap them in a container that has both the base class AND the rank-specific slug class.
         if (config.showImage && config.showName) {
             return `<span class="${config.containerClass} ${rankSlug}">${imageHtml} ${nameHtml}</span>`;
         }
     
         return `<span>${rankName}</span>`; // Fallback
     }
-
 
     function formatTime(ms) {
         if (ms < 0) ms = 0;
@@ -113,11 +101,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'UNKNOWN';
     }
 
-    // --- REUSABLE DISPATCH PASS FUNCTION [MODIFIED FOR ACARS] ---
     const populateDispatchPass = (container, plan) => {
         if (!container || !plan) return;
 
-        // Helpers for formatting data
         const formatWeight = (kg) => (isNaN(kg) || kg === null ? '---' : `${Number(kg).toLocaleString()} kg`);
         const formatTimeFromTimestamp = (ts) => (ts ? new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) : '----');
         const formatDuration = (hours) => {
@@ -130,7 +116,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const departureWeather = window.WeatherService.parseMetar(plan.departureWeather);
         const arrivalWeather = window.WeatherService.parseMetar(plan.arrivalWeather);
 
-        // Build the complete HTML for the dispatch pass
         container.innerHTML = `
             <div class="dispatch-header">
                 <div class="header-left">
@@ -182,7 +167,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button class="end-duty-btn" id="cancel-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-ban"></i> Cancel Flight</button>
             `;
         } else if (plan.status === 'FLYING') {
-            // --- NEW: ACARS Status Display Logic ---
             let actionsHTML = '';
             if (plan.mapData?.ifTracking?.status && plan.mapData.ifTracking.status !== 'stopped') {
                 actionsHTML = `
@@ -197,7 +181,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             actionsHTML += `<button class="cta-button" id="arrive-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-plane-arrival"></i> Arrive Manually</button>`;
             actionsContainer.innerHTML = actionsHTML;
-            // --- END NEW LOGIC ---
         }
 
         if (plan.mapData && plan.mapData.origin && plan.mapData.destination) {
@@ -216,22 +199,8 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
     const rankIndex = (r) => PILOT_RANKS.indexOf(String(r || '').trim());
     
-    const FLEET = [
-        { code:'DH8D', name:'De Havilland Dash 8 Q400', minRank:'IndGo Cadet', operator:'IndGo Air Virtual' },
-        { code:'A320', name:'Airbus A320',              minRank:'IndGo Cadet', operator:'IndGo Air Virtual' },
-        { code:'B738', name:'Boeing 737-800',           minRank:'IndGo Cadet', operator:'IndGo Air Virtual' },
-        { code:'A321', name:'Airbus A321',              minRank:'Skyline Observer', operator:'IndGo Air Virtual' },
-        { code:'B739', name:'Boeing 737-900',      minRank:'Skyline Observer', operator:'IndGo Air Virtual' },
-        { code:'A330', name:'Airbus A330-300',          minRank:'Route Explorer', operator:'IndGo Air Virtual' },
-        { code:'B38M', name:'Boeing 737 MAX 8',         minRank:'Route Explorer', operator:'IndGo Air Virtual' },
-        { code:'B788', name:'Boeing 787-8',             minRank:'Skyline Officer', operator:'IndGo Air Virtual' },
-        { code:'B77L', name:'Boeing 777-200LR',         minRank:'Skyline Officer', operator:'IndGo Air Virtual' },
-        { code:'B789', name:'Boeing 787-9',             minRank:'Command Captain', operator:'IndGo Air Virtual' },
-        { code:'B77W', name:'Boeing 777-300ER',         minRank:'Command Captain', operator:'IndGo Air Virtual' },
-        { code:'A350', name:'Airbus A350-900',          minRank:'Elite Captain', operator:'IndGo Air Virtual' },
-        { code:'A380', name:'Airbus A380-800',          minRank:'Blue Eagle', operator:'IndGo Air Virtual' },
-        { code:'B744', name:'Boeing 747-400',           minRank:'Blue Eagle', operator:'IndGo Air Virtual' },
-    ];
+    // --- MODIFICATION START: Remove hardcoded FLEET and use dynamic functions ---
+    // The const FLEET = [...] array has been removed.
 
     const deduceRankFromAircraftFE = (acStr) => {
         const s = String(acStr || '').toUpperCase();
@@ -246,15 +215,22 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'Unknown';
     };
 
-    const userCanFlyAircraft = (userRank, aircraftCode) => {
-        const ac = FLEET.find(a => a.code === aircraftCode);
+    const userCanFlyAircraft = (userRank, aircraftIcao) => {
+        const ac = DYNAMIC_FLEET.find(a => a.icao === aircraftIcao);
         if (!ac) return false;
         const ui = rankIndex(userRank);
-        const ri = rankIndex(ac.minRank);
+        const ri = rankIndex(ac.rankUnlock);
         return ui >= 0 && ri >= 0 && ri <= ui;
     };
 
-    const getAllowedFleet = (userRank) => FLEET.filter(a => userCanFlyAircraft(userRank, a.code));
+    const getAllowedFleet = (userRank) => {
+        return DYNAMIC_FLEET.filter(ac => {
+            const userRankIndex = rankIndex(userRank);
+            const aircraftRankIndex = rankIndex(ac.rankUnlock);
+            return userRankIndex >= 0 && aircraftRankIndex >= 0 && aircraftRankIndex <= userRankIndex;
+        });
+    };
+    // --- MODIFICATION END ---
 
     // --- Notifications ---
     function showNotification(message, type) {
@@ -286,18 +262,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const promotionModal = document.getElementById('promotion-modal');
     const arriveFlightModal = document.getElementById('arrive-flight-modal');
 
-    // Global state
-    let CURRENT_PILOT = null;
-    let ACTIVE_FLIGHT_PLANS = [];
-    let CURRENT_OFP_DATA = null;
-
     // --- Auth & Initial Setup ---
     if (!token) {
         window.location.href = 'login.html';
         return;
     }
 
-    // MODIFIED: Added live flights polling control to switchView
     const switchView = (viewId) => {
         sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
         mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
@@ -310,19 +280,15 @@ document.addEventListener('DOMContentLoaded', () => {
             newView.classList.add('active');
         }
 
-        // --- NEW: Control the live flights polling interval ---
         if (viewId === 'view-duty-status') {
-            // User is on the Pilot Hub, start the polling if it's not already running
             if (!liveFlightsInterval) {
-                // Run once immediately, then start the interval
                 updateLiveFlights();
                 liveFlightsInterval = setInterval(updateLiveFlights, 20000); // 20 seconds
             }
         } else {
-            // User has left the Pilot Hub, stop polling to save resources
             if (liveFlightsInterval) {
                 clearInterval(liveFlightsInterval);
-                liveFlightsInterval = null; // Clear the interval ID
+                liveFlightsInterval = null;
             }
         }
     };
@@ -384,15 +350,9 @@ document.addEventListener('DOMContentLoaded', () => {
         newMap.fitBounds(routeLine.getBounds().pad(0.1));
     };
 
-
-    // --- NEW: Live Map Functions ---
-    /**
-     * Initializes the Leaflet map for live flights if it doesn't exist yet.
-     */
+    // --- Live Map Functions ---
     function initializeLiveMap() {
-
         const bounds = L.latLngBounds( L.latLng(-85, -180), L.latLng(85, 180) );
-        // Only initialize if the map container exists and map isn't already created
         if (document.getElementById('live-flights-map-container') && !liveFlightsMap) {
             liveFlightsMap = L.map('live-flights-map-container', {
                 zoomControl: false,
@@ -408,156 +368,159 @@ document.addEventListener('DOMContentLoaded', () => {
             }).addTo(liveFlightsMap);
         }
         if (!liveFlightsInterval) {
-            updateLiveFlights(); // Fetch flights immediately on creation
-            liveFlightsInterval = setInterval(updateLiveFlights, 20000); // Then poll every 20 seconds
+            updateLiveFlights();
+            liveFlightsInterval = setInterval(updateLiveFlights, 20000);
         }
     }
 
-    /**
-     * Fetches live flight data and updates the markers on the map.
-     */
-    // crew-center.js
+    let activePathLayers = {
+        flown: null,
+        planned: null
+    };
 
-let activePathLayers = {
-    flown: null,
-    planned: null
-};
+    async function updateLiveFlights() {
+        if (!liveFlightsMap) return;
 
-async function updateLiveFlights() {
-    if (!liveFlightsMap) return;
+        try {
+            const sessionsRes = await fetch('https://acars-backend-uxln.onrender.com/if-sessions');
+            const sessionsJson = await sessionsRes.json();
+            const expertSession = sessionsJson.sessions.find(s => s.name.toLowerCase().includes('expert'));
 
-    try {
-        const sessionsRes = await fetch('https://acars-backend-uxln.onrender.com/if-sessions');
-        const sessionsJson = await sessionsRes.json();
-        const expertSession = sessionsJson.sessions.find(s => s.name.toLowerCase().includes('expert'));
-
-        if (!expertSession) {
-            console.error('No Expert Server session found.');
-            return;
-        }
-        const sessionId = expertSession.id;
-        const response = await fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}?callsignEndsWith=GO`);
-        const json = await response.json();
-        const flights = Array.isArray(json.flights) ? json.flights : [];
-        const activeFlightIds = new Set();
-
-        const planeIcon = L.icon({
-            iconUrl: 'images/whiteplane.png',
-            iconSize: [30, 30],
-            iconAnchor: [15, 15],
-        });
-
-        flights.forEach(f => {
-            const flightId = f.flightId;
-            const pos = f.position;
-            if (!flightId || !pos || pos.lat == null || pos.lon == null) return;
-
-            activeFlightIds.add(flightId);
-            const latLng = [pos.lat, pos.lon];
-
-            if (!pilotMarkers[flightId]) {
-                pilotMarkers[flightId] = {
-                    marker: null,
-                    // NOTE: Local history is no longer used for the heat map but can be kept for other potential features.
-                    history: [] 
-                };
+            if (!expertSession) {
+                console.error('No Expert Server session found.');
+                return;
             }
+            const sessionId = expertSession.id;
+            const response = await fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}?callsignEndsWith=GO`);
+            const json = await response.json();
+            const flights = Array.isArray(json.flights) ? json.flights : [];
+            const activeFlightIds = new Set();
 
-            const flightData = pilotMarkers[flightId];
-            flightData.history.push([pos.lat, pos.lon, pos.alt_ft]);
+            const planeIcon = L.icon({
+                iconUrl: 'images/whiteplane.png',
+                iconSize: [30, 30],
+                iconAnchor: [15, 15],
+            });
 
-            if (flightData.marker) {
-                flightData.marker.setLatLng(latLng);
-                if (typeof flightData.marker.setRotationAngle === 'function' && pos.track_deg != null) {
-                    flightData.marker.setRotationAngle(pos.track_deg);
+            flights.forEach(f => {
+                const flightId = f.flightId;
+                const pos = f.position;
+                if (!flightId || !pos || pos.lat == null || pos.lon == null) return;
+
+                activeFlightIds.add(flightId);
+                const latLng = [pos.lat, pos.lon];
+
+                if (!pilotMarkers[flightId]) {
+                    pilotMarkers[flightId] = {
+                        marker: null,
+                        history: [] 
+                    };
                 }
-            } else {
-                flightData.marker = L.marker(latLng, { icon: planeIcon, rotationAngle: pos.track_deg ?? 0 }).addTo(liveFlightsMap);
-                
-                // --- MODIFIED CLICK HANDLER ---
-                flightData.marker.on('click', async () => {
-                    // 1. Clear any previously displayed path layers
-                    if (activePathLayers.flown) activePathLayers.flown.remove();
-                    if (activePathLayers.planned) activePathLayers.planned.remove();
 
-                    const popup = L.popup()
-                        .setLatLng(latLng)
-                        .setContent(`<b>${f.callsign}</b><br><i>Loading flight data...</i>`)
-                        .openOn(liveFlightsMap);
-                    
-                    try {
-                        // 2. NEW: Fetch both the PLANNED route and the FLOWN route in parallel.
-                        const [planRes, routeRes] = await Promise.all([
-                            fetch(`https://acars-backend-uxln.onrender.com/flights/${sessionId}/${flightId}/plan`),
-                            fetch(`https://acars-backend-uxln.onrender.com/flights/${sessionId}/${flightId}/route`) // This fetches the heat map data
-                        ]);
+                const flightData = pilotMarkers[flightId];
+                flightData.history.push([pos.lat, pos.lon, pos.alt_ft]);
 
-                        const planJson = await planRes.json();
-                        const routeJson = await routeRes.json(); // Data for the flown path
-
-                        // 3. Process the FLOWN path for the heat map
-                        const flownRouteData = (routeRes.ok && routeJson.ok && Array.isArray(routeJson.route)) ? routeJson.route : [];
-                        
-                        if (flownRouteData.length > 1) {
-                            // Convert API data to the format L.hotline needs: [lat, lon, altitude]
-                            const hotlineData = flownRouteData.map(p => [p.lat, p.lon, p.alt_ft]);
-                            
-                            activePathLayers.flown = L.hotline(hotlineData, { // WAS: L.hotline(flightData.history, ...)
-                                palette: { 0.0: '#0088ff', 0.5: '#00ff00', 1.0: '#ff0000' },
-                                weight: 4, outlineColor: '#000', outlineWidth: 1, min: 0, max: 45000
-                            }).addTo(liveFlightsMap);
-                        }
-
-                        // 4. Process the PLANNED path for the remaining segment (no changes to this logic)
-                        if (planRes.ok && planJson.ok && planJson.plan?.waypoints?.length > 0) {
-                            const plannedWaypoints = planJson.plan.waypoints.map(wp => [wp.lat, wp.lon]);
-                            let nextWaypointIndex = 0;
-                            let minDistance = Infinity;
-                            
-                            plannedWaypoints.forEach((wp, index) => {
-                                const distance = L.latLng(latLng).distanceTo(wp);
-                                if (distance < minDistance) {
-                                    minDistance = distance;
-                                    nextWaypointIndex = index;
-                                }
-                            });
-
-                            const remainingPath = [latLng, ...plannedWaypoints.slice(nextWaypointIndex)];
-                            activePathLayers.planned = L.polyline(remainingPath, {
-                                color: '#e84393', weight: 3, opacity: 0.8, dashArray: '8, 8'
-                            }).addTo(liveFlightsMap);
-                             popup.setContent(`<b>${f.callsign}</b> (${f.username || 'N/A'})<br>Route and flight plan loaded.`);
-                        } else {
-                            popup.setContent(`<b>${f.callsign}</b> (${f.username || 'N/A'})<br>No flight plan filed.`);
-                        }
-                        
-                    } catch (err) {
-                        console.error("Failed to fetch or render flight paths:", err);
-                        popup.setContent(`<b>${f.callsign}</b> (${f.username || 'N/A'})<br>Could not load flight data.`);
+                if (flightData.marker) {
+                    flightData.marker.setLatLng(latLng);
+                    if (typeof flightData.marker.setRotationAngle === 'function' && pos.track_deg != null) {
+                        flightData.marker.setRotationAngle(pos.track_deg);
                     }
-                });
-            }
-        });
+                } else {
+                    flightData.marker = L.marker(latLng, { icon: planeIcon, rotationAngle: pos.track_deg ?? 0 }).addTo(liveFlightsMap);
+                    
+                    flightData.marker.on('click', async () => {
+                        if (activePathLayers.flown) activePathLayers.flown.remove();
+                        if (activePathLayers.planned) activePathLayers.planned.remove();
 
-        // Cleanup logic remains the same
-        Object.keys(pilotMarkers).forEach(fid => {
-            if (!activeFlightIds.has(String(fid))) {
-                const data = pilotMarkers[fid];
-                if (data.marker) data.marker.remove();
-                
-                // Clean up path if the plane that was displaying it disappears
-                if (activePathLayers.flown && flightData.marker === data.marker) {
-                    activePathLayers.flown.remove();
-                    if(activePathLayers.planned) activePathLayers.planned.remove();
+                        const popup = L.popup()
+                            .setLatLng(latLng)
+                            .setContent(`<b>${f.callsign}</b><br><i>Loading flight data...</i>`)
+                            .openOn(liveFlightsMap);
+                        
+                        try {
+                            const [planRes, routeRes] = await Promise.all([
+                                fetch(`https://acars-backend-uxln.onrender.com/flights/${sessionId}/${flightId}/plan`),
+                                fetch(`https://acars-backend-uxln.onrender.com/flights/${sessionId}/${flightId}/route`)
+                            ]);
+
+                            const planJson = await planRes.json();
+                            const routeJson = await routeRes.json();
+
+                            const flownRouteData = (routeRes.ok && routeJson.ok && Array.isArray(routeJson.route)) ? routeJson.route : [];
+                            
+                            if (flownRouteData.length > 1) {
+                                const hotlineData = flownRouteData.map(p => [p.lat, p.lon, p.alt_ft]);
+                                activePathLayers.flown = L.hotline(hotlineData, {
+                                    palette: { 0.0: '#0088ff', 0.5: '#00ff00', 1.0: '#ff0000' },
+                                    weight: 4, outlineColor: '#000', outlineWidth: 1, min: 0, max: 45000
+                                }).addTo(liveFlightsMap);
+                            }
+
+                            if (planRes.ok && planJson.ok && planJson.plan?.waypoints?.length > 0) {
+                                const plannedWaypoints = planJson.plan.waypoints.map(wp => [wp.lat, wp.lon]);
+                                let nextWaypointIndex = 0;
+                                let minDistance = Infinity;
+                                
+                                plannedWaypoints.forEach((wp, index) => {
+                                    const distance = L.latLng(latLng).distanceTo(wp);
+                                    if (distance < minDistance) {
+                                        minDistance = distance;
+                                        nextWaypointIndex = index;
+                                    }
+                                });
+
+                                const remainingPath = [latLng, ...plannedWaypoints.slice(nextWaypointIndex)];
+                                activePathLayers.planned = L.polyline(remainingPath, {
+                                    color: '#e84393', weight: 3, opacity: 0.8, dashArray: '8, 8'
+                                }).addTo(liveFlightsMap);
+                                 popup.setContent(`<b>${f.callsign}</b> (${f.username || 'N/A'})<br>Route and flight plan loaded.`);
+                            } else {
+                                popup.setContent(`<b>${f.callsign}</b> (${f.username || 'N/A'})<br>No flight plan filed.`);
+                            }
+                            
+                        } catch (err) {
+                            console.error("Failed to fetch or render flight paths:", err);
+                            popup.setContent(`<b>${f.callsign}</b> (${f.username || 'N/A'})<br>Could not load flight data.`);
+                        }
+                    });
                 }
-                delete pilotMarkers[fid];
-            }
-        });
+            });
 
-    } catch (err) {
-        console.error('Error updating live flights:', err);
+            Object.keys(pilotMarkers).forEach(fid => {
+                if (!activeFlightIds.has(String(fid))) {
+                    const data = pilotMarkers[fid];
+                    if (data.marker) data.marker.remove();
+                    
+                    if (activePathLayers.flown && flightData.marker === data.marker) {
+                        activePathLayers.flown.remove();
+                        if(activePathLayers.planned) activePathLayers.planned.remove();
+                    }
+                    delete pilotMarkers[fid];
+                }
+            });
+
+        } catch (err) {
+            console.error('Error updating live flights:', err);
+        }
     }
-  }
+
+    // --- MODIFICATION START: New function to fetch fleet data ---
+    async function fetchFleetData() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/aircrafts`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) {
+                throw new Error('Could not load fleet data from the server.');
+            }
+            DYNAMIC_FLEET = await response.json();
+        } catch (error) {
+            console.error('Error fetching dynamic fleet:', error);
+            showNotification('Could not load the aircraft library. Some features may not work.', 'error');
+            DYNAMIC_FLEET = []; // Fallback to an empty array
+        }
+    }
+    // --- MODIFICATION END ---
 
 
     // --- Main Data Fetch & Render Cycle ---
@@ -565,15 +528,20 @@ async function updateLiveFlights() {
         try {
             const oldRank = CURRENT_PILOT ? CURRENT_PILOT.rank : null;
 
-            const response = await fetch(`${API_BASE_URL}/api/me`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) {
+            // --- MODIFICATION START: Fetch fleet data along with pilot data ---
+            // Fetch pilot and fleet data in parallel for faster loading
+            const [pilotResponse] = await Promise.all([
+                fetch(`${API_BASE_URL}/api/me`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetchFleetData() // Fetches and populates DYNAMIC_FLEET
+            ]);
+            // --- MODIFICATION END ---
+
+            if (!pilotResponse.ok) {
                 localStorage.removeItem('authToken');
                 window.location.href = 'login.html';
                 throw new Error('Session invalid. Please log in again.');
             }
-            const pilot = await response.json();
+            const pilot = await pilotResponse.json();
             CURRENT_PILOT = pilot;
             ACTIVE_FLIGHT_PLANS = pilot.currentFlightPlans || [];
 
@@ -615,11 +583,13 @@ async function updateLiveFlights() {
         if (!rankNameElem || !perksListElem || !promotionModal) return;
 
         rankNameElem.textContent = newRank;
-
-        const newAircraft = FLEET.filter(ac => ac.minRank === newRank);
+        
+        // --- MODIFICATION START: Use DYNAMIC_FLEET for promotion perks ---
+        const newAircraft = DYNAMIC_FLEET.filter(ac => ac.rankUnlock === newRank);
         if (newAircraft.length > 0) {
-            perksListElem.innerHTML = newAircraft.map(ac => `<li><i class="fa-solid fa-plane-circle-check"></i> <strong>${ac.name}</strong> (${ac.code})</li>`).join('');
+            perksListElem.innerHTML = newAircraft.map(ac => `<li><i class="fa-solid fa-plane-circle-check"></i> <strong>${ac.name}</strong> (${ac.icao})</li>`).join('');
         } else {
+        // --- MODIFICATION END ---
             perksListElem.innerHTML = '<li>More perks and features will be available as you advance.</li>';
         }
 
@@ -666,8 +636,6 @@ async function updateLiveFlights() {
         </div>
     `;
 
-
-    // MODIFIED: Added map initialization and global rank styling to renderPilotHubView
     const renderPilotHubView = async (pilot, leaderboardsHTML) => {
         const dutyStatusView = document.getElementById('view-duty-status');
         if (crewRestInterval) clearInterval(crewRestInterval);
@@ -683,12 +651,10 @@ async function updateLiveFlights() {
 
         dutyStatusView.innerHTML = `${pendingBanner}${dutyStatusHTML}${leaderboardsHTML}`;
 
-        // --- MODIFIED: DYNAMICALLY STYLE THE ENTIRE UI BASED ON RANK ---
         const dashboardContainer = document.querySelector('.dashboard-container');
         if (dashboardContainer && pilot.rank) {
             const rankSlug = 'rank-' + pilot.rank.toLowerCase().replace(/\s+/g, '-');
             
-            // Clean up any old rank classes to handle promotions correctly
             const classList = Array.from(dashboardContainer.classList);
             for (const c of classList) {
                 if (c.startsWith('rank-')) {
@@ -696,13 +662,9 @@ async function updateLiveFlights() {
                 }
             }
             
-            // Add the new class to the main container
             dashboardContainer.classList.add(rankSlug);
         }
-        // --- END MODIFICATION ---
 
-        // NEW: Initialize the map after the HTML is rendered.
-        // Use a small timeout to ensure the DOM is ready for the map.
         setTimeout(initializeLiveMap, 100);
 
         if (pilot.dutyStatus === 'ON_REST' && pilot.timeUntilNextDutyMs > 0) {
@@ -724,7 +686,6 @@ async function updateLiveFlights() {
         }
     };
     
-    // MODIFIED: renderOnRestContent now includes the live map HTML
     const renderOnRestContent = async (pilot) => {
         let content = '';
         let title = '';
@@ -740,7 +701,6 @@ async function updateLiveFlights() {
         } else {
             title = '<i class="fa-solid fa-user-clock"></i> Current Status: 🔴 On Rest';
             try {
-                // Fetch recommended roster and weather data in parallel
                 const rosterResponse = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
                 if (!rosterResponse.ok) throw new Error('Could not fetch recommended roster.');
                 
@@ -790,7 +750,6 @@ async function updateLiveFlights() {
                      rosterCardHTML = `<p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>`;
                 }
 
-                // Combine the cards into a flex container
                 content = `
                     <div class="hub-action-grid" style="display: flex; flex-wrap: wrap; gap: 1.5rem; margin-top: 1.5rem;">
                         ${locationCardHTML}
@@ -804,7 +763,6 @@ async function updateLiveFlights() {
             }
         }
         
-        // NEW: Live map container to be added before the leaderboards
         const liveMapHTML = `
             <div class="content-card live-map-section" style="margin-top: 1.5rem;">
                 <h2><i class="fa-solid fa-tower-broadcast"></i> Live Operations Map</h2>
@@ -819,10 +777,9 @@ async function updateLiveFlights() {
                 ${createHubHeaderHTML(pilot, title)}
                 ${content}
             </div>
-            ${liveMapHTML}`; // Appended the map HTML
+            ${liveMapHTML}`;
     };
 
-    // MODIFIED: renderOnDutyContent now includes the live map HTML
     const renderOnDutyContent = async (pilot) => {
         if (!pilot.currentRoster) return `<div class="content-card"><p>Error: On duty but no roster data found.</p></div>`;
 
@@ -842,7 +799,6 @@ async function updateLiveFlights() {
 
             const headerTitle = '<i class="fa-solid fa-plane-departure"></i> Current Status: 🟢 On Duty';
 
-            // NEW: Define the map HTML
             const liveMapHTML = `
                 <div class="content-card live-map-section" style="margin-top: 1.5rem;">
                     <h2><i class="fa-solid fa-tower-broadcast"></i> Live Operations Map</h2>
@@ -878,7 +834,7 @@ async function updateLiveFlights() {
                         }).join('')}
                     </div>
                 </div>
-                ${liveMapHTML}`; // Appended map HTML
+                ${liveMapHTML}`;
         } catch (error) {
             return `<div class="content-card"><p class="error-text">${error.message}</p></div>`;
         }
@@ -901,14 +857,16 @@ async function updateLiveFlights() {
         renderActiveFlights();
         updateDispatchFormState();
 
+        // --- MODIFICATION START: Populate dropdown from DYNAMIC_FLEET ---
         const aircraftSelect = document.getElementById('fp-aircraft');
         if (aircraftSelect) {
-            const allowed = getAllowedFleet(pilot.rank);
+            const allowedFleet = getAllowedFleet(pilot.rank);
             aircraftSelect.innerHTML = `
                 <option value="" disabled selected>-- Select Aircraft --</option>
-                ${allowed.map(ac => `<option value="${ac.code}">${ac.name} (${ac.code})</option>`).join('')}
+                ${allowedFleet.map(ac => `<option value="${ac.icao}">${ac.name} (${ac.icao})</option>`).join('')}
             `;
         }
+        // --- MODIFICATION END ---
     };
 
     const renderActiveFlights = () => {
@@ -923,7 +881,9 @@ async function updateLiveFlights() {
         }
 
         listContainer.innerHTML = ACTIVE_FLIGHT_PLANS.map(plan => {
-            const aircraft = FLEET.find(a => a.code === plan.aircraft) || { name: plan.aircraft };
+            // --- MODIFICATION START: Look up aircraft name from dynamic fleet ---
+            const aircraft = DYNAMIC_FLEET.find(a => a.icao === plan.aircraft) || { name: plan.aircraft };
+            // --- MODIFICATION END ---
             return `
             <div class="active-flight-item" data-plan-id="${plan._id}">
                 <div class="active-flight-summary">
@@ -1258,7 +1218,6 @@ async function updateLiveFlights() {
                 const roster = allRosters.find(r => r.rosterId === rosterId);
                 
                 if (roster && roster.legs) {
-                    // Check for multiple aircraft to apply a specific class, but don't prevent image rendering
                     const isMultiAircraft = roster.legs.some((leg, i, arr) => i > 0 && leg.aircraft !== arr[0].aircraft);
                     
                     detailsContainer.innerHTML = `
@@ -1272,18 +1231,25 @@ async function updateLiveFlights() {
                                 const airlineCode = extractAirlineCode(leg.flightNumber);
                                 const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : 'images/default-airline.png';
                                 
-                                // FIX: This block now runs for every leg, not just for multi-aircraft rosters.
-                                const legAircraftCode = leg.aircraft;
-                                const legAirlineCode = extractAirlineCode(leg.flightNumber);
-                                const liveryImagePath = `Images/liveries/${legAirlineCode}_${legAircraftCode}.png`;
-                                const genericImagePath = `Images/planesForCC/${legAircraftCode}.png`;
+                                // --- MODIFICATION START: Dynamic aircraft image logic ---
+                                const legAircraftIcao = leg.aircraft;
+                                const legOperator = leg.operator;
+
+                                // Find the specific aircraft from our fetched fleet data
+                                const aircraftData = DYNAMIC_FLEET.find(ac => ac.icao === legAircraftIcao && ac.codeshare === legOperator);
+
+                                // Use the imageUrl from the database, with multiple fallbacks
+                                const aircraftImageUrl = aircraftData?.imageUrl 
+                                    || `Images/planesForCC/${legAircraftIcao}.png`; // Fallback to old generic path
+
                                 const legAircraftImageHTML = `
                                 <div class="leg-aircraft-image-container">
-                                    <img src="${liveryImagePath}" 
-                                         alt="${legAirlineCode} ${legAircraftCode}" 
+                                    <img src="${aircraftImageUrl}" 
+                                         alt="${legOperator} ${legAircraftIcao}" 
                                          class="leg-aircraft-image"
-                                         onerror="this.onerror=null; this.src='${genericImagePath}'; this.alt='${legAircraftCode}';">
+                                         onerror="this.onerror=null; this.src='images/default-aircraft.png'; this.alt='Image not available';">
                                 </div>`;
+                                // --- MODIFICATION END ---
                                 
                                 return `
                                 <li class="${isMultiAircraft ? 'multi-aircraft-leg' : ''}">
@@ -1383,12 +1349,10 @@ async function updateLiveFlights() {
 
     const planId = target.dataset.planId;
     
-    // --- MODIFIED: Depart Button Logic for ACARS Integration ---
     if (target.id === 'depart-btn') {
         target.disabled = true;
         target.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Departing...';
         try {
-            // 1. Mark flight as departed in the main system
             const departRes = await fetch(`${API_BASE_URL}/api/flightplans/${planId}/depart`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -1397,7 +1361,6 @@ async function updateLiveFlights() {
             if (!departRes.ok) throw new Error(departResult.message || 'Failed to mark flight as departed.');
             showNotification(departResult.message, 'info');
 
-            // 2. Start ACARS tracking
             const acarsRes = await fetch(`${API_BASE_URL}/api/acars/track/start/${planId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -1408,7 +1371,6 @@ async function updateLiveFlights() {
             
             showNotification('ACARS tracking initiated successfully.', 'success');
 
-            // 3. Refresh all data to show the new state
             await fetchPilotData();
 
         } catch (err) {
@@ -1417,7 +1379,6 @@ async function updateLiveFlights() {
             target.innerHTML = '<i class="fa-solid fa-plane-departure"></i> Depart';
         }
     }
-    // --- END MODIFICATION ---
 
     if (target.id === 'cancel-btn') {
         target.disabled = true;
