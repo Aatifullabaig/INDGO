@@ -122,13 +122,14 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
         .aircraft-card-image {
-            width: 100px;
-            height: 80px;
-            object-fit: cover;
-            border-radius: 8px;
-            flex-shrink: 0;
-            background-color: var(--main-bg);
-        }
+    width: 120px;       /* Increased width for a better, wider aspect ratio */
+    height: 80px;       /* Kept height the same, creating a more panoramic box */
+    object-fit: contain;  /* This is the key change: fits the whole image without distortion */
+    border-radius: 8px;
+    flex-shrink: 0;
+    background-color: var(--bg-color); /* Corrected CSS variable for a consistent backdrop */
+    padding: 5px;       /* Optional: Adds a little breathing room around the image */
+}
         .aircraft-card-info {
             flex-grow: 1;
             line-height: 1.5;
