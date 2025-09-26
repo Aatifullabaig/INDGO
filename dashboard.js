@@ -100,6 +100,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const mobileLogo = document.getElementById('mobile-scroll-logo');
+
+    // Only run this logic if the logo element exists
+    if (mobileLogo) {
+        window.addEventListener('scroll', () => {
+            // Add 'scrolled' class if user scrolls down more than 10px, otherwise remove it
+            if (window.scrollY > 10) {
+                mobileLogo.classList.add('scrolled');
+            } else {
+                mobileLogo.classList.remove('scrolled');
+            }
+        });
+    }
+
     // =========================================================
     // START: NEW FUNCTION TO APPLY RANK-BASED THEME
     // =========================================================
