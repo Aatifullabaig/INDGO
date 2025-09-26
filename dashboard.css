@@ -234,17 +234,10 @@ body {
     color: #fff;
 }
 
-.sidebar-toggle-btn {
-    background: none;
-    border: none;
-    color: var(--dashboard-text-muted);
-    cursor: pointer;
-    font-size: 1.2rem;
-    padding: 0.5rem;
-    flex-shrink: 0;
+/* --- HIDE MOBILE BUTTONS ON DESKTOP --- */
+.sidebar-toggle-btn, .mobile-fab {
+    display: none;
 }
-.sidebar-toggle-btn:hover { color: #fff; }
-.sidebar-toggle-btn i { transition: transform 0.4s ease; }
 
 /* --- Collapsed Sidebar Styles (FROM CREW CENTER) --- */
 .dashboard-container.sidebar-collapsed .sidebar {
@@ -297,10 +290,6 @@ body {
     justify-content: center;
     font-size: 1.2rem;
     background-color: rgba(255, 255, 255, 0.05);
-}
-
-.dashboard-container.sidebar-collapsed .sidebar-toggle-btn i {
-    transform: rotate(180deg);
 }
 
 /* --- Main Content & Tab Panes (Adapted for Dashboard) --- */
@@ -883,6 +872,9 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
 
     /* Move the toggle button to a fixed position on the top left of the screen */
     .sidebar-toggle-btn {
+        display: flex; /* Overrides the desktop 'none' */
+        align-items: center;
+        justify-content: center;
         position: fixed;
         top: 1rem;
         left: 1rem;
@@ -891,16 +883,42 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
         border-radius: 50%;
         width: 45px;
         height: 45px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        border: 1px solid var(--border-color);
+        color: var(--dashboard-text-muted);
+        cursor: pointer;
+        font-size: 1.2rem;
     }
     
     /* Make the icon an X when the menu is open */
     .dashboard-container:not(.sidebar-collapsed) .sidebar-toggle-btn i::before {
         content: "\f00d"; /* FontAwesome 'times' (X) icon */
     }
+
+    /* --- NEW CREW CENTER FAB --- */
+    .mobile-fab {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 2001;
+        width: 45px;
+        height: 45px;
+        background-color: var(--accent-color);
+        color: #fff;
+        border-radius: 50%;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        text-decoration: none;
+        font-size: 1rem;
+        transition: transform 0.3s ease, background-color 0.3s ease;
+    }
+    .mobile-fab:hover {
+        transform: scale(1.1);
+        filter: brightness(1.2);
+    }
+
 
     /* Ensure main content takes full width and has no margin offset */
     .main-content {
