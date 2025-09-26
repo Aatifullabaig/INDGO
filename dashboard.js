@@ -1045,47 +1045,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
         container.innerHTML = `
             <h2><i class="fas fa-plane"></i> Aircraft Manager</h2>
-            <p>Add, update, and manage aircraft available to the airline and its codeshare partners. Each aircraft can be assigned a minimum rank required for pilots to fly it.</p>
+    <p>Add, update, and manage aircraft available to the airline and its codeshare partners. Each aircraft can be assigned a minimum rank required for pilots to fly it.</p>
 
-            <div class="dashboard-form" id="aircraft-form" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                <h3 id="aircraft-form-title">Add New Aircraft</h3>
-                <input type="hidden" id="ac-edit-id">
-                <div class="form-grid-two-col">
-                     <div class="form-group"><label for="ac-name">Name</label><input id="ac-name" required placeholder="Airbus A320-200"></div>
-                     <div class="form-group"><label for="ac-icao">ICAO Code</label><input id="ac-icao" required maxlength="4" placeholder="A320"></div>
-                     <div class="form-group"><label for="ac-type">Type</label>
-                        <select id="ac-type" class="form-control">
-                            <option value="narrowbody">Narrowbody</option>
-                            <option value="widebody">Widebody</option>
-                            <option value="turboprop">Turboprop</option>
-                            <option value="regional jet">Regional Jet</option>
-                            <option value="other">Other</option>
-                        </select>
-                    </div>
-                     <div class="form-group"><label for="ac-rank">Rank Unlock</label>
-                        <select id="ac-rank" class="form-control">
-                            ${pilotRanks.map(r => `<option value="${r}">${r}</option>`).join('')}
-                        </select>
-                    </div>
-                     <div class="form-group"><label for="ac-codeshare">Operator / Codeshare</label>
-                        <select id="ac-codeshare" class="form-control"></select>
-                    </div>
-                </div>
-                <p style="font-size: 0.9em; color: var(--dashboard-text-muted); margin-top: 1rem;">Use a link or upload a file for the aircraft image. Uploading a new file will override any existing image.</p>
-                 <div class="form-grid-two-col">
-                    <div class="form-group"><label for="ac-image-url">Picture URL (Optional)</label><input id="ac-image-url" type="url" placeholder="https://example.com/image.png"></div>
-                    <div class="form-group"><label for="ac-image-file">Or Upload Picture (Optional)</label><input id="ac-image-file" type="file" accept="image/*" class="form-control"></div>
-                </div>
-                <div style="display: flex; gap: 1rem;">
-                    <button id="ac-save" class="cta-button">Save Aircraft</button>
-                    <button id="ac-cancel-edit" class="cta-button" style="display: none; background-color: #555;">Cancel Edit</button>
-                </div>
+    {/* FIX: Changed <div> to <form> */}
+    <form class="dashboard-form" id="aircraft-form" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
+        <h3 id="aircraft-form-title">Add New Aircraft</h3>
+        <input type="hidden" id="ac-edit-id">
+        <div class="form-grid-two-col">
+             <div class="form-group"><label for="ac-name">Name</label><input id="ac-name" required placeholder="Airbus A320-200"></div>
+             <div class="form-group"><label for="ac-icao">ICAO Code</label><input id="ac-icao" required maxlength="4" placeholder="A320"></div>
+             <div class="form-group"><label for="ac-type">Type</label>
+                <select id="ac-type" class="form-control">
+                    <option value="narrowbody">Narrowbody</option>
+                    <option value="widebody">Widebody</option>
+                    <option value="turboprop">Turboprop</option>
+                    <option value="regional jet">Regional Jet</option>
+                    <option value="other">Other</option>
+                </select>
             </div>
+             <div class="form-group"><label for="ac-rank">Rank Unlock</label>
+                <select id="ac-rank" class="form-control">
+                    ${pilotRanks.map(r => `<option value="${r}">${r}</option>`).join('')}
+                </select>
+            </div>
+             <div class="form-group"><label for="ac-codeshare">Operator / Codeshare</label>
+                <select id="ac-codeshare" class="form-control"></select>
+            </div>
+        </div>
+        <p style="font-size: 0.9em; color: var(--dashboard-text-muted); margin-top: 1rem;">Use a link or upload a file for the aircraft image. Uploading a new file will override any existing image.</p>
+         <div class="form-grid-two-col">
+            <div class="form-group"><label for="ac-image-url">Picture URL (Optional)</label><input id="ac-image-url" type="url" placeholder="https://example.com/image.png"></div>
+            <div class="form-group"><label for="ac-image-file">Or Upload Picture (Optional)</label><input id="ac-image-file" type="file" accept="image/*" class="form-control"></div>
+        </div>
+        <div style="display: flex; gap: 1rem;">
+            {/* FIX: Added type="button" to prevent default form submission */}
+            <button id="ac-save" type="button" class="cta-button">Save Aircraft</button>
+            <button id="ac-cancel-edit" type="button" class="cta-button" style="display: none; background-color: #555;">Cancel Edit</button>
+        </div>
+    </form> {/* FIX: Changed </div> to </form> */}
 
-            <hr>
-            <h3>Existing Aircraft Fleet</h3>
-            <div id="aircraft-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;"><p>Loading aircraft…</p></div>
-        `;
+    <hr>
+    <h3>Existing Aircraft Fleet</h3>
+    <div id="aircraft-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;"><p>Loading aircraft…</p></div>
+`;
 
         await ensureCodeshareOptions('#ac-codeshare');
         await renderAircraftList();
