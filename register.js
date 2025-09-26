@@ -144,18 +144,41 @@ document.addEventListener('DOMContentLoaded', () => {
             registerButton.textContent = 'Create Account';
         }
     });
+
+    // --- START: NEW function to load legal text into the form ---
+    const loadTermsIntoBox = async () => {
+        const container = document.getElementById('terms-container');
+        if (!container) return;
+
+        try {
+            const response = await fetch('terms.html');
+            if (!response.ok) throw new Error('Network response was not ok');
+            
+            const text = await response.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(text, 'text/html');
+            const content = doc.querySelector('.content-card').innerHTML;
+            
+            container.innerHTML = content;
+        } catch (error) {
+            console.error('Failed to load terms into box:', error);
+            container.innerHTML = '<p>Could not load the Terms of Service. Please try refreshing the page.</p>';
+        }
+    };
+    loadTermsIntoBox(); // Call the function on page load
     
     // --- START: Modal Logic ---
     const modal = document.getElementById('legal-modal');
     const modalTitle = document.getElementById('modal-title');
     const modalBody = document.getElementById('modal-body');
     const closeModalBtn = document.getElementById('modal-close');
-    const showTermsLink = document.getElementById('show-terms');
+    // MODIFIED: Removed the 'show-terms' link selector as it's no longer used
     const showPrivacyLink = document.getElementById('show-privacy');
 
     const openModal = async (type) => {
-        const url = type === 'terms' ? 'terms.html' : 'privacy.html';
-        const title = type === 'terms' ? 'Terms of Service' : 'Privacy Policy';
+        // MODIFIED: Simplified to only handle privacy.html
+        const url = 'privacy.html';
+        const title = 'Privacy Policy';
         
         modalTitle.textContent = 'Loading...';
         modalBody.innerHTML = '<p>Please wait...</p>';
@@ -181,11 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.classList.remove('show');
     };
 
-    showTermsLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        openModal('terms');
-    });
-
+    // MODIFIED: Removed the event listener for the terms link
     showPrivacyLink.addEventListener('click', (e) => {
         e.preventDefault();
         openModal('privacy');

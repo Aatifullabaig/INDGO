@@ -90,9 +90,31 @@
         .form-text-muted {
             font-size: 0.8rem;
             color: #888;
-            margin-top: -0.75rem;
+            /* MODIFIED: Changed margin-top from negative to positive to fix layout */
+            margin-top: 0.25rem;
             margin-bottom: 1rem;
             text-align: left;
+        }
+
+        /* --- NEW: Styles for embedded legal text box --- */
+        .legal-box {
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            text-align: left;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            color: #333;
+        }
+        .legal-box h2 {
+            margin-top: 0;
+            font-size: 1rem;
+        }
+        .legal-box p, .legal-box li {
+            color: #444;
         }
 
         /* --- Styles for Modal Window --- */
@@ -261,9 +283,14 @@
 
                 <div class="form-step" data-step="4">
                     <h3 class="step-title">Final Agreement</h3>
+                    
+                    <div id="terms-container" class="legal-box">
+                        <p>Loading Terms of Service...</p>
+                    </div>
+
                     <div class="agreement-group">
                         <input type="checkbox" id="agreement" required>
-                        <label for="agreement">I agree to the <a id="show-terms">Terms of Service</a> and <a id="show-privacy">Privacy Policy</a>.</label>
+                        <label for="agreement">I have read and agree to the Terms of Service above and the <a id="show-privacy">Privacy Policy</a>.</label>
                     </div>
                     <div class="button-group">
                         <button type="button" class="cta-button-secondary back-btn">Back</button>
