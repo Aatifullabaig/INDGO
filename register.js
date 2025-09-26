@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- START: Existing code to handle invite links ---
-    // This logic remains useful and runs once at the start.
     const urlParams = new URLSearchParams(window.location.search);
     const inviteCodeFromUrl = urlParams.get('invite');
     const inviteInput = document.getElementById('invite-code');
@@ -9,18 +8,17 @@ document.addEventListener('DOMContentLoaded', () => {
         inviteInput.value = inviteCodeFromUrl;
         inviteInput.setAttribute('readonly', true);
     }
-    // --- END: Invite link code ---
-
+    
+    // --- START: Form Navigation Logic ---
     const registerForm = document.getElementById('register-form');
     const nextButtons = document.querySelectorAll('.next-btn');
     const backButtons = document.querySelectorAll('.back-btn');
     const formSteps = document.querySelectorAll('.form-step');
     const stepIndicators = document.querySelectorAll('.step-indicator');
-    const progressBarFill = document.querySelector('.progress-bar-line-fill');
+    const progressBarFill = document.querySelector('.progress-bar-fill');
 
     let currentStep = 1;
 
-    // --- Navigation Logic ---
     nextButtons.forEach(button => {
         button.addEventListener('click', () => {
             if (validateStep(currentStep)) {
@@ -37,9 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // --- UI Update Function ---
     function updateFormUI() {
-        // Update form step visibility
         formSteps.forEach(step => {
             step.classList.remove('active');
             if (parseInt(step.dataset.step) === currentStep) {
@@ -47,23 +43,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Update progress bar
         stepIndicators.forEach((indicator, index) => {
-            if (index + 1 < currentStep) {
+            indicator.classList.remove('active');
+            if (index < currentStep) {
                 indicator.classList.add('active');
-            } else if (index + 1 === currentStep) {
-                indicator.classList.add('active');
-            } else {
-                indicator.classList.remove('active');
             }
         });
         
-        // Update progress bar line
         const progressPercentage = ((currentStep - 1) / (formSteps.length - 1)) * 100;
         progressBarFill.style.width = `${progressPercentage}%`;
     }
 
-    // --- Validation Logic ---
     function validateStep(step) {
         let isValid = true;
         const inputs = formSteps[step - 1].querySelectorAll('input[required]');
@@ -78,7 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        // Special validation for step 2 (passwords)
         if (step === 2) {
             const password = document.getElementById('password').value;
             const confirmPassword = document.getElementById('confirm-password').value;
@@ -91,7 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // Special validation for step 4 (agreement)
         if (step === 4) {
              const agreement = document.getElementById('agreement').checked;
              if (!agreement) {
@@ -103,18 +91,16 @@ document.addEventListener('DOMContentLoaded', () => {
         return isValid;
     }
 
-    // --- Form Submission Logic ---
+    // --- START: Form Submission Logic ---
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        // Final validation check
         if (!validateStep(4)) return;
 
         const registerButton = document.getElementById('register-button');
         registerButton.disabled = true;
         registerButton.textContent = 'Processing...';
 
-        // Collect all data from the form
         const name = document.getElementById('name').value;
         const ifcUsername = document.getElementById('ifc-username').value;
         const email = document.getElementById('email').value;
@@ -123,7 +109,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const inviteCode = document.getElementById('invite-code').value;
 
         try {
-            // IMPORTANT: You may need to update your backend to accept the 'ifcUsername' field.
             const response = await fetch('https://indgo-backend.onrender.com/api/register', {
                 method: 'POST',
                 headers: {
@@ -131,7 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 body: JSON.stringify({
                     name,
-                    ifcUsername, // New field added
+                    ifcUsername,
                     email,
                     password,
                     callsign,
@@ -160,15 +145,67 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // Assume showNotification is a global function or defined elsewhere
-    // If not, here is a sample implementation using Toastify.js
+    // --- START: Modal Logic ---
+    const modal = document.getElementById('legal-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalBody = document.getElementById('modal-body');
+    const closeModalBtn = document.getElementById('modal-close');
+    const showTermsLink = document.getElementById('show-terms');
+    const showPrivacyLink = document.getElementById('show-privacy');
+
+    const openModal = async (type) => {
+        const url = type === 'terms' ? 'terms.html' : 'privacy.html';
+        const title = type === 'terms' ? 'Terms of Service' : 'Privacy Policy';
+        
+        modalTitle.textContent = 'Loading...';
+        modalBody.innerHTML = '<p>Please wait...</p>';
+        modal.classList.add('show');
+
+        try {
+            const response = await fetch(url);
+            const text = await response.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(text, 'text/html');
+            const content = doc.querySelector('.content-card').innerHTML;
+            
+            modalTitle.textContent = title;
+            modalBody.innerHTML = content;
+        } catch (error) {
+            console.error('Failed to load content:', error);
+            modalTitle.textContent = 'Error';
+            modalBody.innerHTML = '<p>Could not load the document. Please try again later.</p>';
+        }
+    };
+
+    const closeModal = () => {
+        modal.classList.remove('show');
+    };
+
+    showTermsLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        openModal('terms');
+    });
+
+    showPrivacyLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        openModal('privacy');
+    });
+
+    closeModalBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
+
+    // --- START: Notification Function ---
     function showNotification(message, type) {
         Toastify({
             text: message,
             duration: 3000,
             close: true,
-            gravity: "top", // `top` or `bottom`
-            position: "right", // `left`, `center` or `right`
+            gravity: "top", 
+            position: "right", 
             backgroundColor: type === 'success' ? "linear-gradient(to right, #00b09b, #96c93d)" : "linear-gradient(to right, #ff5f6d, #ffc371)",
         }).showToast();
     }
