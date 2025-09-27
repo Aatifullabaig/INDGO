@@ -712,7 +712,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================================
-    // START: MODIFIED ROUTE MANAGER SECTION
+    // START: 🚀 REDESIGNED ROUTE MANAGER SECTION 🚀
     // =========================================================
     async function populateRouteManager() {
         const container = document.getElementById('tab-route-manager');
@@ -721,59 +721,66 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = `
             <h2><i class="fas fa-route"></i> Route Network Manager</h2>
             <p>Manage the airline's route network, including IndGo and codeshare partner flights.</p>
+            
             <div class="route-manager-grid">
                 <div class="left-column">
-                    <div id="codeshare-management-panel" class="mb-4" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                    
+                    <div id="codeshare-management-panel" class="content-card-nested">
                         <h3><i class="fas fa-handshake"></i> Codeshare Partners</h3>
-                        <p style="font-size: 0.9em; color: var(--dashboard-text-muted);">Partners added here will be saved to the database and available globally.</p>
+                        <p class="panel-description">Manage airline partners. Routes must be assigned to an operator.</p>
                         <form id="add-codeshare-form" class="dashboard-form">
-                            <div class="form-group"><input type="text" id="codeshare-name" placeholder="Airline Name (e.g., Qatar Airways)" required></div>
+                            <div class="form-group"><input type="text" id="codeshare-name" placeholder="Airline Name" required></div>
                             <div class="form-group"><input type="url" id="codeshare-logo" placeholder="Logo URL" required></div>
-                            <button type="submit" class="cta-button">Add Partner</button>
+                            <button type="submit" class="cta-button full-width">Add Partner</button>
                         </form>
-                        <hr>
-                        <div id="codeshare-list-container"><p>Loading partners...</p></div>
+                        <hr style="margin: 1.5rem 0;">
+                        <div id="codeshare-list-container"><div class="skeleton-line"></div></div>
                     </div>
+
+                    <div id="add-route-panel" class="content-card-nested">
+                        <h3><i class="fas fa-plus-circle"></i> Add Route Manually</h3>
+                        <form id="add-route-form" class="dashboard-form">
+                            <div class="form-group"><label for="route-flightnumber">Flight Number</label><input type="text" id="route-flightnumber" required></div>
+                            <div class="form-group"><label for="route-departure">Departure ICAO</label><input type="text" id="route-departure" maxlength="4" required></div>
+                            <div class="form-group"><label for="route-arrival">Arrival ICAO</label><input type="text" id="route-arrival" maxlength="4" required></div>
+                            <div class="form-group"><label for="route-aircraft">Aircraft</label><input type="text" id="route-aircraft" required></div>
+                            <div class="form-group"><label for="route-flighttime">Flight Time (Hrs)</label><input type="number" id="route-flighttime" step="0.1" min="0.1" required></div>
+                            <div class="form-group"><label for="route-operator">Operator</label><select id="route-operator" required></select></div>
+                            <div class="form-group"><label for="route-livery">Livery</label><input type="text" id="route-livery" placeholder="e.g., Oneworld" required></div>
+                            <button type="submit" class="cta-button full-width">Add Route</button>
+                        </form>
+                    </div>
+
                 </div>
+
                 <div class="right-column">
-                    <div id="import-sheet-panel" class="mb-4" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                        <h3><i class="fas fa-file-import"></i> Import Routes from Google Sheet</h3>
-                        <p style="font-size: 0.9em; color: var(--dashboard-text-muted);">Paste a published Google Sheet CSV link to bulk-add routes for an operator.</p>
-                        <form id="import-sheet-form" class="dashboard-form">
+                    
+                    <div id="import-sheet-panel" class="content-card-nested">
+                        <h3><i class="fas fa-file-import"></i> Import from Google Sheet</h3>
+                         <p class="panel-description">Bulk-add routes for a specific operator using a published Google Sheet CSV link.</p>
+                         <form id="import-sheet-form" class="dashboard-form">
                             <div class="form-group">
                                 <label for="import-sheet-url">Google Sheet CSV URL</label>
                                 <input type="url" id="import-sheet-url" required placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv">
                             </div>
                             <div class="form-group">
-                                <label for="import-sheet-operator-select">Operator</label>
-                                <select id="import-sheet-operator-select" required class="form-control"></select>
+                                <label for="import-sheet-operator-select">Operator to Assign Routes To</label>
+                                <select id="import-sheet-operator-select" required></select>
                             </div>
-                            <button type="submit" id="import-sheet-btn" class="cta-button">Import Routes</button>
+                            <button type="submit" id="import-sheet-btn" class="cta-button full-width">Import Routes</button>
                         </form>
                     </div>
 
-                    <div id="add-route-panel" class="mb-4" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                        <h3><i class="fas fa-plus-circle"></i> Add New Route (Manual)</h3>
-                        <form id="add-route-form" class="dashboard-form" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
-                            <div class="form-group"><label for="route-flightnumber">Flight Number</label><input type="text" id="route-flightnumber" required></div>
-                            <div class="form-group"><label for="route-departure">Departure ICAO</label><input type="text" id="route-departure" maxlength="4" required></div>
-                            <div class="form-group"><label for="route-arrival">Arrival ICAO</label><input type="text" id="route-arrival" maxlength="4" required></div>
-                            <div class="form-group"><label for="route-aircraft">Aircraft</label><input type="text" id="route-aircraft" required></div>
-                            <div class="form-group"><label for="route-flighttime">Flight Time (Hours)</label><input type="number" id="route-flighttime" step="0.1" min="0.1" required></div>
-                            <div class="form-group"><label for="route-operator">Operator</label><select id="route-operator" required></select></div>
-                            <div class="form-group"><label for="route-livery">Livery</label><input type="text" id="route-livery" placeholder="e.g., Oneworld" required></div>
-                            <button type="submit" class="cta-button" style="grid-column: 1 / -1;">Add Route</button>
-                        </form>
-                    </div>
-                    <div id="view-routes-panel" style="background-color: var(--secondary-bg); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                        <h3><i class="fas fa-plane-departure"></i> Current Route Database</h3>
-                         <div id="route-filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: flex-end;">
-                            <div style="flex: 1;"><label for="filter-operator">Operator</label><select id="filter-operator" class="form-control"></select></div>
-                            <div style="flex: 1;"><label for="filter-icao">ICAO (Dep/Arr)</label><input type="text" id="filter-icao" placeholder="e.g., VABB" class="form-control"></div>
-                            <div style="flex: 1;"><label for="filter-aircraft-by-codeshare">Aircraft</label><select id="filter-aircraft-by-codeshare" class="form-control"><option value="">All Aircraft</option></select></div>
+                    <div id="view-routes-panel" class="content-card-nested">
+                        <h3><i class="fas fa-plane-departure"></i> Route Database</h3>
+                         <div id="route-filters">
+                            <div class="filter-group"><label for="filter-operator">Operator</label><select id="filter-operator"></select></div>
+                            <div class="filter-group"><label for="filter-icao">ICAO (Dep/Arr)</label><input type="text" id="filter-icao" placeholder="e.g., VABB"></div>
+                            <div class="filter-group"><label for="filter-aircraft-by-codeshare">Aircraft</label><select id="filter-aircraft-by-codeshare"><option value="">All Aircraft</option></select></div>
                         </div>
-                        <div id="route-list-container"><p>Loading routes...</p></div>
+                        <div id="route-list-container"><div class="skeleton-card"><div class="skeleton-line"></div></div></div>
                     </div>
+
                 </div>
             </div>
         `;
@@ -786,7 +793,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('add-codeshare-form').addEventListener('submit', handleAddCodeshare);
         document.getElementById('add-route-form').addEventListener('submit', handleAddRoute);
-        // NEW: Event listener for the import form
         document.getElementById('import-sheet-form').addEventListener('submit', handleImportSheet);
 
         container.addEventListener('click', e => {
@@ -810,7 +816,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('codeshare-list-container');
         const operatorSelect = document.getElementById('route-operator');
         const filterOperatorSelect = document.getElementById('filter-operator');
-        const importOperatorSelect = document.getElementById('import-sheet-operator-select'); // NEW
+        const importOperatorSelect = document.getElementById('import-sheet-operator-select');
 
         try {
             codesharePartners = await safeFetch(`${API_BASE_URL}/api/codeshares`);
@@ -823,24 +829,23 @@ document.addEventListener('DOMContentLoaded', () => {
         renderList(container, codesharePartners, item => {
             const div = document.createElement('div');
             div.className = 'codeshare-item';
-            div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-bottom: 1px solid var(--border-color);';
             div.innerHTML = `
-                <div>
-                    <img src="${item.logoUrl}" alt="${item.name} logo" style="height: 20px; width: auto; margin-right: 10px; vertical-align: middle;"> 
+                <div class="codeshare-info">
+                    <img src="${item.logoUrl}" alt="${item.name} logo"> 
                     <span>${item.name}</span>
                 </div>
-                <button class="delete-user-btn delete-codeshare-btn" data-name="${item.name}" title="Delete">&times;</button>
+                <button class="delete-codeshare-btn" data-name="${item.name}" title="Delete Partner">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
             `;
             return div;
         }, 'No codeshare partners added.');
 
-        // Build the core list of operators
         let coreOptionsHtml = `<option value="IndGo Air Virtual">IndGo Air Virtual</option>`;
         codesharePartners.forEach(p => {
             coreOptionsHtml += `<option value="${p.name}">${p.name}</option>`;
         });
 
-        // Populate the three dropdowns using the core list
         if (operatorSelect) operatorSelect.innerHTML = coreOptionsHtml;
         if (filterOperatorSelect) filterOperatorSelect.innerHTML = `<option value="">All Operators</option>` + coreOptionsHtml;
         if (importOperatorSelect) importOperatorSelect.innerHTML = `<option value="" disabled selected>Select an Operator</option>` + coreOptionsHtml;
@@ -858,10 +863,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             await safeFetch(`${API_BASE_URL}/api/codeshares`, {
                 method: 'POST',
-                body: JSON.stringify({
-                    name,
-                    logoUrl
-                })
+                body: JSON.stringify({ name, logoUrl })
             });
             showNotification('Codeshare partner added.', 'success');
             document.getElementById('add-codeshare-form').reset();
@@ -919,7 +921,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-
     async function renderFilteredRoutes() {
         const container = document.getElementById('route-list-container');
         if (!container) return;
@@ -935,7 +936,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let routes = [];
         try {
-            container.innerHTML = `<p>Loading routes...</p>`;
+            container.innerHTML = `<div class="skeleton-card"><div class="skeleton-line"></div></div><div class="skeleton-card"><div class="skeleton-line short"></div></div>`;
             routes = await safeFetch(`${API_BASE_URL}/api/routes?${params.toString()}`);
         } catch (e) {
             showNotification(`Error loading routes: ${e.message}`, 'error');
@@ -944,23 +945,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const partnerMap = new Map(codesharePartners.map(p => [p.name, p.logoUrl]));
-        const defaultLogo = 'Images/indgo.png';
+        const defaultLogo = 'images/indgo.png';
 
         const renderer = (route) => {
             const card = document.createElement('div');
             card.className = 'route-card';
-            card.style.cssText = 'display: grid; grid-template-columns: 50px 1fr 1fr 1fr auto; gap: 1rem; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);';
             const operatorLogoUrl = partnerMap.get(route.operator) || defaultLogo;
             card.innerHTML = `
-                <img src="${operatorLogoUrl}" alt="${route.operator}" class="operator-logo" title="${route.operator}" style="height: 24px; width: auto;">
-                <div><strong>${route.flightNumber}</strong><br><small style="color: var(--dashboard-text-muted);">${route.operator}</small></div>
-                <div>${route.departure} &rarr; ${route.arrival}<br><small style="color: var(--dashboard-text-muted);">${route.flightTime} hrs</small></div>
-                <div>${route.aircraft}<br><small style="color: var(--dashboard-text-muted);">Livery: ${route.livery || 'Standard'} • Rank: ${route.rankUnlock || 'N/A'}</small></div>
-                <button class="delete-user-btn delete-route-btn" data-flightnumber="${route.flightNumber}"><i class="fas fa-trash-alt"></i></button>
+                <img src="${operatorLogoUrl}" alt="${route.operator}" class="operator-logo" title="${route.operator}">
+                <div class="route-details">
+                    <strong>${route.flightNumber}</strong>
+                    <small>${route.departure} &rarr; ${route.arrival} &bull; ${route.flightTime} hrs</small>
+                </div>
+                <div class="aircraft-details">
+                    <strong>${route.aircraft}</strong>
+                    <small>Livery: ${route.livery || 'Standard'} &bull; Rank: ${route.rankUnlock || 'Cadet'}</small>
+                </div>
+                <button class="delete-user-btn delete-route-btn" data-flightnumber="${route.flightNumber}" title="Delete Route">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
             `;
             return card;
         };
-
         renderList(container, routes.sort((a, b) => a.flightNumber.localeCompare(b.flightNumber)), renderer, 'No routes match the current filters.');
     }
 
@@ -988,13 +994,12 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             showNotification(`Route ${routeData.flightNumber} added successfully!`, 'success');
             document.getElementById('add-route-form').reset();
-            renderFilteredRoutes(); // Refresh the list
+            renderFilteredRoutes();
         } catch (error) {
             showNotification(`Error adding route: ${error.message}`, 'error');
         }
     }
 
-    // --- NEW: Handler for Sheet Import ---
     async function handleImportSheet(e) {
         e.preventDefault();
         const form = document.getElementById('import-sheet-form');
@@ -1013,30 +1018,15 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const result = await safeFetch(`${API_BASE_URL}/api/routes/import-sheet`, {
                 method: 'POST',
-                body: JSON.stringify({
-                    sheetUrl,
-                    operator
-                })
+                body: JSON.stringify({ sheetUrl, operator })
             });
-
-            // Show detailed success message
-            const successMsg = `
-                <p>${result.message}</p>
-                <ul>
-                    <li><strong>Routes Added:</strong> ${result.routesAdded}</li>
-                    <li><strong>New Aircraft Created:</strong> ${result.newAircraftCreated}</li>
-                </ul>
-            `;
+            const successMsg = `<p>${result.message}</p><ul><li><strong>Routes Added:</strong> ${result.routesAdded}</li><li><strong>New Aircraft Created:</strong> ${result.newAircraftCreated}</li></ul>`;
             showNotification(successMsg, 'success', 10000);
-
             form.reset();
-            renderFilteredRoutes(); // Refresh the route list
-
-            // If new aircraft were added, refresh the aircraft manager if it's visible
+            renderFilteredRoutes();
             if (result.newAircraftCreated > 0 && aircraftManagerTabLink.style.display !== 'none') {
                 populateAircraftManager();
             }
-
         } catch (error) {
             showNotification(`Import failed: ${error.message}`, 'error');
         } finally {
@@ -1052,7 +1042,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'DELETE'
             });
             showNotification(`Route ${flightNumber} deleted.`, 'success');
-            renderFilteredRoutes(); // Refresh the list by re-fetching
+            renderFilteredRoutes();
         } catch (error) {
             showNotification(`Error deleting route: ${error.message}`, 'error');
         }
