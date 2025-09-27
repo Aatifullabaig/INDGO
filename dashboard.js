@@ -712,340 +712,318 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================================
-    // START: 🚀 REDESIGNED ROUTE MANAGER SECTION 🚀
+    // START: 🌟 REBUILT & REDESIGNED ROUTE MANAGER SECTION 🌟
     // =========================================================
     async function populateRouteManager() {
         const container = document.getElementById('tab-route-manager');
         if (!container) return;
 
+        // --- STATE FOR PAGINATION ---
+        let routeCurrentPage = 1;
+        const routesPerPage = 15;
+        let allFilteredRoutes = [];
+
+        // --- SETUP INITIAL HTML LAYOUT ---
         container.innerHTML = `
             <h2><i class="fas fa-route"></i> Route Network Manager</h2>
-            <p>Manage the airline's route network, including IndGo and codeshare partner flights.</p>
+            <p>Manage the airline's route network. Use the actions below to add routes manually, manage codeshare partners, or import routes in bulk.</p>
             
-            <div class="route-manager-grid">
-                <div class="left-column">
-                    
-                    <div id="codeshare-management-panel" class="content-card-nested">
-                        <h3><i class="fas fa-handshake"></i> Codeshare Partners</h3>
-                        <p class="panel-description">Manage airline partners. Routes must be assigned to an operator.</p>
-                        <form id="add-codeshare-form" class="dashboard-form">
-                            <div class="form-group"><input type="text" id="codeshare-name" placeholder="Airline Name" required></div>
-                            <div class="form-group"><input type="url" id="codeshare-logo" placeholder="Logo URL" required></div>
-                            <button type="submit" class="cta-button full-width">Add Partner</button>
-                        </form>
-                        <hr style="margin: 1.5rem 0;">
-                        <div id="codeshare-list-container"><div class="skeleton-line"></div></div>
-                    </div>
+            <div class="route-manager-actions">
+                <button id="add-route-btn" class="cta-button"><i class="fas fa-plus"></i> Add New Route</button>
+                <button id="manage-codeshares-btn" class="cta-button secondary-btn"><i class="fas fa-handshake"></i> Manage Codeshares</button>
+                <button id="import-routes-btn" class="cta-button secondary-btn"><i class="fas fa-file-import"></i> Import from Sheet</button>
+            </div>
 
-                    <div id="add-route-panel" class="content-card-nested">
-                        <h3><i class="fas fa-plus-circle"></i> Add Route Manually</h3>
-                        <form id="add-route-form" class="dashboard-form">
-                            <div class="form-group"><label for="route-flightnumber">Flight Number</label><input type="text" id="route-flightnumber" required></div>
-                            <div class="form-group"><label for="route-departure">Departure ICAO</label><input type="text" id="route-departure" maxlength="4" required></div>
-                            <div class="form-group"><label for="route-arrival">Arrival ICAO</label><input type="text" id="route-arrival" maxlength="4" required></div>
-                            <div class="form-group"><label for="route-aircraft">Aircraft</label><input type="text" id="route-aircraft" required></div>
-                            <div class="form-group"><label for="route-flighttime">Flight Time (Hrs)</label><input type="number" id="route-flighttime" step="0.1" min="0.1" required></div>
-                            <div class="form-group"><label for="route-operator">Operator</label><select id="route-operator" required></select></div>
-                            <div class="form-group"><label for="route-livery">Livery</label><input type="text" id="route-livery" placeholder="e.g., Oneworld" required></div>
-                            <button type="submit" class="cta-button full-width">Add Route</button>
-                        </form>
-                    </div>
-
+            <div class="content-card" style="margin-top: 1rem;">
+                <h3><i class="fas fa-plane-departure"></i> Current Route Database</h3>
+                <div id="route-filters" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: flex-end;">
+                    <div style="flex: 1;"><label for="filter-operator">Operator</label><select id="filter-operator" class="form-control"></select></div>
+                    <div style="flex: 1;"><label for="filter-icao">ICAO (Dep/Arr)</label><input type="text" id="filter-icao" placeholder="e.g., VABB" class="form-control"></div>
+                    <div style="flex: 1;"><label for="filter-aircraft-by-codeshare">Aircraft</label><select id="filter-aircraft-by-codeshare" class="form-control"><option value="">All Aircraft</option></select></div>
                 </div>
-
-                <div class="right-column">
-                    
-                    <div id="import-sheet-panel" class="content-card-nested">
-                        <h3><i class="fas fa-file-import"></i> Import from Google Sheet</h3>
-                         <p class="panel-description">Bulk-add routes for a specific operator using a published Google Sheet CSV link.</p>
-                         <form id="import-sheet-form" class="dashboard-form">
-                            <div class="form-group">
-                                <label for="import-sheet-url">Google Sheet CSV URL</label>
-                                <input type="url" id="import-sheet-url" required placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv">
-                            </div>
-                            <div class="form-group">
-                                <label for="import-sheet-operator-select">Operator to Assign Routes To</label>
-                                <select id="import-sheet-operator-select" required></select>
-                            </div>
-                            <button type="submit" id="import-sheet-btn" class="cta-button full-width">Import Routes</button>
-                        </form>
-                    </div>
-
-                    <div id="view-routes-panel" class="content-card-nested">
-                        <h3><i class="fas fa-plane-departure"></i> Route Database</h3>
-                         <div id="route-filters">
-                            <div class="filter-group"><label for="filter-operator">Operator</label><select id="filter-operator"></select></div>
-                            <div class="filter-group"><label for="filter-icao">ICAO (Dep/Arr)</label><input type="text" id="filter-icao" placeholder="e.g., VABB"></div>
-                            <div class="filter-group"><label for="filter-aircraft-by-codeshare">Aircraft</label><select id="filter-aircraft-by-codeshare"><option value="">All Aircraft</option></select></div>
-                        </div>
-                        <div id="route-list-container"><div class="skeleton-card"><div class="skeleton-line"></div></div></div>
-                    </div>
-
-                </div>
+                <div id="route-list-container"><p>Loading routes...</p></div>
+                <div id="route-pagination-controls" class="pagination-container"></div>
             </div>
         `;
 
-        // Load data and set up event listeners
-        await loadAndRenderCodeshares();
-        hookInstallRouteFilters();
-        await populateAircraftOptionsForOperator(); // Initial population for dropdown
-        renderFilteredRoutes(); // Initial render
+        // --- GET MODAL & FORM ELEMENTS ---
+        const routeModal = document.getElementById('route-modal');
+        const codeshareModal = document.getElementById('codeshare-modal');
+        const importSheetModal = document.getElementById('import-sheet-modal');
+        const addRouteForm = document.getElementById('add-route-form');
+        const addCodeshareForm = document.getElementById('add-codeshare-form');
+        const importSheetForm = document.getElementById('import-sheet-form');
 
-        document.getElementById('add-codeshare-form').addEventListener('submit', handleAddCodeshare);
-        document.getElementById('add-route-form').addEventListener('submit', handleAddRoute);
-        document.getElementById('import-sheet-form').addEventListener('submit', handleImportSheet);
+        // --- MODAL CONTROL FUNCTIONS ---
+        const openModal = (modal) => modal.classList.add('active');
+        const closeModal = (modal) => modal.classList.remove('active');
 
-        container.addEventListener('click', e => {
-            const deleteCodeshareBtn = e.target.closest('.delete-codeshare-btn');
-            if (deleteCodeshareBtn) {
-                const name = deleteCodeshareBtn.dataset.name;
-                if (confirm(`Are you sure you want to delete the codeshare partner "${name}"?`)) {
-                    handleDeleteCodeshare(name);
+        // --- HELPER TO POPULATE OPERATOR DROPDOWNS ---
+        const populateOperatorSelects = () => {
+            const selects = document.querySelectorAll('#route-operator, #filter-operator, #import-sheet-operator-select');
+            let coreOptionsHtml = `<option value="IndGo Air Virtual">IndGo Air Virtual</option>`;
+            codesharePartners.forEach(p => {
+                coreOptionsHtml += `<option value="${p.name}">${p.name}</option>`;
+            });
+
+            selects.forEach(select => {
+                if (select.id === 'filter-operator') {
+                    select.innerHTML = `<option value="">All Operators</option>` + coreOptionsHtml;
+                } else if (select.id === 'import-sheet-operator-select') {
+                    select.innerHTML = `<option value="" disabled selected>Select an Operator</option>` + coreOptionsHtml;
+                } else {
+                    select.innerHTML = coreOptionsHtml;
                 }
-            }
+            });
+        };
 
+        // --- CODESHARE MANAGEMENT ---
+        const loadAndRenderCodeshares = async () => {
+            const container = document.getElementById('codeshare-list-container-modal');
+            try {
+                codesharePartners = await safeFetch(`${API_BASE_URL}/api/codeshares`);
+                populateOperatorSelects();
+                renderList(container, codesharePartners, item => {
+                    const div = document.createElement('div');
+                    div.className = 'codeshare-item-modal';
+                    div.innerHTML = `
+                        <div>
+                            <img src="${item.logoUrl}" alt="${item.name} logo" style="height: 20px; width: auto; margin-right: 10px; vertical-align: middle;">
+                            <span>${item.name}</span>
+                        </div>
+                        <button class="delete-user-btn delete-codeshare-btn" data-name="${item.name}" title="Delete">&times;</button>
+                    `;
+                    return div;
+                }, 'No codeshare partners added.');
+            } catch (error) {
+                showNotification(`Error loading codeshares: ${error.message}`, 'error');
+            }
+        };
+
+        const handleAddCodeshare = async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('codeshare-name').value.trim();
+            const logoUrl = document.getElementById('codeshare-logo').value.trim();
+            if (!name || !logoUrl) return;
+
+            try {
+                await safeFetch(`${API_BASE_URL}/api/codeshares`, { method: 'POST', body: JSON.stringify({ name, logoUrl }) });
+                showNotification('Codeshare partner added.', 'success');
+                addCodeshareForm.reset();
+                await loadAndRenderCodeshares();
+            } catch (error) {
+                showNotification(`Failed to add partner: ${error.message}`, 'error');
+            }
+        };
+
+        const handleDeleteCodeshare = async (name) => {
+            if (!name || !confirm(`Delete "${name}"? This will affect all routes and aircraft associated with it.`)) return;
+            try {
+                await safeFetch(`${API_BASE_URL}/api/codeshares/${encodeURIComponent(name)}`, { method: 'DELETE' });
+                showNotification('Codeshare partner removed.', 'success');
+                await loadAndRenderCodeshares();
+            } catch (error) {
+                showNotification(`Failed to remove partner: ${error.message}`, 'error');
+            }
+        };
+
+        // --- PAGINATION & ROUTE RENDERING ---
+        const renderPaginationControls = () => {
+            const container = document.getElementById('route-pagination-controls');
+            const totalPages = Math.ceil(allFilteredRoutes.length / routesPerPage);
+            if (totalPages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+            let buttonsHtml = `
+                <button data-page="${routeCurrentPage - 1}" ${routeCurrentPage === 1 ? 'disabled' : ''}>&laquo; Prev</button>
+            `;
+            for (let i = 1; i <= totalPages; i++) {
+                buttonsHtml += `<button data-page="${i}" class="${i === routeCurrentPage ? 'active' : ''}">${i}</button>`;
+            }
+            buttonsHtml += `
+                <button data-page="${routeCurrentPage + 1}" ${routeCurrentPage === totalPages ? 'disabled' : ''}>Next &raquo;</button>
+            `;
+            container.innerHTML = buttonsHtml;
+        };
+
+        const displayCurrentRoutePage = () => {
+            const container = document.getElementById('route-list-container');
+            const startIndex = (routeCurrentPage - 1) * routesPerPage;
+            const endIndex = startIndex + routesPerPage;
+            const routesToDisplay = allFilteredRoutes.slice(startIndex, endIndex);
+
+            const partnerMap = new Map(codesharePartners.map(p => [p.name, p.logoUrl]));
+            const defaultLogo = 'images/indgo.png';
+
+            const renderer = (route) => {
+                const card = document.createElement('div');
+                card.className = 'route-card';
+                card.style.cssText = 'display: grid; grid-template-columns: 50px 1fr 1fr 1fr auto; gap: 1rem; align-items: center; padding: 0.75rem; border-bottom: 1px solid var(--border-color);';
+                const operatorLogoUrl = partnerMap.get(route.operator) || defaultLogo;
+                card.innerHTML = `
+                    <img src="${operatorLogoUrl}" alt="${route.operator}" class="operator-logo" title="${route.operator}" style="height: 24px; width: auto;">
+                    <div><strong>${route.flightNumber}</strong><br><small style="color: var(--dashboard-text-muted);">${route.operator}</small></div>
+                    <div>${route.departure} &rarr; ${route.arrival}<br><small style="color: var(--dashboard-text-muted);">${route.flightTime} hrs</small></div>
+                    <div>${route.aircraft}<br><small style="color: var(--dashboard-text-muted);">Livery: ${route.livery || 'Standard'}</small></div>
+                    <button class="delete-user-btn delete-route-btn" data-flightnumber="${route.flightNumber}"><i class="fas fa-trash-alt"></i></button>
+                `;
+                return card;
+            };
+            renderList(container, routesToDisplay, renderer, 'No routes match the current filters.');
+            renderPaginationControls();
+        };
+
+        const fetchAndRenderRoutes = async () => {
+            const container = document.getElementById('route-list-container');
+            const operator = document.getElementById('filter-operator')?.value || '';
+            const acPick = document.getElementById('filter-aircraft-by-codeshare')?.value || '';
+            const icao = document.getElementById('filter-icao')?.value.trim() || '';
+
+            const params = new URLSearchParams();
+            if (operator) params.set('operator', operator);
+            if (acPick) params.set('aircraft', acPick);
+            if (icao) params.set('icao', icao.toUpperCase());
+
+            try {
+                if(container) container.innerHTML = `<p>Loading routes...</p>`;
+                allFilteredRoutes = await safeFetch(`${API_BASE_URL}/api/routes?${params.toString()}`);
+                allFilteredRoutes.sort((a, b) => a.flightNumber.localeCompare(b.flightNumber));
+                routeCurrentPage = 1; // Reset to first page on new filter
+                displayCurrentRoutePage();
+            } catch (e) {
+                showNotification(`Error loading routes: ${e.message}`, 'error');
+                if(container) container.innerHTML = `<p style="color:red;">Error loading routes: ${e.message}</p>`;
+            }
+        };
+
+        // --- ROUTE & IMPORT HANDLERS ---
+        const handleAddRoute = async (e) => {
+            e.preventDefault();
+            const routeData = {
+                flightNumber: document.getElementById('route-flightnumber').value.trim().toUpperCase(),
+                departure: document.getElementById('route-departure').value.trim().toUpperCase(),
+                arrival: document.getElementById('route-arrival').value.trim().toUpperCase(),
+                aircraft: document.getElementById('route-aircraft').value.trim(),
+                flightTime: parseFloat(document.getElementById('route-flighttime').value),
+                operator: document.getElementById('route-operator').value,
+                livery: document.getElementById('route-livery').value.trim()
+            };
+            try {
+                await safeFetch(`${API_BASE_URL}/api/routes`, { method: 'POST', body: JSON.stringify(routeData) });
+                showNotification(`Route ${routeData.flightNumber} added!`, 'success');
+                addRouteForm.reset();
+                closeModal(routeModal);
+                fetchAndRenderRoutes();
+            } catch (error) {
+                showNotification(`Error adding route: ${error.message}`, 'error');
+            }
+        };
+        
+        const handleImportSheet = async (e) => {
+            e.preventDefault();
+            const button = document.getElementById('import-sheet-btn');
+            const sheetUrl = document.getElementById('import-sheet-url').value.trim();
+            const operator = document.getElementById('import-sheet-operator-select').value;
+            if (!sheetUrl || !operator) return;
+
+            button.disabled = true;
+            button.textContent = 'Importing...';
+            try {
+                const result = await safeFetch(`${API_BASE_URL}/api/routes/import-sheet`, { method: 'POST', body: JSON.stringify({ sheetUrl, operator }) });
+                showNotification(`${result.message} (Added: ${result.routesAdded}, New Aircraft: ${result.newAircraftCreated})`, 'success', 8000);
+                importSheetForm.reset();
+                closeModal(importSheetModal);
+                fetchAndRenderRoutes();
+                if (result.newAircraftCreated > 0 && aircraftManagerTabLink.style.display !== 'none') {
+                    populateAircraftManager();
+                }
+            } catch (error) {
+                showNotification(`Import failed: ${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Import Routes';
+            }
+        };
+
+        const handleDeleteRoute = async (flightNumber) => {
+            if (!confirm(`Are you sure you want to delete route ${flightNumber}?`)) return;
+            try {
+                await safeFetch(`${API_BASE_URL}/api/routes/${flightNumber}`, { method: 'DELETE' });
+                showNotification(`Route ${flightNumber} deleted.`, 'success');
+                fetchAndRenderRoutes();
+            } catch (error) {
+                showNotification(`Error deleting route: ${error.message}`, 'error');
+            }
+        };
+        
+        const populateAircraftOptionsForOperator = async () => {
+             const operator = (document.getElementById('filter-operator')?.value || '').trim();
+            const sel = document.getElementById('filter-aircraft-by-codeshare');
+            if (!sel) return;
+            if (!operator) {
+                sel.innerHTML = '<option value="">All aircraft</option>';
+                return;
+            }
+            try {
+                const ac = await safeFetch(`${API_BASE_URL}/api/aircrafts?codeshare=${encodeURIComponent(operator)}`);
+                const opts = ['<option value="">All aircraft</option>'].concat(
+                    (ac || []).map(a => `<option value="${a.icao}">${a.icao} — ${a.name}</option>`)
+                );
+                sel.innerHTML = opts.join('');
+            } catch (error) {
+                showNotification(`Could not load aircraft for operator: ${error.message}`, 'error');
+                sel.innerHTML = '<option value="">All aircraft</option>';
+            }
+        };
+
+        // --- ATTACH EVENT LISTENERS ---
+        document.getElementById('add-route-btn').addEventListener('click', () => openModal(routeModal));
+        document.getElementById('manage-codeshares-btn').addEventListener('click', () => openModal(codeshareModal));
+        document.getElementById('import-routes-btn').addEventListener('click', () => openModal(importSheetModal));
+
+        document.querySelectorAll('.modal-close-btn, .cta-button.secondary-btn[data-modal-id]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const modal = document.getElementById(btn.dataset.modalId);
+                if (modal) closeModal(modal);
+            });
+        });
+        
+        addRouteForm.addEventListener('submit', handleAddRoute);
+        addCodeshareForm.addEventListener('submit', handleAddCodeshare);
+        importSheetForm.addEventListener('submit', handleImportSheet);
+        
+        // Filter Listeners
+        document.getElementById('filter-operator').addEventListener('change', () => { populateAircraftOptionsForOperator(); fetchAndRenderRoutes(); });
+        document.getElementById('filter-icao').addEventListener('input', fetchAndRenderRoutes);
+        document.getElementById('filter-aircraft-by-codeshare').addEventListener('change', fetchAndRenderRoutes);
+
+        // Event Delegation for dynamic content
+        container.addEventListener('click', e => {
+            // Delete route
             const deleteRouteBtn = e.target.closest('.delete-route-btn');
             if (deleteRouteBtn) {
-                const flightNumber = deleteRouteBtn.dataset.flightnumber;
-                handleDeleteRoute(flightNumber);
+                handleDeleteRoute(deleteRouteBtn.dataset.flightnumber);
+            }
+            // Pagination
+            const pageBtn = e.target.closest('#route-pagination-controls button[data-page]');
+            if (pageBtn && !pageBtn.disabled) {
+                routeCurrentPage = parseInt(pageBtn.dataset.page, 10);
+                displayCurrentRoutePage();
             }
         });
-    }
-
-    async function loadAndRenderCodeshares() {
-        const container = document.getElementById('codeshare-list-container');
-        const operatorSelect = document.getElementById('route-operator');
-        const filterOperatorSelect = document.getElementById('filter-operator');
-        const importOperatorSelect = document.getElementById('import-sheet-operator-select');
-
-        try {
-            codesharePartners = await safeFetch(`${API_BASE_URL}/api/codeshares`);
-        } catch (error) {
-            console.error('Failed to load codeshares:', error);
-            showNotification(`Error loading codeshares: ${error.message}`, 'error');
-            codesharePartners = [];
-        }
-
-        renderList(container, codesharePartners, item => {
-            const div = document.createElement('div');
-            div.className = 'codeshare-item';
-            div.innerHTML = `
-                <div class="codeshare-info">
-                    <img src="${item.logoUrl}" alt="${item.name} logo"> 
-                    <span>${item.name}</span>
-                </div>
-                <button class="delete-codeshare-btn" data-name="${item.name}" title="Delete Partner">
-                    <i class="fas fa-trash-alt"></i>
-                </button>
-            `;
-            return div;
-        }, 'No codeshare partners added.');
-
-        let coreOptionsHtml = `<option value="IndGo Air Virtual">IndGo Air Virtual</option>`;
-        codesharePartners.forEach(p => {
-            coreOptionsHtml += `<option value="${p.name}">${p.name}</option>`;
+        
+        codeshareModal.addEventListener('click', e => {
+             const deleteCodeshareBtn = e.target.closest('.delete-codeshare-btn');
+            if (deleteCodeshareBtn) {
+                handleDeleteCodeshare(deleteCodeshareBtn.dataset.name);
+            }
         });
 
-        if (operatorSelect) operatorSelect.innerHTML = coreOptionsHtml;
-        if (filterOperatorSelect) filterOperatorSelect.innerHTML = `<option value="">All Operators</option>` + coreOptionsHtml;
-        if (importOperatorSelect) importOperatorSelect.innerHTML = `<option value="" disabled selected>Select an Operator</option>` + coreOptionsHtml;
-    }
-
-    async function handleAddCodeshare(e) {
-        e.preventDefault();
-        const name = document.getElementById('codeshare-name').value.trim();
-        const logoUrl = document.getElementById('codeshare-logo').value.trim();
-        if (!name || !logoUrl) {
-            showNotification('Partner name and logo URL are required.', 'error');
-            return;
-        }
-
-        try {
-            await safeFetch(`${API_BASE_URL}/api/codeshares`, {
-                method: 'POST',
-                body: JSON.stringify({ name, logoUrl })
-            });
-            showNotification('Codeshare partner added.', 'success');
-            document.getElementById('add-codeshare-form').reset();
-            await loadAndRenderCodeshares();
-        } catch (error) {
-            showNotification(`Failed to add partner: ${error.message}`, 'error');
-        }
-    }
-
-    async function handleDeleteCodeshare(name) {
-        if (!name) return;
-        try {
-            await safeFetch(`${API_BASE_URL}/api/codeshares/${encodeURIComponent(name)}`, {
-                method: 'DELETE'
-            });
-            showNotification('Codeshare partner removed.', 'success');
-            await loadAndRenderCodeshares();
-        } catch (error) {
-            showNotification(`Failed to remove partner: ${error.message}`, 'error');
-        }
-    }
-
-    function hookInstallRouteFilters() {
-        const operatorSel = document.getElementById('filter-operator');
-        const icaoInput = document.getElementById('filter-icao');
-        const acByCsSel = document.getElementById('filter-aircraft-by-codeshare');
-
-        if (operatorSel) {
-            operatorSel.addEventListener('change', async () => {
-                await populateAircraftOptionsForOperator();
-                renderFilteredRoutes();
-            });
-        }
-        if (icaoInput) icaoInput.addEventListener('input', () => renderFilteredRoutes());
-        if (acByCsSel) acByCsSel.addEventListener('change', () => renderFilteredRoutes());
-    }
-
-    async function populateAircraftOptionsForOperator() {
-        const operator = (document.getElementById('filter-operator')?.value || '').trim();
-        const sel = document.getElementById('filter-aircraft-by-codeshare');
-        if (!sel) return;
-        if (!operator) {
-            sel.innerHTML = '<option value="">All aircraft</option>';
-            return;
-        }
-        try {
-            const ac = await safeFetch(`${API_BASE_URL}/api/aircrafts?codeshare=${encodeURIComponent(operator)}`);
-            const opts = ['<option value="">All aircraft</option>'].concat(
-                (ac || []).map(a => `<option value="${a.icao}">${a.icao} — ${a.name}</option>`)
-            );
-            sel.innerHTML = opts.join('');
-        } catch (error) {
-            showNotification(`Could not load aircraft for operator: ${error.message}`, 'error');
-            sel.innerHTML = '<option value="">All aircraft</option>';
-        }
-    }
-
-    async function renderFilteredRoutes() {
-        const container = document.getElementById('route-list-container');
-        if (!container) return;
-
-        const operator = document.getElementById('filter-operator')?.value || '';
-        const acPick = document.getElementById('filter-aircraft-by-codeshare')?.value || '';
-        const icao = document.getElementById('filter-icao')?.value.trim() || '';
-
-        const params = new URLSearchParams();
-        if (operator) params.set('operator', operator);
-        if (acPick) params.set('aircraft', acPick);
-        if (icao) params.set('icao', icao.toUpperCase());
-
-        let routes = [];
-        try {
-            container.innerHTML = `<div class="skeleton-card"><div class="skeleton-line"></div></div><div class="skeleton-card"><div class="skeleton-line short"></div></div>`;
-            routes = await safeFetch(`${API_BASE_URL}/api/routes?${params.toString()}`);
-        } catch (e) {
-            showNotification(`Error loading routes: ${e.message}`, 'error');
-            container.innerHTML = `<p style="color:red;">Error loading routes: ${e.message}</p>`;
-            return;
-        }
-
-        const partnerMap = new Map(codesharePartners.map(p => [p.name, p.logoUrl]));
-        const defaultLogo = 'images/indgo.png';
-
-        const renderer = (route) => {
-            const card = document.createElement('div');
-            card.className = 'route-card';
-            const operatorLogoUrl = partnerMap.get(route.operator) || defaultLogo;
-            card.innerHTML = `
-                <img src="${operatorLogoUrl}" alt="${route.operator}" class="operator-logo" title="${route.operator}">
-                <div class="route-details">
-                    <strong>${route.flightNumber}</strong>
-                    <small>${route.departure} &rarr; ${route.arrival} &bull; ${route.flightTime} hrs</small>
-                </div>
-                <div class="aircraft-details">
-                    <strong>${route.aircraft}</strong>
-                    <small>Livery: ${route.livery || 'Standard'} &bull; Rank: ${route.rankUnlock || 'Cadet'}</small>
-                </div>
-                <button class="delete-user-btn delete-route-btn" data-flightnumber="${route.flightNumber}" title="Delete Route">
-                    <i class="fas fa-trash-alt"></i>
-                </button>
-            `;
-            return card;
-        };
-        renderList(container, routes.sort((a, b) => a.flightNumber.localeCompare(b.flightNumber)), renderer, 'No routes match the current filters.');
-    }
-
-    async function handleAddRoute(e) {
-        e.preventDefault();
-        const routeData = {
-            flightNumber: document.getElementById('route-flightnumber').value.trim().toUpperCase(),
-            departure: document.getElementById('route-departure').value.trim().toUpperCase(),
-            arrival: document.getElementById('route-arrival').value.trim().toUpperCase(),
-            aircraft: document.getElementById('route-aircraft').value.trim(),
-            flightTime: parseFloat(document.getElementById('route-flighttime').value),
-            operator: document.getElementById('route-operator').value,
-            livery: document.getElementById('route-livery').value.trim()
-        };
-
-        if (Object.values(routeData).some(val => !val && val !== 0)) {
-            showNotification('Please fill all route fields.', 'error');
-            return;
-        }
-
-        try {
-            await safeFetch(`${API_BASE_URL}/api/routes`, {
-                method: 'POST',
-                body: JSON.stringify(routeData)
-            });
-            showNotification(`Route ${routeData.flightNumber} added successfully!`, 'success');
-            document.getElementById('add-route-form').reset();
-            renderFilteredRoutes();
-        } catch (error) {
-            showNotification(`Error adding route: ${error.message}`, 'error');
-        }
-    }
-
-    async function handleImportSheet(e) {
-        e.preventDefault();
-        const form = document.getElementById('import-sheet-form');
-        const button = document.getElementById('import-sheet-btn');
-        const sheetUrl = document.getElementById('import-sheet-url').value.trim();
-        const operator = document.getElementById('import-sheet-operator-select').value;
-
-        if (!sheetUrl || !operator) {
-            showNotification('Please provide a Sheet URL and select an Operator.', 'error');
-            return;
-        }
-
-        button.disabled = true;
-        button.textContent = 'Importing...';
-
-        try {
-            const result = await safeFetch(`${API_BASE_URL}/api/routes/import-sheet`, {
-                method: 'POST',
-                body: JSON.stringify({ sheetUrl, operator })
-            });
-            const successMsg = `<p>${result.message}</p><ul><li><strong>Routes Added:</strong> ${result.routesAdded}</li><li><strong>New Aircraft Created:</strong> ${result.newAircraftCreated}</li></ul>`;
-            showNotification(successMsg, 'success', 10000);
-            form.reset();
-            renderFilteredRoutes();
-            if (result.newAircraftCreated > 0 && aircraftManagerTabLink.style.display !== 'none') {
-                populateAircraftManager();
-            }
-        } catch (error) {
-            showNotification(`Import failed: ${error.message}`, 'error');
-        } finally {
-            button.disabled = false;
-            button.textContent = 'Import Routes';
-        }
-    }
-
-    async function handleDeleteRoute(flightNumber) {
-        if (!confirm(`Are you sure you want to delete route ${flightNumber}? This cannot be undone.`)) return;
-        try {
-            await safeFetch(`${API_BASE_URL}/api/routes/${flightNumber}`, {
-                method: 'DELETE'
-            });
-            showNotification(`Route ${flightNumber} deleted.`, 'success');
-            renderFilteredRoutes();
-        } catch (error) {
-            showNotification(`Error deleting route: ${error.message}`, 'error');
-        }
+        // --- INITIAL DATA LOAD ---
+        await loadAndRenderCodeshares();
+        await populateAircraftOptionsForOperator();
+        await fetchAndRenderRoutes();
     }
     // =========================================================
     // END: ROUTE MANAGER SECTION

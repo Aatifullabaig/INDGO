@@ -343,9 +343,7 @@ body {
 input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; border: 1px solid var(--border-color); background-color: var(--bg-color); color: #fff; font-size: 1rem; }
 
 .cta-button { 
-    display: inline-flex; /* Use inline-flex for better alignment */
-    align-items: center;
-    gap: 8px;
+    display: inline-block; 
     padding: 0.8rem 1.5rem; 
     border: none; 
     border-radius: 5px; 
@@ -803,157 +801,65 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
     to { opacity: 1; transform: scale(1); }
 }
 
-
-/* ================================================== */
-/* START: ROUTE MANAGER REDESIGN STYLES               */
-/* ================================================== */
-
-#tab-route-manager .route-manager-grid {
-    display: grid;
-    grid-template-columns: 1fr 2fr; /* 1/3 for management, 2/3 for database view */
-    gap: 2rem;
-    align-items: start;
-}
-
-/* A reusable style for panels inside the route manager */
-.content-card-nested {
-    background-color: var(--secondary-bg);
-    padding: 1.5rem;
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-}
-
-.left-column, .right-column {
+/* --- START: NEW ROUTE MANAGER & PAGINATION STYLES --- */
+.route-manager-actions {
     display: flex;
-    flex-direction: column;
-    gap: 2rem; /* Spacing between panels in the same column */
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
 }
-
-.content-card-nested h3 {
-    margin-top: 0;
-    margin-bottom: 1rem;
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 0.75rem;
+.pagination-container {
     display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.content-card-nested .panel-description {
-    font-size: 0.9em;
-    color: var(--dashboard-text-muted);
-    margin-bottom: 1.5rem;
-    line-height: 1.5;
-}
-
-.content-card-nested .cta-button.full-width {
-    width: 100%;
-    text-align: center;
     justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
 }
-
-.codeshare-item {
+.pagination-container button {
+    background-color: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    color: var(--dashboard-text-color);
+    padding: 0.5rem 0.8rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.pagination-container button:hover:not(:disabled) {
+    background-color: var(--info-color);
+    color: white;
+}
+.pagination-container button.active {
+    background-color: var(--rank-accent-color, var(--accent-color));
+    color: white;
+    border-color: var(--rank-accent-color, var(--accent-color));
+}
+.pagination-container button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.codeshare-item-modal {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.75rem 0.5rem;
-    border-bottom: 1px solid var(--border-color);
-    transition: background-color 0.2s;
+    padding: 0.75rem;
+    border-radius: 6px;
+    background-color: var(--bg-color);
+    margin-bottom: 0.5rem;
 }
-.codeshare-item:last-child {
-    border-bottom: none;
+#route-filters { 
+    display: flex; 
+    gap: 1rem; 
+    margin-bottom: 1rem; 
 }
-.codeshare-item:hover {
-    background-color: rgba(255, 255, 255, 0.03);
-}
-
-.codeshare-item .codeshare-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.codeshare-item img {
-    height: 24px;
-    width: auto;
-}
-
-.codeshare-item .delete-codeshare-btn {
-    background: transparent;
-    border: none;
-    color: var(--error-color);
-    cursor: pointer;
-    font-size: 1.1rem;
-    padding: 5px;
-    opacity: 0.6;
-    transition: opacity 0.2s;
-}
-.codeshare-item .delete-codeshare-btn:hover {
-    opacity: 1;
-}
-
-#route-filters {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-
-#route-filters .filter-group {
-    display: flex;
-    flex-direction: column;
-}
-
-#route-filters label {
-    font-size: 0.9em;
-    margin-bottom: 0.3rem;
-}
-
 .route-card {
-    display: grid;
-    grid-template-columns: 40px 1.5fr 1fr auto;
-    gap: 1.25rem;
-    align-items: center;
-    padding: 1rem;
+    display: grid; grid-template-columns: 50px 1fr 1fr 1fr auto;
+    gap: 1rem; align-items: center; padding: 0.75rem;
     border-bottom: 1px solid var(--border-color);
-    transition: background-color 0.2s;
 }
-
-.route-card:last-child {
-    border-bottom: none;
-}
-
-.route-card:hover {
-    background-color: rgba(0, 27, 148, 0.1);
-}
-
-.route-card .operator-logo {
-    width: 40px;
-    height: 40px;
-    object-fit: contain;
-    border-radius: 5px;
-    background-color: rgba(255,255,255,0.05);
-    padding: 4px;
-}
-
-.route-card .route-details strong, .route-card .aircraft-details strong {
-    display: block;
-    font-size: 1.1em;
-    color: #fff;
-}
-
-.route-card small {
-    color: var(--dashboard-text-muted);
-    font-size: 0.85em;
-}
-
-.route-card .delete-route-btn {
-    justify-self: end; /* Align button to the far right of its grid cell */
-}
-
-/* ================================================== */
-/* END: ROUTE MANAGER REDESIGN STYLES                 */
-/* ================================================== */
+.route-card:last-child { border-bottom: none; }
+.route-card .operator-logo { height: 24px; width: auto; }
+.route-card small { color: var(--dashboard-text-muted); }
+/* --- END: NEW ROUTE MANAGER STYLES --- */
 
 
 /* --- NEW: Mobile-only scroll-to-top logo --- */
@@ -1013,12 +919,6 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
 /* --- MOBILE RESPONSIVE STYLES ---                */
 /* These rules apply only to screens 768px wide or smaller. */
 /************************************************************/
-@media (max-width: 992px) { /* A slightly larger breakpoint for better stacking */
-    #tab-route-manager .route-manager-grid {
-        grid-template-columns: 1fr; /* Stack columns on smaller screens */
-    }
-}
-
 @media (max-width: 768px) {
 
     /* --- Mobile Scroll Logo --- */
@@ -1182,31 +1082,32 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
 
     /* Make the route filter controls stack */
     #route-filters {
-        grid-template-columns: 1fr;
+        flex-direction: column;
+        align-items: stretch;
     }
 
-    /* Adjust the route card for smaller screens (redesigned) */
+    /* Adjust the route card for smaller screens */
     .route-card {
-        grid-template-columns: 40px 1fr auto; /* Logo, Info, Delete */
+        grid-template-columns: 40px 1fr auto; /* Logo, Info, Delete Button */
         grid-template-rows: auto auto; /* Two rows */
         gap: 0.5rem 1rem;
-        padding: 0.75rem;
     }
     .route-card .operator-logo {
         grid-row: 1 / 3; /* Logo spans both rows */
     }
-    .route-card .route-details { 
+    .route-card > div:nth-of-type(1) { /* Flight Number / Operator */
         grid-column: 2 / 3;
-        grid-row: 1 / 2;
     }
-    .route-card .aircraft-details {
+    .route-card > div:nth-of-type(2) { /* Departure / Arrival */
         grid-column: 2 / 3;
         grid-row: 2 / 3;
+    }
+    .route-card > div:nth-of-type(3) { /* Aircraft / Livery */
+        display: none; /* Hide for brevity on mobile */
     }
     .route-card .delete-route-btn {
         grid-column: 3 / 4;
         grid-row: 1 / 3;
-        align-self: center;
     }
 
     /* Stack the user management cards */

@@ -180,6 +180,52 @@
         }
         /* --- END: AIRCRAFT STYLES --- */
 
+        /* --- START: NEW ROUTE MANAGER & PAGINATION STYLES --- */
+        .route-manager-actions {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        .pagination-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+        }
+        .pagination-container button {
+            background-color: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            color: var(--dashboard-text);
+            padding: 0.5rem 0.8rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .pagination-container button:hover:not(:disabled) {
+            background-color: var(--info-color);
+            color: white;
+        }
+        .pagination-container button.active {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        .pagination-container button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .codeshare-item-modal {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            border-radius: 6px;
+            background-color: var(--bg-color);
+            margin-bottom: 0.5rem;
+        }
+        /* --- END: NEW ROUTE MANAGER STYLES --- */
     </style>
 </head>
 <body>
@@ -596,7 +642,67 @@
         </div>
     </div>
 
+    <div id="route-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 id="route-modal-title">Add New Route</h2>
+            <button class="modal-close-btn" data-modal-id="route-modal" title="Close">&times;</button>
+            <form id="add-route-form" class="dashboard-form">
+                <div class="form-grid-two-col">
+                    <div class="form-group"><label for="route-flightnumber">Flight Number</label><input type="text" id="route-flightnumber" required></div>
+                    <div class="form-group"><label for="route-aircraft">Aircraft</label><input type="text" id="route-aircraft" required></div>
+                    <div class="form-group"><label for="route-departure">Departure ICAO</label><input type="text" id="route-departure" maxlength="4" required></div>
+                    <div class="form-group"><label for="route-arrival">Arrival ICAO</label><input type="text" id="route-arrival" maxlength="4" required></div>
+                    <div class="form-group"><label for="route-flighttime">Flight Time (Hours)</label><input type="number" id="route-flighttime" step="0.1" min="0.1" required></div>
+                    <div class="form-group"><label for="route-livery">Livery</label><input type="text" id="route-livery" placeholder="e.g., Oneworld" required></div>
+                    <div class="form-group full-width"><label for="route-operator">Operator</label><select id="route-operator" required></select></div>
+                </div>
+                <div class="modal-form-actions">
+                    <button type="button" class="cta-button secondary-btn" data-modal-id="route-modal">Cancel</button>
+                    <button type="submit" class="cta-button">Add Route</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
+    <div id="codeshare-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Manage Codeshare Partners</h2>
+            <button class="modal-close-btn" data-modal-id="codeshare-modal" title="Close">&times;</button>
+            <p style="color: var(--dashboard-text-muted); font-size: 0.9em; margin-bottom: 1.5rem;">Partners added here will be available globally for routes and aircraft.</p>
+            <form id="add-codeshare-form" class="dashboard-form">
+                <div class="form-grid-two-col">
+                    <div class="form-group"><label for="codeshare-name">Airline Name</label><input type="text" id="codeshare-name" placeholder="e.g., Qatar Airways" required></div>
+                    <div class="form-group"><label for="codeshare-logo">Logo URL</label><input type="url" id="codeshare-logo" placeholder="https://example.com/logo.png" required></div>
+                </div>
+                <button type="submit" class="cta-button" style="margin-top: 1rem;">Add New Partner</button>
+            </form>
+            <hr style="margin: 2rem 0;">
+            <h3>Existing Partners</h3>
+            <div id="codeshare-list-container-modal"><p>Loading partners...</p></div>
+        </div>
+    </div>
+
+    <div id="import-sheet-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Import Routes from Google Sheet</h2>
+            <button class="modal-close-btn" data-modal-id="import-sheet-modal" title="Close">&times;</button>
+            <p style="color: var(--dashboard-text-muted); font-size: 0.9em; margin-bottom: 1.5rem;">Paste a published Google Sheet CSV link to bulk-add routes for an operator.</p>
+            <form id="import-sheet-form" class="dashboard-form">
+                <div class="form-group">
+                    <label for="import-sheet-url">Google Sheet CSV URL</label>
+                    <input type="url" id="import-sheet-url" required placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv">
+                </div>
+                <div class="form-group">
+                    <label for="import-sheet-operator-select">Operator for these Routes</label>
+                    <select id="import-sheet-operator-select" required class="form-control"></select>
+                </div>
+                <div class="modal-form-actions">
+                    <button type="button" class="cta-button secondary-btn" data-modal-id="import-sheet-modal">Cancel</button>
+                    <button type="submit" id="import-sheet-btn" class="cta-button">Import Routes</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <div id="notification-bell-container" class="notification-container">
         <a href="#" id="notification-bell" class="notification-button">
             <i class="fas fa-bell"></i>
