@@ -783,13 +783,15 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 codesharePartners = await safeFetch(`${API_BASE_URL}/api/codeshares`);
                 populateOperatorSelects();
-                renderList(codesharePartners.sort((a, b) => a.name.localeCompare(b.name)), item => {
+                renderList(container, codesharePartners, item => {
                     const div = document.createElement('div');
-                    div.className = 'codeshare-partner-card';
+                    div.className = 'codeshare-item-modal';
                     div.innerHTML = `
-                        <img src="${item.logoUrl}" alt="${item.name} logo">
-                        <span>${item.name}</span>
-                        <button class="delete-codeshare-btn" data-name="${item.name}" title="Delete Partner">&times;</button>
+                        <div>
+                            <img src="${item.logoUrl}" alt="${item.name} logo" style="height: 20px; width: auto; margin-right: 10px; vertical-align: middle;">
+                            <span>${item.name}</span>
+                        </div>
+                        <button class="delete-user-btn delete-codeshare-btn" data-name="${item.name}" title="Delete">&times;</button>
                     `;
                     return div;
                 }, 'No codeshare partners added.');
