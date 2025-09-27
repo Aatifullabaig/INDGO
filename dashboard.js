@@ -722,6 +722,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let routeCurrentPage = 1;
         const routesPerPage = 15;
         let allFilteredRoutes = [];
+        // --- NEW: STATE FOR CODESHARE PAGINATION ---
+        let codeshareCurrentPage = 1;
+        const codesharesPerPage = 12; // 12 partners fit well in the modal grid
 
         // --- SETUP INITIAL HTML LAYOUT ---
         container.innerHTML = `
@@ -777,26 +780,60 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         };
 
-        // --- CODESHARE MANAGEMENT ---
-        const loadAndRenderCodeshares = async () => {
+        // --- START: MODIFIED CODESHARE MANAGEMENT WITH PAGINATION ---
+        const renderCodesharePaginationControls = () => {
+            const container = document.getElementById('codeshare-pagination-controls-modal');
+            if (!container) return;
+            const totalPages = Math.ceil(codesharePartners.length / codesharesPerPage);
+
+            if (totalPages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            for (let i = 1; i <= totalPages; i++) {
+                html += `<button data-page="${i}" class="${i === codeshareCurrentPage ? 'active' : ''}">${i}</button>`;
+            }
+
+            container.innerHTML = `
+                <button data-page="${codeshareCurrentPage - 1}" ${codeshareCurrentPage === 1 ? 'disabled' : ''}>&laquo; Prev</button>
+                ${html}
+                <button data-page="${codeshareCurrentPage + 1}" ${codeshareCurrentPage === totalPages ? 'disabled' : ''}>Next &raquo;</button>
+            `;
+        };
+
+        const displayCurrentCodesharePage = () => {
             const container = document.getElementById('codeshare-list-container-modal');
+            const startIndex = (codeshareCurrentPage - 1) * codesharesPerPage;
+            const endIndex = startIndex + codesharesPerPage;
+            const partnersToDisplay = codesharePartners.slice(startIndex, endIndex);
+
+            const renderer = (item) => {
+                const card = document.createElement('div');
+                card.className = 'codeshare-partner-card';
+                card.innerHTML = `
+                    <img src="${item.logoUrl}" alt="${item.name} logo">
+                    <span>${item.name}</span>
+                    <button class="delete-codeshare-btn" data-name="${item.name}" title="Delete Partner">&times;</button>
+                `;
+                return card;
+            };
+
+            renderList(container, partnersToDisplay, renderer, 'No codeshare partners have been added yet.');
+            renderCodesharePaginationControls();
+        };
+
+        const loadAndRenderCodeshares = async () => {
             try {
                 codesharePartners = await safeFetch(`${API_BASE_URL}/api/codeshares`);
                 populateOperatorSelects();
-                renderList(container, codesharePartners, item => {
-                    const div = document.createElement('div');
-                    div.className = 'codeshare-item-modal';
-                    div.innerHTML = `
-                        <div>
-                            <img src="${item.logoUrl}" alt="${item.name} logo" style="height: 20px; width: auto; margin-right: 10px; vertical-align: middle;">
-                            <span>${item.name}</span>
-                        </div>
-                        <button class="delete-user-btn delete-codeshare-btn" data-name="${item.name}" title="Delete">&times;</button>
-                    `;
-                    return div;
-                }, 'No codeshare partners added.');
+                codeshareCurrentPage = 1; // Reset to the first page
+                displayCurrentCodesharePage(); // Render the first page
             } catch (error) {
                 showNotification(`Error loading codeshares: ${error.message}`, 'error');
+                const container = document.getElementById('codeshare-list-container-modal');
+                if (container) container.innerHTML = '<p style="color:red">Could not load partners.</p>';
             }
         };
 
@@ -810,8 +847,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 await safeFetch(`${API_BASE_URL}/api/codeshares`, { method: 'POST', body: JSON.stringify({ name, logoUrl }) });
                 showNotification('Codeshare partner added.', 'success');
                 addCodeshareForm.reset();
-                await loadAndRenderCodeshares();
-            } catch (error) {
+                await loadAndRenderCodeshares(); // This will re-fetch and re-render the paginated list
+            } catch (error)
+            {
                 showNotification(`Failed to add partner: ${error.message}`, 'error');
             }
         };
@@ -821,11 +859,12 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 await safeFetch(`${API_BASE_URL}/api/codeshares/${encodeURIComponent(name)}`, { method: 'DELETE' });
                 showNotification('Codeshare partner removed.', 'success');
-                await loadAndRenderCodeshares();
+                await loadAndRenderCodeshares(); // Re-fetch and re-render the paginated list
             } catch (error) {
                 showNotification(`Failed to remove partner: ${error.message}`, 'error');
             }
         };
+        // --- END: MODIFIED CODESHARE MANAGEMENT ---
 
         // --- PAGINATION & ROUTE RENDERING ---
         const renderPaginationControls = () => {
@@ -1044,6 +1083,12 @@ document.addEventListener('DOMContentLoaded', () => {
              const deleteCodeshareBtn = e.target.closest('.delete-codeshare-btn');
             if (deleteCodeshareBtn) {
                 handleDeleteCodeshare(deleteCodeshareBtn.dataset.name);
+            }
+            // --- NEW: CODESHARE PAGINATION HANDLER ---
+            const pageBtn = e.target.closest('#codeshare-pagination-controls-modal button[data-page]');
+            if (pageBtn && !pageBtn.disabled) {
+                codeshareCurrentPage = parseInt(pageBtn.dataset.page, 10);
+                displayCurrentCodesharePage();
             }
         });
 
