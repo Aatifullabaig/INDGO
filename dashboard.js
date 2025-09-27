@@ -783,15 +783,13 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 codesharePartners = await safeFetch(`${API_BASE_URL}/api/codeshares`);
                 populateOperatorSelects();
-                renderList(container, codesharePartners, item => {
+                renderList(codesharePartners.sort((a, b) => a.name.localeCompare(b.name)), item => {
                     const div = document.createElement('div');
-                    div.className = 'codeshare-item-modal';
+                    div.className = 'codeshare-partner-card';
                     div.innerHTML = `
-                        <div>
-                            <img src="${item.logoUrl}" alt="${item.name} logo" style="height: 20px; width: auto; margin-right: 10px; vertical-align: middle;">
-                            <span>${item.name}</span>
-                        </div>
-                        <button class="delete-user-btn delete-codeshare-btn" data-name="${item.name}" title="Delete">&times;</button>
+                        <img src="${item.logoUrl}" alt="${item.name} logo">
+                        <span>${item.name}</span>
+                        <button class="delete-codeshare-btn" data-name="${item.name}" title="Delete Partner">&times;</button>
                     `;
                     return div;
                 }, 'No codeshare partners added.');
@@ -830,21 +828,48 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- PAGINATION & ROUTE RENDERING ---
         const renderPaginationControls = () => {
             const container = document.getElementById('route-pagination-controls');
+            if (!container) return;
+        
             const totalPages = Math.ceil(allFilteredRoutes.length / routesPerPage);
+        
             if (totalPages <= 1) {
                 container.innerHTML = '';
                 return;
             }
-            let buttonsHtml = `
-                <button data-page="${routeCurrentPage - 1}" ${routeCurrentPage === 1 ? 'disabled' : ''}>&laquo; Prev</button>
-            `;
-            for (let i = 1; i <= totalPages; i++) {
-                buttonsHtml += `<button data-page="${i}" class="${i === routeCurrentPage ? 'active' : ''}">${i}</button>`;
+        
+            const pagesToShow = new Set();
+            const context = 2; // Number of pages to show around the current page
+        
+            // Always add first and last page
+            pagesToShow.add(1);
+            pagesToShow.add(totalPages);
+        
+            // Add current page and surrounding pages
+            for (let i = -context; i <= context; i++) {
+                const page = routeCurrentPage + i;
+                if (page > 0 && page <= totalPages) {
+                    pagesToShow.add(page);
+                }
             }
-            buttonsHtml += `
+        
+            const sortedPages = Array.from(pagesToShow).sort((a, b) => a - b);
+            let html = '';
+            let lastPage = 0;
+        
+            sortedPages.forEach(page => {
+                if (lastPage !== 0 && page - lastPage > 1) {
+                    // If there's a gap, add an ellipsis
+                    html += `<span class="pagination-ellipsis" style="padding: 0.5rem 0.8rem;">...</span>`;
+                }
+                html += `<button data-page="${page}" class="${page === routeCurrentPage ? 'active' : ''}">${page}</button>`;
+                lastPage = page;
+            });
+        
+            container.innerHTML = `
+                <button data-page="${routeCurrentPage - 1}" ${routeCurrentPage === 1 ? 'disabled' : ''}>&laquo; Prev</button>
+                ${html}
                 <button data-page="${routeCurrentPage + 1}" ${routeCurrentPage === totalPages ? 'disabled' : ''}>Next &raquo;</button>
             `;
-            container.innerHTML = buttonsHtml;
         };
 
         const displayCurrentRoutePage = () => {

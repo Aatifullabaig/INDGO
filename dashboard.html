@@ -216,15 +216,73 @@
             opacity: 0.5;
             cursor: not-allowed;
         }
-        .codeshare-item-modal {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.75rem;
-            border-radius: 6px;
-            background-color: var(--bg-color);
-            margin-bottom: 0.5rem;
+        /* --- START: NEW CODESHARE MODAL REDESIGN --- */
+        #codeshare-list-container-modal {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
         }
+
+        .codeshare-partner-card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--bg-color);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .codeshare-partner-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .codeshare-partner-card img {
+            height: 40px;
+            max-width: 90px;
+            object-fit: contain;
+            margin-bottom: 0.75rem;
+        }
+
+        .codeshare-partner-card span {
+            font-size: 0.85em;
+            font-weight: 500;
+            color: var(--dashboard-text-muted);
+            line-height: 1.2;
+        }
+
+        .delete-codeshare-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: var(--error-color);
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            line-height: 1;
+            opacity: 0;
+            transform: scale(0.8);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .codeshare-partner-card:hover .delete-codeshare-btn {
+            opacity: 1;
+            transform: scale(1);
+        }
+        /* --- END: NEW CODESHARE MODAL REDESIGN --- */
         /* --- END: NEW ROUTE MANAGER STYLES --- */
     </style>
 </head>
