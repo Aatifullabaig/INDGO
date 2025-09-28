@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
     async function fetchMapboxToken() {
         try {
-            const response = await fetch('/.netlify/functions/config');
+            const response = await fetch('https://indgo-va.netlify.app/.netlify/functions/config');
             if (!response.ok) throw new Error('Could not fetch server configuration.');
             const config = await response.json();
             if (!config.mapboxToken) throw new Error('Mapbox token is missing from server configuration.');
@@ -1686,6 +1686,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Initial Load ---
     async function initializeApp() {
         mainContentLoader.classList.add('active');
+
         
         await fetchMapboxToken(); // Fetch token first
         await fetchPilotData(); // Then fetch pilot data which handles rendering
