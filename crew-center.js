@@ -174,7 +174,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div class="dispatch-left-panel">
                     <div class="dispatch-core-info">
                         <div class="data-item"><strong>Aircraft:</strong> <span>${plan.aircraft || '---'}</span></div>
-                        <div class="data-item"><strong>Cruise:</strong> <span>FL${plan.cruiseAltitude ? plan.cruiseAltitude / 100 : '---'} @ ${plan.cruiseSpeed ? `${plan.cruiseSpeed} kts TAS` : '---'}</span></div>
+                        <div class="data-item"><strong>Cruise:</strong> <span>FL${plan.cruiseAltitude ? plan.cruiseAltitude / 100 : '---'} @ Mach ${plan.cruiseSpeed || '---'}</span></div>
                         <div class="data-item"><strong>ETD:</strong> <span>${formatTimeFromTimestamp(plan.etd)}</span> | <strong>ETA:</strong> <span>${formatTimeFromTimestamp(plan.eta)}</span></div>
                         <div class="data-item"><strong>Duration:</strong> <span>${formatEET(plan.eet)}</span></div>
                     </div>
@@ -1491,7 +1491,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     // NEW: Save performance and cruise data
                     tlr: ofpData.tlr,
                     cruiseAltitude: ofpData.general.initial_altitude,
-                    cruiseSpeed: ofpData.general.cruise_tas,
+                    cruiseSpeed: ofpData.general.cruise_mach,
                     mapData: {
                         origin: ofpData.origin,
                         destination: ofpData.destination,
@@ -1656,7 +1656,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     departureWeather: ofpData.weather.orig_metar,
                     arrivalWeather: ofpData.weather.dest_metar,
                     cruiseAltitude: ofpData.general.initial_altitude,
-                    cruiseSpeed: ofpData.general.cruise_tas,
+                    cruiseSpeed: ofpData.general.cruise_mach,
                     mapData: {
                         origin: ofpData.origin,
                         destination: ofpData.destination,
