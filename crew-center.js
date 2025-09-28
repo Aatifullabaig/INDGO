@@ -4,6 +4,70 @@ document.addEventListener('DOMContentLoaded', async () => {
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
     const LIVE_FLIGHTS_API_URL = 'https://acars-backend-uxln.onrender.com/flights';
     const TARGET_SERVER_NAME = 'Expert Server';
+    const AIRCRAFT_SELECTION_LIST = [
+        // Airbus
+        { value: 'A318', name: 'Airbus A318-100' },
+        { value: 'A319', name: 'Airbus A319-100' },
+        { value: 'A320', name: 'Airbus A320-200' },
+        { value: 'A20N', name: 'Airbus A320neo' },
+        { value: 'A321', name: 'Airbus A321-200' },
+        { value: 'A21N', name: 'Airbus A321neo' },
+        { value: 'A306', name: 'Airbus A300B4-600' },
+        { value: 'A310', name: 'Airbus A310-304' },
+        { value: 'A332', name: 'Airbus A330-200' },
+        { value: 'A333', name: 'Airbus A330-300' },
+        { value: 'A339', name: 'Airbus A330-900neo' },
+        { value: 'A343', name: 'Airbus A340-300' },
+        { value: 'A346', name: 'Airbus A340-600' },
+        { value: 'A359', name: 'Airbus A350-900' },
+        { value: 'A35K', name: 'Airbus A350-1000' },
+        { value: 'A388', name: 'Airbus A380-800' },
+        // Boeing
+        { value: 'B712', name: 'Boeing 717-200' },
+        { value: 'B722', name: 'Boeing 727-200' },
+        { value: 'B732', name: 'Boeing 737-200' },
+        { value: 'B733', name: 'Boeing 737-300' },
+        { value: 'B734', name: 'Boeing 737-400' },
+        { value: 'B735', name: 'Boeing 737-500' },
+        { value: 'B736', name: 'Boeing 737-600' },
+        { value: 'B737', name: 'Boeing 737-700' },
+        { value: 'B738', name: 'Boeing 737-800' },
+        { value: 'B739', name: 'Boeing 737-900' },
+        { value: 'B38M', name: 'Boeing 737 MAX 8' },
+        { value: 'B742', name: 'Boeing 747-200B' },
+        { value: 'B744', name: 'Boeing 747-400' },
+        { value: 'B748', name: 'Boeing 747-8' },
+        { value: 'B752', name: 'Boeing 757-200' },
+        { value: 'B753', name: 'Boeing 757-300' },
+        { value: 'B762', name: 'Boeing 767-200ER' },
+        { value: 'B763', name: 'Boeing 767-300ER' },
+        { value: 'B772', name: 'Boeing 777-200ER' },
+        { value: 'B77L', name: 'Boeing 777-200LR' },
+        { value: 'B77W', name: 'Boeing 777-300ER' },
+        { value: 'B788', name: 'Boeing 787-8' },
+        { value: 'B789', name: 'Boeing 787-9' },
+        { value: 'B78X', name: 'Boeing 787-10' },
+        // Bombardier (CRJ)
+        { value: 'CRJ2', name: 'Bombardier CRJ-200' },
+        { value: 'CRJ7', name: 'Bombardier CRJ-700' },
+        { value: 'CRJ9', name: 'Bombardier CRJ-900' },
+        { value: 'CRJX', name: 'Bombardier CRJ-1000' },
+        // De Havilland
+        { value: 'DH8D', name: 'De Havilland Dash 8 Q400' },
+        // Embraer
+        { value: 'E135', name: 'Embraer ERJ-135' },
+        { value: 'E145', name: 'Embraer ERJ-145' },
+        { value: 'E170', name: 'Embraer E170' },
+        { value: 'E175', name: 'Embraer E175' },
+        { value: 'E190', name: 'Embraer E190' },
+        { value: 'E195', name: 'Embraer E195' },
+        // McDonnell Douglas
+        { value: 'DC10', name: 'McDonnell Douglas DC-10' },
+        { value: 'MD11', name: 'McDonnell Douglas MD-11' },
+        { value: 'MD82', name: 'McDonnell Douglas MD-82' },
+        { value: 'MD88', name: 'McDonnell Douglas MD-88' },
+        { value: 'MD90', name: 'McDonnell Douglas MD-90' },
+    ];
 
     // --- State Variables ---
     let MAPBOX_ACCESS_TOKEN = null;
@@ -115,7 +179,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const populateDispatchPass = (container, plan, options = {}) => {
         if (!container || !plan) return;
 
-        // --- Data Formatters & Converters (No changes here) ---
+        // --- Data Formatters & Converters ---
         const isSimbriefPlan = !!plan.tlr;
         const lbsToKg = (lbs) => {
             if (isNaN(lbs) || lbs === null) return null;
@@ -132,13 +196,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             const m = Math.round((hours - h) * 60);
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         };
+        // NEW: Helper to format speeds consistently
+        const formatSpeed = (kts) => (kts ? `${kts} kts` : '---');
 
-        // --- Performance & Weather Data Extraction (No changes here) ---
+        // --- Performance & Weather Data Extraction ---
         const plannedTakeoffRunway = plan.tlr?.takeoff?.conditions?.planned_runway;
         const takeoffRunwayData = plan.tlr?.takeoff?.runway?.find(r => r.identifier === plannedTakeoffRunway);
         const takeoffFlaps = takeoffRunwayData?.flap_setting ?? '---';
         const takeoffThrust = takeoffRunwayData?.thrust_setting ?? '---';
         const takeoffFlexTemp = takeoffRunwayData?.flex_temperature ? `${takeoffRunwayData.flex_temperature}°C` : '---';
+        
+        // NEW: Extract V-Speeds
+        const v1 = takeoffRunwayData?.speeds_v1;
+        const vr = takeoffRunwayData?.speeds_vr;
+        const v2 = takeoffRunwayData?.speeds_v2;
+
         const landingFlaps = plan.tlr?.landing?.conditions?.flap_setting ?? '---';
         const landingWeight = formatWeightDisplay(plan.tlr?.landing?.conditions?.planned_weight);
         const landingWind = `${plan.tlr?.landing?.conditions?.wind_direction ?? '???'}° @ ${plan.tlr?.landing?.conditions?.wind_speed ?? '?'} kts`;
@@ -148,7 +220,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const departureWeather = window.WeatherService.parseMetar(plan.departureWeather);
         const arrivalWeather = window.WeatherService.parseMetar(plan.arrivalWeather);
 
-        // --- NEW: Redesigned HTML Structure ---
+        // --- Redesigned HTML Structure ---
         container.innerHTML = `
             <div class="dispatch-header">
                 <div class="header-left">
@@ -221,6 +293,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                                     <div class="data-item"><strong>Flaps:</strong> <span>${takeoffFlaps}</span></div>
                                     <div class="data-item"><strong>Thrust:</strong> <span>${takeoffThrust}</span></div>
                                     <div class="data-item"><strong>SEL/FLEX Temp:</strong> <span>${takeoffFlexTemp}</span></div>
+                                    <div class="data-item"><strong>V1:</strong> <span>${formatSpeed(v1)}</span></div>
+                                    <div class="data-item"><strong>Vr:</strong> <span>${formatSpeed(vr)}</span></div>
+                                    <div class="data-item"><strong>V2:</strong> <span>${formatSpeed(v2)}</span></div>
                                 </div>
                                 <div class="perf-card">
                                     <h4>Landing</h4>
@@ -266,7 +341,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
         `;
 
-        // --- NEW: Add accordion functionality ---
+        // Add accordion functionality
         const accordionHeaders = container.querySelectorAll('.accordion-header');
         accordionHeaders.forEach(header => {
             header.addEventListener('click', () => {
@@ -285,7 +360,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
 
-        // --- Action Buttons & Map Plotting (No changes here) ---
+        // Action Buttons & Map Plotting
         const actionsContainer = container.querySelector(`#dispatch-actions-${plan._id}`);
         if (options.isPreview) {
             actionsContainer.innerHTML = `
@@ -326,7 +401,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, 100);
         }
     };
-
 
     // --- Rank & Fleet Models ---
     const PILOT_RANKS = [
@@ -969,10 +1043,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const aircraftSelect = document.getElementById('fp-aircraft');
         if (aircraftSelect) {
-            const allowedFleet = getAllowedFleet(pilot.rank);
             aircraftSelect.innerHTML = `
                 <option value="" disabled selected>-- Select Aircraft --</option>
-                ${allowedFleet.map(ac => `<option value="${ac.icao}">${ac.name} (${ac.icao})</option>`).join('')}
+                ${AIRCRAFT_SELECTION_LIST.map(ac => `<option value="${ac.value}">${ac.name} (${ac.value})</option>`).join('')}
             `;
         }
     };
