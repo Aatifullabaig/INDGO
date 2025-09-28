@@ -112,33 +112,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         return 'UNKNOWN';
     }
 
-    const populateDispatchPass = (container, plan) => {
+    const populateDispatchPass = (container, plan, options = {}) => {
         if (!container || !plan) return;
 
         // --- Data Formatters & Converters ---
-
-        // Check if this is a SimBrief plan (indicated by the TLR block) to handle unit conversions.
         const isSimbriefPlan = !!plan.tlr;
-
-        // Helper to convert LBS (from Simbrief) to KG for display.
         const lbsToKg = (lbs) => {
             if (isNaN(lbs) || lbs === null) return null;
             return Math.round(Number(lbs) / 2.20462);
         };
 
-        // Modified formatters to handle potential unit conversion.
-        const formatWeight = (value) => {
+        const formatWeightDisplay = (value) => {
             if (isNaN(value) || value === null) return '--- kg';
-            // If it's a Simbrief plan, the value is in LBS and needs conversion. Otherwise, assume it's already KG.
             const kgValue = isSimbriefPlan ? lbsToKg(value) : value;
             return `${kgValue.toLocaleString()} kg`;
         };
         
         const formatSpeed = (kts) => (isNaN(kts) || kts === null || String(kts).includes('---') ? '---' : `${kts} kts`);
-
         const formatTimeFromTimestamp = (ts) => (ts ? new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) : '----');
         
-        const formatDuration = (hours) => {
+        const formatEET = (hours) => {
             if (isNaN(hours) || hours < 0) return '00:00';
             const h = Math.floor(hours);
             const m = Math.round((hours - h) * 60);
@@ -146,17 +139,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         // --- Performance Data Extraction ---
-        
-        // Takeoff Performance
         const plannedTakeoffRunway = plan.tlr?.takeoff?.conditions?.planned_runway;
         const takeoffRunwayData = plan.tlr?.takeoff?.runway?.find(r => r.identifier === plannedTakeoffRunway);
         const takeoffFlaps = takeoffRunwayData?.flap_setting ?? '---';
         const takeoffThrust = takeoffRunwayData?.thrust_setting ?? '---';
         const takeoffFlexTemp = takeoffRunwayData?.flex_temperature ? `${takeoffRunwayData.flex_temperature}°C` : '---';
 
-        // Landing Performance
         const landingFlaps = plan.tlr?.landing?.conditions?.flap_setting ?? '---';
-        const landingWeight = formatWeight(plan.tlr?.landing?.conditions?.planned_weight); // Uses the new formatter
+        const landingWeight = formatWeightDisplay(plan.tlr?.landing?.conditions?.planned_weight);
         const landingWind = `${plan.tlr?.landing?.conditions?.wind_direction ?? '???'}° @ ${plan.tlr?.landing?.conditions?.wind_speed ?? '?'} kts`;
         const vref = plan.tlr?.landing?.distance_dry?.speeds_vref ?? 0;
         const vrefAdd = vref > 0 ? '+5 kts (min)' : '---';
@@ -184,8 +174,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div class="dispatch-left-panel">
                     <div class="dispatch-core-info">
                         <div class="data-item"><strong>Aircraft:</strong> <span>${plan.aircraft || '---'}</span></div>
+                        <div class="data-item"><strong>Cruise:</strong> <span>FL${plan.cruiseAltitude ? plan.cruiseAltitude / 100 : '---'} @ ${plan.cruiseSpeed ? `${plan.cruiseSpeed} kts TAS` : '---'}</span></div>
                         <div class="data-item"><strong>ETD:</strong> <span>${formatTimeFromTimestamp(plan.etd)}</span> | <strong>ETA:</strong> <span>${formatTimeFromTimestamp(plan.eta)}</span></div>
-                        <div class="data-item"><strong>Duration:</strong> <span>${formatDuration(plan.eet)}</span></div>
+                        <div class="data-item"><strong>Duration:</strong> <span>${formatEET(plan.eet)}</span></div>
                     </div>
                     <div id="dispatch-map-${plan._id}" class="dispatch-map-container" style="height: 350px;"></div>
                     <div class="dispatch-route-panel data-card">
@@ -198,11 +189,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
                 </div>
                 <div class="dispatch-right-panel">
-                    <div class="data-card"><h3><i class="fa-solid fa-weight-hanging"></i> Weights & Payload</h3><div class="data-item"><strong>ZFW:</strong> <span>${formatWeight(plan.zfw)}</span></div><div class="data-item"><strong>TOW:</strong> <span>${formatWeight(plan.tow)}</span></div><div class="data-item"><strong>Passengers:</strong> <span>${plan.pob || '---'}</span></div><div class="data-item"><strong>Cargo:</strong> <span>${formatWeight(plan.cargo)}</span></div></div>
-                    <div class="data-card"><h3><i class="fa-solid fa-gas-pump"></i> Fuel</h3><div class="data-item"><strong>Taxi Fuel:</strong> <span>${formatWeight(plan.fuelTaxi)}</span></div><div class="data-item"><strong>Trip Fuel:</strong> <span>${formatWeight(plan.fuelTrip)}</span></div><div class="data-item"><strong>Total Fuel:</strong> <span>${formatWeight(plan.fuelTotal)}</span></div></div>
+                    <div class="data-card"><h3><i class="fa-solid fa-weight-hanging"></i> Weights & Payload</h3><div class="data-item"><strong>ZFW:</strong> <span>${formatWeightDisplay(plan.zfw)}</span></div><div class="data-item"><strong>TOW:</strong> <span>${formatWeightDisplay(plan.tow)}</span></div><div class="data-item"><strong>Passengers:</strong> <span>${plan.pob || '---'}</span></div><div class="data-item"><strong>Cargo:</strong> <span>${formatWeightDisplay(plan.cargo)}</span></div></div>
+                    <div class="data-card"><h3><i class="fa-solid fa-gas-pump"></i> Fuel</h3><div class="data-item"><strong>Taxi Fuel:</strong> <span>${formatWeightDisplay(plan.fuelTaxi)}</span></div><div class="data-item"><strong>Trip Fuel:</strong> <span>${formatWeightDisplay(plan.fuelTrip)}</span></div><div class="data-item"><strong>Total Fuel:</strong> <span>${formatWeightDisplay(plan.fuelTotal)}</span></div></div>
                     <div class="data-card"><h3><i class="fa-solid fa-tower-broadcast"></i> ATC Information</h3><div class="data-item"><strong>FIC #:</strong> <span>${plan.ficNumber || '---'}</span></div><div class="data-item"><strong>ADC #:</strong> <span>${plan.adcNumber || '---'}</span></div><div class="data-item"><strong>Squawk:</strong> <span>${plan.squawkCode || '----'}</span></div></div>
-                    <div class="data-card"><h3><i class="fa-solid fa-gauge-high"></i> Critical Speeds</h3><div class="speeds-grid"><div class="speed-item"><label>V1</label><span>${formatSpeed(plan.v1)}</span></div><div class="speed-item"><label>VR</label><span>${formatSpeed(plan.vr)}</span></div><div class="speed-item"><label>V2</label><span>${formatSpeed(plan.v2)}</span></div><div class="speed-item landing-speed"><label>VREF</label><span>${formatSpeed(plan.vref)}</span></div></div></div>
-                    
                     <div class="data-card">
                         <h3><i class="fa-solid fa-plane-departure"></i> Takeoff Performance</h3>
                         <div class="data-item"><strong>Flaps:</strong> <span>${takeoffFlaps}</span></div>
@@ -226,7 +215,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
 
         const actionsContainer = container.querySelector(`#dispatch-actions-${plan._id}`);
-        if (plan.status === 'PLANNED') {
+        if (options.isPreview) {
+            actionsContainer.innerHTML = `
+                <div class="dispatch-action-group">
+                    <button id="dispatch-close-btn" class="details-button">Cancel</button>
+                    <p class="dispatch-action-description">Discards this generated plan and returns to the filing form.</p>
+                </div>
+                <div class="dispatch-action-group">
+                    <button id="file-from-simbrief-btn" class="cta-button">File This Flight Plan</button>
+                    <p class="dispatch-action-description">Submits this flight plan to the airline and makes it your active flight.</p>
+                </div>
+            `;
+        } else if (plan.status === 'PLANNED') {
             actionsContainer.innerHTML = `
                 <button class="cta-button" id="depart-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-plane-departure"></i> Depart</button>
                 <button class="end-duty-btn" id="cancel-btn" data-plan-id="${plan._id}"><i class="fa-solid fa-ban"></i> Cancel Flight</button>
@@ -1467,12 +1467,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             try {
                 const ofpData = CURRENT_OFP_DATA;
-                const plannedRunway = ofpData.tlr?.takeoff?.conditions?.planned_runway;
-                const runwayData = ofpData.tlr?.takeoff?.runway?.find(r => r.identifier === plannedRunway);
-                const v1 = runwayData?.speeds_v1 ?? '---';
-                const vr = runwayData?.speeds_vr ?? '---';
-                const v2 = runwayData?.speeds_v2 ?? '---';
-                const vref = ofpData.tlr?.landing?.distance_dry?.speeds_vref ?? '---';
                 const cargoWeight = ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight);
 
                 const body = {
@@ -1492,12 +1486,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     fuelTaxi: ofpData.fuel.taxi,
                     fuelTrip: ofpData.fuel.enroute_burn,
                     fuelTotal: ofpData.fuel.plan_ramp,
-                    v1: `${v1} kts`,
-                    vr: `${vr} kts`,
-                    v2: `${v2} kts`,
-                    vref: `${vref} kts`,
                     departureWeather: ofpData.weather.orig_metar,
                     arrivalWeather: ofpData.weather.dest_metar,
+                    // NEW: Save performance and cruise data
+                    tlr: ofpData.tlr,
+                    cruiseAltitude: ofpData.general.initial_altitude,
+                    cruiseSpeed: ofpData.general.cruise_tas,
                     mapData: {
                         origin: ofpData.origin,
                         destination: ofpData.destination,
@@ -1515,6 +1509,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 showNotification(result.message, 'success');
                 CURRENT_OFP_DATA = null;
+                document.getElementById('dispatch-pass-display').style.display = 'none';
+                document.getElementById('manual-dispatch-container').style.display = 'block';
                 await fetchPilotData();
 
             } catch (err) {
@@ -1628,104 +1624,57 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (ofpId) {
             showNotification('Fetching flight plan from SimBrief...', 'info');
-
             try {
                 const response = await fetch(`/.netlify/functions/simbrief?fetch_ofp=true&ofp_id=${ofpId}`);
-                if (!response.ok) {
-                    throw new Error('Could not retrieve flight plan from SimBrief.');
-                }
+                if (!response.ok) throw new Error('Could not retrieve flight plan from SimBrief.');
                 const data = await response.json();
 
                 CURRENT_OFP_DATA = data.OFP;
                 const ofpData = CURRENT_OFP_DATA;
 
+                const cargoWeight = ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight);
+                const previewPlan = {
+                    _id: 'simbrief-preview',
+                    flightNumber: ofpData.general.flight_number,
+                    departure: ofpData.origin.icao_code,
+                    arrival: ofpData.destination.icao_code,
+                    etd: new Date(ofpData.times.sched_out * 1000),
+                    eta: new Date(ofpData.times.sched_in * 1000),
+                    eet: ofpData.times.est_time_enroute / 3600,
+                    aircraft: ofpData.aircraft.icaocode,
+                    route: ofpData.general.route,
+                    alternate: ofpData.alternate.icao_code,
+                    zfw: ofpData.weights.est_zfw,
+                    tow: ofpData.weights.est_tow,
+                    pob: ofpData.general.passengers,
+                    cargo: cargoWeight,
+                    fuelTaxi: ofpData.fuel.taxi,
+                    fuelTrip: ofpData.fuel.enroute_burn,
+                    fuelTotal: ofpData.fuel.plan_ramp,
+                    squawkCode: ofpData.atc.squawk,
+                    tlr: ofpData.tlr,
+                    departureWeather: ofpData.weather.orig_metar,
+                    arrivalWeather: ofpData.weather.dest_metar,
+                    cruiseAltitude: ofpData.general.initial_altitude,
+                    cruiseSpeed: ofpData.general.cruise_tas,
+                    mapData: {
+                        origin: ofpData.origin,
+                        destination: ofpData.destination,
+                        navlog: ofpData.navlog?.fix || []
+                    }
+                };
+                
                 const dispatchDisplay = document.getElementById('dispatch-pass-display');
                 const manualDispatchContainer = document.getElementById('manual-dispatch-container');
 
                 if (!dispatchDisplay || !manualDispatchContainer) {
                     throw new Error('Dispatch or form container not found in the DOM.');
                 }
-
-                document.getElementById('dispatch-flight-number').textContent = ofpData.general.flight_number || 'N/A';
-                document.getElementById('dispatch-route-short').textContent = `${ofpData.origin.icao_code} → ${ofpData.destination.icao_code}`;
-                document.getElementById('dispatch-date').textContent = new Date().toLocaleDateString();
-
-                document.getElementById('dispatch-callsign').textContent = ofpData.atc.callsign || 'N/A';
-                document.getElementById('dispatch-aircraft').textContent = ofpData.aircraft.icaocode || 'N/A';
-                document.getElementById('dispatch-etd').textContent = formatTimeFromTimestamp(ofpData.times.sched_out);
-                document.getElementById('dispatch-eta').textContent = formatTimeFromTimestamp(ofpData.times.sched_in);
-                document.getElementById('dispatch-duration').textContent = formatDuration(ofpData.times.est_time_enroute);
-
-                document.getElementById('dispatch-fuel-taxi').textContent = formatWeight(ofpData.fuel.taxi);
-                document.getElementById('dispatch-fuel-trip').textContent = formatWeight(ofpData.fuel.enroute_burn);
-                document.getElementById('dispatch-fuel-total').textContent = formatWeight(ofpData.fuel.plan_ramp);
-                document.getElementById('dispatch-zfw').textContent = formatWeight(ofpData.weights.est_zfw);
-                document.getElementById('dispatch-tow').textContent = formatWeight(ofpData.weights.est_tow);
-
-                document.getElementById('dispatch-fic').textContent = 'Pending File';
-                document.getElementById('dispatch-adc').textContent = 'Pending File';
-                document.getElementById('dispatch-squawk').textContent = ofpData.atc.squawk || '----';
-
-                document.getElementById('dispatch-pax').textContent = ofpData.general.passengers || '0';
-                const cargoWeight = ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight);
-                document.getElementById('dispatch-cargo').textContent = formatWeight(cargoWeight);
-
-                const departureWeather = window.WeatherService.parseMetar(ofpData.weather.orig_metar);
-                const arrivalWeather = window.WeatherService.parseMetar(ofpData.weather.dest_metar);
-
-                document.getElementById('dispatch-dep-cond').textContent = departureWeather.condition;
-                document.getElementById('dispatch-dep-temp').textContent = departureWeather.temp;
-                document.getElementById('dispatch-dep-wind').textContent = departureWeather.wind;
-
-                document.getElementById('dispatch-arr-cond').textContent = arrivalWeather.condition;
-                document.getElementById('dispatch-arr-temp').textContent = arrivalWeather.temp;
-                document.getElementById('dispatch-arr-wind').textContent = arrivalWeather.wind;
-
-                try {
-                    const plannedRunway = ofpData.tlr?.takeoff?.conditions?.planned_runway;
-                    const runwayData = ofpData.tlr?.takeoff?.runway?.find(r => r.identifier === plannedRunway);
-
-                    const v1 = runwayData?.speeds_v1 ?? '---';
-                    const vr = runwayData?.speeds_vr ?? '---';
-                    const v2 = runwayData?.speeds_v2 ?? '---';
-                    const vref = ofpData.tlr?.landing?.distance_dry?.speeds_vref ?? '---';
-
-                    document.getElementById('dispatch-v1').textContent = `${v1} kts`;
-                    document.getElementById('dispatch-vr').textContent = `${vr} kts`;
-                    document.getElementById('dispatch-v2').textContent = `${v2} kts`;
-                    document.getElementById('dispatch-vref').textContent = `${vref} kts`;
-                } catch (speedError) {
-                    console.error("Could not parse V-Speeds:", speedError);
-                    document.getElementById('dispatch-v1').textContent = '---';
-                    document.getElementById('dispatch-vr').textContent = '---';
-                    document.getElementById('dispatch-v2').textContent = '---';
-                    document.getElementById('dispatch-vref').textContent = '---';
-                }
-
-                document.getElementById('dispatch-route-full').textContent = ofpData.general.route;
-                const alternates = [ofpData.alternate?.icao_code, ofpData.alternate2?.icao_code, ofpData.alternate3?.icao_code, ofpData.alternate4?.icao_code]
-                    .filter(Boolean)
-                    .join(', ');
-                document.getElementById('dispatch-alternates').textContent = alternates || 'None';
-
-                const dispatchActionsContainer = document.getElementById('dispatch-actions');
-                if (dispatchActionsContainer) {
-                    dispatchActionsContainer.innerHTML = `
-                        <div class="dispatch-action-group">
-                            <button id="dispatch-close-btn" class="details-button">Cancel</button>
-                            <p class="dispatch-action-description">Discards this generated plan and returns to the filing form.</p>
-                        </div>
-                        <div class="dispatch-action-group">
-                            <button id="file-from-simbrief-btn" class="cta-button">File This Flight Plan</button>
-                            <p class="dispatch-action-description">Submits this flight plan to the airline and makes it your active flight.</p>
-                        </div>
-                    `;
-                }
+                
+                populateDispatchPass(dispatchDisplay, previewPlan, { isPreview: true });
 
                 manualDispatchContainer.style.display = 'none';
                 dispatchDisplay.style.display = 'block';
-
-                plotDispatchMap('dispatch-map', ofpData.origin, ofpData.destination, ofpData.navlog.fix);
 
                 showNotification('Dispatch Pass generated successfully!', 'success');
                 window.history.replaceState({}, document.title, window.location.pathname);
