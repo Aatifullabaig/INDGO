@@ -115,22 +115,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     const populateDispatchPass = (container, plan, options = {}) => {
         if (!container || !plan) return;
 
-        // --- Data Formatters & Converters ---
+        // --- Data Formatters & Converters (No changes here) ---
         const isSimbriefPlan = !!plan.tlr;
         const lbsToKg = (lbs) => {
             if (isNaN(lbs) || lbs === null) return null;
             return Math.round(Number(lbs) / 2.20462);
         };
-
         const formatWeightDisplay = (value) => {
             if (isNaN(value) || value === null) return '--- kg';
             const kgValue = isSimbriefPlan ? lbsToKg(value) : value;
             return `${kgValue.toLocaleString()} kg`;
         };
-        
-        const formatSpeed = (kts) => (isNaN(kts) || kts === null || String(kts).includes('---') ? '---' : `${kts} kts`);
-        const formatTimeFromTimestamp = (ts) => (ts ? new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) : '----');
-        
         const formatEET = (hours) => {
             if (isNaN(hours) || hours < 0) return '00:00';
             const h = Math.floor(hours);
@@ -138,82 +133,159 @@ document.addEventListener('DOMContentLoaded', async () => {
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         };
 
-        // --- Performance Data Extraction ---
+        // --- Performance & Weather Data Extraction (No changes here) ---
         const plannedTakeoffRunway = plan.tlr?.takeoff?.conditions?.planned_runway;
         const takeoffRunwayData = plan.tlr?.takeoff?.runway?.find(r => r.identifier === plannedTakeoffRunway);
         const takeoffFlaps = takeoffRunwayData?.flap_setting ?? '---';
         const takeoffThrust = takeoffRunwayData?.thrust_setting ?? '---';
         const takeoffFlexTemp = takeoffRunwayData?.flex_temperature ? `${takeoffRunwayData.flex_temperature}°C` : '---';
-
         const landingFlaps = plan.tlr?.landing?.conditions?.flap_setting ?? '---';
         const landingWeight = formatWeightDisplay(plan.tlr?.landing?.conditions?.planned_weight);
         const landingWind = `${plan.tlr?.landing?.conditions?.wind_direction ?? '???'}° @ ${plan.tlr?.landing?.conditions?.wind_speed ?? '?'} kts`;
         const vref = plan.tlr?.landing?.distance_dry?.speeds_vref ?? 0;
         const vrefAdd = vref > 0 ? '+5 kts (min)' : '---';
         const vapp = vref > 0 ? `${parseInt(vref, 10) + 5} kts` : '---';
-
-
         const departureWeather = window.WeatherService.parseMetar(plan.departureWeather);
         const arrivalWeather = window.WeatherService.parseMetar(plan.arrivalWeather);
 
+        // --- NEW: Redesigned HTML Structure ---
         container.innerHTML = `
             <div class="dispatch-header">
                 <div class="header-left">
                     <img src="/images/indgo.png" alt="Indigo Air Logo" class="dispatch-header-logo">
-                    <div>
-                        <h2>${plan.flightNumber}</h2>
-                        <p>Performance Dispatch Pass</p>
+                    <div class="header-flight-info">
+                        <span class="flight-number">${plan.flightNumber}</span>
+                        <h2 class="flight-route">${plan.departure} <i class="fa-solid fa-plane"></i> ${plan.arrival}</h2>
                     </div>
                 </div>
                 <div class="header-right">
-                    <h2>${plan.departure} → ${plan.arrival}</h2>
-                    <p>${new Date(plan.etd).toLocaleDateString()}</p>
+                    <span class="flight-date">${new Date(plan.etd).toLocaleDateString()}</span>
+                    <span class="dispatch-type">Performance Dispatch</span>
                 </div>
             </div>
+
             <div class="dispatch-body">
-                <div class="dispatch-left-panel">
-                    <div class="dispatch-core-info">
-                        <div class="data-item"><strong>Aircraft:</strong> <span>${plan.aircraft || '---'}</span></div>
-                        <div class="data-item"><strong>Cruise:</strong> <span>FL${plan.cruiseAltitude ? plan.cruiseAltitude / 100 : '---'} @ Mach ${plan.cruiseSpeed || '---'}</span></div>
-                        <div class="data-item"><strong>ETD:</strong> <span>${formatTimeFromTimestamp(plan.etd)}</span> | <strong>ETA:</strong> <span>${formatTimeFromTimestamp(plan.eta)}</span></div>
-                        <div class="data-item"><strong>Duration:</strong> <span>${formatEET(plan.eet)}</span></div>
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <label><i class="fa-solid fa-plane-up"></i> Aircraft</label>
+                        <span>${plan.aircraft || '---'}</span>
                     </div>
-                    <div id="dispatch-map-${plan._id}" class="dispatch-map-container" style="height: 350px;"></div>
-                    <div class="dispatch-route-panel data-card">
-                        <div class="route-info">
-                            <strong>Route:</strong> <span>${plan.route || 'Not Provided'}</span>
-                        </div>
-                        <div class="alternates-info">
-                            <strong>Alternates:</strong> <span>${plan.alternate || 'None'}</span>
-                        </div>
+                    <div class="summary-item">
+                        <label><i class="fa-solid fa-gauge-high"></i> Cruise</label>
+                        <span>FL${plan.cruiseAltitude ? plan.cruiseAltitude / 100 : '---'} / M${plan.cruiseSpeed || '---'}</span>
+                    </div>
+                    <div class="summary-item">
+                        <label><i class="fa-solid fa-clock"></i> Duration</label>
+                        <span>${formatEET(plan.eet)}</span>
+                    </div>
+                    <div class="summary-item">
+                        <label><i class="fa-solid fa-weight-hanging"></i> ZFW / TOW</label>
+                        <span>${formatWeightDisplay(plan.zfw)} / ${formatWeightDisplay(plan.tow)}</span>
+                    </div>
+                     <div class="summary-item">
+                        <label><i class="fa-solid fa-users"></i> POB / Cargo</label>
+                        <span>${plan.pob || '0'} / ${formatWeightDisplay(plan.cargo)}</span>
+                    </div>
+                     <div class="summary-item">
+                        <label><i class="fa-solid fa-gas-pump"></i> Total Fuel</label>
+                        <span>${formatWeightDisplay(plan.fuelTotal)}</span>
                     </div>
                 </div>
-                <div class="dispatch-right-panel">
-                    <div class="data-card"><h3><i class="fa-solid fa-weight-hanging"></i> Weights & Payload</h3><div class="data-item"><strong>ZFW:</strong> <span>${formatWeightDisplay(plan.zfw)}</span></div><div class="data-item"><strong>TOW:</strong> <span>${formatWeightDisplay(plan.tow)}</span></div><div class="data-item"><strong>Passengers:</strong> <span>${plan.pob || '---'}</span></div><div class="data-item"><strong>Cargo:</strong> <span>${formatWeightDisplay(plan.cargo)}</span></div></div>
-                    <div class="data-card"><h3><i class="fa-solid fa-gas-pump"></i> Fuel</h3><div class="data-item"><strong>Taxi Fuel:</strong> <span>${formatWeightDisplay(plan.fuelTaxi)}</span></div><div class="data-item"><strong>Trip Fuel:</strong> <span>${formatWeightDisplay(plan.fuelTrip)}</span></div><div class="data-item"><strong>Total Fuel:</strong> <span>${formatWeightDisplay(plan.fuelTotal)}</span></div></div>
-                    <div class="data-card"><h3><i class="fa-solid fa-tower-broadcast"></i> ATC Information</h3><div class="data-item"><strong>FIC #:</strong> <span>${plan.ficNumber || '---'}</span></div><div class="data-item"><strong>ADC #:</strong> <span>${plan.adcNumber || '---'}</span></div><div class="data-item"><strong>Squawk:</strong> <span>${plan.squawkCode || '----'}</span></div></div>
-                    <div class="data-card">
-                        <h3><i class="fa-solid fa-plane-departure"></i> Takeoff Performance</h3>
-                        <div class="data-item"><strong>Flaps:</strong> <span>${takeoffFlaps}</span></div>
-                        <div class="data-item"><strong>Thrust:</strong> <span>${takeoffThrust}</span></div>
-                        <div class="data-item"><strong>SEL/FLEX Temp:</strong> <span>${takeoffFlexTemp}</span></div>
+
+                <div class="dispatch-accordion">
+                    <div class="accordion-item">
+                        <button class="accordion-header" aria-expanded="false">
+                            <h3><i class="fa-solid fa-route"></i> Route & Map</h3>
+                            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <div id="dispatch-map-${plan._id}" class="dispatch-map-container"></div>
+                            <div class="route-info">
+                                <strong>Route:</strong> <span>${plan.route || 'Not Provided'}</span>
+                            </div>
+                            <div class="alternates-info">
+                                <strong>Alternates:</strong> <span>${plan.alternate || 'None'}</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="data-card">
-                        <h3><i class="fa-solid fa-plane-arrival"></i> Landing Performance</h3>
-                        <div class="data-item"><strong>Flaps:</strong> <span>${landingFlaps}</span></div>
-                        <div class="data-item"><strong>Weight:</strong> <span>${landingWeight}</span></div>
-                        <div class="data-item"><strong>Wind:</strong> <span>${landingWind}</span></div>
-                        <div class="data-item"><strong>Vref Additive:</strong> <span>${vrefAdd}</span></div>
-                        <div class="data-item"><strong>Vapp (min):</strong> <span>${vapp}</span></div>
+
+                    <div class="accordion-item">
+                        <button class="accordion-header" aria-expanded="false">
+                            <h3><i class="fa-solid fa-plane-departure"></i> Performance</h3>
+                            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                        </button>
+                        <div class="accordion-content">
+                            <div class="performance-container">
+                                <div class="perf-card">
+                                    <h4>Takeoff</h4>
+                                    <div class="data-item"><strong>Flaps:</strong> <span>${takeoffFlaps}</span></div>
+                                    <div class="data-item"><strong>Thrust:</strong> <span>${takeoffThrust}</span></div>
+                                    <div class="data-item"><strong>SEL/FLEX Temp:</strong> <span>${takeoffFlexTemp}</span></div>
+                                </div>
+                                <div class="perf-card">
+                                    <h4>Landing</h4>
+                                    <div class="data-item"><strong>Flaps:</strong> <span>${landingFlaps}</span></div>
+                                    <div class="data-item"><strong>Weight:</strong> <span>${landingWeight}</span></div>
+                                    <div class="data-item"><strong>Wind:</strong> <span>${landingWind}</span></div>
+                                    <div class="data-item"><strong>Vref Additive:</strong> <span>${vrefAdd}</span></div>
+                                    <div class="data-item"><strong>Vapp (min):</strong> <span>${vapp}</span></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="data-card"><h3><i class="fa-solid fa-cloud-sun"></i> Weather</h3><div class="weather-container"><div class="weather-sub-card"><h4>Departure</h4><div class="data-item"><span>Cond:</span> <span>${departureWeather.condition}</span></div><div class="data-item"><span>Temp:</span> <span>${departureWeather.temp}</span></div><div class="data-item"><span>Wind:</span> <span>${departureWeather.wind}</span></div></div><div class="weather-sub-card"><h4>Arrival</h4><div class="data-item"><span>Cond:</span> <span>${arrivalWeather.condition}</span></div><div class="data-item"><span>Temp:</span> <span>${arrivalWeather.temp}</span></div><div class="data-item"><span>Wind:</span> <span>${arrivalWeather.wind}</span></div></div></div></div>
+                    
+                    <div class="accordion-item">
+                        <button class="accordion-header" aria-expanded="false">
+                            <h3><i class="fa-solid fa-cloud-sun"></i> Weather</h3>
+                            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                        </button>
+                        <div class="accordion-content">
+                             <div class="weather-container">
+                                <div class="weather-sub-card">
+                                    <h4><i class="fa-solid fa-location-dot"></i> Departure (${plan.departure})</h4>
+                                    <div class="data-item"><span>Cond:</span> <span>${departureWeather.condition}</span></div>
+                                    <div class="data-item"><span>Temp:</span> <span>${departureWeather.temp}</span></div>
+                                    <div class="data-item"><span>Wind:</span> <span>${departureWeather.wind}</span></div>
+                                    <code class="metar-raw">${departureWeather.raw}</code>
+                                </div>
+                                <div class="weather-sub-card">
+                                    <h4><i class="fa-solid fa-location-dot"></i> Arrival (${plan.arrival})</h4>
+                                    <div class="data-item"><span>Cond:</span> <span>${arrivalWeather.condition}</span></div>
+                                    <div class="data-item"><span>Temp:</span> <span>${arrivalWeather.temp}</span></div>
+                                    <div class="data-item"><span>Wind:</span> <span>${arrivalWeather.wind}</span></div>
+                                    <code class="metar-raw">${arrivalWeather.raw}</code>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
+
             <div class="dispatch-footer">
                 <div class="dispatch-actions-wrapper" id="dispatch-actions-${plan._id}"></div>
             </div>
         `;
 
+        // --- NEW: Add accordion functionality ---
+        const accordionHeaders = container.querySelectorAll('.accordion-header');
+        accordionHeaders.forEach(header => {
+            header.addEventListener('click', () => {
+                const item = header.parentElement;
+                const content = header.nextElementSibling;
+                const isExpanded = header.getAttribute('aria-expanded') === 'true';
+
+                header.setAttribute('aria-expanded', !isExpanded);
+                item.classList.toggle('active');
+
+                if (!isExpanded) {
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                } else {
+                    content.style.maxHeight = '0px';
+                }
+            });
+        });
+
+        // --- Action Buttons & Map Plotting (No changes here) ---
         const actionsContainer = container.querySelector(`#dispatch-actions-${plan._id}`);
         if (options.isPreview) {
             actionsContainer.innerHTML = `
