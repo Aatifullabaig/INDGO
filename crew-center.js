@@ -1,25 +1,37 @@
-// Crew Center – Merged Script with Notifications, View-Switching, Flight Plan Workflow & Promotion Lockout
-document.addEventListener('DOMContentLoaded', () => {
-    const token = localStorage.getItem('authToken');
+// Crew Center – Merged Script with Mapbox GL JS
+document.addEventListener('DOMContentLoaded', async () => {
+    // --- Global Configuration ---
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
     const LIVE_FLIGHTS_API_URL = 'https://acars-backend-uxln.onrender.com/flights';
-    const TARGET_SERVER_NAME = 'Expert Server'; // or Training/Casual as needed
+    const TARGET_SERVER_NAME = 'Expert Server';
 
-    let crewRestInterval = null; // To manage the countdown timer
-    let dispatchMap = null; // To hold the Leaflet map instance
-
-    let liveFlightsMap = null; // To hold the live map instance
-    let pilotMarkers = {}; // To store pilot markers by flightId { flightId: marker }
-    let liveFlightsInterval = null; // To manage the 40-second polling
-    let displayedFlightPlanLayer = null; // To hold the currently displayed flight plan layer
-
-    // --- MODIFICATION START: Dynamic Fleet & Data Globals ---
-    let DYNAMIC_FLEET = []; // Will store aircraft data fetched from the backend.
+    // --- State Variables ---
+    let MAPBOX_ACCESS_TOKEN = null;
+    let DYNAMIC_FLEET = [];
     let CURRENT_PILOT = null;
     let ACTIVE_FLIGHT_PLANS = [];
     let CURRENT_OFP_DATA = null;
-    // --- MODIFICATION END ---
+    let crewRestInterval = null;
 
+    // --- Map-related State ---
+    let liveFlightsMap = null;
+    let pilotMarkers = {}; // { flightId: { marker, ... } }
+    let liveFlightsInterval = null;
+
+    // --- Helper: Fetch Mapbox Token from Netlify Function ---
+    async function fetchMapboxToken() {
+        try {
+            const response = await fetch('/.netlify/functions/config');
+            if (!response.ok) throw new Error('Could not fetch server configuration.');
+            const config = await response.json();
+            if (!config.mapboxToken) throw new Error('Mapbox token is missing from server configuration.');
+            MAPBOX_ACCESS_TOKEN = config.mapboxToken;
+            mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
+        } catch (error) {
+            console.error('Failed to initialize maps:', error.message);
+            showNotification('Could not load mapping services.', 'error');
+        }
+    }
 
     // --- Helper Functions ---
     function getRankBadgeHTML(rankName, options = {}) {
@@ -30,32 +42,32 @@ document.addEventListener('DOMContentLoaded', () => {
             containerClass: 'rank-badge',
         };
         const config = { ...defaults, ...options };
-    
+
         if (!rankName) return `<span>Unknown Rank</span>`;
-    
+
         const rankSlug = 'rank-' + rankName.toLowerCase().replace(/\s+/g, '-');
         const fileName = rankName.toLowerCase().replace(/\s+/g, '_') + '_badge.png';
         const imagePath = `images/badges/${fileName}`;
-        
+
         let imageHtml = '';
         let nameHtml = '';
-    
+
         if (config.showImage) {
             imageHtml = `<img src="${imagePath}" alt="${rankName}" title="${rankName}" class="${config.imageClass}" onerror="this.outerHTML='<span>${rankName}</span>'">`;
         }
-    
+
         if (config.showName) {
             nameHtml = `<span class="rank-badge-name">${rankName}</span>`;
         }
-        
+
         if (config.showImage && !config.showName) {
             return imageHtml;
         }
-    
+
         if (config.showImage && config.showName) {
             return `<span class="${config.containerClass} ${rankSlug}">${imageHtml} ${nameHtml}</span>`;
         }
-    
+
         return `<span>${rankName}</span>`; // Fallback
     }
 
@@ -78,13 +90,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatTimeFromTimestamp(timestamp) {
         if (!timestamp) return '----';
-        const date = (typeof timestamp === 'number' && timestamp.toString().length === 10) 
-            ? new Date(timestamp * 1000) 
-            : new Date(timestamp);
+        const date = (typeof timestamp === 'number' && timestamp.toString().length === 10) ?
+            new Date(timestamp * 1000) :
+            new Date(timestamp);
         if (isNaN(date.getTime())) return '----';
         return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
     }
-    
+
     function formatWeight(kg) {
         if (isNaN(kg) || kg === null) return '--- kg';
         return `${Number(kg).toLocaleString()} kg`;
@@ -111,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const m = Math.round((hours - h) * 60);
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         };
-        
+
         const departureWeather = window.WeatherService.parseMetar(plan.departureWeather);
         const arrivalWeather = window.WeatherService.parseMetar(plan.arrivalWeather);
 
@@ -197,9 +209,6 @@ document.addEventListener('DOMContentLoaded', () => {
         'Chief Flight Instructor', 'IndGo SkyMaster', 'Blue Legacy Commander'
     ];
     const rankIndex = (r) => PILOT_RANKS.indexOf(String(r || '').trim());
-    
-    // --- MODIFICATION START: Remove hardcoded FLEET and use dynamic functions ---
-    // The const FLEET = [...] array has been removed.
 
     const deduceRankFromAircraftFE = (acStr) => {
         const s = String(acStr || '').toUpperCase();
@@ -229,7 +238,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return userRankIndex >= 0 && aircraftRankIndex >= 0 && aircraftRankIndex <= userRankIndex;
         });
     };
-    // --- MODIFICATION END ---
 
     // --- Notifications ---
     function showNotification(message, type) {
@@ -261,12 +269,205 @@ document.addEventListener('DOMContentLoaded', () => {
     const promotionModal = document.getElementById('promotion-modal');
     const arriveFlightModal = document.getElementById('arrive-flight-modal');
 
-    // --- Auth & Initial Setup ---
+    // --- Auth Check ---
+    const token = localStorage.getItem('authToken');
     if (!token) {
         window.location.href = 'login.html';
         return;
     }
 
+    // --- Mapbox Plotting Functions ---
+
+    /**
+     * Plots a static route map for a dispatch pass using Mapbox GL JS.
+     * @param {string} mapContainerId - The ID of the div to render the map in.
+     * @param {object} origin - The origin airport data.
+     * @param {object} dest - The destination airport data.
+     * @param {Array} navlogFixes - An array of navigation log fixes.
+     */
+    const plotDispatchMap = (mapContainerId, origin, dest, navlogFixes) => {
+        const mapContainer = document.getElementById(mapContainerId);
+        if (!mapContainer || !MAPBOX_ACCESS_TOKEN) return;
+
+        if (mapContainer.mapInstance) {
+            mapContainer.mapInstance.remove();
+            mapContainer.mapInstance = null;
+        }
+
+        if (!origin || !dest || !navlogFixes || navlogFixes.length === 0) {
+            mapContainer.innerHTML = '<p class="map-error-msg">Route data not available.</p>';
+            return;
+        }
+
+        const newMap = new mapboxgl.Map({
+            container: mapContainerId,
+            style: 'mapbox://styles/mapbox/dark-v11',
+            scrollZoom: false,
+            zoom: 3
+        });
+        mapContainer.mapInstance = newMap;
+
+        newMap.on('load', () => {
+            const routeCoords = navlogFixes.map(fix => [parseFloat(fix.pos_long), parseFloat(fix.pos_lat)]);
+
+            newMap.addSource('route', {
+                'type': 'geojson',
+                'data': {
+                    'type': 'Feature',
+                    'geometry': { 'type': 'LineString', 'coordinates': routeCoords }
+                }
+            });
+            newMap.addLayer({
+                'id': 'route',
+                'type': 'line',
+                'source': 'route',
+                'paint': { 'line-color': '#00a8ff', 'line-width': 3 }
+            });
+
+            new mapboxgl.Marker({ color: '#32ff7e' }).setLngLat([origin.pos_long, origin.pos_lat]).setPopup(new mapboxgl.Popup().setHTML(`<b>Departure:</b> ${origin.icao_code}`)).addTo(newMap);
+            new mapboxgl.Marker({ color: '#ff4d4d' }).setLngLat([dest.pos_long, dest.pos_lat]).setPopup(new mapboxgl.Popup().setHTML(`<b>Arrival:</b> ${dest.icao_code}`)).addTo(newMap);
+
+            const bounds = routeCoords.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(routeCoords[0], routeCoords[0]));
+            newMap.fitBounds(bounds, { padding: 50 });
+        });
+    };
+
+    /**
+     * Initializes the live operations map.
+     */
+    function initializeLiveMap() {
+        if (!MAPBOX_ACCESS_TOKEN) return;
+        if (document.getElementById('live-flights-map-container') && !liveFlightsMap) {
+            liveFlightsMap = new mapboxgl.Map({
+                container: 'live-flights-map-container',
+                style: 'mapbox://styles/mapbox/dark-v11',
+                center: [78.9629, 22.5937], // [lon, lat]
+                zoom: 4,
+                minZoom: 2
+            });
+            liveFlightsMap.on('load', startLiveLoop);
+        } else {
+            startLiveLoop();
+        }
+    }
+
+    /**
+     * Starts or restarts the live flight update interval.
+     */
+    function startLiveLoop() {
+        if (!liveFlightsInterval) {
+            updateLiveFlights();
+            liveFlightsInterval = setInterval(updateLiveFlights, 20000);
+        }
+    }
+
+    /**
+     * Helper to remove dynamic flight path layers from the map.
+     */
+    function removeFlightPathLayers(map) {
+        if (map.getLayer('flown-path')) map.removeLayer('flown-path');
+        if (map.getSource('flown-path-source')) map.removeSource('flown-path-source');
+        if (map.getLayer('planned-path')) map.removeLayer('planned-path');
+        if (map.getSource('planned-path-source')) map.removeSource('planned-path-source');
+    }
+
+    /**
+     * Fetches live flight data and updates the map.
+     */
+    async function updateLiveFlights() {
+        if (!liveFlightsMap || !liveFlightsMap.isStyleLoaded()) return;
+
+        try {
+            const sessionsRes = await fetch('https://acars-backend-uxln.onrender.com/if-sessions');
+            const expertSession = (await sessionsRes.json()).sessions.find(s => s.name.toLowerCase().includes('expert'));
+            if (!expertSession) {
+                console.warn('No Expert Server session found for live flights.');
+                return;
+            }
+
+            const response = await fetch(`${LIVE_FLIGHTS_API_URL}/${expertSession.id}?callsignEndsWith=GO`);
+            const flights = (await response.json()).flights || [];
+            const activeFlightIds = new Set();
+
+            flights.forEach(f => {
+                const { flightId, position: pos, callsign, username } = f;
+                if (!flightId || !pos || pos.lat == null || pos.lon == null) return;
+
+                activeFlightIds.add(flightId);
+                const lngLat = [pos.lon, pos.lat];
+
+                if (pilotMarkers[flightId]) {
+                    // Update existing marker
+                    const entry = pilotMarkers[flightId];
+                    entry.marker.setLngLat(lngLat);
+                    entry.marker.getElement().style.transform = `rotate(${pos.track_deg ?? 0}deg)`;
+                } else {
+                    // Create new marker
+                    const el = document.createElement('div');
+                    el.className = 'plane-marker';
+                    const marker = new mapboxgl.Marker(el).setLngLat(lngLat).addTo(liveFlightsMap);
+                    pilotMarkers[flightId] = { marker: marker };
+
+                    // Add click event listener
+                    marker.getElement().addEventListener('click', async () => {
+                        removeFlightPathLayers(liveFlightsMap);
+                        const popup = new mapboxgl.Popup({ closeButton: false, offset: 25 }).setLngLat(lngLat).setHTML(`<b>${callsign}</b><br><i>Loading flight data...</i>`).addTo(liveFlightsMap);
+
+                        try {
+                            const [planRes, routeRes] = await Promise.all([
+                                fetch(`${LIVE_FLIGHTS_API_URL}/${expertSession.id}/${flightId}/plan`),
+                                fetch(`${LIVE_FLIGHTS_API_URL}/${expertSession.id}/${flightId}/route`)
+                            ]);
+                            const planJson = await planRes.json();
+                            const routeJson = await routeRes.json();
+                            let allCoordsForBounds = [];
+
+                            // Flown path
+                            const flownCoords = (routeRes.ok && routeJson.ok && Array.isArray(routeJson.route)) ? routeJson.route.map(p => [p.lon, p.lat]) : [];
+                            if (flownCoords.length > 1) {
+                                allCoordsForBounds.push(...flownCoords);
+                                liveFlightsMap.addSource('flown-path-source', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: flownCoords } } });
+                                liveFlightsMap.addLayer({ id: 'flown-path', type: 'line', source: 'flown-path-source', paint: { 'line-color': '#00b894', 'line-width': 4 } });
+                            }
+
+                            // Planned path
+                            if (planRes.ok && planJson.ok && planJson.plan?.waypoints?.length > 0) {
+                                const plannedWps = planJson.plan.waypoints.map(wp => [wp.lon, wp.lat]);
+                                const remainingPathCoords = [lngLat, ...plannedWps];
+                                allCoordsForBounds.push(...remainingPathCoords);
+                                liveFlightsMap.addSource('planned-path-source', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: remainingPathCoords } } });
+                                liveFlightsMap.addLayer({ id: 'planned-path', type: 'line', source: 'planned-path-source', paint: { 'line-color': '#e84393', 'line-width': 3, 'line-dasharray': [2, 2] } });
+                                popup.setHTML(`<b>${callsign}</b> (${username || 'N/A'})<br>Route and flight plan loaded.`);
+                            } else {
+                                popup.setHTML(`<b>${callsign}</b> (${username || 'N/A'})<br>No flight plan filed.`);
+                            }
+
+                            if (allCoordsForBounds.length > 0) {
+                                const bounds = allCoordsForBounds.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(allCoordsForBounds[0], allCoordsForBounds[0]));
+                                liveFlightsMap.fitBounds(bounds, { padding: 60, maxZoom: 10 });
+                            }
+                        } catch (err) {
+                            console.error("Failed to fetch/render flight paths:", err);
+                            popup.setHTML(`<b>${callsign}</b> (${username || 'N/A'})<br>Could not load flight data.`);
+                        }
+                    });
+                }
+            });
+
+            // Remove inactive markers
+            Object.keys(pilotMarkers).forEach(fid => {
+                if (!activeFlightIds.has(String(fid))) {
+                    pilotMarkers[fid].marker?.remove();
+                    delete pilotMarkers[fid];
+                }
+            });
+        } catch (err) {
+            console.error('Error updating live flights:', err);
+        }
+    }
+
+
+    // --- View Switching ---
     const switchView = (viewId) => {
         sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
         mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
@@ -279,11 +480,9 @@ document.addEventListener('DOMContentLoaded', () => {
             newView.classList.add('active');
         }
 
+        // Manage the live map interval based on view
         if (viewId === 'view-duty-status') {
-            if (!liveFlightsInterval) {
-                updateLiveFlights();
-                liveFlightsInterval = setInterval(updateLiveFlights, 20000); // 20 seconds
-            }
+            initializeLiveMap(); // This will also start the loop if needed
         } else {
             if (liveFlightsInterval) {
                 clearInterval(liveFlightsInterval);
@@ -291,219 +490,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    const initialView = urlParams.get('view');
-    if (initialView) {
-        switchView(initialView);
-    }
 
-    logoutButton.addEventListener('click', (e) => {
-        e.preventDefault();
-        localStorage.removeItem('authToken');
-        showNotification('You have been logged out.', 'success');
-        setTimeout(() => { window.location.href = 'login.html'; }, 1000);
-    });
-
-    if (localStorage.getItem('sidebarState') === 'collapsed') {
-        dashboardContainer.classList.add('sidebar-collapsed');
-    }
-    sidebarToggleBtn.addEventListener('click', () => {
-        dashboardContainer.classList.toggle('sidebar-collapsed');
-        localStorage.setItem('sidebarState', dashboardContainer.classList.contains('sidebar-collapsed') ? 'collapsed' : 'expanded');
-    });
-
-    // --- Map Plotting ---
-    const plotDispatchMap = (mapContainerId, origin, dest, navlogFixes) => {
-        const mapContainer = document.getElementById(mapContainerId);
-        if (!mapContainer) return;
-
-        if (mapContainer.mapInstance) {
-            mapContainer.mapInstance.remove();
-            mapContainer.mapInstance = null;
-        }
-
-        if (!origin || !dest || !navlogFixes || navlogFixes.length === 0) {
-            mapContainer.innerHTML = '<p style="text-align: center; padding-top: 2rem;">Route data not available for map display.</p>';
-            return;
-        }
-
-        const newMap = L.map(mapContainerId, {
-            scrollWheelZoom: false,
-            zoomControl: true
-        });
-        mapContainer.mapInstance = newMap;
-
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 20
-        }).addTo(newMap);
-
-        const latlngs = navlogFixes.map(fix => [parseFloat(fix.pos_lat), parseFloat(fix.pos_long)]);
-        const routeLine = L.polyline(latlngs, { color: '#00a8ff', weight: 3 }).addTo(newMap);
-
-        L.marker([origin.pos_lat, origin.pos_long]).addTo(newMap).bindPopup(`<b>Departure:</b> ${origin.icao_code}`);
-        L.marker([dest.pos_lat, dest.pos_long]).addTo(newMap).bindPopup(`<b>Arrival:</b> ${dest.icao_code}`);
-
-        newMap.fitBounds(routeLine.getBounds().pad(0.1));
-    };
-
-    // --- Live Map Functions ---
-    function initializeLiveMap() {
-        const bounds = L.latLngBounds( L.latLng(-85, -180), L.latLng(85, 180) );
-        if (document.getElementById('live-flights-map-container') && !liveFlightsMap) {
-            liveFlightsMap = L.map('live-flights-map-container', {
-                zoomControl: false,
-                minZoom: 3,
-                maxBounds: bounds,
-                maxBoundsViscosity: 1.0
-            }).setView([22.5937, 78.9629], 5); 
-
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>',
-                subdomains: 'abcd',
-                maxZoom: 19
-            }).addTo(liveFlightsMap);
-        }
-        if (!liveFlightsInterval) {
-            updateLiveFlights();
-            liveFlightsInterval = setInterval(updateLiveFlights, 20000);
-        }
-    }
-
-    let activePathLayers = {
-        flown: null,
-        planned: null
-    };
-
-    async function updateLiveFlights() {
-        if (!liveFlightsMap) return;
-
-        try {
-            const sessionsRes = await fetch('https://acars-backend-uxln.onrender.com/if-sessions');
-            const sessionsJson = await sessionsRes.json();
-            const expertSession = sessionsJson.sessions.find(s => s.name.toLowerCase().includes('expert'));
-
-            if (!expertSession) {
-                console.error('No Expert Server session found.');
-                return;
-            }
-            const sessionId = expertSession.id;
-            const response = await fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}?callsignEndsWith=GO`);
-            const json = await response.json();
-            const flights = Array.isArray(json.flights) ? json.flights : [];
-            const activeFlightIds = new Set();
-
-            const planeIcon = L.icon({
-                iconUrl: 'images/whiteplane.png',
-                iconSize: [30, 30],
-                iconAnchor: [15, 15],
-            });
-
-            flights.forEach(f => {
-                const flightId = f.flightId;
-                const pos = f.position;
-                if (!flightId || !pos || pos.lat == null || pos.lon == null) return;
-
-                activeFlightIds.add(flightId);
-                const latLng = [pos.lat, pos.lon];
-
-                if (!pilotMarkers[flightId]) {
-                    pilotMarkers[flightId] = {
-                        marker: null,
-                        history: [] 
-                    };
-                }
-
-                const flightData = pilotMarkers[flightId];
-                flightData.history.push([pos.lat, pos.lon, pos.alt_ft]);
-
-                if (flightData.marker) {
-                    flightData.marker.setLatLng(latLng);
-                    if (typeof flightData.marker.setRotationAngle === 'function' && pos.track_deg != null) {
-                        flightData.marker.setRotationAngle(pos.track_deg);
-                    }
-                } else {
-                    flightData.marker = L.marker(latLng, { icon: planeIcon, rotationAngle: pos.track_deg ?? 0 }).addTo(liveFlightsMap);
-                    
-                    flightData.marker.on('click', async () => {
-                        if (activePathLayers.flown) activePathLayers.flown.remove();
-                        if (activePathLayers.planned) activePathLayers.planned.remove();
-
-                        const popup = L.popup()
-                            .setLatLng(latLng)
-                            .setContent(`<b>${f.callsign}</b><br><i>Loading flight data...</i>`)
-                            .openOn(liveFlightsMap);
-                        
-                        try {
-                            const [planRes, routeRes] = await Promise.all([
-                                fetch(`https://acars-backend-uxln.onrender.com/flights/${sessionId}/${flightId}/plan`),
-                                fetch(`https://acars-backend-uxln.onrender.com/flights/${sessionId}/${flightId}/route`)
-                            ]);
-
-                            const planJson = await planRes.json();
-                            const routeJson = await routeRes.json();
-
-                            const flownRouteData = (routeRes.ok && routeJson.ok && Array.isArray(routeJson.route)) ? routeJson.route : [];
-                            
-                            if (flownRouteData.length > 1) {
-                                const hotlineData = flownRouteData.map(p => [p.lat, p.lon, p.alt_ft]);
-                                activePathLayers.flown = L.hotline(hotlineData, {
-                                    palette: { 0.0: '#0088ff', 0.5: '#00ff00', 1.0: '#ff0000' },
-                                    weight: 4, outlineColor: '#000', outlineWidth: 1, min: 0, max: 45000
-                                }).addTo(liveFlightsMap);
-                            }
-
-                            if (planRes.ok && planJson.ok && planJson.plan?.waypoints?.length > 0) {
-                                const plannedWaypoints = planJson.plan.waypoints.map(wp => [wp.lat, wp.lon]);
-                                let nextWaypointIndex = 0;
-                                let minDistance = Infinity;
-                                
-                                plannedWaypoints.forEach((wp, index) => {
-                                    const distance = L.latLng(latLng).distanceTo(wp);
-                                    if (distance < minDistance) {
-                                        minDistance = distance;
-                                        nextWaypointIndex = index;
-                                    }
-                                });
-
-                                const remainingPath = [latLng, ...plannedWaypoints.slice(nextWaypointIndex)];
-                                activePathLayers.planned = L.polyline(remainingPath, {
-                                    color: '#e84393', weight: 3, opacity: 0.8, dashArray: '8, 8'
-                                }).addTo(liveFlightsMap);
-                                 popup.setContent(`<b>${f.callsign}</b> (${f.username || 'N/A'})<br>Route and flight plan loaded.`);
-                            } else {
-                                popup.setContent(`<b>${f.callsign}</b> (${f.username || 'N/A'})<br>No flight plan filed.`);
-                            }
-                            
-                        } catch (err) {
-                            console.error("Failed to fetch or render flight paths:", err);
-                            popup.setContent(`<b>${f.callsign}</b> (${f.username || 'N/A'})<br>Could not load flight data.`);
-                        }
-                    });
-                }
-            });
-
-            Object.keys(pilotMarkers).forEach(fid => {
-                if (!activeFlightIds.has(String(fid))) {
-                    const data = pilotMarkers[fid];
-                    if (data.marker) data.marker.remove();
-                    
-                    if (activePathLayers.flown && flightData.marker === data.marker) {
-                        activePathLayers.flown.remove();
-                        if(activePathLayers.planned) activePathLayers.planned.remove();
-                    }
-                    delete pilotMarkers[fid];
-                }
-            });
-
-        } catch (err) {
-            console.error('Error updating live flights:', err);
-        }
-    }
-
-    // --- MODIFICATION START: New function to fetch fleet data ---
+    // --- New function to fetch fleet data ---
     async function fetchFleetData() {
         try {
             const response = await fetch(`${API_BASE_URL}/api/aircrafts`, {
@@ -519,7 +507,6 @@ document.addEventListener('DOMContentLoaded', () => {
             DYNAMIC_FLEET = []; // Fallback to an empty array
         }
     }
-    // --- MODIFICATION END ---
 
 
     // --- Main Data Fetch & Render Cycle ---
@@ -527,13 +514,11 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const oldRank = CURRENT_PILOT ? CURRENT_PILOT.rank : null;
 
-            // --- MODIFICATION START: Fetch fleet data along with pilot data ---
             // Fetch pilot and fleet data in parallel for faster loading
             const [pilotResponse] = await Promise.all([
                 fetch(`${API_BASE_URL}/api/me`, { headers: { 'Authorization': `Bearer ${token}` } }),
                 fetchFleetData() // Fetches and populates DYNAMIC_FLEET
             ]);
-            // --- MODIFICATION END ---
 
             if (!pilotResponse.ok) {
                 localStorage.removeItem('authToken');
@@ -545,7 +530,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ACTIVE_FLIGHT_PLANS = pilot.currentFlightPlans || [];
 
             if (typeof window.initializeGlobalDebugger === 'function') {
-              window.initializeGlobalDebugger(pilot.role);
+                window.initializeGlobalDebugger(pilot.role);
             }
 
             pilotNameElem.textContent = pilot.name || 'N/A';
@@ -559,7 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 badge.style.display = 'none';
             }
-        
+
             await renderAllViews(pilot);
 
             if (oldRank && pilot.rank !== oldRank && rankIndex(pilot.rank) > rankIndex(oldRank)) {
@@ -577,7 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-    
+
     const showPromotionModal = (newRank) => {
         const rankNameElem = document.getElementById('promo-rank-name');
         const perksListElem = document.getElementById('promo-perks-list');
@@ -586,13 +571,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!rankNameElem || !perksListElem || !promotionModal) return;
 
         rankNameElem.textContent = newRank;
-        
-        // --- MODIFICATION START: Use DYNAMIC_FLEET for promotion perks ---
+
         const newAircraft = DYNAMIC_FLEET.filter(ac => ac.rankUnlock === newRank);
         if (newAircraft.length > 0) {
             perksListElem.innerHTML = newAircraft.map(ac => `<li><i class="fa-solid fa-plane-circle-check"></i> <strong>${ac.name}</strong> (${ac.icao})</li>`).join('');
         } else {
-        // --- MODIFICATION END ---
             perksListElem.innerHTML = '<li>More perks and features will be available as you advance.</li>';
         }
 
@@ -608,7 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- View Rendering Logic ---
     const renderAllViews = async (pilot) => {
         const leaderboardsHTML = await fetchAndDisplayLeaderboards();
-        
+
         renderPilotHubView(pilot, leaderboardsHTML);
         await renderFlightPlanView(pilot);
         await fetchAndDisplayRosters();
@@ -657,18 +640,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const dashboardContainer = document.querySelector('.dashboard-container');
         if (dashboardContainer && pilot.rank) {
             const rankSlug = 'rank-' + pilot.rank.toLowerCase().replace(/\s+/g, '-');
-            
+
             const classList = Array.from(dashboardContainer.classList);
             for (const c of classList) {
                 if (c.startsWith('rank-')) {
                     dashboardContainer.classList.remove(c);
                 }
             }
-            
+
             dashboardContainer.classList.add(rankSlug);
         }
-
-        setTimeout(initializeLiveMap, 100);
 
         if (pilot.dutyStatus === 'ON_REST' && pilot.timeUntilNextDutyMs > 0) {
             const timerElement = document.getElementById('crew-rest-timer');
@@ -679,7 +660,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     remainingTime -= 1000;
                     if (remainingTime <= 0) {
                         clearInterval(crewRestInterval);
-                        fetchPilotData(); 
+                        fetchPilotData();
                         showNotification('Your mandatory crew rest is complete. You are now eligible for duty.', 'success');
                     } else {
                         timerElement.textContent = formatTime(remainingTime);
@@ -688,7 +669,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-    
+
     const renderOnRestContent = async (pilot) => {
         let content = '';
         let title = '';
@@ -706,7 +687,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const rosterResponse = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
                 if (!rosterResponse.ok) throw new Error('Could not fetch recommended roster.');
-                
+
                 const rosterData = await rosterResponse.json();
                 const topRoster = rosterData.rosters?.[0];
                 const locationICAO = rosterData.searchCriteria?.searched?.[0];
@@ -750,7 +731,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     `;
                 } else {
-                     rosterCardHTML = `<p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>`;
+                    rosterCardHTML = `<p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>`;
                 }
 
                 content = `
@@ -765,16 +746,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 content = `<p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>`;
             }
         }
-        
+
         const liveMapHTML = `
             <div class="content-card live-map-section" style="margin-top: 1.5rem;">
                 <h2><i class="fa-solid fa-tower-broadcast"></i> Live Operations Map</h2>
-                <div id="live-flights-map-container" style="height: 450px; border-radius: 8px; margin-top: 1rem; background-color: #333;">
+                <div id="live-flights-map-container" style="height: 450px; border-radius: 8px; margin-top: 1rem; background-color: #191a1a;">
                     <p class="map-loader" style="text-align: center; padding-top: 2rem; color: #ccc;">Loading Live Map...</p>
                 </div>
             </div>
         `;
-        
+
         return `
             <div class="pilot-hub-card">
                 ${createHubHeaderHTML(pilot, title)}
@@ -805,7 +786,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const liveMapHTML = `
                 <div class="content-card live-map-section" style="margin-top: 1.5rem;">
                     <h2><i class="fa-solid fa-tower-broadcast"></i> Live Operations Map</h2>
-                    <div id="live-flights-map-container" style="height: 450px; border-radius: 8px; margin-top: 1rem; background-color: #333;">
+                    <div id="live-flights-map-container" style="height: 450px; border-radius: 8px; margin-top: 1rem; background-color: #191a1a;">
                         <p class="map-loader" style="text-align: center; padding-top: 2rem; color: #ccc;">Loading Live Map...</p>
                     </div>
                 </div>
@@ -823,9 +804,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="roster-checklist">
                         ${currentRoster.legs.map(leg => {
-                            const isCompleted = filedFlightNumbers.has(leg.flightNumber);
-                            const reqRank = leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft);
-                            return `
+                const isCompleted = filedFlightNumbers.has(leg.flightNumber);
+                const reqRank = leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft);
+                return `
                               <div class="roster-leg-item ${isCompleted ? 'completed' : ''}">
                                 <span class="status-icon">${isCompleted ? '✅' : '➡️'}</span>
                                 <strong class="flight-number">${leg.flightNumber}</strong>
@@ -834,7 +815,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     ${getRankBadgeHTML(reqRank, { showImage: true, showName: false, imageClass: 'roster-req-rank-badge' })}
                                 </span>
                               </div>`;
-                        }).join('')}
+            }).join('')}
                     </div>
                 </div>
                 ${liveMapHTML}`;
@@ -860,7 +841,6 @@ document.addEventListener('DOMContentLoaded', () => {
         renderActiveFlights();
         updateDispatchFormState();
 
-        // --- MODIFICATION START: Populate dropdown from DYNAMIC_FLEET ---
         const aircraftSelect = document.getElementById('fp-aircraft');
         if (aircraftSelect) {
             const allowedFleet = getAllowedFleet(pilot.rank);
@@ -869,7 +849,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${allowedFleet.map(ac => `<option value="${ac.icao}">${ac.name} (${ac.icao})</option>`).join('')}
             `;
         }
-        // --- MODIFICATION END ---
     };
 
     const renderActiveFlights = () => {
@@ -877,16 +856,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const header = document.getElementById('active-flights-header');
 
         header.innerHTML = `<i class="fa-solid fa-plane-up"></i> Active Flights (${ACTIVE_FLIGHT_PLANS.length})`;
-        
+
         if (ACTIVE_FLIGHT_PLANS.length === 0) {
             listContainer.innerHTML = '<p class="muted">You have no active flights.</p>';
             return;
         }
 
         listContainer.innerHTML = ACTIVE_FLIGHT_PLANS.map(plan => {
-            // --- MODIFICATION START: Look up aircraft name from dynamic fleet ---
             const aircraft = DYNAMIC_FLEET.find(a => a.icao === plan.aircraft) || { name: plan.aircraft };
-            // --- MODIFICATION END ---
             return `
             <div class="active-flight-item" data-plan-id="${plan._id}">
                 <div class="active-flight-summary">
@@ -925,17 +902,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Other Data Display Functions ---
     const renderLeaderboardList = (title, data, valueKey) => {
         if (!data || data.length === 0) return `<h4>Top by ${title}</h4><p class="muted">No data available yet.</p>`;
-        
+
         const unit = title === 'Hours' ? 'hrs' : 'flights';
 
         return `
             <h4><i class="fa-solid ${title === 'Hours' ? 'fa-stopwatch' : 'fa-plane-arrival'}"></i> Top by ${title}</h4>
             <div class="leaderboard-list">
                 ${data.map((pilot, index) => {
-                    const rankClass = index === 0 ? 'rank-1' : '';
-                    const rankContent = index === 0 ? '<i class="fas fa-crown"></i>' : index + 1;
-                    
-                    return `
+            const rankClass = index === 0 ? 'rank-1' : '';
+            const rankContent = index === 0 ? '<i class="fas fa-crown"></i>' : index + 1;
+
+            return `
                     <div class="leaderboard-entry ${rankClass}">
                         <span class="rank-position">${rankContent}</span>
                         <div class="pilot-info">
@@ -948,7 +925,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     `;
-                }).join('')}
+        }).join('')}
             </div>`;
     };
 
@@ -982,7 +959,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return `<div class="content-card"><h2><i class="fa-solid fa-trophy"></i> Leaderboards</h2><p>Could not load leaderboards.</p></div>`;
         }
     };
-    
+
     const fetchAndDisplayRosters = async () => {
         const container = document.getElementById('roster-list-container');
         const header = document.getElementById('roster-list-header');
@@ -1094,7 +1071,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>`;
             }).join('');
-        } catch (error) { 
+        } catch (error) {
             container.innerHTML = `<p class="error-text">${error.message}</p>`;
         }
     };
@@ -1108,9 +1085,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const viewId = link.dataset.view;
         if (viewId) {
             switchView(viewId);
-            if (viewId === 'view-rosters' && window.leafletMap) {
-            setTimeout(() => window.leafletMap.invalidateSize(), 150);
-          }
         }
     });
 
@@ -1135,10 +1109,10 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             if (!body.flightNumber || !body.aircraft || !body.departure || !body.arrival) {
-                 showNotification('Please fill in all required Core Details.', 'error');
-                 btn.disabled = false;
-                 btn.textContent = 'File Manually';
-                 return;
+                showNotification('Please fill in all required Core Details.', 'error');
+                btn.disabled = false;
+                btn.textContent = 'File Manually';
+                return;
             }
 
             try {
@@ -1151,7 +1125,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!res.ok) throw new Error(result.message || 'Failed to file flight plan.');
                 showNotification(result.message, 'success');
                 await fetchPilotData();
-            } catch(err) {
+            } catch (err) {
                 showNotification(`Error: ${err.message}`, 'error');
                 btn.disabled = false;
                 btn.textContent = 'File Manually';
@@ -1159,71 +1133,71 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-   mainContentContainer.addEventListener('click', async (e) => {
-    const target = e.target;
-    
-    if (target.id === 'go-to-roster-btn') {
-        switchView('view-rosters');
-    }
+    mainContentContainer.addEventListener('click', async (e) => {
+        const target = e.target;
 
-    const summary = target.closest('.active-flight-summary');
-    if (summary) {
-        const item = summary.closest('.active-flight-item');
-        if (!item) return;
+        if (target.id === 'go-to-roster-btn') {
+            switchView('view-rosters');
+        }
 
-        item.classList.toggle('expanded');
-        const isNowExpanded = item.classList.contains('expanded');
+        const summary = target.closest('.active-flight-summary');
+        if (summary) {
+            const item = summary.closest('.active-flight-item');
+            if (!item) return;
 
-        if (isNowExpanded) {
-            const details = item.querySelector('.active-flight-details');
-            const passContainer = details.querySelector('.dispatch-pass-container');
+            item.classList.toggle('expanded');
+            const isNowExpanded = item.classList.contains('expanded');
 
-            if (!passContainer.hasChildNodes()) {
-                const planId = item.dataset.planId;
-                const plan = ACTIVE_FLIGHT_PLANS.find(p => p._id === planId);
-                if (plan) {
-                    populateDispatchPass(passContainer, plan);
-                } else {
-                    passContainer.innerHTML = '<p style="padding: 2rem; text-align: center; color: var(--error-color);">Error: Flight plan data not found.</p>';
+            if (isNowExpanded) {
+                const details = item.querySelector('.active-flight-details');
+                const passContainer = details.querySelector('.dispatch-pass-container');
+
+                if (!passContainer.hasChildNodes()) {
+                    const planId = item.dataset.planId;
+                    const plan = ACTIVE_FLIGHT_PLANS.find(p => p._id === planId);
+                    if (plan) {
+                        populateDispatchPass(passContainer, plan);
+                    } else {
+                        passContainer.innerHTML = '<p style="padding: 2rem; text-align: center; color: var(--error-color);">Error: Flight plan data not found.</p>';
+                    }
                 }
             }
         }
-    }
 
-    if (target.classList.contains('details-button') && target.dataset.rosterId && !target.classList.contains('view-roster-on-map-btn')) {
-        const rosterId = target.dataset.rosterId;
-        const detailsContainer = document.getElementById(`details-${rosterId}`);
+        if (target.classList.contains('details-button') && target.dataset.rosterId && !target.classList.contains('view-roster-on-map-btn')) {
+            const rosterId = target.dataset.rosterId;
+            const detailsContainer = document.getElementById(`details-${rosterId}`);
 
-        document.querySelectorAll('.roster-leg-details.visible').forEach(openDetail => {
-            if (openDetail.id !== `details-${rosterId}`) {
-                openDetail.classList.remove('visible');
-                const otherId = openDetail.id.replace('details-', '');
-                document.querySelector(`.details-button[data-roster-id="${otherId}"]`).setAttribute('aria-expanded', 'false');
+            document.querySelectorAll('.roster-leg-details.visible').forEach(openDetail => {
+                if (openDetail.id !== `details-${rosterId}`) {
+                    openDetail.classList.remove('visible');
+                    const otherId = openDetail.id.replace('details-', '');
+                    document.querySelector(`.details-button[data-roster-id="${otherId}"]`).setAttribute('aria-expanded', 'false');
+                }
+            });
+
+            const isVisible = detailsContainer.classList.toggle('visible');
+            target.setAttribute('aria-expanded', isVisible);
+
+            if (isVisible) {
+                if (window.focusOnRoster) window.focusOnRoster(rosterId);
+            } else {
+                if (window.showAllRosters) window.showAllRosters();
             }
-        });
 
-        const isVisible = detailsContainer.classList.toggle('visible');
-        target.setAttribute('aria-expanded', isVisible);
+            if (isVisible && !detailsContainer.innerHTML.trim()) {
+                detailsContainer.innerHTML = '<p>Loading details...</p>';
+                try {
+                    const res = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
+                    if (!res.ok) throw new Error('Could not fetch roster details.');
+                    const rosterData = await res.json();
+                    const allRosters = rosterData.rosters || [];
+                    const roster = allRosters.find(r => r.rosterId === rosterId);
 
-        if (isVisible) {
-            if (window.focusOnRoster) window.focusOnRoster(rosterId);
-        } else {
-            if (window.showAllRosters) window.showAllRosters();
-        }
+                    if (roster && roster.legs) {
+                        const isMultiAircraft = roster.legs.some((leg, i, arr) => i > 0 && leg.aircraft !== arr[0].aircraft);
 
-        if (isVisible && !detailsContainer.innerHTML.trim()) {
-            detailsContainer.innerHTML = '<p>Loading details...</p>';
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
-                if (!res.ok) throw new Error('Could not fetch roster details.');
-                const rosterData = await res.json();
-                const allRosters = rosterData.rosters || [];
-                const roster = allRosters.find(r => r.rosterId === rosterId);
-                
-                if (roster && roster.legs) {
-                    const isMultiAircraft = roster.legs.some((leg, i, arr) => i > 0 && leg.aircraft !== arr[0].aircraft);
-                    
-                    detailsContainer.innerHTML = `
+                        detailsContainer.innerHTML = `
                         <div class="roster-details-actions">
                             <button class="details-button view-roster-on-map-btn" data-roster-id="${rosterId}">
                                 <i class="fa-solid fa-map-location-dot"></i> View Route on Map
@@ -1231,30 +1205,28 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <ul>
                             ${roster.legs.map(leg => {
-                                const airlineCode = extractAirlineCode(leg.flightNumber);
-                                const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : 'images/default-airline.png';
-                                
-                                // --- MODIFICATION START: Dynamic aircraft image logic ---
-                                const legAircraftIcao = leg.aircraft;
-                                const legOperator = leg.operator;
+                            const airlineCode = extractAirlineCode(leg.flightNumber);
+                            const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : 'images/default-airline.png';
 
-                                // Find the specific aircraft from our fetched fleet data
-                                const aircraftData = DYNAMIC_FLEET.find(ac => ac.icao === legAircraftIcao && ac.codeshare === legOperator);
+                            const legAircraftIcao = leg.aircraft;
+                            const legOperator = leg.operator;
 
-                                // Use the imageUrl from the database, with multiple fallbacks
-                                const aircraftImageUrl = aircraftData?.imageUrl 
-                                    || `Images/planesForCC/${legAircraftIcao}.png`; // Fallback to old generic path
+                            // Find the specific aircraft from our fetched fleet data
+                            const aircraftData = DYNAMIC_FLEET.find(ac => ac.icao === legAircraftIcao && ac.codeshare === legOperator);
 
-                                const legAircraftImageHTML = `
+                            // Use the imageUrl from the database, with multiple fallbacks
+                            const aircraftImageUrl = aircraftData?.imageUrl ||
+                                `Images/planesForCC/${legAircraftIcao}.png`; // Fallback to old generic path
+
+                            const legAircraftImageHTML = `
                                 <div class="leg-aircraft-image-container">
                                     <img src="${aircraftImageUrl}" 
                                          alt="${legOperator} ${legAircraftIcao}" 
                                          class="leg-aircraft-image"
                                          onerror="this.onerror=null; this.src='images/default-aircraft.png'; this.alt='Image not available';">
                                 </div>`;
-                                // --- MODIFICATION END ---
-                                
-                                return `
+
+                            return `
                                 <li class="${isMultiAircraft ? 'multi-aircraft-leg' : ''}">
                                     <div class="leg-main-content">
                                         <div class="leg-header">
@@ -1287,217 +1259,217 @@ document.addEventListener('DOMContentLoaded', () => {
                                     ${legAircraftImageHTML}
                                 </li>
                                 `;
-                            }).join('')}
+                        }).join('')}
                         </ul>`;
-                } else {
-                    detailsContainer.innerHTML = '<p>Details could not be loaded.</p>';
+                    } else {
+                        detailsContainer.innerHTML = '<p>Details could not be loaded.</p>';
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch roster details:', error);
+                    detailsContainer.innerHTML = `<p class="error-text">${error.message}</p>`;
                 }
-            } catch (error) {
-                console.error('Failed to fetch roster details:', error);
-                detailsContainer.innerHTML = `<p class="error-text">${error.message}</p>`;
             }
         }
-    }
 
-    if (target.classList.contains('view-roster-on-map-btn') || target.closest('.view-roster-on-map-btn')) {
-        const button = target.closest('.view-roster-on-map-btn');
-        const rosterId = button.dataset.rosterId;
-        if (window.focusOnRoster) {
-            window.focusOnRoster(rosterId);
-            document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (target.classList.contains('view-roster-on-map-btn') || target.closest('.view-roster-on-map-btn')) {
+            const button = target.closest('.view-roster-on-map-btn');
+            const rosterId = button.dataset.rosterId;
+            if (window.focusOnRoster) {
+                window.focusOnRoster(rosterId);
+                document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
         }
-    }
 
-    if (target.classList.contains('go-on-duty-btn')) {
-        const rosterId = target.dataset.rosterId;
-        target.disabled = true;
-        target.textContent = 'Starting...';
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/duty/start`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ rosterId })
-            });
-            const result = await res.json();
-            if (!res.ok) throw new Error(result.message || 'Failed to start duty.');
-            showNotification(result.message, 'success');
-            await fetchPilotData();
-        } catch (err) {
-            showNotification(`Error: ${err.message}`, 'error');
-            target.disabled = false;
-            target.textContent = 'Go On Duty';
-        }
-    }
-
-    if (target.id === 'end-duty-btn') {
-        if (confirm('Are you sure you want to complete your duty day? This will put you on mandatory crew rest.')) {
+        if (target.classList.contains('go-on-duty-btn')) {
+            const rosterId = target.dataset.rosterId;
             target.disabled = true;
-            target.textContent = 'Completing...';
+            target.textContent = 'Starting...';
             try {
-                const res = await fetch(`${API_BASE_URL}/api/duty/end`, {
+                const res = await fetch(`${API_BASE_URL}/api/duty/start`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ rosterId })
                 });
                 const result = await res.json();
-                if (!res.ok) throw new Error(result.message || 'Failed to end duty.');
+                if (!res.ok) throw new Error(result.message || 'Failed to start duty.');
                 showNotification(result.message, 'success');
                 await fetchPilotData();
             } catch (err) {
                 showNotification(`Error: ${err.message}`, 'error');
                 target.disabled = false;
-                target.textContent = 'Complete Duty Day';
+                target.textContent = 'Go On Duty';
             }
         }
-    }
 
-    const planId = target.dataset.planId;
-    
-    if (target.id === 'depart-btn') {
-        target.disabled = true;
-        target.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Departing...';
-        try {
-            const departRes = await fetch(`${API_BASE_URL}/api/flightplans/${planId}/depart`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const departResult = await departRes.json();
-            if (!departRes.ok) throw new Error(departResult.message || 'Failed to mark flight as departed.');
-            showNotification(departResult.message, 'info');
-
-            const acarsRes = await fetch(`${API_BASE_URL}/api/acars/track/start/${planId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ server: TARGET_SERVER_NAME })
-            });
-            const acarsResult = await acarsRes.json();
-            if (!acarsRes.ok) throw new Error(acarsResult.message || 'Could not start ACARS tracking.');
-            
-            showNotification('ACARS tracking initiated successfully.', 'success');
-
-            await fetchPilotData();
-
-        } catch (err) {
-            showNotification(err.message, 'error');
-            target.disabled = false;
-            target.innerHTML = '<i class="fa-solid fa-plane-departure"></i> Depart';
-        }
-    }
-
-    if (target.id === 'cancel-btn') {
-        target.disabled = true;
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/flightplans/${planId}/cancel`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }});
-            const result = await res.json();
-            if (!res.ok) throw new Error(result.message);
-            showNotification(result.message, 'success');
-            await fetchPilotData();
-        } catch (err) { showNotification(err.message, 'error'); target.disabled = false; }
-    }
-    if (target.id === 'arrive-btn') {
-        document.getElementById('arrive-flight-form').dataset.planId = planId;
-        arriveFlightModal.classList.add('visible');
-    }
-
-    if (target.id === 'generate-with-simbrief-btn') {
-        e.preventDefault();
-
-        const flightNumber = document.getElementById('fp-flightNumber').value.toUpperCase();
-        const departure = document.getElementById('fp-departure').value.toUpperCase();
-        const arrival = document.getElementById('fp-arrival').value.toUpperCase();
-        const aircraft = document.getElementById('fp-aircraft').value;
-
-        if (!flightNumber || !departure || !arrival || !aircraft) {
-            showNotification('Please fill in Flight Number, Departure, Arrival, and Aircraft before generating.', 'error');
-            return;
-        }
-
-        const sbForm = document.getElementById('sbapiform');
-        sbForm.querySelector('input[name="orig"]').value = departure;
-        sbForm.querySelector('input[name="dest"]').value = arrival;
-        sbForm.querySelector('input[name="type"]').value = aircraft;
-        sbForm.querySelector('input[name="fltnum"]').value = flightNumber;
-
-        showNotification('Opening SimBrief planner...', 'info');
-
-        const redirectUrl = window.location.origin + window.location.pathname + '?view=view-flight-plan';
-        simbriefsubmit(redirectUrl);
-    }
-
-    if (target.id === 'dispatch-close-btn') {
-        document.getElementById('dispatch-pass-display').style.display = 'none';
-        document.getElementById('manual-dispatch-container').style.display = 'block';
-        CURRENT_OFP_DATA = null;
-    }
-
-    if (target.id === 'file-from-simbrief-btn') {
-        e.preventDefault();
-        if (!CURRENT_OFP_DATA) {
-            showNotification('Error: SimBrief data not found. Please regenerate the flight plan.', 'error');
-            return;
-        }
-
-        target.disabled = true;
-        target.textContent = 'Filing...';
-
-        try {
-            const ofpData = CURRENT_OFP_DATA;
-            const plannedRunway = ofpData.tlr?.takeoff?.conditions?.planned_runway;
-            const runwayData = ofpData.tlr?.takeoff?.runway?.find(r => r.identifier === plannedRunway);
-            const v1 = runwayData?.speeds_v1 ?? '---';
-            const vr = runwayData?.speeds_vr ?? '---';
-            const v2 = runwayData?.speeds_v2 ?? '---';
-            const vref = ofpData.tlr?.landing?.distance_dry?.speeds_vref ?? '---';
-            const cargoWeight = ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight);
-            
-            const body = {
-                flightNumber: ofpData.general.flight_number,
-                aircraft: ofpData.aircraft.icaocode,
-                departure: ofpData.origin.icao_code,
-                arrival: ofpData.destination.icao_code,
-                alternate: ofpData.alternate.icao_code,
-                route: ofpData.general.route,
-                etd: new Date(ofpData.times.sched_out * 1000).toISOString(),
-                eet: ofpData.times.est_time_enroute / 3600, 
-                pob: parseInt(ofpData.general.passengers, 10),
-                squawkCode: ofpData.atc.squawk,
-                zfw: ofpData.weights.est_zfw,
-                tow: ofpData.weights.est_tow,
-                cargo: cargoWeight,
-                fuelTaxi: ofpData.fuel.taxi,
-                fuelTrip: ofpData.fuel.enroute_burn,
-                fuelTotal: ofpData.fuel.plan_ramp,
-                v1: `${v1} kts`,
-                vr: `${vr} kts`,
-                v2: `${v2} kts`,
-                vref: `${vref} kts`,
-                departureWeather: ofpData.weather.orig_metar,
-                arrivalWeather: ofpData.weather.dest_metar,
-                mapData: {
-                    origin: ofpData.origin,
-                    destination: ofpData.destination,
-                    navlog: ofpData.navlog?.fix || []
+        if (target.id === 'end-duty-btn') {
+            if (confirm('Are you sure you want to complete your duty day? This will put you on mandatory crew rest.')) {
+                target.disabled = true;
+                target.textContent = 'Completing...';
+                try {
+                    const res = await fetch(`${API_BASE_URL}/api/duty/end`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const result = await res.json();
+                    if (!res.ok) throw new Error(result.message || 'Failed to end duty.');
+                    showNotification(result.message, 'success');
+                    await fetchPilotData();
+                } catch (err) {
+                    showNotification(`Error: ${err.message}`, 'error');
+                    target.disabled = false;
+                    target.textContent = 'Complete Duty Day';
                 }
-            };
-
-            const res = await fetch(`${API_BASE_URL}/api/flightplans`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(body)
-            });
-            const result = await res.json();
-            if (!res.ok) throw new Error(result.message || 'Failed to file flight plan.');
-            
-            showNotification(result.message, 'success');
-            CURRENT_OFP_DATA = null;
-            await fetchPilotData();
-            
-        } catch (err) {
-            showNotification(`Error: ${err.message}`, 'error');
-            target.disabled = false;
-            target.textContent = 'File This Flight Plan';
+            }
         }
-    }
-});
+
+        const planId = target.dataset.planId;
+
+        if (target.id === 'depart-btn') {
+            target.disabled = true;
+            target.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Departing...';
+            try {
+                const departRes = await fetch(`${API_BASE_URL}/api/flightplans/${planId}/depart`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const departResult = await departRes.json();
+                if (!departRes.ok) throw new Error(departResult.message || 'Failed to mark flight as departed.');
+                showNotification(departResult.message, 'info');
+
+                const acarsRes = await fetch(`${API_BASE_URL}/api/acars/track/start/${planId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ server: TARGET_SERVER_NAME })
+                });
+                const acarsResult = await acarsRes.json();
+                if (!acarsRes.ok) throw new Error(acarsResult.message || 'Could not start ACARS tracking.');
+
+                showNotification('ACARS tracking initiated successfully.', 'success');
+
+                await fetchPilotData();
+
+            } catch (err) {
+                showNotification(err.message, 'error');
+                target.disabled = false;
+                target.innerHTML = '<i class="fa-solid fa-plane-departure"></i> Depart';
+            }
+        }
+
+        if (target.id === 'cancel-btn') {
+            target.disabled = true;
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/flightplans/${planId}/cancel`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.message);
+                showNotification(result.message, 'success');
+                await fetchPilotData();
+            } catch (err) { showNotification(err.message, 'error'); target.disabled = false; }
+        }
+        if (target.id === 'arrive-btn') {
+            document.getElementById('arrive-flight-form').dataset.planId = planId;
+            arriveFlightModal.classList.add('visible');
+        }
+
+        if (target.id === 'generate-with-simbrief-btn') {
+            e.preventDefault();
+
+            const flightNumber = document.getElementById('fp-flightNumber').value.toUpperCase();
+            const departure = document.getElementById('fp-departure').value.toUpperCase();
+            const arrival = document.getElementById('fp-arrival').value.toUpperCase();
+            const aircraft = document.getElementById('fp-aircraft').value;
+
+            if (!flightNumber || !departure || !arrival || !aircraft) {
+                showNotification('Please fill in Flight Number, Departure, Arrival, and Aircraft before generating.', 'error');
+                return;
+            }
+
+            const sbForm = document.getElementById('sbapiform');
+            sbForm.querySelector('input[name="orig"]').value = departure;
+            sbForm.querySelector('input[name="dest"]').value = arrival;
+            sbForm.querySelector('input[name="type"]').value = aircraft;
+            sbForm.querySelector('input[name="fltnum"]').value = flightNumber;
+
+            showNotification('Opening SimBrief planner...', 'info');
+
+            const redirectUrl = window.location.origin + window.location.pathname + '?view=view-flight-plan';
+            simbriefsubmit(redirectUrl);
+        }
+
+        if (target.id === 'dispatch-close-btn') {
+            document.getElementById('dispatch-pass-display').style.display = 'none';
+            document.getElementById('manual-dispatch-container').style.display = 'block';
+            CURRENT_OFP_DATA = null;
+        }
+
+        if (target.id === 'file-from-simbrief-btn') {
+            e.preventDefault();
+            if (!CURRENT_OFP_DATA) {
+                showNotification('Error: SimBrief data not found. Please regenerate the flight plan.', 'error');
+                return;
+            }
+
+            target.disabled = true;
+            target.textContent = 'Filing...';
+
+            try {
+                const ofpData = CURRENT_OFP_DATA;
+                const plannedRunway = ofpData.tlr?.takeoff?.conditions?.planned_runway;
+                const runwayData = ofpData.tlr?.takeoff?.runway?.find(r => r.identifier === plannedRunway);
+                const v1 = runwayData?.speeds_v1 ?? '---';
+                const vr = runwayData?.speeds_vr ?? '---';
+                const v2 = runwayData?.speeds_v2 ?? '---';
+                const vref = ofpData.tlr?.landing?.distance_dry?.speeds_vref ?? '---';
+                const cargoWeight = ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight);
+
+                const body = {
+                    flightNumber: ofpData.general.flight_number,
+                    aircraft: ofpData.aircraft.icaocode,
+                    departure: ofpData.origin.icao_code,
+                    arrival: ofpData.destination.icao_code,
+                    alternate: ofpData.alternate.icao_code,
+                    route: ofpData.general.route,
+                    etd: new Date(ofpData.times.sched_out * 1000).toISOString(),
+                    eet: ofpData.times.est_time_enroute / 3600,
+                    pob: parseInt(ofpData.general.passengers, 10),
+                    squawkCode: ofpData.atc.squawk,
+                    zfw: ofpData.weights.est_zfw,
+                    tow: ofpData.weights.est_tow,
+                    cargo: cargoWeight,
+                    fuelTaxi: ofpData.fuel.taxi,
+                    fuelTrip: ofpData.fuel.enroute_burn,
+                    fuelTotal: ofpData.fuel.plan_ramp,
+                    v1: `${v1} kts`,
+                    vr: `${vr} kts`,
+                    v2: `${v2} kts`,
+                    vref: `${vref} kts`,
+                    departureWeather: ofpData.weather.orig_metar,
+                    arrivalWeather: ofpData.weather.dest_metar,
+                    mapData: {
+                        origin: ofpData.origin,
+                        destination: ofpData.destination,
+                        navlog: ofpData.navlog?.fix || []
+                    }
+                };
+
+                const res = await fetch(`${API_BASE_URL}/api/flightplans`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(body)
+                });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.message || 'Failed to file flight plan.');
+
+                showNotification(result.message, 'success');
+                CURRENT_OFP_DATA = null;
+                await fetchPilotData();
+
+            } catch (err) {
+                showNotification(`Error: ${err.message}`, 'error');
+                target.disabled = false;
+                target.textContent = 'File This Flight Plan';
+            }
+        }
+    });
 
     // --- Modal Handlers ---
     document.getElementById('arrive-flight-form').addEventListener('submit', async (e) => {
@@ -1513,10 +1485,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (imageInput.files.length > 0) {
             formData.append('verificationImage', imageInput.files[0]);
         } else {
-             showNotification('Error: You must upload a verification image.', 'error');
-             btn.disabled = false;
-             btn.textContent = 'Complete Flight';
-             return;
+            showNotification('Error: You must upload a verification image.', 'error');
+            btn.disabled = false;
+            btn.textContent = 'Complete Flight';
+            return;
         }
 
         try {
@@ -1560,7 +1532,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 container.innerHTML = '<p>You have no notifications.</p>';
                 return;
             }
-            
+
             const unreadIds = notifications.filter(n => !n.read).map(n => n._id);
 
             container.innerHTML = `
@@ -1594,7 +1566,7 @@ document.addEventListener('DOMContentLoaded', () => {
             container.innerHTML = '<p class="error-text">Could not load notifications.</p>';
         }
     });
-    
+
     // --- SimBrief Return Handler ---
     const handleSimbriefReturn = async () => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -1609,10 +1581,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error('Could not retrieve flight plan from SimBrief.');
                 }
                 const data = await response.json();
-                
+
                 CURRENT_OFP_DATA = data.OFP;
                 const ofpData = CURRENT_OFP_DATA;
-                
+
                 const dispatchDisplay = document.getElementById('dispatch-pass-display');
                 const manualDispatchContainer = document.getElementById('manual-dispatch-container');
 
@@ -1643,14 +1615,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('dispatch-pax').textContent = ofpData.general.passengers || '0';
                 const cargoWeight = ofpData.weights.payload - (ofpData.general.passengers * ofpData.weights.pax_weight);
                 document.getElementById('dispatch-cargo').textContent = formatWeight(cargoWeight);
-                
+
                 const departureWeather = window.WeatherService.parseMetar(ofpData.weather.orig_metar);
                 const arrivalWeather = window.WeatherService.parseMetar(ofpData.weather.dest_metar);
 
                 document.getElementById('dispatch-dep-cond').textContent = departureWeather.condition;
                 document.getElementById('dispatch-dep-temp').textContent = departureWeather.temp;
                 document.getElementById('dispatch-dep-wind').textContent = departureWeather.wind;
-                
+
                 document.getElementById('dispatch-arr-cond').textContent = arrivalWeather.condition;
                 document.getElementById('dispatch-arr-temp').textContent = arrivalWeather.temp;
                 document.getElementById('dispatch-arr-wind').textContent = arrivalWeather.wind;
@@ -1658,12 +1630,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const plannedRunway = ofpData.tlr?.takeoff?.conditions?.planned_runway;
                     const runwayData = ofpData.tlr?.takeoff?.runway?.find(r => r.identifier === plannedRunway);
-                    
+
                     const v1 = runwayData?.speeds_v1 ?? '---';
                     const vr = runwayData?.speeds_vr ?? '---';
                     const v2 = runwayData?.speeds_v2 ?? '---';
                     const vref = ofpData.tlr?.landing?.distance_dry?.speeds_vref ?? '---';
-                    
+
                     document.getElementById('dispatch-v1').textContent = `${v1} kts`;
                     document.getElementById('dispatch-vr').textContent = `${vr} kts`;
                     document.getElementById('dispatch-v2').textContent = `${v2} kts`;
@@ -1695,12 +1667,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     `;
                 }
-                
+
                 manualDispatchContainer.style.display = 'none';
                 dispatchDisplay.style.display = 'block';
 
                 plotDispatchMap('dispatch-map', ofpData.origin, ofpData.destination, ofpData.navlog.fix);
-                
+
                 showNotification('Dispatch Pass generated successfully!', 'success');
                 window.history.replaceState({}, document.title, window.location.pathname);
 
@@ -1710,7 +1682,36 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-    
+
     // --- Initial Load ---
-    fetchPilotData();
+    async function initializeApp() {
+        mainContentLoader.classList.add('active');
+        
+        await fetchMapboxToken(); // Fetch token first
+        await fetchPilotData(); // Then fetch pilot data which handles rendering
+
+        // Initial view setup
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialView = urlParams.get('view') || 'view-duty-status';
+        switchView(initialView);
+
+        // Sidebar state
+        if (localStorage.getItem('sidebarState') === 'collapsed') {
+            dashboardContainer.classList.add('sidebar-collapsed');
+        }
+        sidebarToggleBtn.addEventListener('click', () => {
+            dashboardContainer.classList.toggle('sidebar-collapsed');
+            localStorage.setItem('sidebarState', dashboardContainer.classList.contains('sidebar-collapsed') ? 'collapsed' : 'expanded');
+        });
+
+        logoutButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            localStorage.removeItem('authToken');
+            showNotification('You have been logged out.', 'success');
+            setTimeout(() => { window.location.href = 'login.html'; }, 1000);
+        });
+    }
+
+    // Start the application
+    initializeApp();
 });

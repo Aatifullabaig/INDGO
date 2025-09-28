@@ -294,11 +294,11 @@ body::before {
 .content-card + .content-card { margin-top: 2rem; }
 
 /* --- Specific Component Styling (Roster REDESIGNED) --- */
-#roster-list-container { 
-    display: flex; 
-    flex-direction: column; 
-    gap: 1.5rem; 
-    margin-top: 1.5rem; 
+#roster-list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
 }
 
 .roster-item {
@@ -856,6 +856,55 @@ roster-item {
     contain: content;
 }
 
+/* --- NEW MAPBOX & LIVE FLIGHTS STYLES --- */
+/* Make Mapbox popups match your dark theme */
+.mapboxgl-popup-content {
+    background-color: rgba(23, 27, 41, 0.95) !important;
+    color: #e0e0e0 !important;
+    border-radius: 6px !important;
+    padding: 10px 15px !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    font-family: var(--font-body);
+    border: 1px solid var(--border-color);
+}
+
+.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip {
+    border-top-color: rgba(23, 27, 41, 0.95) !important;
+}
+
+.mapboxgl-popup-anchor-top .mapboxgl-popup-tip {
+    border-bottom-color: rgba(23, 27, 41, 0.95) !important;
+}
+
+.mapboxgl-popup-close-button {
+    color: #fff;
+    font-size: 1.5rem;
+    padding: 0 5px;
+}
+
+.mapboxgl-popup-close-button:hover {
+    background-color: transparent !important;
+    color: var(--warning-color);
+}
+
+/* Custom aircraft marker for the live map */
+.plane-marker {
+    background-image: url('/images/whiteplane.png'); /* Ensure this path is correct */
+    background-size: contain;
+    background-repeat: no-repeat;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    transition: transform 0.3s ease-out; /* For smooth rotation */
+}
+
+/* Message for when a map can't load route data */
+.map-error-msg {
+    text-align: center;
+    padding-top: 2rem;
+    color: var(--dashboard-text-muted);
+}
+
 /* --- NEW: LEADERBOARD STYLES (REDESIGNED) --- */
 .leaderboards-container {
     display: grid;
@@ -1129,55 +1178,6 @@ roster-item {
     border-radius: 2px;
 }
 
-/* --- NEW STYLES FOR MAP ROUTE LABELS --- */
-
-/* This class is applied by L.divIcon to its container, helping to reset default icon styles */
-.map-route-icon-container {
-    background: transparent;
-    border: none;
-    margin-left: 0 !important; /* Override Leaflet's default negative margins */
-    margin-top: 0 !important;
-}
-
-.map-route-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    /* Style changes: Removed background and border, added white text with a shadow */
-    background-color: transparent;
-    color: #ffffff; /* White text */
-    border: none;
-    box-shadow: none;
-    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); /* Strong shadow for readability */
-    font-family: 'monospace', sans-serif;
-    font-size: 0.9rem; /* Slightly larger for better visibility */
-    font-weight: bold;
-    white-space: nowrap;
-    /* This transform centers the label perfectly on the line's midpoint */
-    transform: translate(-50%, -50%);
-    transition: all 0.2s ease-in-out;
-}
-
-.map-route-label:hover {
-    transform: translate(-50%, -50%) scale(1.1);
-    z-index: 1000 !important;
-}
-
-.map-route-aircraft-img {
-    height: 25px;
-    width: 40px;
-    object-fit: contain;
-    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
-}
-
-.map-route-text {
-    letter-spacing: 0.5px;
-}
-
-.map-route-label.offset-return {
-    transform: translate(-50%, calc(-50% + 30px));
-}
-
 /* --- NEW: ROSTER HEADER LAYOUT --- */
 /* This ensures the title and button align nicely */
 #roster-list-header {
@@ -1278,7 +1278,7 @@ roster-item {
     .sidebar-nav .nav-link.active {
         /* Clear the blocky background and use a border indicator */
         background-color: transparent;
-        color: #ffffff; 
+        color: #ffffff;
         border-bottom-color: var(--rank-accent-color, var(--accent-color));
     }
     
