@@ -1,57 +1,142 @@
-// --- map.js (Updated) ---
-// This version adds functionality to focus on a single roster, displaying custom route info.
+// --- map.js (REWRITTEN for Mapbox GL JS) ---
+// This version is a complete replacement of the Leaflet implementation.
 
 document.addEventListener('DOMContentLoaded', () => {
+    // --- MAPBOX CONFIGURATION ---
+    // IMPORTANT: Replace this placeholder with your actual Mapbox access token.
+
+    // State variables
     let airportsData;
-    const rosterLayers = {}; // To store layers (lines, markers, leg data) for each roster
-    const allAirportMarkers = {}; // Global store to avoid duplicate airport markers {icao: marker}
-    let routeInfoLayerGroup = null; // A layer group specifically for our custom route labels
+    let rostersDataStore = []; // To store the original roster data
+    let customLabelMarkers = []; // To store custom HTML markers for route labels
+    let MAPBOX_ACCESS_TOKEN = null;
 
-    // --- Define styles for map elements ---
-    const defaultLineStyle = { color: '#5a6a9c', weight: 2, opacity: 0.7 };
-    const highlightLineStyle = { color: '#FFA500', weight: 3, opacity: 1 }; // Orange
-
-    const defaultAirportStyle = {
-        radius: 4,
-        fillColor: "#00BFFF", // Deep Sky Blue
-        color: "#fff",
-        weight: 1,
-        opacity: 1,
-        fillOpacity: 0.8
-    };
-    const highlightAirportStyle = {
-        radius: 6,
-        fillColor: "#FFA500", // Orange
-        color: "#fff",
-        weight: 1,
-        opacity: 1,
-        fillOpacity: 1
-    };
-
-    function initializeMap() {
-        if (window.leafletMap) return;
-        
-        window.leafletMap = L.map('map', { worldCopyJump: true }).setView([20, 0], 2);
-
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 20,
-            minZoom: 2
-        }).addTo(window.leafletMap);
-
-        const southWest = L.latLng(-85, -180);
-        const northEast = L.latLng(85, 180);
-        const bounds = L.latLngBounds(southWest, northEast);
-        window.leafletMap.setMaxBounds(bounds);
-        window.leafletMap.on('drag', function() {
-            window.leafletMap.panInsideBounds(bounds, { animate: false });
-        });
-
-        // Initialize the layer group for our custom labels
-        routeInfoLayerGroup = L.layerGroup().addTo(window.leafletMap);
+    async function fetchMapboxToken() {
+        try {
+            const response = await fetch('/.netlify/functions/config');
+            if (!response.ok) throw new Error('Could not fetch server configuration.');
+            const config = await response.json();
+            if (!config.mapboxToken) throw new Error('Mapbox token is missing from server configuration.');
+            MAPBOX_ACCESS_TOKEN = config.mapboxToken;
+            mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
+        } catch (error) {
+            console.error('Failed to initialize maps:', error.message);
+            showNotification('Could not load mapping services.', 'error');
+        }
     }
 
+    // --- INITIALIZE MAP ---
+    // This is now a Mapbox GL JS map instance. The variable name is changed to reflect this.
+    function initializeMap() {
+        if (window.mapboxMap) return;
+
+        mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
+        window.mapboxMap = new mapboxgl.Map({
+            container: 'map', // The ID of the div where the map will be
+            style: 'mapbox://styles/mapbox/dark-v11', // Mapbox dark style
+            center: [0, 20],
+            zoom: 1.5,
+            worldCopyJump: true,
+            maxBounds: [[-180, -85], [180, 85]] // Set map boundaries
+        });
+
+        // Add standard map controls
+        window.mapboxMap.addControl(new mapboxgl.NavigationControl());
+        window.mapboxMap.on('load', setupMapLayers);
+    }
+
+    // --- SETUP MAP SOURCES AND LAYERS ---
+    // Mapbox works by adding data 'sources' and then styling them with 'layers'.
+    function setupMapLayers() {
+        if (!window.mapboxMap.getSource('roster-lines')) {
+            window.mapboxMap.addSource('roster-lines', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] }
+            });
+        }
+        if (!window.mapboxMap.getSource('airport-points')) {
+            window.mapboxMap.addSource('airport-points', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] }
+            });
+        }
+
+        // Layer for the roster lines (default style)
+        window.mapboxMap.addLayer({
+            id: 'roster-lines-layer',
+            type: 'line',
+            source: 'roster-lines',
+            paint: {
+                'line-color': '#5a6a9c',
+                'line-width': 2,
+                'line-opacity': 0.7
+            }
+        });
+        
+        // Layer for the highlighted roster lines (initially hidden)
+        window.mapboxMap.addLayer({
+            id: 'roster-lines-highlight-layer',
+            type: 'line',
+            source: 'roster-lines',
+            paint: {
+                'line-color': '#FFA500', // Orange
+                'line-width': 3,
+                'line-opacity': 1
+            },
+            filter: ['==', 'rosterId', ''] // Initially show nothing
+        });
+
+        // Layer for airport markers
+        window.mapboxMap.addLayer({
+            id: 'airport-points-layer',
+            type: 'circle',
+            source: 'airport-points',
+            paint: {
+                'circle-radius': 4,
+                'circle-color': '#00BFFF', // Deep Sky Blue
+                'circle-stroke-color': '#fff',
+                'circle-stroke-width': 1
+            }
+        });
+        
+        // Layer for highlighted airport markers
+         window.mapboxMap.addLayer({
+            id: 'airport-points-highlight-layer',
+            type: 'circle',
+            source: 'airport-points',
+            paint: {
+                'circle-radius': 6,
+                'circle-color': '#FFA500', // Orange
+                'circle-stroke-color': '#fff',
+                'circle-stroke-width': 1.5
+            },
+            filter: ['==', 'icao', ''] // Initially show nothing
+        });
+        
+        // Create a popup, but don't add it to the map yet.
+        const popup = new mapboxgl.Popup({
+            closeButton: false,
+            closeOnClick: false
+        });
+
+        // Add hover and click interactions for airports
+        window.mapboxMap.on('mouseenter', 'airport-points-layer', (e) => {
+            window.mapboxMap.getCanvas().style.cursor = 'pointer';
+            const coordinates = e.features[0].geometry.coordinates.slice();
+            const properties = e.features[0].properties;
+            const popupHtml = `<b>${properties.icao}</b><br>${properties.name}`;
+            
+            popup.setLngLat(coordinates).setHTML(popupHtml).addTo(window.mapboxMap);
+        });
+
+        window.mapboxMap.on('mouseleave', 'airport-points-layer', () => {
+            window.mapboxMap.getCanvas().style.cursor = '';
+            popup.remove();
+        });
+    }
+
+
+    // --- LOAD AIRPORT DATA ---
     async function loadAirportsData() {
         if (airportsData) return;
         try {
@@ -63,35 +148,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function clearAllRosterLayers() {
-        if (!window.leafletMap) return;
-        Object.values(rosterLayers).forEach(data => {
-            data.polylines.forEach(polyline => window.leafletMap.removeLayer(polyline));
-        });
-        Object.values(allAirportMarkers).forEach(marker => window.leafletMap.removeLayer(marker));
-        routeInfoLayerGroup.clearLayers(); // Also clear custom labels
-
-        for (const key in rosterLayers) { delete rosterLayers[key]; }
-        for (const key in allAirportMarkers) { delete allAirportMarkers[key]; }
+    // --- CLEAR ALL DATA ---
+    function clearAllData() {
+        if (!window.mapboxMap || !window.mapboxMap.isStyleLoaded()) return;
+        
+        const emptyGeoJSON = { type: 'FeatureCollection', features: [] };
+        window.mapboxMap.getSource('roster-lines').setData(emptyGeoJSON);
+        window.mapboxMap.getSource('airport-points').setData(emptyGeoJSON);
+        
+        // Clear stored data
+        rostersDataStore = [];
     }
 
+    // --- PLOT ROSTERS ON THE MAP ---
     window.plotRosters = async function(pilotLocation, rosters) {
         initializeMap();
-        if (!window.leafletMap) return;
-        
-        clearAllRosterLayers();
         await loadAirportsData();
+        rostersDataStore = rosters; // Save original roster data
 
-        if (!airportsData) {
-            console.error("Airports data is not available.");
-            return;
+        if (!airportsData) return;
+        
+        // Wait for the map to be fully loaded before manipulating sources
+        if (!window.mapboxMap.isStyleLoaded()) {
+             window.mapboxMap.on('load', () => processAndPlotData(pilotLocation, rosters));
+        } else {
+            processAndPlotData(pilotLocation, rosters);
         }
+    };
+    
+    function processAndPlotData(pilotLocation, rosters) {
+        clearAllData();
+        
+        const lineFeatures = [];
+        const pointFeatures = new Map();
 
         rosters.forEach(roster => {
-            // MODIFIED: Store leg data along with layers
-            rosterLayers[roster.rosterId] = { polylines: [], airportMarkers: [], legs: [] };
             const rosterUniqueIcaos = new Set();
-
             roster.legs.forEach(leg => {
                 rosterUniqueIcaos.add(leg.departure);
                 rosterUniqueIcaos.add(leg.arrival);
@@ -100,141 +192,142 @@ document.addEventListener('DOMContentLoaded', () => {
                 const arr = airportsData[leg.arrival];
 
                 if (dep && arr) {
-                    const latlngs = [[dep.lat, dep.lon], [arr.lat, arr.lon]];
-                    const polyline = L.polyline(latlngs, defaultLineStyle).addTo(window.leafletMap);
-                    rosterLayers[roster.rosterId].polylines.push(polyline);
-                    // NEW: Store detailed leg info for later use
-                    rosterLayers[roster.rosterId].legs.push({
-                        ...leg,
-                        depCoords: [dep.lat, dep.lon],
-                        arrCoords: [arr.lat, arr.lon]
+                    // Create a GeoJSON LineString feature
+                    lineFeatures.push({
+                        type: 'Feature',
+                        properties: { rosterId: roster.rosterId },
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: [[dep.lon, dep.lat], [arr.lon, arr.lat]]
+                        }
                     });
                 }
             });
+            
+             // Add associated ICAOs to each leg for filtering later
+            roster.associatedIcaos = Array.from(rosterUniqueIcaos);
 
             rosterUniqueIcaos.forEach(icao => {
                 const airport = airportsData[icao];
-                if (airport) {
-                    let marker;
-                    if (!allAirportMarkers[icao]) {
-                        marker = L.circleMarker([airport.lat, airport.lon], defaultAirportStyle)
-                            .addTo(window.leafletMap)
-                            .bindPopup(`<b>${airport.icao}</b><br>${airport.name}`);
-                        allAirportMarkers[icao] = marker;
-                    }
-                    marker = allAirportMarkers[icao];
-                    rosterLayers[roster.rosterId].airportMarkers.push(marker);
+                if (airport && !pointFeatures.has(icao)) {
+                    // Create a GeoJSON Point feature
+                    pointFeatures.set(icao, {
+                        type: 'Feature',
+                        properties: { icao: airport.icao, name: airport.name },
+                        geometry: { type: 'Point', coordinates: [airport.lon, airport.lat] }
+                    });
                 }
             });
         });
 
+        // Update map sources with the new GeoJSON data
+        window.mapboxMap.getSource('roster-lines').setData({ type: 'FeatureCollection', features: lineFeatures });
+        window.mapboxMap.getSource('airport-points').setData({ type: 'FeatureCollection', features: Array.from(pointFeatures.values()) });
+
+        // Center map view
         const pilotAirport = airportsData[pilotLocation];
         if (pilotAirport) {
-            window.leafletMap.setView([pilotAirport.lat, pilotAirport.lon], 5);
+            window.mapboxMap.flyTo({ center: [pilotAirport.lon, pilotAirport.lat], zoom: 4 });
         } else {
-             window.leafletMap.fitWorld(); // Fallback if pilot location not found
+             window.mapboxMap.flyTo({ zoom: 1.5 });
         }
-    };
+    }
 
-    window.resetHighlights = function() {
-        Object.values(rosterLayers).forEach(data => {
-            data.polylines.forEach(polyline => polyline.setStyle(defaultLineStyle));
-        });
-        Object.values(allAirportMarkers).forEach(marker => {
-            marker.setStyle(defaultAirportStyle);
-        });
-    };
-    
-    // NEW: Function to reset the map to its initial state, showing all rosters
+    // --- RESET MAP TO SHOW ALL ROSTERS ---
     window.showAllRosters = function() {
-        if (!window.leafletMap) return;
-        resetHighlights();
-        routeInfoLayerGroup.clearLayers();
+        if (!window.mapboxMap || !window.mapboxMap.isStyleLoaded()) return;
 
-        // Add all layers back to the map
-        Object.values(allAirportMarkers).forEach(marker => marker.addTo(window.leafletMap));
-        Object.values(rosterLayers).forEach(data => {
-            data.polylines.forEach(polyline => polyline.addTo(window.leafletMap));
+        // Remove any custom HTML markers
+        customLabelMarkers.forEach(marker => marker.remove());
+        customLabelMarkers = [];
+
+        // Reset filters to show all features
+        window.mapboxMap.setFilter('roster-lines-layer', null);
+        window.mapboxMap.setFilter('airport-points-layer', null);
+        
+        // Hide highlight layers
+        window.mapboxMap.setFilter('roster-lines-highlight-layer', ['==', 'rosterId', '']);
+        window.mapboxMap.setFilter('airport-points-highlight-layer', ['==', 'icao', '']);
+        
+        // Fit map to bounds of all points
+        const features = window.mapboxMap.getSource('airport-points')._data.features;
+        if(features.length === 0) return;
+        
+        const bounds = new mapboxgl.LngLatBounds();
+        features.forEach(feature => {
+            bounds.extend(feature.geometry.coordinates);
+        });
+        window.mapboxMap.fitBounds(bounds, { padding: 50, duration: 1000 });
+    };
+
+    // --- FOCUS ON A SINGLE ROSTER ---
+    window.focusOnRoster = function(rosterId) {
+        if (!window.mapboxMap || !window.mapboxMap.isStyleLoaded()) return;
+
+        const rosterData = rostersDataStore.find(r => r.rosterId === rosterId);
+        if (!rosterData) return;
+
+        // Remove any old custom markers
+        customLabelMarkers.forEach(marker => marker.remove());
+        customLabelMarkers = [];
+        
+        // Use setFilter to show only the selected roster and its airports
+        window.mapboxMap.setFilter('roster-lines-layer', ['!=', 'rosterId', rosterId]);
+        window.mapboxMap.setFilter('airport-points-layer', ['!in', 'icao', ...rosterData.associatedIcaos]);
+        
+        // Use a separate layer for highlighting
+        window.mapboxMap.setFilter('roster-lines-highlight-layer', ['==', 'rosterId', rosterId]);
+        window.mapboxMap.setFilter('airport-points-highlight-layer', ['in', 'icao', ...rosterData.associatedIcaos]);
+
+        const processedReturnRoutes = new Set();
+        const bounds = new mapboxgl.LngLatBounds();
+
+        // Create and add custom HTML labels for each leg
+        rosterData.legs.forEach(leg => {
+            const dep = airportsData[leg.departure];
+            const arr = airportsData[leg.arrival];
+            if (!dep || !arr) return;
+
+            // Add coordinates to bounds
+            bounds.extend([dep.lon, dep.lat]);
+            bounds.extend([arr.lon, arr.lat]);
+
+            const forwardRouteKey = `${leg.departure}-${leg.arrival}`;
+            const reverseRouteKey = `${leg.arrival}-${leg.departure}`;
+            let labelClass = "map-route-label";
+            if (processedReturnRoutes.has(forwardRouteKey)) {
+                labelClass += " offset-return";
+            } else {
+                processedReturnRoutes.add(reverseRouteKey);
+            }
+
+            const airlineCode = leg.flightNumber.replace(/\d+$/, '').toUpperCase();
+            const aircraftCode = leg.aircraft;
+            const liveryPath = `Images/liveries/${airlineCode}_${aircraftCode}.png`;
+            const genericPath = `Images/planesForCC/${aircraftCode}.png`;
+
+            // Create custom HTML element for the marker
+            const el = document.createElement('div');
+            el.className = 'map-route-icon-container';
+            el.innerHTML = `
+                <div class="${labelClass}">
+                    <img src="${liveryPath}" class="map-route-aircraft-img"
+                         onerror="this.onerror=null; this.src='${genericPath}';">
+                    <span class="map-route-text">${leg.departure} → ${leg.arrival}</span>
+                </div>`;
+            
+            // Calculate midpoint for the label
+            const midpoint = [ (dep.lon + arr.lon) / 2, (dep.lat + arr.lat) / 2 ];
+
+            // Add the custom marker to the map
+            const marker = new mapboxgl.Marker(el).setLngLat(midpoint).addTo(window.mapboxMap);
+            customLabelMarkers.push(marker);
         });
 
-        // Create a feature group of everything to set the view
-        const allMarkersGroup = L.featureGroup(Object.values(allAirportMarkers));
-        if (Object.keys(allAirportMarkers).length > 0) {
-            window.leafletMap.fitBounds(allMarkersGroup.getBounds().pad(0.1));
-        }
-    }
+        // Fit map to the bounds of the focused roster
+        window.mapboxMap.fitBounds(bounds, { padding: 80, duration: 1000 });
+    };
 
-    // MODIFIED: highlightRoster is now focusOnRoster
-    window.focusOnRoster = function(rosterId) { // FIX: Corrected the parameter name
-    if (!window.leafletMap) return;
-    resetHighlights();
-    routeInfoLayerGroup.clearLayers(); // Clear any existing route labels
-
-    const rosterData = rosterLayers[rosterId]; // FIX: Use the corrected parameter name
-    if (!rosterData) return;
-
-    // Hide all markers and polylines first
-    Object.values(allAirportMarkers).forEach(marker => window.leafletMap.removeLayer(marker));
-    Object.values(rosterLayers).forEach(data => {
-        data.polylines.forEach(p => window.leafletMap.removeLayer(p));
-    });
-
-    // Show and highlight layers for the selected roster
-    rosterData.polylines.forEach(p => {
-        p.addTo(window.leafletMap).setStyle(highlightLineStyle).bringToFront();
-    });
-    rosterData.airportMarkers.forEach(m => {
-        m.addTo(window.leafletMap).setStyle(highlightAirportStyle).bringToFront();
-    });
-
-    // --- MODIFIED SECTION FOR OVERLAP FIX ---
-    const processedReturnRoutes = new Set(); // Tracks routes to find their return leg
-
-    // Create and add custom labels for each leg
-    rosterData.legs.forEach(leg => {
-        const forwardRouteKey = `${leg.departure}-${leg.arrival}`;
-        const reverseRouteKey = `${leg.arrival}-${leg.departure}`;
-        let labelClass = "map-route-label"; // Base class
-
-        // Check if this leg is the return trip for a previously processed leg
-        if (processedReturnRoutes.has(forwardRouteKey)) {
-            labelClass += " offset-return"; // Add the offset class if it's a return leg
-        } else {
-            // If not, add its reverse key to the set to be watched for later
-            processedReturnRoutes.add(reverseRouteKey);
-        }
-
-        const airlineCode = leg.flightNumber.replace(/\d+$/, '').toUpperCase();
-        const aircraftCode = leg.aircraft;
-        const liveryPath = `Images/liveries/${airlineCode}_${aircraftCode}.png`;
-        const genericPath = `Images/planesForCC/${aircraftCode}.png`;
-
-        // Use the dynamically assigned labelClass
-        const iconHtml = `
-            <div class="${labelClass}">
-                <img src="${liveryPath}" class="map-route-aircraft-img"
-                     onerror="this.onerror=null; this.src='${genericPath}';">
-                <span class="map-route-text">${leg.departure} → ${leg.arrival}</span>
-            </div>`;
-
-        const routeIcon = L.divIcon({
-            className: 'map-route-icon-container',
-            html: iconHtml
-        });
-
-        // Place the label at the midpoint of the leg's polyline
-        const midpoint = L.latLngBounds(leg.depCoords, leg.arrCoords).getCenter();
-        L.marker(midpoint, { icon: routeIcon }).addTo(routeInfoLayerGroup);
-    });
-    // --- END OF MODIFIED SECTION ---
-
-    const allLayersForBounds = [...rosterData.polylines, ...rosterData.airportMarkers];
-    if (allLayersForBounds.length > 0) {
-        const featureGroup = L.featureGroup(allLayersForBounds);
-        window.leafletMap.fitBounds(featureGroup.getBounds().pad(0.2));
-    }
-};
-
-
+    // Initial load
     loadAirportsData();
 });
