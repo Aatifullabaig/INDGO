@@ -2,16 +2,7 @@
 // This version is a complete replacement of the Leaflet implementation.
 
 document.addEventListener('DOMContentLoaded', () => {
-    // --- MAPBOX CONFIGURATION ---
-    // IMPORTANT: Replace this placeholder with your actual Mapbox access token.
-
-    // State variables
-    let airportsData;
-    let rostersDataStore = []; // To store the original roster data
-    let customLabelMarkers = []; // To store custom HTML markers for route labels
-    let MAPBOX_ACCESS_TOKEN = null;
-
-    async function fetchMapboxToken() {
+     async function fetchMapboxToken() {
         try {
             const response = await fetch('/.netlify/functions/config');
             if (!response.ok) throw new Error('Could not fetch server configuration.');
@@ -24,6 +15,14 @@ document.addEventListener('DOMContentLoaded', () => {
             showNotification('Could not load mapping services.', 'error');
         }
     }
+
+    // --- MAPBOX CONFIGURATION ---
+
+    // State variables
+    let airportsData;
+    let rostersDataStore = []; // To store the original roster data
+    let customLabelMarkers = []; // To store custom HTML markers for route labels
+    let MAPBOX_ACCESS_TOKEN = null;
 
     // --- INITIALIZE MAP ---
     // This is now a Mapbox GL JS map instance. The variable name is changed to reflect this.
