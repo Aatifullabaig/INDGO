@@ -801,6 +801,135 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
     to { opacity: 1; transform: scale(1); }
 }
 
+/* --- NEW: GENERIC MODAL & CODESHARE STYLES --- */
+
+/* Basic styles for all modals to prevent overflow */
+.modal.active .modal-content {
+    animation: fadeInModal 0.3s ease-out;
+}
+
+.modal-content {
+    background-color: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    padding: 2rem;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 700px; /* Increased max-width for codeshare grid */
+    position: relative;
+    /* This is the key fix for the overflow problem */
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* This makes the content area inside the modal scrollable */
+.modal-body {
+    overflow-y: auto;
+    padding-right: 1rem; /* Add some space for the scrollbar */
+    margin-right: -1rem; /* Offset the padding to keep alignment */
+}
+
+
+/* Grid layout for the existing partners list */
+#codeshare-list-container-modal {
+    display: grid;
+    /* Creates a responsive grid with columns between 120px and 1fr */
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 1.5rem; /* Increased gap for better spacing */
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Styling for each individual partner card in the grid */
+.codeshare-partner-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    background-color: var(--bg-color);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.codeshare-partner-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 15px var(--glow-color);
+}
+
+.codeshare-partner-card img {
+    height: 40px; /* Uniform height for logos */
+    max-width: 100px;
+    object-fit: contain;
+}
+
+.codeshare-partner-card span {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--dashboard-text-muted);
+}
+
+/* Styling for the small delete button on each partner card */
+.delete-codeshare-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: var(--error-color);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    line-height: 1;
+    opacity: 0; /* Hide by default */
+    transition: opacity 0.2s ease;
+}
+
+.codeshare-partner-card:hover .delete-codeshare-btn {
+    opacity: 1; /* Show on hover */
+}
+
+/* Pagination controls specific to the codeshare modal */
+#codeshare-pagination-controls-modal {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+#codeshare-pagination-controls-modal button {
+    background-color: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    color: var(--dashboard-text-color);
+    padding: 0.5rem 0.8rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+#codeshare-pagination-controls-modal button:hover:not(:disabled) {
+    background-color: var(--info-color);
+}
+#codeshare-pagination-controls-modal button.active {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+#codeshare-pagination-controls-modal button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* --- START: NEW ROUTE MANAGER & PAGINATION STYLES --- */
 .route-manager-actions {
     display: flex;
