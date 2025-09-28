@@ -1445,7 +1445,10 @@ input, textarea, select {
 
 /* --- V2 Header --- */
 .dispatch-pass-container .dispatch-header {
-    background-color: #2c3e50; /* A more neutral dark blue */
+    background-image: linear-gradient(rgba(44, 62, 80, 0.5), rgba(44, 62, 80, 0.5)), url('icon.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     color: #ffffff;
     padding: 1rem 1.5rem;
     display: flex;
