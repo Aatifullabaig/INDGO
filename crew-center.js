@@ -115,14 +115,53 @@ document.addEventListener('DOMContentLoaded', async () => {
     const populateDispatchPass = (container, plan) => {
         if (!container || !plan) return;
 
-        const formatWeight = (kg) => (isNaN(kg) || kg === null ? '---' : `${Number(kg).toLocaleString()} kg`);
+        // --- Data Formatters & Converters ---
+
+        // Check if this is a SimBrief plan (indicated by the TLR block) to handle unit conversions.
+        const isSimbriefPlan = !!plan.tlr;
+
+        // Helper to convert LBS (from Simbrief) to KG for display.
+        const lbsToKg = (lbs) => {
+            if (isNaN(lbs) || lbs === null) return null;
+            return Math.round(Number(lbs) / 2.20462);
+        };
+
+        // Modified formatters to handle potential unit conversion.
+        const formatWeight = (value) => {
+            if (isNaN(value) || value === null) return '--- kg';
+            // If it's a Simbrief plan, the value is in LBS and needs conversion. Otherwise, assume it's already KG.
+            const kgValue = isSimbriefPlan ? lbsToKg(value) : value;
+            return `${kgValue.toLocaleString()} kg`;
+        };
+        
+        const formatSpeed = (kts) => (isNaN(kts) || kts === null || String(kts).includes('---') ? '---' : `${kts} kts`);
+
         const formatTimeFromTimestamp = (ts) => (ts ? new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) : '----');
+        
         const formatDuration = (hours) => {
             if (isNaN(hours) || hours < 0) return '00:00';
             const h = Math.floor(hours);
             const m = Math.round((hours - h) * 60);
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         };
+
+        // --- Performance Data Extraction ---
+        
+        // Takeoff Performance
+        const plannedTakeoffRunway = plan.tlr?.takeoff?.conditions?.planned_runway;
+        const takeoffRunwayData = plan.tlr?.takeoff?.runway?.find(r => r.identifier === plannedTakeoffRunway);
+        const takeoffFlaps = takeoffRunwayData?.flap_setting ?? '---';
+        const takeoffThrust = takeoffRunwayData?.thrust_setting ?? '---';
+        const takeoffFlexTemp = takeoffRunwayData?.flex_temperature ? `${takeoffRunwayData.flex_temperature}°C` : '---';
+
+        // Landing Performance
+        const landingFlaps = plan.tlr?.landing?.conditions?.flap_setting ?? '---';
+        const landingWeight = formatWeight(plan.tlr?.landing?.conditions?.planned_weight); // Uses the new formatter
+        const landingWind = `${plan.tlr?.landing?.conditions?.wind_direction ?? '???'}° @ ${plan.tlr?.landing?.conditions?.wind_speed ?? '?'} kts`;
+        const vref = plan.tlr?.landing?.distance_dry?.speeds_vref ?? 0;
+        const vrefAdd = vref > 0 ? '+5 kts (min)' : '---';
+        const vapp = vref > 0 ? `${parseInt(vref, 10) + 5} kts` : '---';
+
 
         const departureWeather = window.WeatherService.parseMetar(plan.departureWeather);
         const arrivalWeather = window.WeatherService.parseMetar(plan.arrivalWeather);
@@ -162,7 +201,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="data-card"><h3><i class="fa-solid fa-weight-hanging"></i> Weights & Payload</h3><div class="data-item"><strong>ZFW:</strong> <span>${formatWeight(plan.zfw)}</span></div><div class="data-item"><strong>TOW:</strong> <span>${formatWeight(plan.tow)}</span></div><div class="data-item"><strong>Passengers:</strong> <span>${plan.pob || '---'}</span></div><div class="data-item"><strong>Cargo:</strong> <span>${formatWeight(plan.cargo)}</span></div></div>
                     <div class="data-card"><h3><i class="fa-solid fa-gas-pump"></i> Fuel</h3><div class="data-item"><strong>Taxi Fuel:</strong> <span>${formatWeight(plan.fuelTaxi)}</span></div><div class="data-item"><strong>Trip Fuel:</strong> <span>${formatWeight(plan.fuelTrip)}</span></div><div class="data-item"><strong>Total Fuel:</strong> <span>${formatWeight(plan.fuelTotal)}</span></div></div>
                     <div class="data-card"><h3><i class="fa-solid fa-tower-broadcast"></i> ATC Information</h3><div class="data-item"><strong>FIC #:</strong> <span>${plan.ficNumber || '---'}</span></div><div class="data-item"><strong>ADC #:</strong> <span>${plan.adcNumber || '---'}</span></div><div class="data-item"><strong>Squawk:</strong> <span>${plan.squawkCode || '----'}</span></div></div>
-                    <div class="data-card"><h3><i class="fa-solid fa-gauge-high"></i> Critical Speeds</h3><div class="speeds-grid"><div class="speed-item"><label>V1</label><span>${plan.v1 || '---'}</span></div><div class="speed-item"><label>VR</label><span>${plan.vr || '---'}</span></div><div class="speed-item"><label>V2</label><span>${plan.v2 || '---'}</span></div><div class="speed-item landing-speed"><label>VREF</label><span>${plan.vref || '---'}</span></div></div></div>
+                    <div class="data-card"><h3><i class="fa-solid fa-gauge-high"></i> Critical Speeds</h3><div class="speeds-grid"><div class="speed-item"><label>V1</label><span>${formatSpeed(plan.v1)}</span></div><div class="speed-item"><label>VR</label><span>${formatSpeed(plan.vr)}</span></div><div class="speed-item"><label>V2</label><span>${formatSpeed(plan.v2)}</span></div><div class="speed-item landing-speed"><label>VREF</label><span>${formatSpeed(plan.vref)}</span></div></div></div>
+                    
+                    <div class="data-card">
+                        <h3><i class="fa-solid fa-plane-departure"></i> Takeoff Performance</h3>
+                        <div class="data-item"><strong>Flaps:</strong> <span>${takeoffFlaps}</span></div>
+                        <div class="data-item"><strong>Thrust:</strong> <span>${takeoffThrust}</span></div>
+                        <div class="data-item"><strong>SEL/FLEX Temp:</strong> <span>${takeoffFlexTemp}</span></div>
+                    </div>
+                    <div class="data-card">
+                        <h3><i class="fa-solid fa-plane-arrival"></i> Landing Performance</h3>
+                        <div class="data-item"><strong>Flaps:</strong> <span>${landingFlaps}</span></div>
+                        <div class="data-item"><strong>Weight:</strong> <span>${landingWeight}</span></div>
+                        <div class="data-item"><strong>Wind:</strong> <span>${landingWind}</span></div>
+                        <div class="data-item"><strong>Vref Additive:</strong> <span>${vrefAdd}</span></div>
+                        <div class="data-item"><strong>Vapp (min):</strong> <span>${vapp}</span></div>
+                    </div>
                     <div class="data-card"><h3><i class="fa-solid fa-cloud-sun"></i> Weather</h3><div class="weather-container"><div class="weather-sub-card"><h4>Departure</h4><div class="data-item"><span>Cond:</span> <span>${departureWeather.condition}</span></div><div class="data-item"><span>Temp:</span> <span>${departureWeather.temp}</span></div><div class="data-item"><span>Wind:</span> <span>${departureWeather.wind}</span></div></div><div class="weather-sub-card"><h4>Arrival</h4><div class="data-item"><span>Cond:</span> <span>${arrivalWeather.condition}</span></div><div class="data-item"><span>Temp:</span> <span>${arrivalWeather.temp}</span></div><div class="data-item"><span>Wind:</span> <span>${arrivalWeather.wind}</span></div></div></div></div>
                 </div>
             </div>
