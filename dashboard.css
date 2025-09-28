@@ -1021,44 +1021,32 @@ input, textarea, select { width: 100%; padding: 0.8rem; border-radius: 5px; bord
 /************************************************************/
 @media (max-width: 768px) {
 
-    /* --- Mobile Scroll Logo --- */
+    /* --- Mobile Scroll Banner (MODIFIED) --- */
     #mobile-scroll-logo {
-    /* Core positioning and logic (unchanged) */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: fixed;
-    top: 1rem;
-    left: 50%;
-    z-index: 2000;
-    pointer-events: none; /* Allows clicks to pass through */
-    
-    /* NEW styling to match the other buttons */
-    width: 45px;
-    height: 45px;
-    background-color: var(--secondary-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 50%; /* This makes the container a circle */
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: auto;
+        z-index: 1000; /* Positioned behind buttons */
+        pointer-events: none;
+        transition: opacity 0.4s ease, transform 0.4s ease;
+        transform: translateY(0);
+        opacity: 1;
+    }
 
-    /* Updated transition for a smoother effect */
-    transition: opacity 0.4s ease, transform 0.4s ease;
-    transform: translateX(-50%); /* Initial transform */
-    opacity: 1;
-}
+    #mobile-scroll-logo img {
+        width: 100%;
+        height: auto;
+        display: block; /* Removes bottom space */
+    }
 
-#mobile-scroll-logo img {
-    /* Resize the logo to fit nicely inside the new circle */
-    height: 60%;
-    width: auto;
-}
-
-/* This class is still added by JavaScript on scroll */
-#mobile-scroll-logo.scrolled {
-    opacity: 0;
-    /* BONUS: Add a subtle slide-up animation as it fades */
-    transform: translateX(-50%) translateY(-20px);
-}
+    /* This class is added by JavaScript on scroll */
+    #mobile-scroll-logo.scrolled {
+        opacity: 0;
+        transform: translateY(-100%); /* Slides the banner up and out of view */
+    }
 
 
     /* --- Main Layout & Sidebar --- */
