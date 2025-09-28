@@ -278,7 +278,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Mapbox Plotting Functions ---
 
-    /**
+/**
      * Plots a static route map for a dispatch pass using Mapbox GL JS.
      * @param {string} mapContainerId - The ID of the div to render the map in.
      * @param {object} origin - The origin airport data.
@@ -301,7 +301,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const newMap = new mapboxgl.Map({
             container: mapContainerId,
-            style: 'mapbox://styles/mapbox/dark-v11',
+            style: 'mapbox://styles/mapbox/light-v11', // CHANGED to light theme
             scrollZoom: false,
             zoom: 3
         });
@@ -321,11 +321,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 'id': 'route',
                 'type': 'line',
                 'source': 'route',
-                'paint': { 'line-color': '#00a8ff', 'line-width': 3 }
+                'paint': { 'line-color': '#001B94', 'line-width': 3 } // Adjusted color for better contrast on light map
             });
 
-            new mapboxgl.Marker({ color: '#32ff7e' }).setLngLat([origin.pos_long, origin.pos_lat]).setPopup(new mapboxgl.Popup().setHTML(`<b>Departure:</b> ${origin.icao_code}`)).addTo(newMap);
-            new mapboxgl.Marker({ color: '#ff4d4d' }).setLngLat([dest.pos_long, dest.pos_lat]).setPopup(new mapboxgl.Popup().setHTML(`<b>Arrival:</b> ${dest.icao_code}`)).addTo(newMap);
+            new mapboxgl.Marker({ color: '#28a745' }).setLngLat([origin.pos_long, origin.pos_lat]).setPopup(new mapboxgl.Popup().setHTML(`<b>Departure:</b> ${origin.icao_code}`)).addTo(newMap);
+            new mapboxgl.Marker({ color: '#dc3545' }).setLngLat([dest.pos_long, dest.pos_lat]).setPopup(new mapboxgl.Popup().setHTML(`<b>Arrival:</b> ${dest.icao_code}`)).addTo(newMap);
 
             const bounds = routeCoords.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(routeCoords[0], routeCoords[0]));
             newMap.fitBounds(bounds, { padding: 50 });

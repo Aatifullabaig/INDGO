@@ -594,7 +594,7 @@ input, textarea, select {
     filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
 }
 
-roster-item {
+.roster-item {
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
@@ -857,34 +857,34 @@ roster-item {
 }
 
 /* --- NEW MAPBOX & LIVE FLIGHTS STYLES --- */
-/* Make Mapbox popups match your dark theme */
+/* Make Mapbox popups match your light theme */
 .mapboxgl-popup-content {
-    background-color: rgba(23, 27, 41, 0.95) !important;
-    color: #e0e0e0 !important;
+    background-color: #ffffff !important;
+    color: #333333 !important;
     border-radius: 6px !important;
     padding: 10px 15px !important;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
     font-family: var(--font-body);
-    border: 1px solid var(--border-color);
+    border: 1px solid #ddd;
 }
 
 .mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip {
-    border-top-color: rgba(23, 27, 41, 0.95) !important;
+    border-top-color: #ffffff !important;
 }
 
 .mapboxgl-popup-anchor-top .mapboxgl-popup-tip {
-    border-bottom-color: rgba(23, 27, 41, 0.95) !important;
+    border-bottom-color: #ffffff !important;
 }
 
 .mapboxgl-popup-close-button {
-    color: #fff;
+    color: #555;
     font-size: 1.5rem;
     padding: 0 5px;
 }
 
 .mapboxgl-popup-close-button:hover {
     background-color: transparent !important;
-    color: var(--warning-color);
+    color: var(--error-color);
 }
 
 /* Custom aircraft marker for the live map */
@@ -902,8 +902,9 @@ roster-item {
 .map-error-msg {
     text-align: center;
     padding-top: 2rem;
-    color: var(--dashboard-text-muted);
+    color: #6c757d;
 }
+
 
 /* --- NEW: LEADERBOARD STYLES (REDESIGNED) --- */
 .leaderboards-container {
@@ -1077,11 +1078,11 @@ roster-item {
 /* --- NEW STYLES FOR FLIGHT PLAN, NOTIFICATIONS, AND ALERTS --- */
 
 /* Notification Badge & Button */
-#notifications-btn { position: relative; }
+.nav-link-item { position: relative; }
 .notification-badge {
     position: absolute;
-    top: 5px;
-    right: 5px;
+    top: 10px;
+    right: 15px;
     background-color: var(--error-color);
     color: white;
     border-radius: 50%;
@@ -1109,9 +1110,28 @@ roster-item {
     padding: 1rem;
     border-radius: 5px;
     border-left: 3px solid var(--rank-accent-color, var(--accent-color));
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
 }
-.notification-item p { margin: 0; }
-.notification-item small { opacity: 0.7; font-size: 0.8rem; }
+.notification-item.unread .notification-dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--rank-accent-color, var(--accent-color));
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 8px;
+}
+.notification-item.read .notification-dot {
+    width: 8px;
+    height: 8px;
+    background-color: transparent;
+    flex-shrink: 0;
+    margin-top: 8px;
+}
+
+.notification-content p { margin: 0; }
+.notification-content small { opacity: 0.7; font-size: 0.8rem; }
 
 /* Pending Test Banner */
 .pending-test-banner {
@@ -1419,10 +1439,11 @@ roster-item {
     background-color: #fff;
     color: #333;
     border-radius: 10px;
-    width: 90%;
+    width: 100%; /* Changed to be responsive within container */
     max-width: 1200px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     font-family: 'Arial', sans-serif;
+    margin: 0;
 }
 
 /* NEW: Styles for when the dispatch pass is embedded, not a modal */
@@ -1463,6 +1484,9 @@ roster-item {
 .dispatch-header h2 {
     margin: 0;
     font-size: 1.5rem;
+    border: none;
+    padding: 0;
+    color: #fff;
 }
 .dispatch-header p {
     margin: 0;
@@ -1481,12 +1505,6 @@ roster-item {
     grid-template-columns: 2fr 1.25fr; /* Left column is wider than the right */
     gap: 2rem;
     padding: 2rem;
-}
-
-@media (max-width: 1024px) {
-    .dispatch-body {
-        grid-template-columns: 1fr; /* Stack columns on smaller screens */
-    }
 }
 
 .dispatch-left-panel, .dispatch-right-panel {
@@ -1525,6 +1543,11 @@ roster-item {
     font-weight: bold;
     color: #000;
 }
+.dispatch-route-panel.data-card {
+    background-color: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+}
 .dispatch-route-panel {
     display: flex;
     flex-direction: column;
@@ -1536,16 +1559,6 @@ roster-item {
     padding: 1.25rem;
     border-radius: 8px;
     border: 1px solid #e0e0e0;
-}
-/* === END: RESTRUCTURED DISPATCH BODY === */
-
-/* Remove old layout styles that are no longer needed */
-.dispatch-column-main, .dashed-divider, .dispatch-column-grid {
-    display: none;
-}
-/* Old styles for manual form are still needed */
-.dispatch-pass-container .dispatch-column-grid {
-    display: grid;
 }
 
 .data-card {
@@ -1642,12 +1655,12 @@ roster-item {
 }
 
 .dispatch-map-container {
-    height: 450px; /* Give it a more substantial height */
+    height: 450px;
     width: 100%;
     border-radius: 8px;
     border: 1px solid #e0e0e0;
     background-color: #e9ecef;
-    flex-grow: 1; /* Allow map to fill vertical space in its panel */
+    flex-grow: 1;
 }
 
 .dispatch-footer {
@@ -1675,7 +1688,7 @@ roster-item {
 }
 
 .dispatch-actions-wrapper {
-    margin-top: 0; /* Remove top margin as it's the only element */
+    margin-top: 0;
     display: flex;
     flex-wrap: wrap;
     gap: 1.5rem;
@@ -1711,54 +1724,15 @@ roster-item {
 /* ================================================== */
 /* START: NEW STYLES FOR MANUAL DISPATCH FORM         */
 /* ================================================== */
-.dispatch-pass-container .form-group {
+.file-flight-card .form-group {
     margin-bottom: 1rem;
 }
-.dispatch-pass-container .form-group label {
+.file-flight-card .form-group label {
     display: block;
     margin-bottom: 0.35rem;
     font-weight: bold;
     font-size: 0.9rem;
     color: #555;
-}
-
-.dispatch-input,
-.dispatch-pass-container select.dispatch-input,
-.dispatch-pass-container textarea.dispatch-input,
-.dispatch-pass-container input.dispatch-input {
-    width: 100%;
-    padding: 0.7rem;
-    border-radius: 5px;
-    border: 1px solid #ccc;
-    background-color: #f0f2f5;
-    color: #333;
-    font-size: 1rem;
-    box-sizing: border-box;
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.dispatch-input:focus {
-    outline: none;
-    border-color: var(--rank-accent-color, var(--accent-color));
-    box-shadow: 0 0 0 2px var(--rank-glow-color, var(--glow-color));
-}
-
-.dispatch-pass-container .dispatch-actions .cta-button {
-    background-color: var(--rank-accent-color, var(--accent-color));
-    color: white;
-}
-.dispatch-pass-container .dispatch-actions .cta-button:hover {
-    filter: brightness(1.2);
-}
-
-.dispatch-pass-container .dispatch-actions .details-button {
-    background-color: #e9ecef;
-    color: #333;
-    border-color: #ccc;
-}
-.dispatch-pass-container .dispatch-actions .details-button:hover {
-    background-color: #dee2e6;
-    border-color: #adb5bd;
 }
 
 /* Hide the old, unused container */
@@ -1802,6 +1776,10 @@ roster-item {
 }
 
 .active-flight-summary:hover {
+    background-color: rgba(0, 27, 148, 0.4);
+}
+
+.active-flight-item.expanded .active-flight-summary {
     background-color: var(--rank-accent-color, var(--accent-color));
 }
 
@@ -1837,6 +1815,7 @@ roster-item {
     overflow: hidden;
     transition: max-height 0.5s ease-in-out;
     background-color: #fff;
+    border-top: 1px solid var(--border-color);
 }
 
 .active-flight-item.expanded .active-flight-details {
@@ -1847,7 +1826,6 @@ roster-item {
 .active-flight-details .dispatch-pass-container {
     border-radius: 0;
     box-shadow: none;
-    border-top: 1px solid var(--border-color);
 }
 
 /* Styles for the form lockout */
@@ -1862,7 +1840,7 @@ roster-item {
     background-color: rgba(13, 16, 28, 0.95);
     border-radius: 10px;
     z-index: 10;
-    display: flex;
+    display: none;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -1885,88 +1863,33 @@ roster-item {
 /* ================================================== */
 
 /* --- Active Flights Accordion --- */
-#active-flights-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
 .active-flight-item {
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background-color: var(--primary-glass);
     transition: background-color 0.3s ease;
 }
 
-.active-flight-summary {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    padding: 1rem 1.5rem;
-    cursor: pointer;
-    transition: background-color 0.3s;
-    border-radius: 8px;
-}
-
 .active-flight-item.expanded .active-flight-summary {
-    background-color: var(--rank-accent-color, var(--accent-color));
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
 }
 
-.active-flight-summary:not(.expanded):hover {
-    background-color: rgba(0, 27, 148, 0.4);
-}
-
-.flight-summary-info {
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    flex-grow: 1;
-    flex-wrap: wrap;
-}
-
-.flight-summary-info strong {
-    font-size: 1.2rem;
-    color: #fff;
-    min-width: 100px;
-}
-
 .flight-summary-info span {
-    font-size: 1rem;
     color: var(--dashboard-text-color); /* Brighter text color */
 }
 
 .flight-summary-toggle i {
-    font-size: 1.2rem;
     color: #fff;
     transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-.active-flight-item.expanded .flight-summary-toggle i {
-    transform: rotate(180deg);
-}
-
 .active-flight-details {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.5s ease-in-out;
     background-color: #0b0e19; /* Dark solid background for contrast */
     border-bottom-left-radius: 8px;
     border-bottom-right-radius: 8px;
 }
 
-.active-flight-item.expanded .active-flight-details {
-    max-height: 2000px; /* Large enough value for content */
-}
-
 /* Ensure embedded dispatch pass looks good */
 .active-flight-details .dispatch-pass-container {
-    border-radius: 0;
-    box-shadow: none;
     border: none; /* No extra border needed */
-    border-top: 1px solid var(--border-color);
     margin-top: 0;
 }
 
@@ -2090,36 +2013,12 @@ roster-item {
     color: var(--dashboard-text-muted);
 }
 
-/* Styles for the form lockout */
-.dispatch-form-lockout {
-    position: absolute;
-    inset: 0;
-    background-color: rgba(13, 16, 28, 0.95);
-    border-radius: 10px;
-    z-index: 10;
-    display: none; /* Initially hidden */
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    color: var(--dashboard-text-color);
-    padding: 2rem;
+/* Initially hidden */
+.dispatch-form-lockout[style*="display: flex"] {
+    display: flex !important;
 }
 
-.dispatch-form-lockout h3 {
-    color: var(--warning-color);
-    margin-bottom: 1rem;
-    font-size: 1.5rem;
-}
 
-/* Clean up old unused selectors to avoid conflicts */
-#manual-dispatch-container .dispatch-header,
-#manual-dispatch-container .dispatch-body,
-#manual-dispatch-container .dispatch-footer,
-#manual-dispatch-container .dispatch-column-grid,
-#manual-dispatch-container .data-card {
-    display: none;
-}
 /* ================================================== */
 /* END: NEW REDESIGNED DISPATCH UI STYLES             */
 /* ================================================== */
@@ -2355,14 +2254,6 @@ roster-item {
     font-weight: 500;
 }
 
-/* Hide the old hub header structure to avoid conflicts */
-.hub-header:not(.redesigned) {
-    display: none;
-}
-.hub-stats-grid {
-    display: none;
-}
-
 .acars-tracking-notice {
     display: flex;
     align-items: center;
@@ -2373,6 +2264,7 @@ roster-item {
     border-radius: 6px;
     margin-bottom: 1rem;
     text-align: left;
+    color: var(--dashboard-text-color);
 }
 
 .acars-tracking-notice i {
@@ -2381,7 +2273,7 @@ roster-item {
 }
 
 .acars-tracking-notice strong {
-    color: var(--dashboard-text-primary);
+    color: #fff;
     display: block;
 }
 
@@ -2390,7 +2282,3 @@ roster-item {
     font-size: 0.9rem;
     color: var(--dashboard-text-muted);
 }
-
-
-/* --- REMOVED Redundant Dynamic Rank-Based Hub Card Styling --- */
-/* This is now handled by the global theme system */
