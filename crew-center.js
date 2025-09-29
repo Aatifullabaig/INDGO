@@ -1045,12 +1045,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             mapLoader.classList.add('active');
 
             // CHANGE: Re-plot the map based on which tab was selected
-            if (tabId === 'roster-hub-content') {
+            if (tabId === 'tab-rosters') {
                 // If switching to Rosters, plot routes for the selected hub
                 const selectedHub = view.querySelector('#departure-hub-selector').value;
                 const routesForMap = ALL_AVAILABLE_ROUTES.filter(r => r.departure === selectedHub);
                 await plotHubRoutesOnMap(selectedHub, routesForMap);
-            } else if (tabId === 'route-explorer-content') {
+            } else if (tabId === 'tab-routes') {
                 // If switching to Route Explorer, plot ALL routes
                 await plotAllRoutesOnMap(ALL_AVAILABLE_ROUTES);
             }
