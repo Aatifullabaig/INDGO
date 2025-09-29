@@ -1119,6 +1119,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // END: CORRECTED SECTOR OPS / ROUTE EXPLORER LOGIC
     // ==========================================================
 
+
     /**
      * Main view switching logic.
      */
