@@ -922,120 +922,120 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * Fetches all rank-permissible single routes from the new backend endpoint.
      */
-    async function fetchAndRenderRoutes(departureICAO) {
-        const container = document.getElementById('route-list-container');
-        container.innerHTML = '<div class="spinner-small"></div><p>Exploring all available routes...</p>';
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/routes/from/${departureICAO}`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!res.ok) throw new Error('Could not fetch available routes from the server.');
-            const data = await res.json();
+    async function fetchAndRenderRoutes() {
+    const container = document.getElementById('route-list-container');
+    container.innerHTML = '<div class="spinner-small"></div><p>Loading all available routes...</p>';
+    try {
+        // Call the new backend endpoint to get every route
+        const res = await fetch(`${API_BASE_URL}/api/routes/all`, { 
+            headers: { 'Authorization': `Bearer ${token}` } 
+        });
+        if (!res.ok) throw new Error('Could not fetch routes from the server.');
+        const allRoutes = await res.json();
 
-            if (!data.routes || data.routes.length === 0) {
-                container.innerHTML = `<p class="muted">No rank-permissible single routes found from ${departureICAO}.</p>`;
-                return [];
-            }
+        if (allRoutes.length === 0) {
+            container.innerHTML = `<p class="muted">No routes found in the database.</p>`;
+            return;
+        }
 
-            container.innerHTML = data.routes.map(route => {
-                // Find the "best" aircraft option to display (e.g., highest rank)
-                const bestAircraft = route.options.sort((a, b) => rankIndex(b.rankUnlock) - rankIndex(a.rankUnlock))[0];
-                const countryFlag = route.arrivalCountry ? `<img src="https://flagcdn.com/w20/${route.arrivalCountry.toLowerCase()}.png" class="country-flag" alt="${route.arrivalCountry}">` : '';
+        // Render each route as a card
+        container.innerHTML = allRoutes.map(route => {
+            const airlineCode = extractAirlineCode(route.flightNumber);
+            const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : '';
+            const requiredRank = route.rankUnlock || deduceRankFromAircraftFE(route.aircraft);
 
-                return `
-                <div class="route-card" data-arrival="${route.arrival}">
-                    <div class="route-card-main">
-                        <div class="route-card-arrival">
-                            ${countryFlag}
-                            <span>${route.arrival}</span>
-                        </div>
-                        <div class="route-card-details">
-                            <span>Best A/C: <strong>${bestAircraft.aircraft}</strong></span>
-                            <span>EET: <strong>${formatDuration(bestAircraft.flightTime * 3600)}</strong></span>
-                        </div>
+            return `
+            <div class="route-explorer-card" 
+                 data-departure="${route.departure}" 
+                 data-arrival="${route.arrival}" 
+                 data-aircraft="${route.aircraft}"
+                 data-operator="${route.operator}">
+                <div class="route-card-main">
+                    <img src="${logoPath}" class="leg-airline-logo" alt="${airlineCode}" onerror="this.style.display='none'">
+                    <div class="route-info">
+                        <strong>${route.flightNumber}</strong>
+                        <span>${route.departure} <i class="fa-solid fa-arrow-right-long"></i> ${route.arrival}</span>
                     </div>
-                    <div class="route-card-actions">
-                        <button class="cta-button plan-flight-btn" data-route='${JSON.stringify(route)}'>Plan Flight</button>
+                    <div class="route-details">
+                        <span><i class="fa-solid fa-plane"></i> ${route.aircraft}</span>
+                        <span><i class="fa-solid fa-stopwatch"></i> ${Number(route.flightTime || 0).toFixed(1)} hrs</span>
                     </div>
                 </div>
-                `;
-            }).join('');
-            return data.routes;
-        } catch (error) {
-            container.innerHTML = `<p class="error-text">${error.message}</p>`;
-            return [];
-        }
+                <div class="route-card-actions">
+                    ${getRankBadgeHTML(requiredRank, { showImage: true, imageClass: 'roster-req-rank-badge' })}
+                    <button class="cta-button plan-flight-from-explorer-btn" data-route='${JSON.stringify(route)}'>Plan</button>
+                </div>
+            </div>
+            `;
+        }).join('');
+    } catch (error) {
+        container.innerHTML = `<p class="error-text">${error.message}</p>`;
+        return [];
     }
+}
 
     /**
      * Sets up all event listeners for the Sector Ops view.
      */
-    function setupSectorOpsEventListeners() {
-        const view = document.getElementById('view-rosters');
-        if (!view) return;
+    // MODIFIED: Sets up event listeners for the new Route Explorer.
+function setupSectorOpsEventListeners() {
+    const view = document.getElementById('view-rosters');
+    if (!view || view.dataset.listenersAttached === 'true') return;
+    view.dataset.listenersAttached = 'true';
 
-        // Use a flag to prevent multiple listener attachments
-        if (view.dataset.listenersAttached === 'true') return;
-        view.dataset.listenersAttached = 'true';
+    // Tab switching remains the same
+    view.querySelector('.panel-tabs')?.addEventListener('click', (e) => {
+        if (e.target.classList.contains('tab-link')) {
+            view.querySelectorAll('.tab-link, .tab-content').forEach(el => el.classList.remove('active'));
+            const tabId = e.target.dataset.tab;
+            e.target.classList.add('active');
+            view.querySelector(`#${tabId}`).classList.add('active');
+        }
+    });
 
-        // Tab switching
-        view.querySelector('.panel-tabs')?.addEventListener('click', (e) => {
-            if (e.target.classList.contains('tab-link')) {
-                view.querySelectorAll('.tab-link, .tab-content').forEach(el => el.classList.remove('active'));
-                const tabId = e.target.dataset.tab;
-                e.target.classList.add('active');
-                view.querySelector(`#${tabId}`).classList.add('active');
+    // Event listener for the new search input
+    view.querySelector('#route-search-input')?.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toUpperCase().trim();
+        view.querySelectorAll('.route-explorer-card').forEach(card => {
+            const departure = card.dataset.departure;
+            const arrival = card.dataset.arrival;
+            const aircraft = card.dataset.aircraft;
+            const operator = card.dataset.operator.toUpperCase();
+            
+            // Show the card if the search term is found in any key datapoint
+            const isMatch = (
+                departure.includes(searchTerm) ||
+                arrival.includes(searchTerm) ||
+                aircraft.includes(searchTerm) ||
+                operator.includes(searchTerm)
+            );
+            card.style.display = isMatch ? 'flex' : 'none';
+        });
+    });
+
+    // "Plan Flight" button click from the new Route Explorer
+    view.querySelector('#route-list-container')?.addEventListener('click', (e) => {
+        const planButton = e.target.closest('.plan-flight-from-explorer-btn');
+        if (planButton) {
+            const routeData = JSON.parse(planButton.dataset.route);
+            
+            // Switch to the dispatch view
+            switchView('view-flight-plan');
+
+            // Pre-fill the form fields from the selected route
+            document.getElementById('fp-flightNumber').value = routeData.flightNumber;
+            document.getElementById('fp-departure').value = routeData.departure;
+            document.getElementById('fp-arrival').value = routeData.arrival;
+            
+            const aircraftSelect = document.getElementById('fp-aircraft');
+            if(aircraftSelect) {
+                aircraftSelect.value = routeData.aircraft;
             }
-        });
-
-        // Hub selector change
-        view.querySelector('#departure-hub-selector')?.addEventListener('change', async (e) => {
-            const selectedHub = e.target.value;
-            const mapLoader = view.querySelector('#sector-ops-map-container .loader-overlay');
-            mapLoader.classList.add('active');
-
-            const [rosters, routes] = await Promise.all([
-                fetchAndRenderRosters(selectedHub),
-                fetchAndRenderRoutes(selectedHub)
-            ]);
-            await plotDataOnMap(selectedHub, rosters, routes);
-
-            mapLoader.classList.remove('active');
-        });
-
-        // Route search/filter
-        view.querySelector('#route-search-input')?.addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toUpperCase();
-            view.querySelectorAll('.route-card').forEach(card => {
-                const arrivalIcao = card.dataset.arrival;
-                card.style.display = arrivalIcao.includes(searchTerm) ? 'flex' : 'none';
-            });
-        });
-
-        // "Plan Flight" button click from Route Explorer
-        view.querySelector('#route-list-container')?.addEventListener('click', (e) => {
-            const planButton = e.target.closest('.plan-flight-btn');
-            if (planButton) {
-                const routeData = JSON.parse(planButton.dataset.route);
-
-                // Switch to the dispatch view
-                switchView('view-flight-plan');
-
-                // Pre-fill the form fields
-                document.getElementById('fp-departure').value = routeData.departure;
-                document.getElementById('fp-arrival').value = routeData.arrival;
-
-                // Populate aircraft dropdown with only the valid options for this single route
-                const aircraftSelect = document.getElementById('fp-aircraft');
-                if (aircraftSelect) {
-                    aircraftSelect.innerHTML = routeData.options
-                        .map(opt => `<option value="${opt.aircraft}">${AIRCRAFT_SELECTION_LIST.find(a => a.value === opt.aircraft)?.name || opt.aircraft}</option>`)
-                        .join('');
-                }
-
-                showNotification(`Pre-filled dispatch for ${routeData.departure} → ${routeData.arrival}. Please generate with SimBrief or file manually.`, 'info');
-            }
-        });
-    }
-
+            
+            showNotification(`Pre-filled dispatch for ${routeData.flightNumber}. Please generate with SimBrief or file manually.`, 'info');
+        }
+    });
+}
     // ==========================================================
     // END: NEW SECTOR OPS COMMAND CENTER LOGIC
     // ==========================================================
