@@ -1214,6 +1214,154 @@ input, textarea, select {
     border-bottom: 1px solid var(--border-color);
 }
 
+/* --- Sector Ops Command Layout --- */
+.sector-ops-container {
+    display: flex;
+    gap: 1.5rem;
+    height: calc(100vh - 4rem); /* Full height minus main content padding */
+    max-height: 850px;
+}
+
+#sector-ops-map-container {
+    flex: 3; /* Map takes more space */
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    background-color: #191a1a;
+    border: 1px solid var(--border-color);
+}
+
+#sector-ops-map {
+    width: 100%;
+    height: 100%;
+}
+
+.sector-ops-panel {
+    flex: 2; /* Panel takes less space */
+    display: flex;
+    flex-direction: column;
+    background-color: var(--primary-glass);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.panel-header {
+    padding: 1.25rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.panel-header h2 {
+    margin: 0 0 1rem 0;
+    padding: 0;
+    border: none;
+    font-size: 1.4rem;
+}
+.departure-selector-group label {
+    display: block;
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+    color: var(--dashboard-text-muted);
+}
+
+.panel-tabs {
+    display: flex;
+    background-color: rgba(13, 16, 28, 0.7);
+}
+.tab-link {
+    flex: 1;
+    padding: 0.85rem 1rem;
+    background: none;
+    border: none;
+    color: var(--dashboard-text-muted);
+    font-size: 0.9rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    border-bottom: 3px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+.tab-link:hover {
+    background-color: var(--border-color);
+    color: #fff;
+}
+.tab-link.active {
+    color: #fff;
+    border-bottom-color: var(--rank-accent-color, var(--accent-color));
+}
+
+.panel-content {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 1.25rem;
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+
+/* --- Route Explorer Styles --- */
+.route-explorer-filters {
+    margin-bottom: 1rem;
+}
+#route-list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.route-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(13, 16, 28, 0.6);
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    border-left: 3px solid transparent;
+    transition: all 0.2s ease-in-out;
+}
+.route-card:hover {
+    background-color: rgba(0, 27, 148, 0.4);
+    border-left-color: var(--rank-accent-color, var(--accent-color));
+    transform: translateX(5px);
+}
+
+.route-card-main {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+.route-card-arrival {
+    font-family: monospace;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.route-card-details {
+    font-size: 0.85rem;
+    color: var(--dashboard-text-muted);
+}
+.route-card-details strong {
+    color: #e0e0e0;
+}
+
+/* --- Map Marker Style --- */
+.destination-marker {
+    width: 12px;
+    height: 12px;
+    background-color: #00a8ff;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(0, 168, 255, 0.7);
+}
+
+
 /* ========================================================== */
 /* START: MOBILE RESPONSIVE STYLES (ENHANCED FOR PHONE UI)   */
 /* ========================================================== */

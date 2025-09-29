@@ -1,4 +1,4 @@
-// Crew Center – Merged Script with Mapbox GL JS
+// Crew Center – Merged Script with Sector Ops Command Revamp
 document.addEventListener('DOMContentLoaded', async () => {
     // --- Global Configuration ---
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
@@ -76,11 +76,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     let ACTIVE_FLIGHT_PLANS = [];
     let CURRENT_OFP_DATA = null;
     let crewRestInterval = null;
+    let airportsData = {}; // NEW: To store airport coordinates for map plotting
 
     // --- Map-related State ---
     let liveFlightsMap = null;
     let pilotMarkers = {}; // { flightId: { marker, ... } }
     let liveFlightsInterval = null;
+    // NEW: State for the new Sector Ops map
+    let sectorOpsMap = null;
+    let sectorOpsMapMarkers = [];
+    let sectorOpsMapRouteLayers = [];
+
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
     async function fetchMapboxToken() {
@@ -94,6 +100,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             console.error('Failed to initialize maps:', error.message);
             showNotification('Could not load mapping services.', 'error');
+        }
+    }
+
+    // --- NEW: Fetch Airport Coordinate Data ---
+    // Fetches all airport data once on startup to be used for map plotting.
+    async function fetchAirportsData() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/airports`);
+            if (!response.ok) throw new Error('Could not load airport coordinate data.');
+            airportsData = await response.json();
+            console.log(`Successfully loaded data for ${Object.keys(airportsData).length} airports.`);
+        } catch (error) {
+            console.error('Failed to fetch airport data:', error);
+            showNotification('Could not load airport location data; map features will be limited.', 'error');
+        }
+    }
+
+
+    // --- Fetch Routes from Backend ---
+    async function fetchRoutes(params = {}) {
+        try {
+            const query = new URLSearchParams(params).toString();
+            const res = await fetch(`${API_BASE_URL}/api/routes${query ? `?${query}` : ''}`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                }
+            });
+            if (!res.ok) throw new Error('Failed to fetch routes.');
+            return await res.json();
+        } catch (err) {
+            console.error('Error fetching routes:', err);
+            showNotification('Could not load routes from server.', 'error');
+            return [];
         }
     }
 
@@ -478,7 +517,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Mapbox Plotting Functions ---
 
-/**
+    /**
      * Plots a static route map for a dispatch pass using Mapbox GL JS.
      * @param {string} mapContainerId - The ID of the div to render the map in.
      * @param {object} origin - The origin airport data.
@@ -667,7 +706,344 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
 
-    // --- View Switching ---
+    // ==========================================================
+    // START: NEW SECTOR OPS COMMAND CENTER LOGIC
+    // ==========================================================
+
+    /**
+     * Main orchestrator for the revamped Sector Ops view.
+     */
+    async function initializeSectorOpsView() {
+        const selector = document.getElementById('departure-hub-selector');
+        const mapLoader = document.querySelector('#sector-ops-map-container .loader-overlay');
+        if (!selector || !mapLoader) return;
+
+        mapLoader.classList.add('active');
+
+        try {
+            // 1. Get pilot's available hubs from the backend
+            const rosterRes = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!rosterRes.ok) throw new Error('Could not determine your current location.');
+            const rosterData = await rosterRes.json();
+            const departureHubs = rosterData.searchCriteria?.searched || ['VIDP'];
+
+            // 2. Populate the hub selector dropdown
+            selector.innerHTML = departureHubs.map(h => `<option value="${h}">${airportsData[h]?.name || h}</option>`).join('');
+            const selectedHub = selector.value;
+
+            // 3. Initialize the Mapbox map for this view
+            await initializeSectorOpsMap(selectedHub);
+
+            // 4. Fetch data for both tabs in parallel for speed
+            const [rosters, routes] = await Promise.all([
+                fetchAndRenderRosters(selectedHub),
+                fetchAndRenderRoutes(selectedHub)
+            ]);
+
+            // 5. Plot the fetched data on the map
+            await plotDataOnMap(selectedHub, rosters, routes);
+
+            // 6. Set up all event listeners for this view
+            setupSectorOpsEventListeners();
+
+        } catch (error) {
+            console.error("Error initializing Sector Ops view:", error);
+            showNotification(error.message, 'error');
+            document.getElementById('roster-list-container').innerHTML = `<p class="error-text">${error.message}</p>`;
+            document.getElementById('route-list-container').innerHTML = `<p class="error-text">${error.message}</p>`;
+        } finally {
+            mapLoader.classList.remove('active');
+        }
+    }
+
+    /**
+     * Initializes or resets the main Sector Ops Mapbox map.
+     */
+    async function initializeSectorOpsMap(centerICAO) {
+        if (!MAPBOX_ACCESS_TOKEN) {
+            document.getElementById('sector-ops-map-container').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
+            return;
+        }
+        if (sectorOpsMap) sectorOpsMap.remove();
+
+        const centerCoords = airportsData[centerICAO] ? [airportsData[centerICAO].lon, airportsData[centerICAO].lat] : [77.2, 28.6]; // Default to Delhi
+
+        sectorOpsMap = new mapboxgl.Map({
+            container: 'sector-ops-map',
+            style: 'mapbox://styles/mapbox/dark-v11',
+            center: centerCoords,
+            zoom: 4.5,
+            interactive: true
+        });
+
+        return new Promise(resolve => {
+            sectorOpsMap.on('load', () => resolve());
+        });
+    }
+
+    /**
+     * Plots all available destinations and route lines on the Sector Ops map.
+     */
+    async function plotDataOnMap(departureICAO, rosters, routes) {
+        if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded() || !airportsData[departureICAO]) return;
+
+        // Clear any previous markers and layers from the map
+        sectorOpsMapMarkers.forEach(marker => marker.remove());
+        sectorOpsMapMarkers = [];
+        sectorOpsMapRouteLayers.forEach(id => {
+            if (sectorOpsMap.getLayer(id)) sectorOpsMap.removeLayer(id);
+            if (sectorOpsMap.getSource(id)) sectorOpsMap.removeSource(id);
+        });
+        sectorOpsMapRouteLayers = [];
+
+        const departureCoords = [airportsData[departureICAO].lon, airportsData[departureICAO].lat];
+        sectorOpsMap.flyTo({ center: departureCoords, zoom: 5, essential: true });
+
+        const uniqueDestinations = new Map();
+        routes.forEach(route => {
+            if (airportsData[route.arrival]) {
+                uniqueDestinations.set(route.arrival, [airportsData[route.arrival].lon, airportsData[route.arrival].lat]);
+            }
+        });
+
+        // Create GeoJSON features for route lines
+        const routeLineFeatures = Array.from(uniqueDestinations.entries()).map(([_, destCoords]) => ({
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: [departureCoords, destCoords] }
+        }));
+
+        // Add route lines source and layer
+        const routeLinesId = 'route-lines';
+        sectorOpsMap.addSource(routeLinesId, {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: routeLineFeatures }
+        });
+        sectorOpsMap.addLayer({
+            id: routeLinesId,
+            type: 'line',
+            source: routeLinesId,
+            paint: { 'line-color': 'rgba(0, 168, 255, 0.5)', 'line-width': 1.5, 'line-dasharray': [2, 2] }
+        });
+        sectorOpsMapRouteLayers.push(routeLinesId);
+
+        // Add destination markers
+        uniqueDestinations.forEach((coords, icao) => {
+            const el = document.createElement('div');
+            el.className = 'destination-marker';
+            el.title = `${icao}: ${airportsData[icao]?.name || ''}`;
+
+            const marker = new mapboxgl.Marker(el)
+                .setLngLat(coords)
+                .setPopup(new mapboxgl.Popup({ offset: 25, closeButton: false }).setHTML(`<strong>${icao}</strong>`))
+                .addTo(sectorOpsMap);
+
+            // Add interactivity: clicking a marker filters the route list
+            el.addEventListener('click', () => {
+                const searchInput = document.getElementById('route-search-input');
+                searchInput.value = icao;
+                searchInput.dispatchEvent(new Event('input')); // Trigger the filter
+                document.querySelector('.tab-link[data-tab="tab-routes"]').click(); // Switch to route explorer tab
+            });
+
+            sectorOpsMapMarkers.push(marker);
+        });
+    }
+
+    /**
+     * Fetches and renders the curated rosters for the selected hub.
+     */
+    async function fetchAndRenderRosters(departureICAO) {
+        const container = document.getElementById('roster-list-container');
+        container.innerHTML = '<div class="spinner-small"></div><p>Loading recommended rosters...</p>';
+        try {
+            // This endpoint is smart enough to find rosters for the given hub
+            const res = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!res.ok) throw new Error('Could not fetch recommended rosters.');
+            const data = await res.json();
+
+            const relevantRosters = data.rosters.filter(r => r.hub === departureICAO || r.legs?.[0]?.departure === departureICAO);
+
+            if (relevantRosters.length === 0) {
+                container.innerHTML = `<p class="muted">No recommended multi-leg rosters found departing from ${departureICAO}.</p>`;
+                return [];
+            }
+
+            container.innerHTML = relevantRosters.map(roster => {
+                const dutyDisabled = CURRENT_PILOT?.promotionStatus === 'PENDING_TEST' ? 'disabled' : '';
+                const uniqueAirlines = [...new Set(roster.legs.map(leg => extractAirlineCode(leg.flightNumber)))];
+                const airlineLogosHTML = uniqueAirlines.map(code => {
+                    if (!code || code === 'UNKNOWN') return '';
+                    const logoPath = `Images/vas/${code}.png`;
+                    return `<img src="${logoPath}" alt="${code}" class="roster-airline-logo" onerror="this.style.display='none'">`;
+                }).join('');
+
+                const firstLeg = roster.legs[0];
+                const lastLeg = roster.legs[roster.legs.length - 1];
+                const pathString = [roster.legs[0].departure, ...roster.legs.map(leg => leg.arrival)].join(' → ');
+
+                return `
+                <div class="roster-item" data-roster-id="${roster.rosterId}">
+                    <div class="roster-card-header">
+                        <div class="roster-airlines">${airlineLogosHTML}</div>
+                        <div class="roster-title-info">
+                            <span class="roster-name">${roster.name}</span>
+                            <span class="roster-meta">Total: ${Number(roster.totalFlightTime || 0).toFixed(1)} hrs</span>
+                        </div>
+                    </div>
+                    <div class="roster-flight-info">
+                        <div class="flight-segment departure">
+                            <span class="segment-label">Departs</span>
+                            <span class="segment-icao">${firstLeg.departure}</span>
+                        </div>
+                        <div class="flight-divider"><i class="fa-solid fa-plane"></i></div>
+                        <div class="flight-segment arrival">
+                            <span class="segment-label">Arrives</span>
+                            <span class="segment-icao">${lastLeg.arrival}</span>
+                        </div>
+                    </div>
+                    <div class="roster-card-footer">
+                        <div class="roster-path-display">${pathString}</div>
+                        <div class="roster-actions">
+                            <button class="details-button" data-roster-id="${roster.rosterId}" aria-expanded="false">Details</button>
+                            <button class="cta-button go-on-duty-btn" data-roster-id="${roster.rosterId}" ${dutyDisabled}>Go On Duty</button>
+                        </div>
+                    </div>
+                    <div class="roster-leg-details" id="details-${roster.rosterId}"></div>
+                </div>`;
+            }).join('');
+            return relevantRosters;
+
+        } catch (error) {
+            container.innerHTML = `<p class="error-text">${error.message}</p>`;
+            return [];
+        }
+    }
+
+    /**
+     * Fetches all rank-permissible single routes from the new backend endpoint.
+     */
+    async function fetchAndRenderRoutes(departureICAO) {
+        const container = document.getElementById('route-list-container');
+        container.innerHTML = '<div class="spinner-small"></div><p>Exploring all available routes...</p>';
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/routes/from/${departureICAO}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!res.ok) throw new Error('Could not fetch available routes from the server.');
+            const data = await res.json();
+
+            if (!data.routes || data.routes.length === 0) {
+                container.innerHTML = `<p class="muted">No rank-permissible single routes found from ${departureICAO}.</p>`;
+                return [];
+            }
+
+            container.innerHTML = data.routes.map(route => {
+                // Find the "best" aircraft option to display (e.g., highest rank)
+                const bestAircraft = route.options.sort((a, b) => rankIndex(b.rankUnlock) - rankIndex(a.rankUnlock))[0];
+                const countryFlag = route.arrivalCountry ? `<img src="https://flagcdn.com/w20/${route.arrivalCountry.toLowerCase()}.png" class="country-flag" alt="${route.arrivalCountry}">` : '';
+
+                return `
+                <div class="route-card" data-arrival="${route.arrival}">
+                    <div class="route-card-main">
+                        <div class="route-card-arrival">
+                            ${countryFlag}
+                            <span>${route.arrival}</span>
+                        </div>
+                        <div class="route-card-details">
+                            <span>Best A/C: <strong>${bestAircraft.aircraft}</strong></span>
+                            <span>EET: <strong>${formatDuration(bestAircraft.flightTime * 3600)}</strong></span>
+                        </div>
+                    </div>
+                    <div class="route-card-actions">
+                        <button class="cta-button plan-flight-btn" data-route='${JSON.stringify(route)}'>Plan Flight</button>
+                    </div>
+                </div>
+                `;
+            }).join('');
+            return data.routes;
+        } catch (error) {
+            container.innerHTML = `<p class="error-text">${error.message}</p>`;
+            return [];
+        }
+    }
+
+    /**
+     * Sets up all event listeners for the Sector Ops view.
+     */
+    function setupSectorOpsEventListeners() {
+        const view = document.getElementById('view-rosters');
+        if (!view) return;
+
+        // Use a flag to prevent multiple listener attachments
+        if (view.dataset.listenersAttached === 'true') return;
+        view.dataset.listenersAttached = 'true';
+
+        // Tab switching
+        view.querySelector('.panel-tabs')?.addEventListener('click', (e) => {
+            if (e.target.classList.contains('tab-link')) {
+                view.querySelectorAll('.tab-link, .tab-content').forEach(el => el.classList.remove('active'));
+                const tabId = e.target.dataset.tab;
+                e.target.classList.add('active');
+                view.querySelector(`#${tabId}`).classList.add('active');
+            }
+        });
+
+        // Hub selector change
+        view.querySelector('#departure-hub-selector')?.addEventListener('change', async (e) => {
+            const selectedHub = e.target.value;
+            const mapLoader = view.querySelector('#sector-ops-map-container .loader-overlay');
+            mapLoader.classList.add('active');
+
+            const [rosters, routes] = await Promise.all([
+                fetchAndRenderRosters(selectedHub),
+                fetchAndRenderRoutes(selectedHub)
+            ]);
+            await plotDataOnMap(selectedHub, rosters, routes);
+
+            mapLoader.classList.remove('active');
+        });
+
+        // Route search/filter
+        view.querySelector('#route-search-input')?.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toUpperCase();
+            view.querySelectorAll('.route-card').forEach(card => {
+                const arrivalIcao = card.dataset.arrival;
+                card.style.display = arrivalIcao.includes(searchTerm) ? 'flex' : 'none';
+            });
+        });
+
+        // "Plan Flight" button click from Route Explorer
+        view.querySelector('#route-list-container')?.addEventListener('click', (e) => {
+            const planButton = e.target.closest('.plan-flight-btn');
+            if (planButton) {
+                const routeData = JSON.parse(planButton.dataset.route);
+
+                // Switch to the dispatch view
+                switchView('view-flight-plan');
+
+                // Pre-fill the form fields
+                document.getElementById('fp-departure').value = routeData.departure;
+                document.getElementById('fp-arrival').value = routeData.arrival;
+
+                // Populate aircraft dropdown with only the valid options for this single route
+                const aircraftSelect = document.getElementById('fp-aircraft');
+                if (aircraftSelect) {
+                    aircraftSelect.innerHTML = routeData.options
+                        .map(opt => `<option value="${opt.aircraft}">${AIRCRAFT_SELECTION_LIST.find(a => a.value === opt.aircraft)?.name || opt.aircraft}</option>`)
+                        .join('');
+                }
+
+                showNotification(`Pre-filled dispatch for ${routeData.departure} → ${routeData.arrival}. Please generate with SimBrief or file manually.`, 'info');
+            }
+        });
+    }
+
+    // ==========================================================
+    // END: NEW SECTOR OPS COMMAND CENTER LOGIC
+    // ==========================================================
+
+    /**
+     * MODIFIED: This is the main view switching logic.
+     * It now triggers the new Sector Ops initialization.
+     */
     const switchView = (viewId) => {
         sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
         mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
@@ -680,16 +1056,21 @@ document.addEventListener('DOMContentLoaded', async () => {
             newView.classList.add('active');
         }
 
-        // Manage the live map interval based on view
+        // Manage map intervals and initializations based on view
+        if (liveFlightsInterval) {
+            clearInterval(liveFlightsInterval);
+            liveFlightsInterval = null;
+        }
+
         if (viewId === 'view-duty-status') {
-            initializeLiveMap(); // This will also start the loop if needed
-        } else {
-            if (liveFlightsInterval) {
-                clearInterval(liveFlightsInterval);
-                liveFlightsInterval = null;
-            }
+            initializeLiveMap();
+        } else if (viewId === 'view-rosters') {
+            // *** THIS IS THE KEY CHANGE ***
+            // Instead of just fetching a list, we now initialize the entire interactive view.
+            initializeSectorOpsView();
         }
     };
+
 
     // --- New function to fetch fleet data ---
     async function fetchFleetData() {
@@ -794,7 +1175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         renderPilotHubView(pilot, leaderboardsHTML);
         await renderFlightPlanView(pilot);
-        await fetchAndDisplayRosters();
+        // Note: fetchAndDisplayRosters() is no longer called here. It's handled by initializeSectorOpsView().
         await fetchPirepHistory();
     };
 
@@ -1156,87 +1537,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             console.error('Leaderboard fetch error:', error);
             return `<div class="content-card"><h2><i class="fa-solid fa-trophy"></i> Leaderboards</h2><p>Could not load leaderboards.</p></div>`;
-        }
-    };
-
-    const fetchAndDisplayRosters = async () => {
-        const container = document.getElementById('roster-list-container');
-        const header = document.getElementById('roster-list-header');
-        container.innerHTML = '<p>Loading available rosters...</p>';
-        header.innerHTML = '<p>Finding rosters for your location...</p>';
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!response.ok) throw new Error('Could not fetch personalized rosters.');
-            const data = await response.json();
-            const rosters = data.rosters || [];
-            const criteria = data.searchCriteria || {};
-
-            if (criteria.searched?.length > 0) {
-                header.innerHTML = `
-                    <div class="roster-header-info">
-                        Showing rosters for <strong>${criteria.searched.join(' & ')}</strong>
-                        <span class="rank-display-pill ml-8">
-                            ${getRankBadgeHTML(CURRENT_PILOT?.rank, { showImage: true, showName: true })}
-                        </span>
-                    </div>
-                `;
-                if (window.plotRosters) window.plotRosters(criteria.searched[0], rosters);
-            } else {
-                header.innerHTML = 'No location data found. Showing rosters from primary hubs.';
-            }
-
-            if (rosters.length === 0) {
-                container.innerHTML = '<p>There are no rosters available from your current location(s).</p>';
-                return;
-            }
-
-            container.innerHTML = rosters.map(roster => {
-                const dutyDisabled = CURRENT_PILOT?.promotionStatus === 'PENDING_TEST' ? 'disabled' : '';
-                const uniqueAirlines = [...new Set(roster.legs.map(leg => extractAirlineCode(leg.flightNumber)))];
-                const airlineLogosHTML = uniqueAirlines.map(code => {
-                    if (!code || code === 'UNKNOWN') return '';
-                    const logoPath = `Images/vas/${code}.png`;
-                    return `<img src="${logoPath}" alt="${code}" class="roster-airline-logo" onerror="this.style.display='none'">`;
-                }).join('');
-
-                const firstLeg = roster.legs[0];
-                const lastLeg = roster.legs[roster.legs.length - 1];
-                const pathString = [roster.legs[0].departure, ...roster.legs.map(leg => leg.arrival)].join(' → ');
-
-                return `
-                <div class="roster-item" data-roster-id="${roster.rosterId}">
-                    <div class="roster-card-header">
-                        <div class="roster-airlines">${airlineLogosHTML}</div>
-                        <div class="roster-title-info">
-                            <span class="roster-name">${roster.name}</span>
-                            <span class="roster-meta">Total: ${Number(roster.totalFlightTime || 0).toFixed(1)} hrs</span>
-                        </div>
-                    </div>
-                    <div class="roster-flight-info">
-                        <div class="flight-segment departure">
-                            <span class="segment-label">Departs</span>
-                            <span class="segment-icao">${firstLeg.departure}</span>
-                            <span class="segment-time">TBA</span>
-                        </div>
-                        <div class="flight-divider"><i class="fa-solid fa-plane"></i></div>
-                        <div class="flight-segment arrival">
-                            <span class="segment-label">Arrives</span>
-                            <span class="segment-icao">${lastLeg.arrival}</span>
-                            <span class="segment-time">TBA</span>
-                        </div>
-                    </div>
-                    <div class="roster-card-footer">
-                        <div class="roster-path-display">${pathString}</div>
-                        <div class="roster-actions">
-                            <button class="details-button" data-roster-id="${roster.rosterId}" aria-expanded="false">Details</button>
-                            <button class="cta-button go-on-duty-btn" data-roster-id="${roster.rosterId}" ${dutyDisabled}>Go On Duty</button>
-                        </div>
-                    </div>
-                    <div class="roster-leg-details" id="details-${roster.rosterId}"></div>
-                </div>`;
-            }).join('');
-        } catch (error) {
-            container.innerHTML = `<p class="error-text">${error.message}</p>`;
         }
     };
 
@@ -1808,14 +2108,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                         navlog: ofpData.navlog?.fix || []
                     }
                 };
-                
+
                 const dispatchDisplay = document.getElementById('dispatch-pass-display');
                 const manualDispatchContainer = document.getElementById('manual-dispatch-container');
 
                 if (!dispatchDisplay || !manualDispatchContainer) {
                     throw new Error('Dispatch or form container not found in the DOM.');
                 }
-                
+
                 populateDispatchPass(dispatchDisplay, previewPlan, { isPreview: true });
 
                 manualDispatchContainer.style.display = 'none';
@@ -1835,9 +2135,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function initializeApp() {
         mainContentLoader.classList.add('active');
 
-        
-        await fetchMapboxToken(); // Fetch token first
-        await fetchPilotData(); // Then fetch pilot data which handles rendering
+        // Fetch essential data in parallel
+        await Promise.all([
+            fetchMapboxToken(),
+            fetchAirportsData() // NEW: Load airport coordinates on startup
+        ]);
+
+        await fetchPilotData();
 
         // Initial view setup
         const urlParams = new URLSearchParams(window.location.search);
