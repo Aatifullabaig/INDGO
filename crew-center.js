@@ -705,7 +705,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     /**
      * Main orchestrator for the Sector Ops view.
-     * Rosters are hub-specific; Route Explorer is global.
+     * Manages fetching data and orchestrating map and list updates.
      */
     async function initializeSectorOpsView() {
         const selector = document.getElementById('departure-hub-selector');
@@ -729,17 +729,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             await initializeSectorOpsMap(selectedHub);
 
             // 4. Fetch data for both tabs in parallel
-            // Rosters are hub-specific, routes are global.
             const [rosters, routes] = await Promise.all([
                 fetchAndRenderRosters(selectedHub),
-                fetchAndRenderRoutes() // No longer needs selectedHub
+                fetchAndRenderRoutes()
             ]);
             ALL_AVAILABLE_ROUTES = routes; // Store all routes for later use
 
-            // 5. Plot hub-specific data on the map
-            // We filter the global routes list to get only those relevant for the map
+            // 5. Plot initial data on the map based on the default active tab (Rosters)
             const routesForMap = ALL_AVAILABLE_ROUTES.filter(r => r.departure === selectedHub);
-            await plotDataOnMap(selectedHub, rosters, routesForMap);
+            await plotHubRoutesOnMap(selectedHub, routesForMap);
 
             // 6. Set up all event listeners
             setupSectorOpsEventListeners();
@@ -780,12 +778,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /**
-     * Plots hub-specific destinations and route lines on the Sector Ops map.
+     * Clears any existing route layers and markers from the Sector Ops map.
      */
-    async function plotDataOnMap(departureICAO, rosters, routes) {
-        if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded() || !airportsData[departureICAO]) return;
-
-        // Clear previous markers and layers
+    function clearMapLayersAndMarkers() {
         sectorOpsMapMarkers.forEach(marker => marker.remove());
         sectorOpsMapMarkers = [];
         sectorOpsMapRouteLayers.forEach(id => {
@@ -793,6 +788,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (sectorOpsMap.getSource(id)) sectorOpsMap.removeSource(id);
         });
         sectorOpsMapRouteLayers = [];
+    }
+    
+    /**
+     * MODIFIED: Plots routes originating from a single, specific hub.
+     * This is used for the "Rosters" tab view.
+     */
+    async function plotHubRoutesOnMap(departureICAO, routes) {
+        if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded() || !airportsData[departureICAO]) return;
+
+        clearMapLayersAndMarkers();
 
         const departureCoords = [airportsData[departureICAO].lon, airportsData[departureICAO].lat];
         sectorOpsMap.flyTo({ center: departureCoords, zoom: 5, essential: true });
@@ -809,7 +814,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             geometry: { type: 'LineString', coordinates: [departureCoords, destCoords] }
         }));
 
-        const routeLinesId = 'route-lines';
+        const routeLinesId = 'hub-route-lines';
         sectorOpsMap.addSource(routeLinesId, {
             type: 'geojson',
             data: { type: 'FeatureCollection', features: routeLineFeatures }
@@ -827,14 +832,72 @@ document.addEventListener('DOMContentLoaded', async () => {
             const el = document.createElement('div');
             el.className = 'destination-marker';
             el.title = `${icao}: ${airportsData[icao]?.name || ''}`;
-
             const marker = new mapboxgl.Marker(el)
                 .setLngLat(coords)
                 .setPopup(new mapboxgl.Popup({ offset: 25, closeButton: false }).setHTML(`<strong>${icao}</strong>`))
                 .addTo(sectorOpsMap);
-            
             sectorOpsMapMarkers.push(marker);
         });
+    }
+
+    /**
+     * NEW: Plots all routes globally on the map.
+     * This is used for the "Route Explorer" tab view.
+     */
+    async function plotAllRoutesOnMap(routes) {
+        if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
+
+        clearMapLayersAndMarkers();
+        
+        const allCoords = [];
+        const uniqueAirports = new Map();
+
+        const routeLineFeatures = routes.map(route => {
+            const dep = airportsData[route.departure];
+            const arr = airportsData[route.arrival];
+
+            if (dep && arr) {
+                const depCoords = [dep.lon, dep.lat];
+                const arrCoords = [arr.lon, arr.lat];
+                allCoords.push(depCoords, arrCoords);
+                
+                if (!uniqueAirports.has(dep.icao)) uniqueAirports.set(dep.icao, depCoords);
+                if (!uniqueAirports.has(arr.icao)) uniqueAirports.set(arr.icao, arrCoords);
+
+                return {
+                    type: 'Feature',
+                    geometry: { type: 'LineString', coordinates: [depCoords, arrCoords] }
+                };
+            }
+            return null;
+        }).filter(Boolean); // Remove null entries for routes with missing airport data
+
+        if (routeLineFeatures.length === 0) return;
+
+        const routeLinesId = 'global-route-lines';
+        sectorOpsMap.addSource(routeLinesId, {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: routeLineFeatures }
+        });
+        sectorOpsMap.addLayer({
+            id: routeLinesId,
+            type: 'line',
+            source: routeLinesId,
+            paint: { 'line-color': 'rgba(232, 67, 147, 0.4)', 'line-width': 1 }
+        });
+        sectorOpsMapRouteLayers.push(routeLinesId);
+
+        // Add airport markers
+        uniqueAirports.forEach((coords, icao) => {
+            const el = document.createElement('div');
+            el.className = 'destination-marker small'; // Use a smaller marker for global view
+            const marker = new mapboxgl.Marker(el).setLngLat(coords).addTo(sectorOpsMap);
+            sectorOpsMapMarkers.push(marker);
+        });
+
+        // Fit map to show all routes
+        const bounds = allCoords.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(allCoords[0], allCoords[0]));
+        sectorOpsMap.fitBounds(bounds, { padding: 50, duration: 1000 });
     }
 
     /**
@@ -907,13 +970,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /**
-     * MODIFIED: Fetches ALL available routes from the new backend endpoint.
+     * Fetches ALL available routes from the backend.
      */
     async function fetchAndRenderRoutes() {
         const container = document.getElementById('route-list-container');
         container.innerHTML = '<div class="spinner-small"></div><p>Exploring all available routes...</p>';
         try {
-            // Calls the new `/api/routes/all` endpoint
             const res = await fetch(`${API_BASE_URL}/api/routes/all`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -925,7 +987,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return [];
             }
 
-            // Renders each route as a filterable card
             container.innerHTML = allRoutes.map(route => {
                 const airlineCode = extractAirlineCode(route.flightNumber);
                 const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : '';
@@ -963,32 +1024,53 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /**
-     * MODIFIED: Sets up event listeners for both hub-specific rosters and the global route explorer.
+     * MODIFIED: Sets up event listeners that correctly update the map based on the active tab.
      */
     function setupSectorOpsEventListeners() {
         const view = document.getElementById('view-rosters');
         if (!view || view.dataset.listenersAttached === 'true') return;
         view.dataset.listenersAttached = 'true';
 
-        // Tab switching
-        view.querySelector('.panel-tabs')?.addEventListener('click', (e) => {
-            if (e.target.classList.contains('tab-link')) {
-                view.querySelectorAll('.tab-link, .tab-content').forEach(el => el.classList.remove('active'));
-                const tabId = e.target.dataset.tab;
-                e.target.classList.add('active');
-                view.querySelector(`#${tabId}`).classList.add('active');
+        // Tab switching now controls the map display
+        view.querySelector('.panel-tabs')?.addEventListener('click', async (e) => {
+            const tabLink = e.target.closest('.tab-link');
+            if (!tabLink) return;
+            
+            view.querySelectorAll('.tab-link, .tab-content').forEach(el => el.classList.remove('active'));
+            const tabId = tabLink.dataset.tab;
+            tabLink.classList.add('active');
+            view.querySelector(`#${tabId}`).classList.add('active');
+            
+            const mapLoader = view.querySelector('#sector-ops-map-container .loader-overlay');
+            mapLoader.classList.add('active');
+
+            // CHANGE: Re-plot the map based on which tab was selected
+            if (tabId === 'roster-hub-content') {
+                // If switching to Rosters, plot routes for the selected hub
+                const selectedHub = view.querySelector('#departure-hub-selector').value;
+                const routesForMap = ALL_AVAILABLE_ROUTES.filter(r => r.departure === selectedHub);
+                await plotHubRoutesOnMap(selectedHub, routesForMap);
+            } else if (tabId === 'route-explorer-content') {
+                // If switching to Route Explorer, plot ALL routes
+                await plotAllRoutesOnMap(ALL_AVAILABLE_ROUTES);
             }
+            mapLoader.classList.remove('active');
         });
 
-        // Hub selector change (affects rosters and map ONLY)
+        // Hub selector change only affects the "Rosters" map view
         view.querySelector('#departure-hub-selector')?.addEventListener('change', async (e) => {
             const selectedHub = e.target.value;
             const mapLoader = view.querySelector('#sector-ops-map-container .loader-overlay');
             mapLoader.classList.add('active');
 
-            const rosters = await fetchAndRenderRosters(selectedHub);
-            const routesForMap = ALL_AVAILABLE_ROUTES.filter(r => r.departure === selectedHub);
-            await plotDataOnMap(selectedHub, rosters, routesForMap);
+            // This only updates the roster list, the map update is handled by the tab logic
+            await fetchAndRenderRosters(selectedHub);
+            
+            // CHANGE: Only update the map if the Rosters tab is currently active
+            if (view.querySelector('#roster-hub-content').classList.contains('active')) {
+                 const routesForMap = ALL_AVAILABLE_ROUTES.filter(r => r.departure === selectedHub);
+                 await plotHubRoutesOnMap(selectedHub, routesForMap);
+            }
 
             mapLoader.classList.remove('active');
         });
