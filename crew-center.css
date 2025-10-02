@@ -1214,60 +1214,86 @@ input, textarea, select {
     border-bottom: 1px solid var(--border-color);
 }
 
-/* --- Sector Ops Command Layout --- */
-.sector-ops-container {
-    display: flex;
-    gap: 1.5rem;
-    height: calc(100vh - 4rem); /* Full height minus main content padding */
-    max-height: 850px;
-}
+/* ========================================================== */
+/* START: NEW SECTOR OPS FULL-SCREEN LAYOUT                   */
+/* ========================================================== */
 
-#sector-ops-map-container {
-    flex: 3; /* Map takes more space */
+/* This makes the main view container a positioning context for its children */
+#view-rosters.active {
     position: relative;
-    border-radius: 10px;
+    /* Full viewport height minus the main content's vertical padding (2rem top + 2rem bottom) */
+    height: calc(100vh - 4rem); 
     overflow: hidden;
-    background-color: #191a1a;
-    border: 1px solid var(--border-color);
+    padding: 0 !important; /* Override parent padding */
+    margin: -2rem -3rem; /* Counteract parent padding to be truly full-screen */
 }
 
-#sector-ops-map {
+#sector-ops-map-fullscreen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: 100%;
     height: 100%;
 }
 
-.sector-ops-panel {
-    flex: 2; /* Panel takes less space */
+#sector-ops-floating-panel {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    width: 480px;
+    max-height: calc(100% - 3rem); /* Panel height with vertical padding */
+    z-index: 10;
+    
+    background-color: var(--primary-glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    
     display: flex;
     flex-direction: column;
-    background-color: var(--primary-glass);
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
     overflow: hidden;
+    transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
-.panel-header {
+/* Let the scrollable content area take up the remaining space */
+#sector-ops-floating-panel .panel-content {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 1rem 1.25rem;
+}
+#roster-list-container {
+    margin-top: 0; /* Reset margin for this context */
+    gap: 0.75rem;
+}
+
+
+/* Style adjustments for elements inside the new panel */
+#sector-ops-floating-panel .panel-header {
     padding: 1.25rem;
     border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
 }
-.panel-header h2 {
+#sector-ops-floating-panel .panel-header h2 {
     margin: 0 0 1rem 0;
     padding: 0;
     border: none;
     font-size: 1.4rem;
 }
-.departure-selector-group label {
-    display: block;
+#sector-ops-floating-panel .departure-selector-group label {
     font-size: 0.8rem;
     margin-bottom: 0.25rem;
     color: var(--dashboard-text-muted);
 }
-
-.panel-tabs {
+#sector-ops-floating-panel .panel-tabs {
     display: flex;
     background-color: rgba(13, 16, 28, 0.7);
+    flex-shrink: 0;
 }
-.tab-link {
+#sector-ops-floating-panel .tab-link {
     flex: 1;
     padding: 0.85rem 1rem;
     background: none;
@@ -1283,29 +1309,25 @@ input, textarea, select {
     justify-content: center;
     gap: 8px;
 }
-.tab-link:hover {
+#sector-ops-floating-panel .tab-link:hover {
     background-color: var(--border-color);
     color: #fff;
 }
-.tab-link.active {
+#sector-ops-floating-panel .tab-link.active {
     color: #fff;
     border-bottom-color: var(--rank-accent-color, var(--accent-color));
 }
-
-.panel-content {
-    flex-grow: 1;
-    overflow-y: auto;
-    padding: 1.25rem;
+#sector-ops-floating-panel .tab-content { display: none; }
+#sector-ops-floating-panel .tab-content.active { display: block; }
+#sector-ops-floating-panel .route-explorer-filters {
+    margin-bottom: 1rem;
 }
-
-.tab-content { display: none; }
-.tab-content.active { display: block; }
+#sector-ops-floating-panel #route-search-input.form-input {
+    width: 100%;
+}
 
 
 /* --- Route Explorer Styles --- */
-.route-explorer-filters {
-    margin-bottom: 1rem;
-}
 #route-list-container {
     display: flex;
     flex-direction: column;
@@ -1349,6 +1371,16 @@ input, textarea, select {
 .route-card-details strong {
     color: #e0e0e0;
 }
+.route-card .cta-button {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+}
+.route-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
 
 /* --- Map Marker Style --- */
 .destination-marker {
@@ -1361,10 +1393,19 @@ input, textarea, select {
     box-shadow: 0 0 8px rgba(0, 168, 255, 0.7);
 }
 
+/* ========================================================== */
+/* END: NEW SECTOR OPS FULL-SCREEN LAYOUT                     */
+/* ========================================================== */
+
 
 /* ========================================================== */
 /* START: MOBILE RESPONSIVE STYLES (ENHANCED FOR PHONE UI)   */
 /* ========================================================== */
+@media (max-width: 992px) {
+    #sector-ops-floating-panel {
+        width: 400px;
+    }
+}
 @media (max-width: 768px) {
 
     /* --- Main Layout --- */
@@ -1465,6 +1506,37 @@ input, textarea, select {
         /* Reduce padding on mobile to maximize space */
         padding: 1rem;
     }
+
+    #view-rosters.active {
+        /* Revert full-screen overrides for mobile */
+        margin: 0; 
+        height: auto;
+        min-height: calc(100vh - 150px); /* Adjust based on your header/nav height */
+        display: flex;
+        flex-direction: column;
+    }
+    
+    #sector-ops-map-fullscreen {
+        /* Map takes a fixed height portion of the screen */
+        position: relative;
+        height: 50vh;
+        min-height: 350px;
+    }
+    
+    #sector-ops-floating-panel {
+        /* Panel becomes a static block below the map, not floating */
+        position: relative;
+        top: 0;
+        right: 0;
+        width: 100%;
+        max-height: none;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        box-shadow: none;
+        margin-top: -1px; /* Overlap border */
+    }
+
 
     /* Hide the sidebar toggle button on mobile as it's not needed */
     #sidebar-toggle {

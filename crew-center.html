@@ -175,45 +175,37 @@
             </div>
     </div>
     <div id="view-rosters" class="content-view">
-    <div class="sector-ops-container">
-        <div id="sector-ops-map-container">
-            <div id="sector-ops-map"></div>
-            <div id="map-loader" class="loader-overlay active">
-                <div class="spinner"></div>
+    <div id="sector-ops-map-fullscreen"></div>
+
+    <div id="sector-ops-floating-panel">
+        <div class="panel-header">
+            <h2><i class="fa-solid fa-compass-drafting"></i> Sector Operations</h2>
+            <div class="departure-selector-group">
+                <label for="departure-hub-selector">Current Hub</label>
+                <select id="departure-hub-selector" class="select-control"></select>
             </div>
         </div>
 
-        <div class="sector-ops-panel">
-            <div class="panel-header">
-                <h2><i class="fa-solid fa-compass-drafting"></i> Sector Operations</h2>
-                <div class="departure-selector-group">
-                    <label for="departure-hub-selector">Current Hub</label>
-                    <select id="departure-hub-selector" class="form-input"></select>
-                </div>
-            </div>
+        <div class="panel-tabs">
+            <button class="tab-link active" data-tab="rosters-content">
+                <i class="fa-solid fa-list-check"></i> Recommended Rosters
+            </button>
+            <button class="tab-link" data-tab="routes-content">
+                <i class="fa-solid fa-route"></i> Route Explorer
+            </button>
+        </div>
 
-            <div class="panel-tabs">
-                <button class="tab-link active" data-tab="tab-rosters">
-                    <i class="fa-solid fa-clipboard-list"></i> Recommended Rosters
-                </button>
-                <button class="tab-link" data-tab="tab-routes">
-                    <i class="fa-solid fa-route"></i> Route Explorer
-                </button>
-            </div>
-
-            <div class="panel-content">
-                <div id="tab-rosters" class="tab-content active">
-                    <div id="roster-list-container">
-                        </div>
-                </div>
-
-                <div id="tab-routes" class="tab-content">
-                    <div class="route-explorer-filters">
-                        <input type="text" id="route-search-input" class="form-input" placeholder="Search by arrival ICAO...">
+        <div class="panel-content">
+            <div id="rosters-content" class="tab-content active">
+                <div id="roster-list-container">
                     </div>
-                    <div id="route-list-container">
-                        </div>
+            </div>
+            <div id="routes-content" class="tab-content">
+                <div class="route-explorer-filters">
+                    <input type="text" id="route-search-input" class="form-input" placeholder="Search by ICAO, Aircraft, Operator...">
                 </div>
+                <div id="route-list-container">
+                    </div>
             </div>
         </div>
     </div>

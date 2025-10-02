@@ -709,10 +709,11 @@ document.addEventListener('DOMContentLoaded', async () => {
      */
     async function initializeSectorOpsView() {
         const selector = document.getElementById('departure-hub-selector');
-        const mapLoader = document.querySelector('#sector-ops-map-container .loader-overlay');
-        if (!selector || !mapLoader) return;
+        const mapContainer = document.getElementById('sector-ops-map-fullscreen');
+        if (!selector || !mapContainer) return;
 
-        mapLoader.classList.add('active');
+        // Use the main content loader instead of a local one
+        mainContentLoader.classList.add('active');
 
         try {
             // 1. Get pilot's available hubs
@@ -747,7 +748,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('roster-list-container').innerHTML = `<p class="error-text">${error.message}</p>`;
             document.getElementById('route-list-container').innerHTML = `<p class="error-text">${error.message}</p>`;
         } finally {
-            mapLoader.classList.remove('active');
+            mainContentLoader.classList.remove('active');
         }
     }
 
@@ -756,7 +757,7 @@ document.addEventListener('DOMContentLoaded', async () => {
      */
     async function initializeSectorOpsMap(centerICAO) {
         if (!MAPBOX_ACCESS_TOKEN) {
-            document.getElementById('sector-ops-map-container').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
+            document.getElementById('sector-ops-map-fullscreen').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
             return;
         }
         if (sectorOpsMap) sectorOpsMap.remove();
@@ -764,7 +765,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const centerCoords = airportsData[centerICAO] ? [airportsData[centerICAO].lon, airportsData[centerICAO].lat] : [77.2, 28.6]; // Default to Delhi
 
         sectorOpsMap = new mapboxgl.Map({
-            container: 'sector-ops-map',
+            container: 'sector-ops-map-fullscreen', // UPDATE: Target the new full-screen container
             style: 'mapbox://styles/mapbox/dark-v11',
             center: centerCoords,
             zoom: 4.5,
@@ -1013,33 +1014,32 @@ document.addEventListener('DOMContentLoaded', async () => {
      * Sets up event listeners for the Sector Ops view.
      */
     function setupSectorOpsEventListeners() {
-        const view = document.getElementById('view-rosters');
-        if (!view || view.dataset.listenersAttached === 'true') return;
-        view.dataset.listenersAttached = 'true';
+        const panel = document.getElementById('sector-ops-floating-panel');
+        if (!panel || panel.dataset.listenersAttached === 'true') return;
+        panel.dataset.listenersAttached = 'true';
 
-        // Tab switching now ONLY changes the panel content, not the map.
-        view.querySelector('.panel-tabs')?.addEventListener('click', async (e) => {
+        // Tab switching now ONLY changes the panel content
+        panel.querySelector('.panel-tabs')?.addEventListener('click', (e) => {
             const tabLink = e.target.closest('.tab-link');
             if (!tabLink) return;
             
-            view.querySelectorAll('.tab-link, .tab-content').forEach(el => el.classList.remove('active'));
+            panel.querySelectorAll('.tab-link, .tab-content').forEach(el => el.classList.remove('active'));
             const tabId = tabLink.dataset.tab;
             tabLink.classList.add('active');
-            view.querySelector(`#${tabId}`).classList.add('active');
-            
-            // The map no longer needs to be redrawn when switching tabs.
+            panel.querySelector(`#${tabId}`).classList.add('active');
         });
 
         // Hub selector only updates the roster list. Map is independent.
-        view.querySelector('#departure-hub-selector')?.addEventListener('change', async (e) => {
+        panel.querySelector('#departure-hub-selector')?.addEventListener('change', async (e) => {
             const selectedHub = e.target.value;
             await fetchAndRenderRosters(selectedHub);
         });
 
         // Route search/filter (for the global list)
-        view.querySelector('#route-search-input')?.addEventListener('input', (e) => {
+        panel.querySelector('#route-search-input')?.addEventListener('input', (e) => {
             const searchTerm = e.target.value.toUpperCase().trim();
-            view.querySelectorAll('.route-card').forEach(card => {
+            // UPDATE: Must query the whole document as the list is not a child of the input
+            document.querySelectorAll('#route-list-container .route-card').forEach(card => {
                 const departure = card.dataset.departure;
                 const arrival = card.dataset.arrival;
                 const aircraft = card.dataset.aircraft;
@@ -1056,7 +1056,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         // "Plan Flight" button click from Route Explorer
-        view.querySelector('#route-list-container')?.addEventListener('click', (e) => {
+        // NOTE: This listener is attached to the document for robustness, as content is dynamic.
+        document.getElementById('routes-content').addEventListener('click', (e) => {
             const planButton = e.target.closest('.plan-flight-from-explorer-btn');
             if (planButton) {
                 const routeData = JSON.parse(planButton.dataset.route);
@@ -1099,6 +1100,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (liveFlightsInterval) {
             clearInterval(liveFlightsInterval);
             liveFlightsInterval = null;
+        }
+        
+        if (sectorOpsMap) {
+            // Ensure map is resized if sidebar state changes while view is inactive
+            setTimeout(() => sectorOpsMap.resize(), 400); 
         }
 
         if (viewId === 'view-duty-status') {
@@ -2180,6 +2186,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         sidebarToggleBtn.addEventListener('click', () => {
             dashboardContainer.classList.toggle('sidebar-collapsed');
             localStorage.setItem('sidebarState', dashboardContainer.classList.contains('sidebar-collapsed') ? 'collapsed' : 'expanded');
+            
+            // Trigger map resize after sidebar transition
+            if (sectorOpsMap) {
+                setTimeout(() => sectorOpsMap.resize(), 400); 
+            }
         });
 
         logoutButton.addEventListener('click', (e) => {
