@@ -472,7 +472,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         let atcHtml = '';
         if (atcForAirport.length > 0) {
-            const controller = atcForAirport[0].user?.name || 'N/A';
+            const controller = atcForAirport[0].username || 'N/A';
             const duration = formatAtcDuration(atcForAirport[0].startTime);
 
             atcHtml = `
