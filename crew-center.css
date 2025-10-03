@@ -2620,3 +2620,102 @@ input, textarea, select {
     font-size: 0.9rem;
     color: var(--dashboard-text-muted);
 }
+
+/* --- Styles for Active ATC Markers on Sector Ops Map --- */
+.atc-active-marker {
+    background-color: #ff4757; /* A vibrant red */
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+    cursor: pointer;
+    box-shadow: 0 0 8px #ff4757;
+    animation: atc-pulse 2s infinite ease-in-out;
+}
+
+@keyframes atc-pulse {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7);
+    }
+    70% {
+        transform: scale(1.15);
+        box-shadow: 0 0 0 12px rgba(255, 71, 87, 0);
+    }
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(255, 71, 87, 0);
+    }
+}
+
+/* --- Styles for the Airport Info Popup --- */
+.mapboxgl-popup-content {
+    background-color: #1e2a47;
+    color: #e0e0e0;
+    border-radius: 8px;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+    max-width: 320px !important;
+}
+
+.airport-popup-content h3 {
+    background-color: #001B94;
+    color: #fff;
+    padding: 10px 15px;
+    margin: 0;
+    font-size: 1.1em;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+.airport-popup-content h3 small {
+    font-weight: normal;
+    opacity: 0.8;
+}
+
+.airport-popup-content h4 {
+    margin: 10px 0 8px 0;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    color: #00a8ff;
+    border-bottom: 1px solid #33415c;
+    padding-bottom: 5px;
+}
+
+.popup-section {
+    padding: 0 15px 15px 15px;
+}
+.popup-section:last-child {
+    padding-bottom: 15px;
+}
+
+.atc-controller-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9em;
+    background-color: rgba(0,0,0,0.2);
+    padding: 8px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+.atc-controller-info span i {
+    margin-right: 5px;
+    opacity: 0.7;
+}
+
+ul.atc-frequencies, ul.notam-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 0.9em;
+}
+ul.atc-frequencies li, ul.notam-list li {
+    padding: 4px 0;
+    border-bottom: 1px solid #2a3858;
+}
+ul.atc-frequencies li:last-child, ul.notam-list li:last-child {
+    border-bottom: none;
+}
+ul.notam-list li {
+    line-height: 1.4;
+}

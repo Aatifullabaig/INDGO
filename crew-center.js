@@ -85,8 +85,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     let liveFlightsInterval = null;
     let sectorOpsMap = null;
     let sectorOpsMapMarkers = [];
+    let atcMarkers = {}; // To hold the custom DOM markers for active ATC
     let sectorOpsMapRouteLayers = [];
     let sectorOpsLiveFlightsInterval = null;
+    let activeAtcFacilities = []; // To store fetched ATC data
+    let activeNotams = []; // To store fetched NOTAMs data
+    let atcPopup = null; // To manage a single, shared popup instance
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -438,6 +442,74 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, 100);
         }
     };
+
+    function atcTypeToString(typeId) {
+        const types = {
+            0: 'Ground', 1: 'Tower', 2: 'Unicom', 3: 'Clearance',
+            4: 'Approach', 5: 'Departure', 6: 'Center', 7: 'ATIS',
+            8: 'Aircraft', 9: 'Recorded', 10: 'Unknown', 11: 'Unused'
+        };
+        return types[typeId] || 'Unknown';
+    }
+
+    function formatAtcDuration(startTime) {
+        if (!startTime) return '';
+        const start = new Date(startTime).getTime();
+        const now = Date.now();
+        const diffMs = Math.max(0, now - start);
+        const hours = Math.floor(diffMs / 3600000);
+        const minutes = Math.floor((diffMs % 3600000) / 60000);
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
+
+    function createAirportPopupHTML(icao) {
+        const atcForAirport = activeAtcFacilities.filter(f => f.airportName === icao);
+        const notamsForAirport = activeNotams.filter(n => n.airportIcao === icao);
+
+        if (atcForAirport.length === 0 && notamsForAirport.length === 0) {
+            return null; // No data means no popup
+        }
+
+        let atcHtml = '';
+        if (atcForAirport.length > 0) {
+            const controller = atcForAirport[0].user?.name || 'N/A';
+            const duration = formatAtcDuration(atcForAirport[0].startTime);
+
+            atcHtml = `
+                <div class="popup-section atc-section">
+                    <h4><i class="fa-solid fa-headset"></i> Active ATC</h4>
+                    <div class="atc-controller-info">
+                        <span><i class="fa-solid fa-user"></i> ${controller}</span>
+                        <span><i class="fa-solid fa-clock"></i> ${duration}</span>
+                    </div>
+                    <ul class="atc-frequencies">
+                        ${atcForAirport.map(f => `<li><strong>${atcTypeToString(f.type)}:</strong> ${f.frequency}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+
+        let notamsHtml = '';
+        if (notamsForAirport.length > 0) {
+            notamsHtml = `
+                <div class="popup-section notam-section">
+                    <h4><i class="fa-solid fa-triangle-exclamation"></i> NOTAMs</h4>
+                    <ul class="notam-list">
+                        ${notamsForAirport.map(n => `<li>${n.message}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        const airportName = airportsData[icao]?.name || 'Airport';
+        return `
+            <div class="airport-popup-content">
+                <h3>${icao} <small>- ${airportName}</small></h3>
+                ${atcHtml}
+                ${notamsHtml}
+            </div>
+        `;
+    }
 
     // --- Rank & Fleet Models ---
     const PILOT_RANKS = [
@@ -837,15 +909,41 @@ document.addEventListener('DOMContentLoaded', async () => {
                     .setLngLat([airport.lon, airport.lat])
                     .addTo(sectorOpsMap);
 
-                // Add the core functionality: click to show routes
+                // Add the core functionality: click to show routes and info
                 el.addEventListener('click', (e) => {
                     e.stopPropagation(); // Prevents map click event from firing
-                    plotRoutesFromAirport(icao);
+                    handleAirportClick(icao);
                 });
 
                 sectorOpsMapMarkers.push(marker);
             }
         });
+    }
+
+    /**
+     * NEW: Centralized handler for clicking any airport marker (regular or ATC).
+     */
+    function handleAirportClick(icao) {
+        // Maintain existing route plotting functionality
+        plotRoutesFromAirport(icao);
+
+        const airport = airportsData[icao];
+        if (!airport) return;
+
+        // Remove any existing popup to prevent duplicates
+        if (atcPopup) {
+            atcPopup.remove();
+        }
+
+        const popupHTML = createAirportPopupHTML(icao);
+
+        // Only create a popup if there's ATC or NOTAM info to show
+        if (popupHTML) {
+            atcPopup = new mapboxgl.Popup({ closeButton: true, anchor: 'bottom', maxWidth: '320px' })
+                .setLngLat([airport.lon, airport.lat])
+                .setHTML(popupHTML)
+                .addTo(sectorOpsMap);
+        }
     }
 
     /**
@@ -861,10 +959,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const routesFromHub = ALL_AVAILABLE_ROUTES.filter(r => r.departure === departureICAO);
 
         if (routesFromHub.length === 0) {
-            new mapboxgl.Popup({ closeButton: false, anchor: 'bottom' })
-                .setLngLat(departureCoords)
-                .setHTML(`<strong>${departureICAO}</strong><br>No departures in database.`)
-                .addTo(sectorOpsMap);
+            // Don't show a popup here, as the main click handler will manage it
             return;
         }
 
@@ -1118,7 +1213,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ==========================================================
 
     // ====================================================================
-    // START: NEW LIVE FLIGHTS LOGIC FOR SECTOR OPS MAP
+    // START: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
 
     /**
@@ -1141,7 +1236,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /**
-     * Fetches all live flights and plots them on the Sector Ops map using an optimized GeoJSON source.
+     * NEW: Manages the creation and removal of custom DOM markers for active ATC airports.
+     */
+    function updateAtcLayer() {
+        if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
+
+        const atcAirportIcaos = new Set(activeAtcFacilities.map(f => f.airportName).filter(Boolean));
+        const activeMarkerIcaos = new Set();
+
+        // Add or update markers for currently active ATC airports
+        atcAirportIcaos.forEach(icao => {
+            activeMarkerIcaos.add(icao);
+            const airport = airportsData[icao];
+            if (!airport || airport.lat == null || airport.lon == null) return;
+
+            if (!atcMarkers[icao]) {
+                const el = document.createElement('div');
+                el.className = 'atc-active-marker';
+                el.title = `${icao}: Active ATC`;
+
+                const marker = new mapboxgl.Marker(el)
+                    .setLngLat([airport.lon, airport.lat])
+                    .addTo(sectorOpsMap);
+
+                // Use the same centralized handler as regular airport markers
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    handleAirportClick(icao);
+                });
+
+                atcMarkers[icao] = marker;
+            }
+        });
+
+        // Clean up markers for airports that are no longer active
+        Object.keys(atcMarkers).forEach(icao => {
+            if (!activeMarkerIcaos.has(icao)) {
+                atcMarkers[icao].remove();
+                delete atcMarkers[icao];
+            }
+        });
+    }
+
+    /**
+     * Fetches all live data (flights, ATC, NOTAMs) and plots them on the Sector Ops map.
      */
     async function updateSectorOpsLiveFlights() {
         if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
@@ -1159,16 +1297,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            // 2. Fetch ALL flights for the session (no callsign filter)
-            const flightsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`);
-            const flightsData = await flightsRes.json();
+            // 2. Fetch ALL live data in parallel for efficiency
+            const [flightsRes, atcRes, notamsRes] = await Promise.all([
+                fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
+                fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
+                fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
+            ]);
+            
+            // 3. Process ATC and NOTAM data first, then update the map layer
+            const atcData = await atcRes.json();
+            activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
+            
+            const notamsData = await notamsRes.json();
+            activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
 
+            updateAtcLayer();
+
+            // 4. Process flight data
+            const flightsData = await flightsRes.json();
             if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
                 console.warn('Sector Ops Map: Could not fetch live flights.');
                 return;
             }
 
-            // 3. Convert flight data to a GeoJSON Feature Collection
             const flightFeatures = flightsData.flights.map(flight => {
                 if (!flight.position || flight.position.lat == null || flight.position.lon == null) {
                     return null;
@@ -1187,23 +1338,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                         heading: flight.position.track_deg || 0
                     }
                 };
-            }).filter(Boolean); // Remove any null entries
+            }).filter(Boolean);
 
             const geojsonData = {
                 type: 'FeatureCollection',
                 features: flightFeatures
             };
 
-            // 4. Update the map source and layer
+            // 5. Update the flight map source and layer
             const sourceId = 'sector-ops-live-flights-source';
             const layerId = 'sector-ops-live-flights-layer';
             const source = sectorOpsMap.getSource(sourceId);
 
             if (source) {
-                // If source exists, just update the data for high performance
                 source.setData(geojsonData);
             } else {
-                // Otherwise, create the source and the layer for the first time
                 sectorOpsMap.addSource(sourceId, {
                     type: 'geojson',
                     data: geojsonData
@@ -1214,50 +1363,37 @@ document.addEventListener('DOMContentLoaded', async () => {
                     type: 'symbol',
                     source: sourceId,
                     layout: {
-                        'icon-image': 'plane-icon', // The name we added with map.addImage
+                        'icon-image': 'plane-icon',
                         'icon-size': 0.07,
-                        'icon-rotate': ['get', 'heading'], // Rotate icon based on 'heading' property
+                        'icon-rotate': ['get', 'heading'],
                         'icon-rotation-alignment': 'map',
                         'icon-allow-overlap': true,
                         'icon-ignore-placement': true
                     }
                 });
 
-                // Add a popup on click for better UX
                 sectorOpsMap.on('click', layerId, (e) => {
                     const coordinates = e.features[0].geometry.coordinates.slice();
                     const props = e.features[0].properties;
-
                     while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
                         coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
                     }
-
                     new mapboxgl.Popup()
                         .setLngLat(coordinates)
-                        .setHTML(`
-                        <strong>${props.callsign}</strong><br>
-                        <em>${props.username}</em><br>
-                        Altitude: ${Math.round(props.altitude)} ft<br>
-                        Speed: ${Math.round(props.speed)} kts
-                    `)
+                        .setHTML(`<strong>${props.callsign}</strong><br><em>${props.username}</em><br>Altitude: ${Math.round(props.altitude)} ft<br>Speed: ${Math.round(props.speed)} kts`)
                         .addTo(sectorOpsMap);
                 });
 
-                // Change cursor to pointer on hover
-                sectorOpsMap.on('mouseenter', layerId, () => {
-                    sectorOpsMap.getCanvas().style.cursor = 'pointer';
-                });
-                sectorOpsMap.on('mouseleave', layerId, () => {
-                    sectorOpsMap.getCanvas().style.cursor = '';
-                });
+                sectorOpsMap.on('mouseenter', layerId, () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
+                sectorOpsMap.on('mouseleave', layerId, () => { sectorOpsMap.getCanvas().style.cursor = ''; });
             }
 
         } catch (error) {
-            console.error('Error updating Sector Ops live flights:', error);
+            console.error('Error updating Sector Ops live data:', error);
         }
     }
     // ====================================================================
-    // END: NEW LIVE FLIGHTS LOGIC FOR SECTOR OPS MAP
+    // END: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
 
     /**
