@@ -1475,6 +1475,221 @@ input, textarea, select {
 /* END: SECTOR OPS PANEL REVAMP                               */
 /* ========================================================== */
 
+/* ========================================================== */
+/* START: NEW FLOATING INFO PANELS (RIGHT-ALIGNED & STYLED)   */
+/* ========================================================== */
+
+.info-panel {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    width: 450px;
+    max-height: calc(100% - 3rem);
+    z-index: 20;
+
+    color: #e0e0e0;
+    background: radial-gradient(circle at top left, rgba(26, 35, 63, 0.8), rgba(13, 16, 28, 0.9));
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(0, 168, 255, 0.2);
+    border-radius: 12px;
+    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.6), 0 0 15px var(--rank-glow-color, rgba(0, 168, 255, 0.1));
+
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    /* Initial state is hidden */
+    opacity: 0;
+    transform: translateX(100%);
+    visibility: hidden;
+    transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.5s ease, visibility 0.5s;
+}
+
+.info-panel.visible {
+    opacity: 1;
+    transform: translateX(0);
+    visibility: visible;
+}
+
+.info-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    background-color: rgba(0,0,0,0.2);
+    border-bottom: 1px solid rgba(0, 168, 255, 0.2);
+    flex-shrink: 0;
+    cursor: grab;
+}
+.info-panel-header:active {
+    cursor: grabbing;
+}
+
+.info-panel-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--rank-text-color, #fff);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-shadow: 0 0 5px var(--rank-glow-color, rgba(0, 168, 255, 0.5));
+}
+
+.info-panel-close-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--dashboard-text-muted);
+    font-size: 1rem;
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.info-panel-close-btn:hover {
+    background: var(--error-color);
+    color: #fff;
+    border-color: transparent;
+    transform: rotate(90deg);
+}
+
+.info-panel-content {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 1.25rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--rank-accent-color, var(--accent-color)) transparent;
+}
+.info-panel-content::-webkit-scrollbar { width: 6px; }
+.info-panel-content::-webkit-scrollbar-track { background: transparent; }
+.info-panel-content::-webkit-scrollbar-thumb {
+    background-color: var(--rank-accent-color, var(--accent-color));
+    border-radius: 10px;
+}
+
+/* Specific Panel Overrides */
+#sector-ops-panel {
+    /* The main ops panel should be wider */
+    width: 520px;
+}
+
+/* --- ATC List Specific Styles --- */
+.atc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.atc-list-item {
+    background-color: rgba(13, 16, 28, 0.6);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+.atc-item-header {
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.atc-icao {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--rank-text-color, #fff);
+    font-family: monospace;
+}
+.atc-name {
+    font-size: 0.8rem;
+    color: var(--dashboard-text-muted);
+    margin-left: 0.5rem;
+}
+.atc-item-body { display: flex; flex-direction: column; gap: 0.5rem; }
+.atc-user-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+}
+.atc-type { font-weight: bold; flex-basis: 30%; color: #fff; }
+.atc-user { flex-basis: 45%; color: #e0e0e0; }
+.atc-duration { flex-basis: 25%; text-align: right; color: var(--dashboard-text-muted); font-family: monospace;}
+
+
+/* --- Selected Aircraft Specific Styles --- */
+.aircraft-info-placeholder {
+    text-align: center; color: var(--dashboard-text-muted);
+    height: 100%; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 1rem;
+}
+.aircraft-info-placeholder i { font-size: 3rem; opacity: 0.3; }
+.aircraft-info-header {
+    text-align: center;
+    padding-bottom: 1rem; margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+.aircraft-info-header .callsign {
+    font-size: 2.2rem; font-weight: bold;
+    color: var(--rank-text-color, #fff);
+    text-shadow: 0 0 10px var(--rank-glow-color, rgba(0,0,0,0.5));
+}
+.aircraft-info-header .username { font-size: 1.1rem; color: var(--dashboard-text-muted); }
+.aircraft-info-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+.info-item {
+    background-color: rgba(13, 16, 28, 0.7);
+    padding: 1rem; border-radius: 8px;
+    border: 1px solid var(--border-color); text-align: center;
+}
+.info-item label {
+    display: block; font-size: 0.8rem; text-transform: uppercase;
+    color: var(--dashboard-text-muted); margin-bottom: 0.5rem;
+}
+.info-item .value { font-size: 1.8rem; font-weight: bold; color: #fff; font-family: monospace; }
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    #sector-ops-panel { width: 450px; }
+    .info-panel { width: 400px; }
+}
+@media (max-width: 992px) {
+    /* Stack panels vertically on smaller screens */
+    .info-panel {
+        width: calc(100% - 2rem);
+        right: 1rem;
+        left: 1rem;
+        max-height: 45%;
+    }
+    #sector-ops-panel { top: 1rem; }
+    #atc-info-panel { top: 1rem; }
+    #aircraft-info-panel { bottom: 1rem; top: auto; }
+}
+
+@media (max-width: 768px) {
+    #view-rosters.active {
+        display: block;
+        position: relative;
+    }
+    #sector-ops-map-fullscreen {
+        height: 100vh;
+    }
+    .info-panel {
+        /* On mobile, panels take over the screen */
+        width: calc(100% - 2rem);
+        height: calc(100% - 6rem); /* Adjust based on your top/bottom bars */
+        top: 5rem;
+        bottom: 1rem;
+        right: 1rem;
+        left: 1rem;
+        max-height: none;
+    }
+}
 
 /* ========================================================== */
 /* START: MOBILE RESPONSIVE STYLES (ENHANCED FOR PHONE UI)   */
