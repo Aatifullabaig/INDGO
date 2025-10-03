@@ -195,31 +195,47 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             /* Palpitating ATC Marker */
-            .atc-active-marker {
-                width: 14px;
-                height: 14px;
-                background-color: #ff4757;
-                border-radius: 50%;
-                border: 2px solid rgba(255, 255, 255, 0.9);
-                cursor: pointer;
-                box-shadow: 0 0 12px rgba(255, 71, 87, 0.9);
-                animation: atc-palpitate 1.5s infinite ease-in-out;
-            }
+            /* --- Styles for Active ATC Markers on Sector Ops Map (FIXED) --- */
+.atc-active-marker {
+    width: 12px;
+    height: 12px;
+    background-color: #dc3545; /* The solid red center dot */
+    border-radius: 50%;
+    border: 2px solid #fff;
+    cursor: pointer;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.3);
+    /* This makes it an anchor for the animated pulse */
+    position: relative; 
+}
 
-            @keyframes atc-palpitate {
-                0% {
-                    transform: scale(0.95);
-                    box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7);
-                }
-                70% {
-                    transform: scale(1.2);
-                    box-shadow: 0 0 0 10px rgba(255, 71, 87, 0);
-                }
-                100% {
-                    transform: scale(0.95);
-                    box-shadow: 0 0 0 0 rgba(255, 71, 87, 0);
-                }
-            }
+/* This pseudo-element creates the animated pulse */
+.atc-active-marker::after {
+    content: '';
+    position: absolute;
+    /* Start the pulse from the same size as the dot */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background-color: #dc3545;
+    /* Apply the animation ONLY to the pulse */
+    animation: atc-pulse 1.5s infinite;
+    /* Place the pulse behind the main dot */
+    z-index: -1; 
+}
+
+/* The new animation keyframes */
+@keyframes atc-pulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.7;
+    }
+    100% {
+        transform: scale(2.5); /* Pulse expands outwards */
+        opacity: 0;
+    }
+}
         `;
 
         const style = document.createElement('style');
