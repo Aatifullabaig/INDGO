@@ -2630,7 +2630,7 @@ input, textarea, select {
     border: 2px solid #ffffff;
     cursor: pointer;
     box-shadow: 0 0 8px #ff4757;
-    animation: atc-pulse 2s infinite ease-in-out;
+    /*animation: atc-pulse 2s infinite ease-in-out;
 }
 
 @keyframes atc-pulse {
