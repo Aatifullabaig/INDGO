@@ -204,7 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     cursor: pointer;
     box-shadow: 0 0 10px rgba(255, 82, 82, 0.9);
     position: relative;
-    /* The transform property has been removed to fix the positioning bug. */
+    transform: translate(-50%, -50%);
 }
 
 .atc-active-marker::after {
@@ -1492,9 +1492,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             el.className = markerClass;
             el.title = title;
 
-            const marker = new mapboxgl.Marker(el)
-                .setLngLat([airport.lon, airport.lat])
-                .addTo(sectorOpsMap);
+            const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([airport.lon, airport.lat])
+            .addTo(sectorOpsMap);
 
             // Add the same universal click handler to all markers
             el.addEventListener('click', (e) => {
