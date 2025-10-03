@@ -208,6 +208,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     /* --- CHANGED: Stronger static glow --- */
     box-shadow: 0 0 10px rgba(255, 82, 82, 0.9);
     position: relative;
+    transform: translate(-50%, -50%);
 }
 
 .atc-active-marker::after {
@@ -222,6 +223,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     /* --- CHANGED: Slower, smoother animation for more prominence --- */
     animation: atc-pulse 2s infinite ease-out;
     z-index: -1;
+    
 }
 
 @keyframes atc-pulse {
