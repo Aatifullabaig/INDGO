@@ -194,21 +194,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 50% { transform: scale(1.3); color: #fff; }
             }
 
-            /* Palpitating ATC Marker */
-            /* --- Styles for Active ATC Markers on Sector Ops Map (FIXED) --- */
-/* --- Styles for Active ATC Markers on Sector Ops Map (ENHANCED VISIBILITY) --- */
+/* --- Styles for Active ATC Markers on Sector Ops Map (FIXED) --- */
 .atc-active-marker {
-    /* --- CHANGED: Increased size from 12px to 15px --- */
     width: 15px;
     height: 15px;
     background-color: #dc3545;
     border-radius: 50%;
     border: 2px solid #fff;
     cursor: pointer;
-    /* --- CHANGED: Stronger static glow --- */
     box-shadow: 0 0 10px rgba(255, 82, 82, 0.9);
     position: relative;
-    transform: translate(-50%, -50%);
+    /* The transform property has been removed to fix the positioning bug. */
 }
 
 .atc-active-marker::after {
@@ -220,7 +216,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     height: 100%;
     border-radius: 50%;
     background-color: #dc3545;
-    /* --- CHANGED: Slower, smoother animation for more prominence --- */
     animation: atc-pulse 2s infinite ease-out;
     z-index: -1;
     
@@ -232,7 +227,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         opacity: 0.7;
     }
     100% {
-        /* --- CHANGED: Pulse now expands further --- */
         transform: scale(3);
         opacity: 0;
     }
@@ -1066,11 +1060,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             ]);
             ALL_AVAILABLE_ROUTES = routes; // Store all routes for later use
 
+            // *** FIX APLIED HERE ***
+            // Immediately render markers with the static route data to prevent blank map on view switch
+            renderAirportMarkers();
+
             // 5. Set up all event listeners
             setupSectorOpsEventListeners();
             setupAirportWindowEvents();
 
-            // 6. Start the live data loop. Markers will be plotted on the first run.
+            // 6. Start the live data loop.
             startSectorOpsLiveLoop();
 
         } catch (error) {
