@@ -730,9 +730,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 3. Initialize the Mapbox map
             await initializeSectorOpsMap(selectedHub);
 
-            // After the map is initialized, start the live flight data loop for this specific map.
-            startSectorOpsLiveLoop();
-
             // 4. Fetch data for both tabs in parallel
             const [rosters, routes] = await Promise.all([
                 fetchAndRenderRosters(selectedHub),
@@ -745,6 +742,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // 6. Set up all event listeners
             setupSectorOpsEventListeners();
+
+            // 7. NOW, start the live flight data loop after the base map is ready.
+            startSectorOpsLiveLoop();
 
         } catch (error) {
             console.error("Error initializing Sector Ops view:", error);
