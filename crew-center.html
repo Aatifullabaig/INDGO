@@ -179,13 +179,17 @@
 
     <div id="sector-ops-floating-panel">
         <div class="panel-header">
-            <h2><i class="fa-solid fa-compass-drafting"></i> Sector Operations</h2>
-            <div class="departure-selector-group">
-                <label for="departure-hub-selector">Current Hub</label>
-                <select id="departure-hub-selector" class="select-control"></select>
+            <div class="panel-header-main">
+                <h2><i class="fa-solid fa-compass-drafting"></i> Sector Operations</h2>
+                <div class="departure-selector-group">
+                    <label for="departure-hub-selector">Current Hub</label>
+                    <select id="departure-hub-selector" class="select-control"></select>
+                </div>
             </div>
+            <button id="sector-ops-toggle-btn" class="panel-toggle-btn" aria-label="Toggle Panel" aria-expanded="true">
+                <i class="fa-solid fa-chevron-right toggle-icon"></i>
+            </button>
         </div>
-
         <div class="panel-tabs">
             <button class="tab-link active" data-tab="rosters-content">
                 <i class="fa-solid fa-list-check"></i> Recommended Rosters

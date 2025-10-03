@@ -1256,7 +1256,7 @@ input, textarea, select {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    transition: transform 0.3s ease, opacity 0.3s ease;
+    transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
 }
 
 /* Let the scrollable content area take up the remaining space */
@@ -1397,6 +1397,78 @@ input, textarea, select {
 /* END: NEW SECTOR OPS FULL-SCREEN LAYOUT                     */
 /* ========================================================== */
 
+/* ========================================================== */
+/* START: SECTOR OPS PANEL REVAMP (COLLAPSIBLE)             */
+/* ========================================================== */
+
+#sector-ops-floating-panel {
+    /* MODIFIED: Add transition for the transform property */
+    transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
+}
+
+/* --- MODIFIED: Panel Header to accommodate the new button --- */
+#sector-ops-floating-panel .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start; /* Align to top */
+    gap: 1rem;
+}
+
+.panel-header-main {
+    flex-grow: 1;
+}
+
+.panel-toggle-btn {
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-color);
+    color: var(--dashboard-text-muted);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+}
+
+.panel-toggle-btn:hover {
+    background-color: var(--rank-accent-color, var(--accent-color));
+    color: #fff;
+}
+
+.panel-toggle-btn .toggle-icon {
+    transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* --- ADDED: Collapsed State for the Panel --- */
+#sector-ops-floating-panel.panel-collapsed {
+    /* Slide the panel off-screen, leaving 45px visible as a "handle" */
+    transform: translateX(calc(100% - 45px));
+    box-shadow: none;
+    background-color: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-left: 1px solid var(--border-color);
+}
+
+#sector-ops-floating-panel.panel-collapsed .panel-header-main,
+#sector-ops-floating-panel.panel-collapsed .panel-tabs,
+#sector-ops-floating-panel.panel-collapsed .panel-content {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+#sector-ops-floating-panel.panel-collapsed .panel-toggle-btn .toggle-icon {
+    transform: rotate(180deg);
+}
+
+/* ========================================================== */
+/* END: SECTOR OPS PANEL REVAMP                               */
+/* ========================================================== */
+
 
 /* ========================================================== */
 /* START: MOBILE RESPONSIVE STYLES (ENHANCED FOR PHONE UI)   */
@@ -1535,8 +1607,13 @@ input, textarea, select {
         border-right: none;
         box-shadow: none;
         margin-top: -1px; /* Overlap border */
+        transform: none !important; /* Ensure transform is disabled on mobile */
     }
 
+    /* Hide the panel toggle button on mobile as it's not needed */
+    .panel-toggle-btn {
+        display: none;
+    }
 
     /* Hide the sidebar toggle button on mobile as it's not needed */
     #sidebar-toggle {

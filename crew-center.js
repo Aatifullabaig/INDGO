@@ -1018,6 +1018,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!panel || panel.dataset.listenersAttached === 'true') return;
         panel.dataset.listenersAttached = 'true';
 
+        // --- START: MODIFICATION FOR COLLAPSIBLE PANEL ---
+        const toggleBtn = document.getElementById('sector-ops-toggle-btn');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                const isCollapsed = panel.classList.toggle('panel-collapsed');
+                toggleBtn.setAttribute('aria-expanded', !isCollapsed);
+
+                // IMPORTANT: Resize the map after the transition to fill the space
+                if (sectorOpsMap) {
+                    setTimeout(() => {
+                        sectorOpsMap.resize();
+                    }, 400); // This duration should match the CSS transition duration
+                }
+            });
+        }
+        // --- END: MODIFICATION FOR COLLAPSIBLE PANEL ---
+
         // Tab switching now ONLY changes the panel content
         panel.querySelector('.panel-tabs')?.addEventListener('click', (e) => {
             const tabLink = e.target.closest('.tab-link');
