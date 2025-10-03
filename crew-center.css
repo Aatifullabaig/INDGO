@@ -2630,22 +2630,6 @@ input, textarea, select {
     border: 2px solid #ffffff;
     cursor: pointer;
     box-shadow: 0 0 8px #ff4757;
-    /*animation: atc-pulse 2s infinite ease-in-out;
-}
-
-@keyframes atc-pulse {
-    0% {
-        transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7);
-    }
-    70% {
-        transform: scale(1.15);
-        box-shadow: 0 0 0 12px rgba(255, 71, 87, 0);
-    }
-    100% {
-        transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(255, 71, 87, 0);
-    }
 }
 
 /* --- Styles for the Airport Info Popup --- */
@@ -2689,33 +2673,53 @@ input, textarea, select {
     padding-bottom: 15px;
 }
 
-.atc-controller-info {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.9em;
-    background-color: rgba(0,0,0,0.2);
-    padding: 8px;
-    border-radius: 4px;
-    margin-bottom: 10px;
-}
-.atc-controller-info span i {
-    margin-right: 5px;
-    opacity: 0.7;
-}
-
 ul.atc-frequencies, ul.notam-list {
     list-style: none;
     padding: 0;
     margin: 0;
     font-size: 0.9em;
 }
-ul.atc-frequencies li, ul.notam-list li {
+
+/* --- NEW STYLES FOR FREQUENCY LIST FORMATTING --- */
+.atc-frequency-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: 4px 0;
     border-bottom: 1px solid #2a3858;
 }
-ul.atc-frequencies li:last-child, ul.notam-list li:last-child {
+
+.atc-frequency-item:last-child {
     border-bottom: none;
 }
+
+.atc-frequency-item .freq-type {
+    font-weight: bold;
+    flex-basis: 35%; /* Allocates space for the frequency type */
+    flex-shrink: 0;
+}
+
+.atc-frequency-item .freq-user {
+    flex-basis: 45%; /* Allocates space for the username */
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.atc-frequency-item .freq-time {
+    flex-basis: 20%; /* Allocates space for the time */
+    text-align: right;
+    font-family: monospace;
+    color: #bdc3c7;
+}
+
 ul.notam-list li {
+    padding: 4px 0;
+    border-bottom: 1px solid #2a3858;
     line-height: 1.4;
+}
+
+ul.notam-list li:last-child {
+    border-bottom: none;
 }

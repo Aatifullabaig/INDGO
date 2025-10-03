@@ -463,53 +463,54 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function createAirportPopupHTML(icao) {
-        const atcForAirport = activeAtcFacilities.filter(f => f.airportName === icao);
-        const notamsForAirport = activeNotams.filter(n => n.airportIcao === icao);
+    const atcForAirport = activeAtcFacilities.filter(f => f.airportName === icao);
+    const notamsForAirport = activeNotams.filter(n => n.airportIcao === icao);
 
-        if (atcForAirport.length === 0 && notamsForAirport.length === 0) {
-            return null; // No data means no popup
-        }
+    if (atcForAirport.length === 0 && notamsForAirport.length === 0) {
+        return null; // No data means no popup
+    }
 
-        let atcHtml = '';
-        if (atcForAirport.length > 0) {
-            const controller = atcForAirport[0].username || 'N/A';
-            const duration = formatAtcDuration(atcForAirport[0].startTime);
-
-            atcHtml = `
-                <div class="popup-section atc-section">
-                    <h4><i class="fa-solid fa-headset"></i> Active ATC</h4>
-                    <div class="atc-controller-info">
-                        <span><i class="fa-solid fa-user"></i> ${controller}</span>
-                        <span><i class="fa-solid fa-clock"></i> ${duration}</span>
-                    </div>
-                    <ul class="atc-frequencies">
-                        ${atcForAirport.map(f => `<li><strong>${atcTypeToString(f.type)}:</strong> ${f.frequency}</li>`).join('')}
-                    </ul>
-                </div>
-            `;
-        }
-
-        let notamsHtml = '';
-        if (notamsForAirport.length > 0) {
-            notamsHtml = `
-                <div class="popup-section notam-section">
-                    <h4><i class="fa-solid fa-triangle-exclamation"></i> NOTAMs</h4>
-                    <ul class="notam-list">
-                        ${notamsForAirport.map(n => `<li>${n.message}</li>`).join('')}
-                    </ul>
-                </div>
-            `;
-        }
-        
-        const airportName = airportsData[icao]?.name || 'Airport';
-        return `
-            <div class="airport-popup-content">
-                <h3>${icao} <small>- ${airportName}</small></h3>
-                ${atcHtml}
-                ${notamsHtml}
+    let atcHtml = '';
+    if (atcForAirport.length > 0) {
+        // The single controller header is removed.
+        // Instead, we build the list with all details for each frequency.
+        atcHtml = `
+            <div class="popup-section atc-section">
+                <h4><i class="fa-solid fa-headset"></i> Active ATC</h4>
+                <ul class="atc-frequencies">
+                    ${atcForAirport.map(f => `
+                        <li class="atc-frequency-item">
+                            <span class="freq-type">${atcTypeToString(f.type)}:</span>
+                            <span class="freq-user">${f.username || 'N/A'}</span>
+                            <span class="freq-time">${formatAtcDuration(f.startTime)}</span>
+                        </li>
+                    `).join('')}
+                </ul>
             </div>
         `;
     }
+
+    let notamsHtml = '';
+    if (notamsForAirport.length > 0) {
+        notamsHtml = `
+            <div class="popup-section notam-section">
+                <h4><i class="fa-solid fa-triangle-exclamation"></i> NOTAMs</h4>
+                <ul class="notam-list">
+                    ${notamsForAirport.map(n => `<li>${n.message}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+    
+    const airportName = airportsData[icao]?.name || 'Airport';
+    return `
+        <div class="airport-popup-content">
+            <h3>${icao} <small>- ${airportName}</small></h3>
+            ${atcHtml}
+            ${notamsHtml}
+        </div>
+    `;
+}
 
     // --- Rank & Fleet Models ---
     const PILOT_RANKS = [
