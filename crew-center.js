@@ -84,8 +84,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let pilotMarkers = {};
     let liveFlightsInterval = null;
     let sectorOpsMap = null;
-    let sectorOpsMapMarkers = [];
-    let atcMarkers = {}; // To hold the custom DOM markers for active ATC
+    let airportAndAtcMarkers = {}; // Holds all airport markers (blue dots and red ATC dots)
     let sectorOpsMapRouteLayers = [];
     let sectorOpsLiveFlightsInterval = null;
     let activeAtcFacilities = []; // To store fetched ATC data
@@ -193,6 +192,33 @@ document.addEventListener('DOMContentLoaded', async () => {
             @keyframes palpitate {
                 0%, 100% { transform: scale(1); color: #00a8ff; }
                 50% { transform: scale(1.3); color: #fff; }
+            }
+
+            /* Palpitating ATC Marker */
+            .atc-active-marker {
+                width: 14px;
+                height: 14px;
+                background-color: #ff4757;
+                border-radius: 50%;
+                border: 2px solid rgba(255, 255, 255, 0.9);
+                cursor: pointer;
+                box-shadow: 0 0 12px rgba(255, 71, 87, 0.9);
+                animation: atc-palpitate 1.5s infinite ease-in-out;
+            }
+
+            @keyframes atc-palpitate {
+                0% {
+                    transform: scale(0.95);
+                    box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7);
+                }
+                70% {
+                    transform: scale(1.2);
+                    box-shadow: 0 0 0 10px rgba(255, 71, 87, 0);
+                }
+                100% {
+                    transform: scale(0.95);
+                    box-shadow: 0 0 0 0 rgba(255, 71, 87, 0);
+                }
             }
         `;
 
@@ -1023,14 +1049,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             ]);
             ALL_AVAILABLE_ROUTES = routes; // Store all routes for later use
 
-            // 5. Plot all airports on the map as the default view
-            plotAllAirportsOnMap();
-
-            // 6. Set up all event listeners
+            // 5. Set up all event listeners
             setupSectorOpsEventListeners();
-            setupAirportWindowEvents(); // NEW: Set up listeners for the new window
+            setupAirportWindowEvents();
 
-            // 7. NOW, start the live flight data loop after the base map is ready.
+            // 6. Start the live data loop. Markers will be plotted on the first run.
             startSectorOpsLiveLoop();
 
         } catch (error) {
@@ -1092,47 +1115,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (sectorOpsMap.getSource(id)) sectorOpsMap.removeSource(id);
         });
         sectorOpsMapRouteLayers = [];
-    }
-
-    /**
-     * (NEW) Plots all unique airports as clickable markers on the Sector Ops map.
-     */
-    function plotAllAirportsOnMap() {
-        if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
-
-        // Clear everything to start fresh
-        clearRouteLayers();
-        sectorOpsMapMarkers.forEach(marker => marker.remove());
-        sectorOpsMapMarkers = [];
-
-        // Find all unique airports from the global route list
-        const uniqueAirports = new Set();
-        ALL_AVAILABLE_ROUTES.forEach(route => {
-            uniqueAirports.add(route.departure);
-            uniqueAirports.add(route.arrival);
-        });
-
-        // Create a marker for each unique airport
-        uniqueAirports.forEach(icao => {
-            const airport = airportsData[icao];
-            if (airport && airport.lon && airport.lat) {
-                const el = document.createElement('div');
-                el.className = 'destination-marker';
-                el.title = `${icao}: ${airport.name || 'Unknown Airport'}`;
-
-                const marker = new mapboxgl.Marker(el)
-                    .setLngLat([airport.lon, airport.lat])
-                    .addTo(sectorOpsMap);
-
-                // Add the core functionality: click to show routes and info
-                el.addEventListener('click', (e) => {
-                    e.stopPropagation(); // Prevents map click event from firing
-                    handleAirportClick(icao);
-                });
-
-                sectorOpsMapMarkers.push(marker);
-            }
-        });
     }
 
     /**
@@ -1458,45 +1440,55 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /**
-     * NEW: Manages the creation and removal of custom DOM markers for active ATC airports.
+     * NEW / REFACTORED: Renders all airport markers based on current route and ATC data.
+     * This single, efficient function replaces the previous separate functions.
      */
-    function updateAtcLayer() {
+    function renderAirportMarkers() {
         if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
-        const atcAirportIcaos = new Set(activeAtcFacilities.map(f => f.airportName).filter(Boolean));
-        const activeMarkerIcaos = new Set();
+        // Clear all previously rendered airport markers to ensure a fresh state
+        Object.values(airportAndAtcMarkers).forEach(({ marker }) => marker.remove());
+        airportAndAtcMarkers = {};
 
-        // Add or update markers for currently active ATC airports
-        atcAirportIcaos.forEach(icao => {
-            activeMarkerIcaos.add(icao);
+        // Get the set of airports with active ATC
+        const atcAirportIcaos = new Set(activeAtcFacilities.map(f => f.airportName).filter(Boolean));
+        
+        // Get the set of all unique airports from our available routes
+        const allRouteAirports = new Set();
+        ALL_AVAILABLE_ROUTES.forEach(route => {
+            allRouteAirports.add(route.departure);
+            allRouteAirports.add(route.arrival);
+        });
+
+        // Combine all airports that need a marker (from routes and active ATC)
+        const allAirportsToRender = new Set([...allRouteAirports, ...atcAirportIcaos]);
+
+        allAirportsToRender.forEach(icao => {
             const airport = airportsData[icao];
             if (!airport || airport.lat == null || airport.lon == null) return;
 
-            if (!atcMarkers[icao]) {
-                const el = document.createElement('div');
-                el.className = 'atc-active-marker';
-                el.title = `${icao}: Active ATC`;
+            const hasAtc = atcAirportIcaos.has(icao);
+            
+            // **Decision Logic**: Use the pulsating red marker if ATC is active, otherwise use the standard blue one.
+            const markerClass = hasAtc ? 'atc-active-marker' : 'destination-marker';
+            const title = `${icao}: ${airport.name || 'Unknown Airport'}${hasAtc ? ' (Active ATC)' : ''}`;
 
-                const marker = new mapboxgl.Marker(el)
-                    .setLngLat([airport.lon, airport.lat])
-                    .addTo(sectorOpsMap);
+            const el = document.createElement('div');
+            el.className = markerClass;
+            el.title = title;
 
-                // Use the same centralized handler as regular airport markers
-                el.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    handleAirportClick(icao);
-                });
+            const marker = new mapboxgl.Marker(el)
+                .setLngLat([airport.lon, airport.lat])
+                .addTo(sectorOpsMap);
 
-                atcMarkers[icao] = marker;
-            }
-        });
+            // Add the same universal click handler to all markers
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                handleAirportClick(icao);
+            });
 
-        // Clean up markers for airports that are no longer active
-        Object.keys(atcMarkers).forEach(icao => {
-            if (!activeMarkerIcaos.has(icao)) {
-                atcMarkers[icao].remove();
-                delete atcMarkers[icao];
-            }
+            // Store the marker for future cleanup
+            airportAndAtcMarkers[icao] = { marker: marker, className: markerClass };
         });
     }
 
@@ -1526,14 +1518,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
             ]);
             
-            // 3. Process ATC and NOTAM data first, then update the map layer
+            // 3. Process ATC and NOTAM data, then render all airport markers
             const atcData = await atcRes.json();
             activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
             
             const notamsData = await notamsRes.json();
             activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
 
-            updateAtcLayer();
+            renderAirportMarkers(); // This now handles plotting all airport dots correctly
 
             // 4. Process flight data
             const flightsData = await flightsRes.json();

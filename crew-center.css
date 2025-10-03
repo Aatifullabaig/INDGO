@@ -2684,13 +2684,29 @@ input, textarea, select {
 
 /* --- Styles for Active ATC Markers on Sector Ops Map --- */
 .atc-active-marker {
-    background-color: #ff4757; /* A vibrant red */
-    width: 18px;
-    height: 18px;
+    width: 14px;
+    height: 14px;
+    background-color: #ff4757;
     border-radius: 50%;
-    border: 2px solid #ffffff;
+    border: 2px solid rgba(255, 255, 255, 0.9);
     cursor: pointer;
-    box-shadow: 0 0 8px #ff4757;
+    box-shadow: 0 0 12px rgba(255, 71, 87, 0.9);
+    animation: atc-palpitate 1.5s infinite ease-in-out;
+}
+
+@keyframes atc-palpitate {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7);
+    }
+    70% {
+        transform: scale(1.2);
+        box-shadow: 0 0 0 10px rgba(255, 71, 87, 0);
+    }
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(255, 71, 87, 0);
+    }
 }
 
 /* ========================================================== */
