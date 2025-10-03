@@ -91,6 +91,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     let activeAtcFacilities = []; // To store fetched ATC data
     let activeNotams = []; // To store fetched NOTAMs data
     let atcPopup = null; // To manage a single, shared popup instance
+    // NEW: State for the airport info window
+    let airportInfoWindow = null;
+    let airportInfoWindowRecallBtn = null;
+    let currentAirportInWindow = null;
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -106,6 +110,97 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Failed to initialize maps:', error.message);
             showNotification('Could not load mapping services.', 'error');
         }
+    }
+
+    // NEW: Helper to inject custom CSS for new features
+    function injectCustomStyles() {
+        const styleId = 'sector-ops-custom-styles';
+        if (document.getElementById(styleId)) return;
+
+        const css = `
+            /* Airport Info Window */
+            .airport-info-window {
+                position: absolute;
+                top: 80px;
+                right: 20px;
+                width: 380px;
+                max-width: 90vw;
+                max-height: 70vh;
+                background-color: #1e212e;
+                border-radius: 8px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+                z-index: 1050;
+                display: none;
+                flex-direction: column;
+                border: 1px solid #33384f;
+                overflow: hidden;
+            }
+            .airport-info-window.visible {
+                display: flex;
+            }
+            .airport-window-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px 15px;
+                background-color: #10121a;
+                border-bottom: 1px solid #33384f;
+                flex-shrink: 0;
+            }
+            .airport-window-header h3 {
+                margin: 0;
+                font-size: 1.1rem;
+                color: #fff;
+            }
+            .airport-window-header h3 small {
+                font-weight: 300;
+                color: #aaa;
+                font-size: 0.9rem;
+            }
+            .airport-window-actions button {
+                background: none;
+                border: none;
+                color: #aaa;
+                cursor: pointer;
+                font-size: 1.1rem;
+                padding: 5px;
+                line-height: 1;
+                transition: color 0.2s;
+            }
+            .airport-window-actions button:hover {
+                color: #fff;
+            }
+            .airport-window-content {
+                overflow-y: auto;
+                flex-grow: 1;
+            }
+            .airport-window-content .airport-popup-content {
+                padding: 15px;
+            }
+
+            /* Toolbar Recall Button */
+            #airport-recall-btn {
+                display: none;
+                font-size: 1.1rem;
+                position: relative;
+            }
+            #airport-recall-btn.visible {
+                display: inline-block;
+            }
+            #airport-recall-btn.palpitate {
+                animation: palpitate 0.5s ease-in-out 2;
+            }
+            @keyframes palpitate {
+                0%, 100% { transform: scale(1); color: #00a8ff; }
+                50% { transform: scale(1.3); color: #fff; }
+            }
+        `;
+
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.type = 'text/css';
+        style.appendChild(document.createTextNode(css));
+        document.head.appendChild(style);
     }
 
     // --- NEW: Fetch Airport Coordinate Data ---
@@ -463,10 +558,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /**
-     * MODIFIED: Creates the rich HTML content for the airport information popup.
+     * MODIFIED: Creates the rich HTML content for the airport information popup/window.
      * This now includes ATC, NOTAMs, and a detailed list of departing routes.
+     * An options object can disable the top-level header for embedding in the new window.
      */
-    function createAirportPopupHTML(icao) {
+    function createAirportPopupHTML(icao, options = {}) {
+        const { includeHeader = true } = options;
         const atcForAirport = activeAtcFacilities.filter(f => f.airportName === icao);
         const notamsForAirport = activeNotams.filter(n => n.airportIcao === icao);
         const routesFromAirport = ALL_AVAILABLE_ROUTES.filter(r => r.departure === icao);
@@ -519,7 +616,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                             const aircraftName = aircraftInfo ? aircraftInfo.name : route.aircraft;
                             const aircraftImagePath = `Images/planesForCC/${route.aircraft}.png`;
                             
-                            // Safely stringify the route data for the data attribute
                             const routeDataString = JSON.stringify(route).replace(/'/g, "&apos;");
     
                             return `
@@ -552,9 +648,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     
         const airportName = airportsData[icao]?.name || 'Airport';
+        const headerHtml = includeHeader ? `<h3>${icao} <small>- ${airportName}</small></h3>` : '';
+
         return `
             <div class="airport-popup-content">
-                <h3>${icao} <small>- ${airportName}</small></h3>
+                ${headerHtml}
                 ${atcHtml}
                 ${notamsHtml}
                 ${routesHtml}
@@ -826,6 +924,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ==========================================================
     // START: SECTOR OPS / ROUTE EXPLORER LOGIC (INTERACTIVE AIRPORT MAP)
     // ==========================================================
+    
+    // NEW: Function to set up event listeners for the Airport Info Window
+    function setupAirportWindowEvents() {
+        if (!airportInfoWindow || airportInfoWindow.dataset.eventsAttached === 'true') return;
+
+        const closeBtn = document.getElementById('airport-window-close-btn');
+        const hideBtn = document.getElementById('airport-window-hide-btn');
+
+        closeBtn.addEventListener('click', () => {
+            airportInfoWindow.classList.remove('visible');
+            airportInfoWindowRecallBtn.classList.remove('visible');
+            clearRouteLayers(); // Closing also clears the map routes
+            currentAirportInWindow = null;
+        });
+
+        hideBtn.addEventListener('click', () => {
+            airportInfoWindow.classList.remove('visible');
+            if (currentAirportInWindow) {
+                airportInfoWindowRecallBtn.classList.add('visible');
+                // Trigger animation by adding and removing the class
+                airportInfoWindowRecallBtn.classList.add('palpitate');
+                setTimeout(() => {
+                    airportInfoWindowRecallBtn.classList.remove('palpitate');
+                }, 1000); // Duration of 2 palpitations (0.5s each)
+            }
+        });
+
+        airportInfoWindowRecallBtn.addEventListener('click', () => {
+            if (currentAirportInWindow) {
+                airportInfoWindow.classList.add('visible');
+                airportInfoWindowRecallBtn.classList.remove('visible');
+            }
+        });
+
+        airportInfoWindow.dataset.eventsAttached = 'true';
+    }
+
 
     /**
      * Main orchestrator for the Sector Ops view.
@@ -840,6 +975,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         mainContentLoader.classList.add('active');
 
         try {
+            // NEW: Create and inject the Airport Info Window and its recall button
+            if (!document.getElementById('airport-info-window')) {
+                const windowHtml = `
+                    <div id="airport-info-window" class="airport-info-window">
+                        <div class="airport-window-header">
+                            <h3 id="airport-window-title"></h3>
+                            <div class="airport-window-actions">
+                                <button id="airport-window-hide-btn" title="Hide Window"><i class="fa-solid fa-compress"></i></button>
+                                <button id="airport-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                        </div>
+                        <div id="airport-window-content" class="airport-window-content"></div>
+                    </div>
+                `;
+                document.getElementById('view-rosters').insertAdjacentHTML('beforeend', windowHtml);
+            }
+            const toolbarToggleBtn = document.getElementById('toolbar-toggle-panel-btn');
+            if (toolbarToggleBtn && !document.getElementById('airport-recall-btn')) {
+                 toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
+                    <button id="airport-recall-btn" class="toolbar-btn" title="Show Airport Info">
+                        <i class="fa-solid fa-location-dot"></i>
+                    </button>
+                 `);
+            }
+            airportInfoWindow = document.getElementById('airport-info-window');
+            airportInfoWindowRecallBtn = document.getElementById('airport-recall-btn');
+
+
             // 1. Get pilot's available hubs
             const rosterRes = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!rosterRes.ok) throw new Error('Could not determine your current location.');
@@ -865,6 +1028,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // 6. Set up all event listeners
             setupSectorOpsEventListeners();
+            setupAirportWindowEvents(); // NEW: Set up listeners for the new window
 
             // 7. NOW, start the live flight data loop after the base map is ready.
             startSectorOpsLiveLoop();
@@ -972,30 +1136,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /**
-     * NEW: Centralized handler for clicking any airport marker (regular or ATC).
+     * MODIFIED: Centralized handler for clicking any airport marker.
+     * This now opens the persistent info window instead of a popup.
      */
     function handleAirportClick(icao) {
-        // Maintain existing route plotting functionality
-        plotRoutesFromAirport(icao);
+        // If a different airport is clicked, clear previous state
+        if (currentAirportInWindow && currentAirportInWindow !== icao) {
+            airportInfoWindow.classList.remove('visible');
+            airportInfoWindowRecallBtn.classList.remove('visible');
+            clearRouteLayers();
+        }
+
+        plotRoutesFromAirport(icao); // Always plot routes for the clicked airport
 
         const airport = airportsData[icao];
         if (!airport) return;
 
-        // Remove any existing popup to prevent duplicates
-        if (atcPopup) {
-            atcPopup.remove();
-        }
+        // Use the helper to generate the content, but without its own header
+        const windowContentHTML = createAirportPopupHTML(icao, { includeHeader: false });
 
-        const popupHTML = createAirportPopupHTML(icao);
+        if (windowContentHTML) {
+            // Populate and show the window
+            const titleEl = document.getElementById('airport-window-title');
+            const contentEl = document.getElementById('airport-window-content');
+            
+            titleEl.innerHTML = `${icao} <small>- ${airport.name || 'Airport'}</small>`;
+            contentEl.innerHTML = windowContentHTML;
+            contentEl.scrollTop = 0; // Ensure content starts from the top
 
-        // Only create a popup if there's ATC or NOTAM info to show
-        if (popupHTML) {
-            atcPopup = new mapboxgl.Popup({ closeButton: true, anchor: 'bottom', maxWidth: '320px' })
-                .setLngLat([airport.lon, airport.lat])
-                .setHTML(popupHTML)
-                .addTo(sectorOpsMap);
+            airportInfoWindow.classList.add('visible');
+            airportInfoWindowRecallBtn.classList.remove('visible'); // Hide recall button when window is freshly opened
+            currentAirportInWindow = icao;
+        } else {
+             // If there's no content, ensure any old window is hidden
+             airportInfoWindow.classList.remove('visible');
+             currentAirportInWindow = null;
         }
     }
+
 
     /**
      * (NEW) Clears old routes and draws all new routes originating from a selected airport.
@@ -1010,7 +1188,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const routesFromHub = ALL_AVAILABLE_ROUTES.filter(r => r.departure === departureICAO);
 
         if (routesFromHub.length === 0) {
-            // Don't show a popup here, as the main click handler will manage it
             return;
         }
 
@@ -2058,9 +2235,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 showNotification(`Pre-filled dispatch for ${routeData.flightNumber}. Please generate with SimBrief or file manually.`, 'info');
                 
-                // Close the map popup if it exists
-                if(atcPopup) {
-                    atcPopup.remove();
+                // Close the map window if it is open
+                if(airportInfoWindow && airportInfoWindow.classList.contains('visible')) {
+                    document.getElementById('airport-window-close-btn').click();
                 }
             } catch (error) {
                 console.error("Error parsing route data from button:", error);
@@ -2557,6 +2734,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- Initial Load ---
     async function initializeApp() {
         mainContentLoader.classList.add('active');
+
+        // NEW: Inject all custom CSS needed for new features
+        injectCustomStyles();
 
         // Fetch essential data in parallel
         await Promise.all([
