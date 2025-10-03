@@ -78,7 +78,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let crewRestInterval = null;
     let airportsData = {};
     let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
-    let selectedAircraftData = null; // To store data of the last clicked aircraft
 
     // --- Map-related State ---
     let liveFlightsMap = null;
@@ -91,7 +90,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let sectorOpsLiveFlightsInterval = null;
     let activeAtcFacilities = []; // To store fetched ATC data
     let activeNotams = []; // To store fetched NOTAMs data
-    let airportInfoPopup = null; // To manage a single, shared popup instance
+    let atcPopup = null; // To manage a single, shared popup instance
+    let lastSelectedAircraft = null; // *** NEW: Stores data for the last clicked aircraft in Sector Ops
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -463,6 +463,106 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
     }
 
+    /**
+     * MODIFIED: Creates the rich HTML content for the airport information popup.
+     * This now includes ATC, NOTAMs, and a detailed list of departing routes.
+     */
+    function createAirportPopupHTML(icao) {
+        const atcForAirport = activeAtcFacilities.filter(f => f.airportName === icao);
+        const notamsForAirport = activeNotams.filter(n => n.airportIcao === icao);
+        const routesFromAirport = ALL_AVAILABLE_ROUTES.filter(r => r.departure === icao);
+    
+        // If there's no data at all, don't show a popup
+        if (atcForAirport.length === 0 && notamsForAirport.length === 0 && routesFromAirport.length === 0) {
+            return null;
+        }
+    
+        let atcHtml = '';
+        if (atcForAirport.length > 0) {
+            atcHtml = `
+                <div class="popup-section atc-section">
+                    <h4><i class="fa-solid fa-headset"></i> Active ATC</h4>
+                    <ul class="atc-frequencies">
+                        ${atcForAirport.map(f => `
+                            <li class="atc-frequency-item">
+                                <span class="freq-type">${atcTypeToString(f.type)}:</span>
+                                <span class="freq-user">${f.username || 'N/A'}</span>
+                                <span class="freq-time">${formatAtcDuration(f.startTime)}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+    
+        let notamsHtml = '';
+        if (notamsForAirport.length > 0) {
+            notamsHtml = `
+                <div class="popup-section notam-section">
+                    <h4><i class="fa-solid fa-triangle-exclamation"></i> NOTAMs</h4>
+                    <ul class="notam-list">
+                        ${notamsForAirport.map(n => `<li>${n.message}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        let routesHtml = '';
+        if (routesFromAirport.length > 0) {
+            routesHtml = `
+                <div class="popup-section routes-section">
+                    <h4><i class="fa-solid fa-route"></i> Departing Routes</h4>
+                    <ul class="popup-routes-list">
+                        ${routesFromAirport.map(route => {
+                            const airlineCode = extractAirlineCode(route.flightNumber);
+                            const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : '';
+                            const aircraftInfo = AIRCRAFT_SELECTION_LIST.find(ac => ac.value === route.aircraft);
+                            const aircraftName = aircraftInfo ? aircraftInfo.name : route.aircraft;
+                            const aircraftImagePath = `Images/planesForCC/${route.aircraft}.png`;
+                            
+                            // Safely stringify the route data for the data attribute
+                            const routeDataString = JSON.stringify(route).replace(/'/g, "&apos;");
+    
+                            return `
+                            <li class="popup-route-item">
+                                <div class="route-item-header">
+                                    <div class="route-item-info">
+                                        <img src="${logoPath}" class="route-item-airline-logo" alt="${airlineCode}" onerror="this.style.display='none'">
+                                        <div class="route-item-flight-details">
+                                            <span class="flight-number">${route.flightNumber}</span>
+                                            <span class="destination">to ${route.arrival}</span>
+                                        </div>
+                                    </div>
+                                    <div class="route-item-actions">
+                                         <button class="cta-button plan-flight-from-explorer-btn" data-route='${routeDataString}'>Plan</button>
+                                    </div>
+                                </div>
+                                <div class="route-item-footer">
+                                    <div class="route-item-aircraft-info">
+                                        <img src="${aircraftImagePath}" class="route-item-aircraft-img" alt="${aircraftName}" onerror="this.style.display='none'">
+                                        <span>${aircraftName}</span>
+                                    </div>
+                                    ${getRankBadgeHTML(route.rankUnlock || deduceRankFromAircraftFE(route.aircraft), { showImage: true, imageClass: 'roster-req-rank-badge' })}
+                                </div>
+                            </li>
+                            `;
+                        }).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+    
+        const airportName = airportsData[icao]?.name || 'Airport';
+        return `
+            <div class="airport-popup-content">
+                <h3>${icao} <small>- ${airportName}</small></h3>
+                ${atcHtml}
+                ${notamsHtml}
+                ${routesHtml}
+            </div>
+        `;
+    }
+
     // --- Rank & Fleet Models ---
     const PILOT_RANKS = [
         'IndGo Cadet', 'Skyline Observer', 'Route Explorer', 'Skyline Officer',
@@ -727,153 +827,87 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ==========================================================
     // START: SECTOR OPS / ROUTE EXPLORER LOGIC (INTERACTIVE AIRPORT MAP)
     // ==========================================================
-    
-    // ==========================================================
-    // START: NEW FLOATING PANEL RENDERERS
-    // ==========================================================
-
-    /**
-     * Populates and shows the Active ATC information panel.
-     */
-    function renderAtcPanel() {
-        const panel = document.getElementById('atc-info-panel');
-        const content = panel.querySelector('.info-panel-content');
-        if (!panel || !content) return;
-
-        if (!activeAtcFacilities || activeAtcFacilities.length === 0) {
-            content.innerHTML = `<p class="muted" style="text-align: center;">No active ATC facilities found on the server.</p>`;
-            return;
-        }
-
-        // Group ATC by airport
-        const atcByAirport = activeAtcFacilities.reduce((acc, facility) => {
-            if (!facility.airportName) return acc;
-            if (!acc[facility.airportName]) {
-                acc[facility.airportName] = [];
-            }
-            acc[facility.airportName].push(facility);
-            return acc;
-        }, {});
-
-        // Sort airport ICAO codes alphabetically
-        const sortedIcaos = Object.keys(atcByAirport).sort();
-
-        content.innerHTML = `
-            <div class="atc-list">
-                ${sortedIcaos.map(icao => `
-                    <div class="atc-list-item">
-                        <div class="atc-item-header">
-                            <span class="atc-icao">${icao}</span>
-                            <span class="atc-name">${airportsData[icao]?.name || 'Airport'}</span>
-                        </div>
-                        <div class="atc-item-body">
-                        ${atcByAirport[icao].map(f => `
-                            <div class="atc-user-info">
-                                <span class="atc-type">${atcTypeToString(f.type)}</span>
-                                <span class="atc-user">${f.username || 'N/A'}</span>
-                                <span class="atc-duration"><i class="fa-regular fa-clock"></i> ${formatAtcDuration(f.startTime)}</span>
-                            </div>
-                        `).join('')}
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-    }
-
-    /**
-     * Populates and shows the Selected Aircraft information panel.
-     */
-    function renderAircraftPanel() {
-        const panel = document.getElementById('aircraft-info-panel');
-        const content = panel.querySelector('.info-panel-content');
-        if (!panel || !content) return;
-
-        if (!selectedAircraftData) {
-            content.innerHTML = `
-                <div class="aircraft-info-placeholder">
-                    <i class="fa-solid fa-crosshairs"></i>
-                    <p>Click an aircraft on the Sector Ops map to view its live flight data here.</p>
-                </div>
-            `;
-            return;
-        }
-
-        const data = selectedAircraftData;
-        content.innerHTML = `
-            <div class="aircraft-info-details">
-                <div class="aircraft-info-header">
-                    <div class="callsign">${data.callsign}</div>
-                    <div class="username">${data.username}</div>
-                </div>
-                <div class="aircraft-info-grid">
-                    <div class="info-item">
-                        <label>Altitude</label>
-                        <span class="value">${Math.round(data.altitude).toLocaleString()} ft</span>
-                    </div>
-                    <div class="info-item">
-                        <label>Ground Speed</label>
-                        <span class="value">${Math.round(data.speed)} kts</span>
-                    </div>
-                    <div class="info-item">
-                        <label>Heading</label>
-                        <span class="value">${Math.round(data.heading)}°</span>
-                    </div>
-                     <div class="info-item">
-                        <label>Aircraft</label>
-                        <span class="value">${data.aircraft || 'N/A'}</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-
-    // ==========================================================
-    // END: NEW FLOATING PANEL RENDERERS
-    // ==========================================================
-
 
     /**
      * Main orchestrator for the Sector Ops view.
      * Manages fetching data and orchestrating map and list updates.
      */
     async function initializeSectorOpsView() {
+        const viewContainer = document.getElementById('view-rosters'); // Target the main view container
         const selector = document.getElementById('departure-hub-selector');
         const mapContainer = document.getElementById('sector-ops-map-fullscreen');
         if (!selector || !mapContainer) return;
 
-        // Use the main content loader instead of a local one
+        // *** NEW: Inject Command Center UI into the Sector Ops view if it doesn't exist
+        if (!document.getElementById('sector-ops-command-center')) {
+            const commandCenterHTML = `
+                <div id="sector-ops-command-center">
+                    <div class="command-center-fab-group">
+                        <button id="command-atc-btn" class="command-fab" title="Show Active ATC">
+                            <i class="fa-solid fa-tower-broadcast"></i>
+                        </button>
+                        <button id="command-aircraft-btn" class="command-fab" title="Show Last Selected Aircraft" disabled>
+                            <i class="fa-solid fa-plane"></i>
+                        </button>
+                    </div>
+                    
+                    <div id="command-panel-atc" class="command-panel">
+                        <div class="command-panel-header">
+                            <h3><i class="fa-solid fa-headset"></i> Active ATC Facilities</h3>
+                            <button class="close-panel-btn"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div class="command-panel-body" id="atc-master-list-container">
+                            <p class="muted">Loading ATC data...</p>
+                        </div>
+                    </div>
+
+                    <div id="command-panel-aircraft" class="command-panel">
+                         <div class="command-panel-header">
+                            <h3><i class="fa-solid fa-paper-plane"></i> Selected Aircraft</h3>
+                            <button class="close-panel-btn"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div class="command-panel-body" id="selected-aircraft-details-container">
+                            <p class="muted">Click on an aircraft on the map to see details.</p>
+                        </div>
+                    </div>
+
+                     <div id="command-panel-airport" class="command-panel">
+                         <div class="command-panel-header">
+                            <h3><i class="fa-solid fa-location-dot"></i> Airport Information</h3>
+                            <button class="close-panel-btn"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div class="command-panel-body" id="selected-airport-details-container">
+                            <p class="muted">Click on an airport on the map to see details.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            mapContainer.insertAdjacentHTML('afterend', commandCenterHTML);
+            setupCommandCenterListeners(); // Setup listeners for the new UI
+        }
+        // *** END NEW
+
         mainContentLoader.classList.add('active');
 
         try {
-            // 1. Get pilot's available hubs
             const rosterRes = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!rosterRes.ok) throw new Error('Could not determine your current location.');
             const rosterData = await rosterRes.json();
             const departureHubs = rosterData.searchCriteria?.searched || ['VIDP'];
 
-            // 2. Populate hub selector
             selector.innerHTML = departureHubs.map(h => `<option value="${h}">${airportsData[h]?.name || h}</option>`).join('');
             const selectedHub = selector.value;
-
-            // 3. Initialize the Mapbox map
+            
             await initializeSectorOpsMap(selectedHub);
 
-            // 4. Fetch data for both tabs in parallel
             const [rosters, routes] = await Promise.all([
                 fetchAndRenderRosters(selectedHub),
                 fetchAndRenderRoutes()
             ]);
-            ALL_AVAILABLE_ROUTES = routes; // Store all routes for later use
+            ALL_AVAILABLE_ROUTES = routes;
 
-            // 5. Plot all airports on the map as the default view
             plotAllAirportsOnMap();
-
-            // 6. Set up all event listeners
             setupSectorOpsEventListeners();
-
-            // 7. NOW, start the live flight data loop after the base map is ready.
             startSectorOpsLiveLoop();
 
         } catch (error) {
@@ -908,7 +942,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         return new Promise(resolve => {
             sectorOpsMap.on('load', () => {
-                // Load the icon for live aircraft markers. Assumes an icon exists at this path.
                 sectorOpsMap.loadImage(
                     '/images/whiteplane.png',
                     (error, image) => {
@@ -919,7 +952,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 sectorOpsMap.addImage('plane-icon', image);
                             }
                         }
-                        resolve(); // Resolve the promise once the image is loaded or fails
+                        resolve();
                     }
                 );
             });
@@ -943,19 +976,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     function plotAllAirportsOnMap() {
         if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
-        // Clear everything to start fresh
         clearRouteLayers();
         sectorOpsMapMarkers.forEach(marker => marker.remove());
         sectorOpsMapMarkers = [];
 
-        // Find all unique airports from the global route list
         const uniqueAirports = new Set();
         ALL_AVAILABLE_ROUTES.forEach(route => {
             uniqueAirports.add(route.departure);
             uniqueAirports.add(route.arrival);
         });
 
-        // Create a marker for each unique airport
         uniqueAirports.forEach(icao => {
             const airport = airportsData[icao];
             if (airport && airport.lon && airport.lat) {
@@ -967,9 +997,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     .setLngLat([airport.lon, airport.lat])
                     .addTo(sectorOpsMap);
 
-                // Add the core functionality: click to show routes and info
                 el.addEventListener('click', (e) => {
-                    e.stopPropagation(); // Prevents map click event from firing
+                    e.stopPropagation();
                     handleAirportClick(icao);
                 });
 
@@ -979,27 +1008,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /**
-     * MODIFIED: Centralized handler for clicking any airport marker (regular or ATC).
-     * INSTEAD of creating a popup, it now opens the main ATC info panel.
+     * MODIFIED: Centralized handler for clicking any airport marker.
+     * This now opens the new side panel instead of a map popup.
      */
     function handleAirportClick(icao) {
-        plotRoutesFromAirport(icao); // This functionality remains the same
+        plotRoutesFromAirport(icao); // Keep existing route plotting functionality
 
-        const airport = airportsData[icao];
-        if (!airport) return;
+        const airportInfoPanel = document.getElementById('command-panel-airport');
+        const airportDetailsContainer = document.getElementById('selected-airport-details-container');
 
-        // Bring the Sector Ops panel to the front to show the routes for this airport.
-        document.getElementById('sector-ops-panel').classList.add('visible');
+        if (!airportInfoPanel || !airportDetailsContainer) return;
 
-        // If there is active ATC at this airport, open the main ATC panel as well
-        const atcForAirport = activeAtcFacilities.some(f => f.airportName === icao);
-        if (atcForAirport) {
-            renderAtcPanel(); // Ensure content is up-to-date
-            const atcPanel = document.getElementById('atc-info-panel');
-            atcPanel.classList.add('visible');
-            // Bring ATC panel to the front if multiple are open
-            document.querySelectorAll('.info-panel.visible').forEach(p => p.style.zIndex = '20');
-            atcPanel.style.zIndex = '21';
+        // Close other panels for a cleaner experience
+        document.querySelectorAll('.command-panel.visible').forEach(p => p.classList.remove('visible'));
+
+        const popupHTML = createAirportPopupHTML(icao);
+
+        if (popupHTML) {
+            airportDetailsContainer.innerHTML = popupHTML;
+            airportInfoPanel.classList.add('visible');
+        } else {
+            airportDetailsContainer.innerHTML = `<p class="muted">No departing routes, active ATC, or NOTAMs for ${icao} at this time.</p>`;
+            airportInfoPanel.classList.add('visible');
         }
     }
 
@@ -1017,11 +1047,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const routesFromHub = ALL_AVAILABLE_ROUTES.filter(r => r.departure === departureICAO);
 
         if (routesFromHub.length === 0) {
-            // Don't show a popup here, as the main click handler will manage it
             return;
         }
 
-        // Create line features for each route
         const routeLineFeatures = routesFromHub.map(route => {
             const arrivalAirport = airportsData[route.arrival];
             if (arrivalAirport) {
@@ -1034,7 +1062,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
             }
             return null;
-        }).filter(Boolean); // Filter out any routes with missing arrival data
+        }).filter(Boolean);
 
         const routeLinesId = `routes-from-${departureICAO}`;
         sectorOpsMap.addSource(routeLinesId, {
@@ -1047,15 +1075,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             type: 'line',
             source: routeLinesId,
             paint: {
-                'line-color': '#00a8ff', // A bright blue for visibility
+                'line-color': '#00a8ff',
                 'line-width': 2,
                 'line-opacity': 0.8
             }
         });
 
-        sectorOpsMapRouteLayers.push(routeLinesId); // Track the new layer for cleanup
+        sectorOpsMapRouteLayers.push(routeLinesId);
 
-        // Fly to the selected airport
         sectorOpsMap.flyTo({
             center: departureCoords,
             zoom: 5,
@@ -1154,7 +1181,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const airlineCode = extractAirlineCode(route.flightNumber);
                 const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : '';
                 const requiredRank = route.rankUnlock || deduceRankFromAircraftFE(route.aircraft);
-                // Safely stringify the route data for the data attribute
                 const routeDataString = JSON.stringify(route).replace(/'/g, "&apos;");
 
                 return `
@@ -1188,11 +1214,24 @@ document.addEventListener('DOMContentLoaded', async () => {
      * Sets up event listeners for the Sector Ops view.
      */
     function setupSectorOpsEventListeners() {
-        const panel = document.getElementById('sector-ops-panel');
+        const panel = document.getElementById('sector-ops-floating-panel');
         if (!panel || panel.dataset.listenersAttached === 'true') return;
         panel.dataset.listenersAttached = 'true';
 
-        // Tab switching now ONLY changes the panel content
+        const toggleBtn = document.getElementById('sector-ops-toggle-btn');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                const isCollapsed = panel.classList.toggle('panel-collapsed');
+                toggleBtn.setAttribute('aria-expanded', !isCollapsed);
+
+                if (sectorOpsMap) {
+                    setTimeout(() => {
+                        sectorOpsMap.resize();
+                    }, 400); 
+                }
+            });
+        }
+        
         panel.querySelector('.panel-tabs')?.addEventListener('click', (e) => {
             const tabLink = e.target.closest('.tab-link');
             if (!tabLink) return;
@@ -1203,16 +1242,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             panel.querySelector(`#${tabId}`).classList.add('active');
         });
 
-        // Hub selector only updates the roster list. Map is independent.
         panel.querySelector('#departure-hub-selector')?.addEventListener('change', async (e) => {
             const selectedHub = e.target.value;
             await fetchAndRenderRosters(selectedHub);
         });
 
-        // Route search/filter (for the global list)
         panel.querySelector('#route-search-input')?.addEventListener('input', (e) => {
             const searchTerm = e.target.value.toUpperCase().trim();
-            // UPDATE: Must query the whole document as the list is not a child of the input
             document.querySelectorAll('#route-list-container .route-card').forEach(card => {
                 const departure = card.dataset.departure;
                 const arrival = card.dataset.arrival;
@@ -1228,9 +1264,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 card.style.display = isMatch ? 'flex' : 'none';
             });
         });
-
-        // NOTE: The "Plan Flight" button listener has been moved to the global
-        // mainContentContainer listener to work from anywhere, including map popups.
     }
 
     // ==========================================================
@@ -1240,14 +1273,53 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ====================================================================
     // START: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
+    
+    /**
+     * *** NEW: Sets up listeners for the new command center UI.
+     */
+    function setupCommandCenterListeners() {
+        const atcBtn = document.getElementById('command-atc-btn');
+        const aircraftBtn = document.getElementById('command-aircraft-btn');
+        const atcPanel = document.getElementById('command-panel-atc');
+        const aircraftPanel = document.getElementById('command-panel-aircraft');
+        const airportPanel = document.getElementById('command-panel-airport');
+
+        atcBtn?.addEventListener('click', () => {
+            closeAllCommandPanels(atcPanel);
+            atcPanel.classList.toggle('visible');
+        });
+
+        aircraftBtn?.addEventListener('click', () => {
+            if (aircraftBtn.disabled) return;
+            closeAllCommandPanels(aircraftPanel);
+            aircraftPanel.classList.toggle('visible');
+        });
+
+        document.querySelectorAll('.command-panel .close-panel-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.closest('.command-panel').classList.remove('visible');
+            });
+        });
+    }
+
+    /**
+     * *** NEW: Helper to close all command panels, with an exception for the one being opened.
+     */
+    function closeAllCommandPanels(exceptPanel = null) {
+        document.querySelectorAll('.command-panel.visible').forEach(panel => {
+            if (panel !== exceptPanel) {
+                panel.classList.remove('visible');
+            }
+        });
+    }
 
     /**
      * Starts the polling loop for live flights specifically for the Sector Ops map.
      */
     function startSectorOpsLiveLoop() {
-        stopSectorOpsLiveLoop(); // Ensure no duplicate intervals are running
-        updateSectorOpsLiveFlights(); // Fetch immediately
-        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 30000); // Then update every 30 seconds
+        stopSectorOpsLiveLoop(); 
+        updateSectorOpsLiveFlights();
+        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 30000);
     }
 
     /**
@@ -1269,7 +1341,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const atcAirportIcaos = new Set(activeAtcFacilities.map(f => f.airportName).filter(Boolean));
         const activeMarkerIcaos = new Set();
 
-        // Add or update markers for currently active ATC airports
         atcAirportIcaos.forEach(icao => {
             activeMarkerIcaos.add(icao);
             const airport = airportsData[icao];
@@ -1284,7 +1355,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     .setLngLat([airport.lon, airport.lat])
                     .addTo(sectorOpsMap);
 
-                // Use the same centralized handler as regular airport markers
                 el.addEventListener('click', (e) => {
                     e.stopPropagation();
                     handleAirportClick(icao);
@@ -1294,13 +1364,93 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
-        // Clean up markers for airports that are no longer active
         Object.keys(atcMarkers).forEach(icao => {
             if (!activeMarkerIcaos.has(icao)) {
                 atcMarkers[icao].remove();
                 delete atcMarkers[icao];
             }
         });
+    }
+
+    /**
+     * *** NEW: Updates the master ATC list in the new side panel.
+     */
+    function updateAtcSidePanel() {
+        const container = document.getElementById('atc-master-list-container');
+        if (!container) return;
+
+        if (activeAtcFacilities.length === 0) {
+            container.innerHTML = '<p class="muted">No active ATC facilities on the server.</p>';
+            return;
+        }
+
+        const groupedAtc = activeAtcFacilities.reduce((acc, facility) => {
+            const key = facility.airportName || 'En-Route';
+            if (!acc[key]) {
+                acc[key] = [];
+            }
+            acc[key].push(facility);
+            return acc;
+        }, {});
+
+        // Sort airports alphabetically, with 'En-Route' last
+        const sortedAirports = Object.keys(groupedAtc).sort((a, b) => {
+            if (a === 'En-Route') return 1;
+            if (b === 'En-Route') return -1;
+            return a.localeCompare(b);
+        });
+
+        let html = '';
+        sortedAirports.forEach(airportIcao => {
+            html += `
+                <div class="atc-group">
+                    <h4 class="atc-group-header">${airportIcao}</h4>
+                    <ul class="atc-frequencies">
+            `;
+            groupedAtc[airportIcao].forEach(f => {
+                 html += `
+                    <li class="atc-frequency-item">
+                        <span class="freq-type">${atcTypeToString(f.type)}:</span>
+                        <span class="freq-user">${f.username || 'N/A'}</span>
+                        <span class="freq-time">${formatAtcDuration(f.startTime)}</span>
+                    </li>
+                `;
+            });
+            html += '</ul></div>';
+        });
+
+        container.innerHTML = html;
+    }
+
+    /**
+     * *** NEW: Updates the selected aircraft details in its side panel.
+     */
+    function updateAircraftSidePanel(props) {
+        const container = document.getElementById('selected-aircraft-details-container');
+        if (!container || !props) return;
+
+        container.innerHTML = `
+            <div class="aircraft-panel-info">
+                <div class="info-header">
+                    <strong class="callsign">${props.callsign}</strong>
+                    <em class="username">${props.username}</em>
+                </div>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>Altitude</label>
+                        <span>${Math.round(props.altitude).toLocaleString()} ft</span>
+                    </div>
+                     <div class="info-item">
+                        <label>Ground Speed</label>
+                        <span>${Math.round(props.speed)} kts</span>
+                    </div>
+                     <div class="info-item">
+                        <label>Heading</label>
+                        <span>${Math.round(props.heading)}°</span>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     /**
@@ -1312,7 +1462,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const LIVE_FLIGHTS_BACKEND = 'https://acars-backend-uxln.onrender.com';
 
         try {
-            // 1. Fetch the server session ID
             const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
             const sessionsData = await sessionsRes.json();
             const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
@@ -1322,14 +1471,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            // 2. Fetch ALL live data in parallel for efficiency
             const [flightsRes, atcRes, notamsRes] = await Promise.all([
                 fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
                 fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
                 fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
             ]);
             
-            // 3. Process ATC and NOTAM data first, then update the map layer
             const atcData = await atcRes.json();
             activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
             
@@ -1337,8 +1484,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
 
             updateAtcLayer();
+            updateAtcSidePanel(); // *** NEW: Update the master ATC list panel
 
-            // 4. Process flight data
             const flightsData = await flightsRes.json();
             if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
                 console.warn('Sector Ops Map: Could not fetch live flights.');
@@ -1360,8 +1507,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         username: flight.username,
                         altitude: flight.position.alt_ft,
                         speed: flight.position.gs_kt,
-                        heading: flight.position.track_deg || 0,
-                        aircraft: flight.aircraftType,
+                        heading: flight.position.track_deg || 0
                     }
                 };
             }).filter(Boolean);
@@ -1371,7 +1517,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 features: flightFeatures
             };
 
-            // 5. Update the flight map source and layer
             const sourceId = 'sector-ops-live-flights-source';
             const layerId = 'sector-ops-live-flights-layer';
             const source = sectorOpsMap.getSource(sourceId);
@@ -1397,30 +1542,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                         'icon-ignore-placement': true
                     }
                 });
-
-                // --- MAJOR CHANGE: Replaced Popup with Panel Logic ---
+                
+                // *** MODIFIED: Aircraft click now opens the side panel
                 sectorOpsMap.on('click', layerId, (e) => {
-                    if (e.features.length === 0) return;
+                    if (!e.features.length) return;
                     const props = e.features[0].properties;
+
+                    lastSelectedAircraft = props;
+                    updateAircraftSidePanel(props);
+
+                    const aircraftPanel = document.getElementById('command-panel-aircraft');
+                    const aircraftBtn = document.getElementById('command-aircraft-btn');
                     
-                    // 1. Store the clicked aircraft's data globally
-                    selectedAircraftData = {
-                        callsign: props.callsign,
-                        username: props.username,
-                        altitude: props.altitude,
-                        speed: props.speed,
-                        heading: props.heading,
-                        aircraft: props.aircraft
-                    };
-                    
-                    // 2. Render the panel with the new data
-                    renderAircraftPanel();
-                    
-                    // 3. Make the panel visible and bring it to the front
-                    const aircraftPanel = document.getElementById('aircraft-info-panel');
+                    closeAllCommandPanels();
                     aircraftPanel.classList.add('visible');
-                    document.querySelectorAll('.info-panel.visible').forEach(p => p.style.zIndex = '20');
-                    aircraftPanel.style.zIndex = '21';
+                    aircraftBtn.disabled = false;
                 });
 
                 sectorOpsMap.on('mouseenter', layerId, () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
@@ -1450,36 +1586,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             newView.classList.add('active');
         }
 
-        // Hide all floating panels when switching main views
-        document.querySelectorAll('.info-panel').forEach(p => p.classList.remove('visible'));
-
-        // Stop the dashboard live map loop
         if (liveFlightsInterval) {
             clearInterval(liveFlightsInterval);
             liveFlightsInterval = null;
         }
         
-        // Stop the Sector Ops live map loop
         stopSectorOpsLiveLoop();
-        
-        // Hide the Sector Ops panel itself unless the view is 'view-rosters'
-        const sectorOpsPanel = document.getElementById('sector-ops-panel');
-        if (sectorOpsPanel) {
-            if (viewId === 'view-rosters') {
-                 // It will be shown by its own trigger, so keep it hidden initially
-                 sectorOpsPanel.classList.remove('visible');
-            } else {
-                 sectorOpsPanel.classList.remove('visible');
-            }
-        }
-
+        // *** NEW: Hide command panels when switching views
+        document.querySelectorAll('.command-panel.visible').forEach(p => p.classList.remove('visible'));
 
         if (sectorOpsMap) {
-            // Ensure map is resized if sidebar state changes while view is inactive
             setTimeout(() => sectorOpsMap.resize(), 400); 
         }
 
-        // Conditionally start the correct loop based on the new view
         if (viewId === 'view-duty-status') {
             initializeLiveMap();
         } else if (viewId === 'view-rosters') {
@@ -1993,11 +2112,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     sidebarNav.addEventListener('click', (e) => {
         const link = e.target.closest('.nav-link');
         if (!link) return;
+        e.preventDefault();
 
-        // Prevent default for view switching links, but not for panel triggers
         const viewId = link.dataset.view;
         if (viewId) {
-            e.preventDefault();
             switchView(viewId);
         }
     });
@@ -2050,7 +2168,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     mainContentContainer.addEventListener('click', async (e) => {
         const target = e.target;
 
-        // MODIFIED: Global listener for "Plan Flight" buttons
         const planButton = target.closest('.plan-flight-from-explorer-btn');
         if (planButton) {
             try {
@@ -2068,9 +2185,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 showNotification(`Pre-filled dispatch for ${routeData.flightNumber}. Please generate with SimBrief or file manually.`, 'info');
                 
-                // Close any open info panels
-                document.querySelectorAll('.info-panel.visible').forEach(p => p.classList.remove('visible'));
-
+                closeAllCommandPanels(); // Close any open Sector Ops panels
+                
             } catch (error) {
                 console.error("Error parsing route data from button:", error);
                 showNotification("Could not load flight data from this button.", "error");
@@ -2079,8 +2195,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (target.id === 'go-to-roster-btn') {
             switchView('view-rosters');
-             // After switching, programmatically click the Sector Ops trigger
-            setTimeout(() => document.getElementById('sector-ops-panel-trigger')?.click(), 50);
         }
 
         const summary = target.closest('.active-flight-summary');
@@ -2569,59 +2683,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function initializeApp() {
         mainContentLoader.classList.add('active');
 
-        // --- NEW: Inject new elements on load ---
-        const sidebarList = document.querySelector('.sidebar-nav ul');
-        if (sidebarList) {
-            // Find the original Rosters link and change its data-view to avoid conflicts
-            const originalRosterLink = sidebarList.querySelector('.nav-link[data-view="view-rosters"]');
-            if (originalRosterLink) {
-                 originalRosterLink.dataset.view = 'view-duty-status'; // Or another default view
-                 originalRosterLink.style.display = 'none'; // Hide the original link
-            }
-
-            const sectorOpsLi = document.createElement('li');
-            sectorOpsLi.innerHTML = `<a href="#" class="nav-link" id="sector-ops-panel-trigger" title="Sector Operations"><i class="fa-solid fa-map-location-dot"></i><span class="nav-text">Sector Ops</span></a>`;
-            sidebarList.appendChild(sectorOpsLi);
-
-            const atcLi = document.createElement('li');
-            atcLi.innerHTML = `<a href="#" class="nav-link" id="atc-panel-trigger" title="Active ATC"><i class="fa-solid fa-headset"></i><span class="nav-text">ATC List</span></a>`;
-            sidebarList.appendChild(atcLi);
-
-            const aircraftLi = document.createElement('li');
-            aircraftLi.innerHTML = `<a href="#" class="nav-link" id="aircraft-panel-trigger" title="Selected Aircraft"><i class="fa-solid fa-plane-up"></i><span class="nav-text">Selected Aircraft</span></a>`;
-            sidebarList.appendChild(aircraftLi);
-        }
-
-        const atcPanelHTML = `
-            <div class="info-panel" id="atc-info-panel">
-                <div class="info-panel-header">
-                    <h3><i class="fa-solid fa-tower-broadcast"></i> Active ATC Facilities</h3>
-                    <button class="info-panel-close-btn" data-panel-id="atc-info-panel"><i class="fa-solid fa-xmark"></i></button>
-                </div>
-                <div class="info-panel-content"></div>
-            </div>
-        `;
-        const aircraftPanelHTML = `
-            <div class="info-panel" id="aircraft-info-panel">
-                <div class="info-panel-header">
-                    <h3><i class="fa-solid fa-circle-info"></i> Selected Aircraft</h3>
-                    <button class="info-panel-close-btn" data-panel-id="aircraft-info-panel"><i class="fa-solid fa-xmark"></i></button>
-                </div>
-                <div class="info-panel-content"></div>
-            </div>
-        `;
-        // Rename original sector ops panel ID to avoid conflicts
-        const sectorOpsPanel = document.getElementById('sector-ops-floating-panel');
-        if (sectorOpsPanel) {
-            sectorOpsPanel.id = 'sector-ops-panel';
-            sectorOpsPanel.classList.add('info-panel');
-        }
-
-        document.body.insertAdjacentHTML('beforeend', atcPanelHTML + aircraftPanelHTML);
-        // --- END: Injection logic ---
-
-
-        // Fetch essential data in parallel
         await Promise.all([
             fetchMapboxToken(),
             fetchAirportsData()
@@ -2629,12 +2690,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         await fetchPilotData();
 
-        // Initial view setup
         const urlParams = new URLSearchParams(window.location.search);
         const initialView = urlParams.get('view') || 'view-duty-status';
         switchView(initialView);
 
-        // Sidebar state
         if (localStorage.getItem('sidebarState') === 'collapsed') {
             dashboardContainer.classList.add('sidebar-collapsed');
         }
@@ -2653,51 +2712,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             showNotification('You have been logged out.', 'success');
             setTimeout(() => { window.location.href = 'login.html'; }, 1000);
         });
-
-        // --- NEW: Event Listeners for new panels ---
-        function togglePanel(panelId) {
-            const targetPanel = document.getElementById(panelId);
-            if (!targetPanel) return;
-
-            const isVisible = targetPanel.classList.contains('visible');
-             // If we're opening a panel, make sure we are in the rosters view
-            if (!isVisible && (panelId === 'sector-ops-panel' || panelId === 'atc-info-panel' || panelId === 'aircraft-info-panel')) {
-                const currentView = document.querySelector('.content-view.active').id;
-                if (currentView !== 'view-rosters') {
-                    switchView('view-rosters');
-                }
-            }
-
-            // Bring the clicked panel to the front
-            document.querySelectorAll('.info-panel').forEach(p => p.style.zIndex = '20');
-            targetPanel.style.zIndex = '21';
-            
-            targetPanel.classList.toggle('visible');
-        }
-
-        document.getElementById('sector-ops-panel-trigger').addEventListener('click', (e) => {
-            e.preventDefault();
-            togglePanel('sector-ops-panel');
-        });
-        document.getElementById('atc-panel-trigger').addEventListener('click', (e) => {
-            e.preventDefault();
-            renderAtcPanel();
-            togglePanel('atc-info-panel');
-        });
-        document.getElementById('aircraft-panel-trigger').addEventListener('click', (e) => {
-            e.preventDefault();
-            renderAircraftPanel();
-            togglePanel('aircraft-info-panel');
-        });
-
-        document.querySelectorAll('.info-panel-close-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const panelId = btn.dataset.panelId || btn.closest('.info-panel').id;
-                document.getElementById(panelId).classList.remove('visible');
-            });
-        });
     }
 
-    // Start the application
     initializeApp();
 });
