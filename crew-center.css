@@ -2620,38 +2620,3 @@ input, textarea, select {
     font-size: 0.9rem;
     color: var(--dashboard-text-muted);
 }
-
-/* --- NEW STYLES FOR ENHANCED LIVE MAP --- */
-
-/* Ensures the map container is well-defined and looks good */
-.live-map-container-enhanced {
-    height: 550px; /* Taller map for a better view */
-    border-radius: 8px;
-    margin-top: 1rem;
-    background-color: #191a1a;
-    position: relative;
-    overflow: hidden; /* Ensures rounded corners are respected by the map canvas */
-}
-
-/* Styling for the airport markers on the live map */
-.destination-marker {
-    background-color: rgba(0, 168, 255, 0.7); /* Semi-transparent blue */
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    border: 2px solid #ffffff;
-    cursor: pointer;
-    box-shadow: 0 0 8px rgba(0, 168, 255, 0.5);
-    transition: transform 0.2s ease, background-color 0.2s ease;
-}
-
-.destination-marker:hover {
-    transform: scale(1.4);
-    background-color: rgba(0, 168, 255, 1); /* Solid blue on hover */
-}
-
-/* Hides the default Mapbox logo and attribution controls for a cleaner look */
-.live-map-container-enhanced .mapboxgl-ctrl-bottom-left,
-.live-map-container-enhanced .mapboxgl-ctrl-bottom-right {
-    display: none !important;
-}
