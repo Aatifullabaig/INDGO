@@ -2632,7 +2632,10 @@ input, textarea, select {
     box-shadow: 0 0 8px #ff4757;
 }
 
-/* --- Styles for the Airport Info Popup --- */
+/* ========================================================== */
+/* START: AIRPORT INFO POPUP REVAMP (MODAL-LIKE)              */
+/* ========================================================== */
+
 .mapboxgl-popup-content {
     background-color: #1e2a47;
     color: #e0e0e0;
@@ -2640,7 +2643,24 @@ input, textarea, select {
     padding: 0;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     box-shadow: 0 5px 15px rgba(0,0,0,0.4);
-    max-width: 320px !important;
+    max-width: 400px !important; /* Increased width for more content */
+    max-height: 450px; /* Added max height */
+    overflow-y: auto; /* Enable scrolling for busy airports */
+
+    /* Custom scrollbar styling */
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-color) transparent;
+}
+
+.mapboxgl-popup-content::-webkit-scrollbar {
+    width: 6px;
+}
+.mapboxgl-popup-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+.mapboxgl-popup-content::-webkit-scrollbar-thumb {
+    background-color: var(--accent-color);
+    border-radius: 10px;
 }
 
 .airport-popup-content h3 {
@@ -2651,6 +2671,9 @@ input, textarea, select {
     font-size: 1.1em;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
+    position: sticky; /* Keep header visible when scrolling */
+    top: 0;
+    z-index: 1;
 }
 .airport-popup-content h3 small {
     font-weight: normal;
@@ -2723,3 +2746,101 @@ ul.notam-list li {
 ul.notam-list li:last-child {
     border-bottom: none;
 }
+
+/* --- NEW STYLES FOR DEPARTING ROUTES IN POPUP --- */
+.popup-routes-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* Space between route items */
+}
+
+.popup-route-item {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+    background-color: rgba(13, 16, 28, 0.6);
+    border-radius: 6px;
+    border-left: 3px solid transparent;
+    transition: background-color 0.2s, border-left-color 0.2s;
+}
+
+.popup-route-item:hover {
+    background-color: rgba(0, 27, 148, 0.4);
+    border-left-color: var(--rank-accent-color, var(--accent-color));
+}
+
+.route-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.route-item-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.route-item-airline-logo {
+    height: 24px;
+    width: auto;
+    max-width: 60px;
+    object-fit: contain;
+    background-color: rgba(255, 255, 255, 0.85);
+    border-radius: 4px;
+    padding: 2px;
+    flex-shrink: 0;
+}
+
+.route-item-flight-details span {
+    display: block;
+}
+
+.route-item-flight-details .flight-number {
+    font-weight: bold;
+    color: #fff;
+    font-size: 1rem;
+}
+
+.route-item-flight-details .destination {
+    font-size: 0.85rem;
+    color: var(--dashboard-text-muted);
+}
+
+.route-item-actions .cta-button {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8rem;
+    font-weight: bold;
+}
+
+.route-item-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color);
+}
+
+.route-item-aircraft-info {
+    font-size: 0.8rem;
+    color: #aeb9e1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.route-item-aircraft-img {
+    height: 20px; /* Small icon-like image */
+    width: auto;
+    max-width: 40px;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
+}
+/* ========================================================== */
+/* END: AIRPORT INFO POPUP REVAMP                             */
+/* ========================================================== */

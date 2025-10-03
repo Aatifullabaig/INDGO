@@ -462,55 +462,105 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
     }
 
+    /**
+     * MODIFIED: Creates the rich HTML content for the airport information popup.
+     * This now includes ATC, NOTAMs, and a detailed list of departing routes.
+     */
     function createAirportPopupHTML(icao) {
-    const atcForAirport = activeAtcFacilities.filter(f => f.airportName === icao);
-    const notamsForAirport = activeNotams.filter(n => n.airportIcao === icao);
-
-    if (atcForAirport.length === 0 && notamsForAirport.length === 0) {
-        return null; // No data means no popup
-    }
-
-    let atcHtml = '';
-    if (atcForAirport.length > 0) {
-        // The single controller header is removed.
-        // Instead, we build the list with all details for each frequency.
-        atcHtml = `
-            <div class="popup-section atc-section">
-                <h4><i class="fa-solid fa-headset"></i> Active ATC</h4>
-                <ul class="atc-frequencies">
-                    ${atcForAirport.map(f => `
-                        <li class="atc-frequency-item">
-                            <span class="freq-type">${atcTypeToString(f.type)}:</span>
-                            <span class="freq-user">${f.username || 'N/A'}</span>
-                            <span class="freq-time">${formatAtcDuration(f.startTime)}</span>
-                        </li>
-                    `).join('')}
-                </ul>
-            </div>
-        `;
-    }
-
-    let notamsHtml = '';
-    if (notamsForAirport.length > 0) {
-        notamsHtml = `
-            <div class="popup-section notam-section">
-                <h4><i class="fa-solid fa-triangle-exclamation"></i> NOTAMs</h4>
-                <ul class="notam-list">
-                    ${notamsForAirport.map(n => `<li>${n.message}</li>`).join('')}
-                </ul>
-            </div>
-        `;
-    }
+        const atcForAirport = activeAtcFacilities.filter(f => f.airportName === icao);
+        const notamsForAirport = activeNotams.filter(n => n.airportIcao === icao);
+        const routesFromAirport = ALL_AVAILABLE_ROUTES.filter(r => r.departure === icao);
     
-    const airportName = airportsData[icao]?.name || 'Airport';
-    return `
-        <div class="airport-popup-content">
-            <h3>${icao} <small>- ${airportName}</small></h3>
-            ${atcHtml}
-            ${notamsHtml}
-        </div>
-    `;
-}
+        // If there's no data at all, don't show a popup
+        if (atcForAirport.length === 0 && notamsForAirport.length === 0 && routesFromAirport.length === 0) {
+            return null;
+        }
+    
+        let atcHtml = '';
+        if (atcForAirport.length > 0) {
+            atcHtml = `
+                <div class="popup-section atc-section">
+                    <h4><i class="fa-solid fa-headset"></i> Active ATC</h4>
+                    <ul class="atc-frequencies">
+                        ${atcForAirport.map(f => `
+                            <li class="atc-frequency-item">
+                                <span class="freq-type">${atcTypeToString(f.type)}:</span>
+                                <span class="freq-user">${f.username || 'N/A'}</span>
+                                <span class="freq-time">${formatAtcDuration(f.startTime)}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+    
+        let notamsHtml = '';
+        if (notamsForAirport.length > 0) {
+            notamsHtml = `
+                <div class="popup-section notam-section">
+                    <h4><i class="fa-solid fa-triangle-exclamation"></i> NOTAMs</h4>
+                    <ul class="notam-list">
+                        ${notamsForAirport.map(n => `<li>${n.message}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        let routesHtml = '';
+        if (routesFromAirport.length > 0) {
+            routesHtml = `
+                <div class="popup-section routes-section">
+                    <h4><i class="fa-solid fa-route"></i> Departing Routes</h4>
+                    <ul class="popup-routes-list">
+                        ${routesFromAirport.map(route => {
+                            const airlineCode = extractAirlineCode(route.flightNumber);
+                            const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : '';
+                            const aircraftInfo = AIRCRAFT_SELECTION_LIST.find(ac => ac.value === route.aircraft);
+                            const aircraftName = aircraftInfo ? aircraftInfo.name : route.aircraft;
+                            const aircraftImagePath = `Images/planesForCC/${route.aircraft}.png`;
+                            
+                            // Safely stringify the route data for the data attribute
+                            const routeDataString = JSON.stringify(route).replace(/'/g, "&apos;");
+    
+                            return `
+                            <li class="popup-route-item">
+                                <div class="route-item-header">
+                                    <div class="route-item-info">
+                                        <img src="${logoPath}" class="route-item-airline-logo" alt="${airlineCode}" onerror="this.style.display='none'">
+                                        <div class="route-item-flight-details">
+                                            <span class="flight-number">${route.flightNumber}</span>
+                                            <span class="destination">to ${route.arrival}</span>
+                                        </div>
+                                    </div>
+                                    <div class="route-item-actions">
+                                         <button class="cta-button plan-flight-from-explorer-btn" data-route='${routeDataString}'>Plan</button>
+                                    </div>
+                                </div>
+                                <div class="route-item-footer">
+                                    <div class="route-item-aircraft-info">
+                                        <img src="${aircraftImagePath}" class="route-item-aircraft-img" alt="${aircraftName}" onerror="this.style.display='none'">
+                                        <span>${aircraftName}</span>
+                                    </div>
+                                    ${getRankBadgeHTML(route.rankUnlock || deduceRankFromAircraftFE(route.aircraft), { showImage: true, imageClass: 'roster-req-rank-badge' })}
+                                </div>
+                            </li>
+                            `;
+                        }).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+    
+        const airportName = airportsData[icao]?.name || 'Airport';
+        return `
+            <div class="airport-popup-content">
+                <h3>${icao} <small>- ${airportName}</small></h3>
+                ${atcHtml}
+                ${notamsHtml}
+                ${routesHtml}
+            </div>
+        `;
+    }
 
     // --- Rank & Fleet Models ---
     const PILOT_RANKS = [
@@ -1097,6 +1147,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const airlineCode = extractAirlineCode(route.flightNumber);
                 const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : '';
                 const requiredRank = route.rankUnlock || deduceRankFromAircraftFE(route.aircraft);
+                // Safely stringify the route data for the data attribute
+                const routeDataString = JSON.stringify(route).replace(/'/g, "&apos;");
 
                 return `
                 <div class="route-card" 
@@ -1113,7 +1165,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
                     <div class="route-card-actions">
                         ${getRankBadgeHTML(requiredRank, { showImage: true, imageClass: 'roster-req-rank-badge' })}
-                        <button class="cta-button plan-flight-from-explorer-btn" data-route='${JSON.stringify(route)}'>Plan</button>
+                        <button class="cta-button plan-flight-from-explorer-btn" data-route='${routeDataString}'>Plan</button>
                     </div>
                 </div>
                 `;
@@ -1187,26 +1239,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
 
-        // "Plan Flight" button click from Route Explorer
-        // NOTE: This listener is attached to the document for robustness, as content is dynamic.
-        document.getElementById('routes-content').addEventListener('click', (e) => {
-            const planButton = e.target.closest('.plan-flight-from-explorer-btn');
-            if (planButton) {
-                const routeData = JSON.parse(planButton.dataset.route);
-                switchView('view-flight-plan');
-
-                document.getElementById('fp-flightNumber').value = routeData.flightNumber;
-                document.getElementById('fp-departure').value = routeData.departure;
-                document.getElementById('fp-arrival').value = routeData.arrival;
-                
-                const aircraftSelect = document.getElementById('fp-aircraft');
-                if (aircraftSelect) {
-                    aircraftSelect.value = routeData.aircraft;
-                }
-                
-                showNotification(`Pre-filled dispatch for ${routeData.flightNumber}. Please generate with SimBrief or file manually.`, 'info');
-            }
-        });
+        // NOTE: The "Plan Flight" button listener has been moved to the global
+        // mainContentContainer listener to work from anywhere, including map popups.
     }
 
     // ==========================================================
@@ -1995,6 +2029,34 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     mainContentContainer.addEventListener('click', async (e) => {
         const target = e.target;
+
+        // MODIFIED: Global listener for "Plan Flight" buttons
+        const planButton = target.closest('.plan-flight-from-explorer-btn');
+        if (planButton) {
+            try {
+                const routeData = JSON.parse(planButton.dataset.route);
+                switchView('view-flight-plan');
+    
+                document.getElementById('fp-flightNumber').value = routeData.flightNumber;
+                document.getElementById('fp-departure').value = routeData.departure;
+                document.getElementById('fp-arrival').value = routeData.arrival;
+                
+                const aircraftSelect = document.getElementById('fp-aircraft');
+                if (aircraftSelect) {
+                    aircraftSelect.value = routeData.aircraft;
+                }
+                
+                showNotification(`Pre-filled dispatch for ${routeData.flightNumber}. Please generate with SimBrief or file manually.`, 'info');
+                
+                // Close the map popup if it exists
+                if(atcPopup) {
+                    atcPopup.remove();
+                }
+            } catch (error) {
+                console.error("Error parsing route data from button:", error);
+                showNotification("Could not load flight data from this button.", "error");
+            }
+        }
 
         if (target.id === 'go-to-roster-btn') {
             switchView('view-rosters');
