@@ -1465,6 +1465,12 @@ input, textarea, select {
     transform: rotate(180deg);
 }
 
+/* --- FIX: Ensure toggle button is visible when panel is collapsed --- */
+#sector-ops-floating-panel.panel-collapsed .panel-toggle-btn {
+    order: -1; /* Move the button to the start of the header flex container */
+    background-color: var(--secondary-bg); /* Give it a solid background to act as a handle */
+}
+
 /* ========================================================== */
 /* END: SECTOR OPS PANEL REVAMP                               */
 /* ========================================================== */
