@@ -2682,46 +2682,6 @@ input, textarea, select {
     color: var(--dashboard-text-muted);
 }
 
-/* --- Styles for Active ATC Markers on Sector Ops Map --- */
-/* --- Styles for Active ATC Markers on Sector Ops Map (ENHANCED VISIBILITY) --- */
-.atc-active-marker {
-    /* --- CHANGED: Increased size from 12px to 15px --- */
-    width: 15px;
-    height: 15px;
-    background-color: #dc3545;
-    border-radius: 50%;
-    border: 2px solid #fff;
-    cursor: pointer;
-    /* --- CHANGED: Stronger static glow --- */
-    box-shadow: 0 0 10px rgba(255, 82, 82, 0.9);
-    position: relative;
-}
-
-.atc-active-marker::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    background-color: #dc3545;
-    /* --- CHANGED: Slower, smoother animation for more prominence --- */
-    animation: atc-pulse 2s infinite ease-out;
-    z-index: -1;
-}
-
-@keyframes atc-pulse {
-    0% {
-        transform: scale(1);
-        opacity: 0.7;
-    }
-    100% {
-        /* --- CHANGED: Pulse now expands further --- */
-        transform: scale(3);
-        opacity: 0;
-    }
-}
 
 /* ========================================================== */
 /* START: AIRPORT INFO POPUP REVAMP (MODAL-LIKE)              */

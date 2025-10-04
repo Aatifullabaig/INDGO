@@ -204,7 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     cursor: pointer;
     box-shadow: 0 0 10px rgba(255, 82, 82, 0.9);
     position: relative;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%); /* This line centers the marker */
 }
 
 .atc-active-marker::after {
