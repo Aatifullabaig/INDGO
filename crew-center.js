@@ -86,6 +86,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let sectorOpsMap = null;
     let airportAndAtcMarkers = {}; // Holds all airport markers (blue dots and red ATC dots)
     let sectorOpsMapRouteLayers = [];
+    let sectorOpsLiveFlightPathLayerId = null; // NEW: To track the live flight trail
     let sectorOpsLiveFlightsInterval = null;
     let activeAtcFacilities = []; // To store fetched ATC data
     let activeNotams = []; // To store fetched NOTAMs data
@@ -1053,6 +1054,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         closeBtn.addEventListener('click', () => {
             aircraftInfoWindow.classList.remove('visible');
             aircraftInfoWindowRecallBtn.classList.remove('visible');
+            clearLiveFlightPath(); // NEW: Clear the flight trail when closing the window
             currentFlightInWindow = null;
         });
 
@@ -1237,6 +1239,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         sectorOpsMapRouteLayers = [];
     }
 
+    // NEW: Helper to clear the live flight trail from the map
+    function clearLiveFlightPath() {
+        if (sectorOpsMap && sectorOpsLiveFlightPathLayerId) {
+            if (sectorOpsMap.getLayer(sectorOpsLiveFlightPathLayerId)) {
+                sectorOpsMap.removeLayer(sectorOpsLiveFlightPathLayerId);
+            }
+            if (sectorOpsMap.getSource(sectorOpsLiveFlightPathLayerId)) {
+                sectorOpsMap.removeSource(sectorOpsLiveFlightPathLayerId);
+            }
+            sectorOpsLiveFlightPathLayerId = null;
+        }
+    }
+
+
     /**
      * MODIFIED: Centralized handler for clicking any airport marker.
      * This now opens the persistent info window instead of a popup.
@@ -1276,42 +1292,91 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
-    // NEW: Handler for clicking an aircraft on the Sector Ops map.
+    // NEW & UPDATED: Handler for clicking an aircraft on the Sector Ops map.
     async function handleAircraftClick(flightProps, sessionId) {
         if (!flightProps || !flightProps.flightId) return;
 
-        currentFlightInWindow = flightProps.flightId; // Store for recall
+        clearLiveFlightPath(); // Clear any previous trail first
+
+        currentFlightInWindow = flightProps.flightId;
         aircraftInfoWindow.classList.add('visible');
         aircraftInfoWindowRecallBtn.classList.remove('visible');
 
         const titleEl = document.getElementById('aircraft-window-title');
         const contentEl = document.getElementById('aircraft-window-content');
         titleEl.innerHTML = `${flightProps.callsign} <small>(${flightProps.username})</small>`;
-        contentEl.innerHTML = `<div class="spinner-small"></div><p>Loading flight plan...</p>`;
-        
+        contentEl.innerHTML = `<div class="spinner-small"></div><p>Loading flight data...</p>`;
+
         try {
-            const planRes = await fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/plan`);
+            // Fetch plan and route in parallel for speed
+            const [planRes, routeRes] = await Promise.all([
+                fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/plan`),
+                fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/route`)
+            ]);
+
             if (!planRes.ok) throw new Error('No flight plan data available.');
             const planData = await planRes.json();
             if (!planData.ok) throw new Error(planData.error || 'Flight plan not found.');
             
             populateAircraftInfoWindow(flightProps, planData.plan);
 
+            // Now, plot the flight trail if data is available
+            if (routeRes.ok) {
+                const routeData = await routeRes.json();
+                if (routeData.ok && Array.isArray(routeData.route) && routeData.route.length > 1) {
+                    const trailCoords = routeData.route.map(p => [p.longitude, p.latitude]);
+                    const trailId = `live-trail-${flightProps.flightId}`;
+                    sectorOpsLiveFlightPathLayerId = trailId;
+
+                    sectorOpsMap.addSource(trailId, {
+                        type: 'geojson',
+                        data: {
+                            type: 'Feature',
+                            geometry: {
+                                type: 'LineString',
+                                coordinates: trailCoords
+                            }
+                        }
+                    });
+                    sectorOpsMap.addLayer({
+                        id: trailId,
+                        type: 'line',
+                        source: trailId,
+                        paint: {
+                            'line-color': '#00b894', // A bright green for the trail
+                            'line-width': 3,
+                            'line-opacity': 0.8
+                        }
+                    });
+                }
+            }
+
         } catch (error) {
-            console.error("Error fetching aircraft plan:", error);
+            console.error("Error fetching aircraft details:", error);
             contentEl.innerHTML = `<p class="error-text">${error.message}</p>`;
         }
     }
 
-    // NEW: Function to generate and inject the aircraft window's HTML content.
+    // UPDATED: Function to generate and inject the aircraft window's HTML content.
     function populateAircraftInfoWindow(baseProps, plan) {
         const contentEl = document.getElementById('aircraft-window-content');
-        const aircraftInfo = AIRCRAFT_SELECTION_LIST.find(ac => ac.value === plan.aircraftType) || { name: plan.aircraftType };
+        // The raw plan from the API uses 'aircraftType', not 'icaocode' like Simbrief
+        const aircraftInfo = AIRCRAFT_SELECTION_LIST.find(ac => ac.name === plan.aircraftType) || { name: plan.aircraftType, value: '' };
         
         // Update window title with more info
         document.getElementById('aircraft-window-title').innerHTML = `${baseProps.callsign} <small>- ${aircraftInfo.name}</small>`;
 
-        const progress = (1 - (plan.distanceToDestination / plan.totalDistance)) * 100;
+        // --- CORRECTED DATA EXTRACTION ---
+        const waypoints = plan.flightPlanItems || [];
+        const departureIcao = waypoints.length > 0 ? waypoints[0].identifier : 'N/A';
+        const arrivalIcao = waypoints.length > 1 ? waypoints[waypoints.length - 1].identifier : 'N/A';
+
+        // Calculate progress using the live distance from baseProps and total from the plan
+        const totalDistance = plan.totalDistance || 0;
+        const remainingDistance = baseProps.distanceToDestination || 0;
+        // Ensure progress doesn't go below 0 or above 100
+        const progress = totalDistance > 0 ? Math.max(0, Math.min(100, (1 - (remainingDistance / totalDistance)) * 100)) : 0;
+        // --- END CORRECTION ---
 
         contentEl.innerHTML = `
             <div class="pilot-info-item">
@@ -1320,8 +1385,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
             <div class="flight-progress">
                 <div class="progress-labels">
-                    <span>${plan.departureIcao}</span>
-                    <span>${plan.arrivalIcao}</span>
+                    <span>${departureIcao}</span>
+                    <span>${arrivalIcao}</span>
                 </div>
                 <div class="flight-progress-bar">
                     <div class="flight-progress-bar-inner" style="width: ${progress.toFixed(2)}%;"></div>
@@ -1752,13 +1817,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                         coordinates: [flight.position.lon, flight.position.lat]
                     },
                     properties: {
-                        flightId: flight.flightId, // IMPORTANT: Pass flightId for detail fetching
+                        flightId: flight.flightId,
                         callsign: flight.callsign,
                         username: flight.username,
                         altitude: flight.position.alt_ft,
                         speed: flight.position.gs_kt,
                         heading: flight.position.track_deg || 0,
-                        verticalSpeed: flight.position.vs_fpm || 0
+                        verticalSpeed: flight.position.vs_fpm || 0,
+                        // V-- THIS IS THE FIX FROM PREVIOUS STEP --V
+                        distanceToDestination: flight.distanceToDestination
                     }
                 };
             }).filter(Boolean);
