@@ -195,7 +195,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             /* --- Styles for Active ATC Markers on Sector Ops Map (MODIFIED) --- */
-            /* --- Styles for Active ATC Markers on Sector Ops Map (MODIFIED) --- */
     @keyframes atc-pulse {
         0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
         70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
@@ -231,7 +230,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     /* NEW CLASS and PSEUDO-ELEMENT for the AURA */
     .atc-approach-active::before {
         content: '';
-        position: absolute;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
