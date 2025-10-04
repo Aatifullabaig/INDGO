@@ -225,11 +225,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         border: 2px solid #fff;
         cursor: pointer;
         animation: atc-pulse 2s infinite;
+        position: relative;
     }
 
     /* NEW CLASS and PSEUDO-ELEMENT for the AURA */
     .atc-approach-active::before {
         content: '';
+        position: relative;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
