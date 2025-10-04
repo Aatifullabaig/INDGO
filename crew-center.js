@@ -218,30 +218,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     .atc-active-marker {
-        width: 15px;
-        height: 15px;
-        background-color: #dc3545;
-        border-radius: 50%;
-        border: 2px solid #fff;
-        cursor: pointer;
-        animation: atc-pulse 2s infinite;
-    }
+    width: 15px;
+    height: 15px;
+    background-color: #dc3545;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    cursor: pointer;
+    animation: atc-pulse 2s infinite;
+    /* --- MODIFICATIONS START HERE --- */
+    display: grid;
+    place-items: center;
+}
 
-    /* NEW CLASS and PSEUDO-ELEMENT for the AURA */
-    .atc-approach-active::before {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 250%; /* Makes the aura larger than the dot */
-        height: 250%;
-        border-radius: 50%;
-        background-color: rgba(240, 173, 78, 0.8); /* Yellowish aura */
-        /* The z-index sends it behind the main dot */
-        z-index: -1; 
-        animation: atc-breathe 4s ease-in-out infinite;
-    }
+/* NEW CLASS and PSEUDO-ELEMENT for the AURA */
+.atc-approach-active::before {
+    content: '';
+    /* Place the aura in the same grid cell as the parent */
+    grid-area: 1 / 1; 
+    width: 250%;
+    height: 250%;
+    border-radius: 50%;
+    background-color: rgba(240, 173, 78, 0.8);
+    /* The z-index sends it behind the main dot */
+    z-index: -1; 
+    animation: atc-breathe 4s ease-in-out infinite;
+    /* We no longer need top, left, transform, or position */
+}
         `;
 
         const style = document.createElement('style');
