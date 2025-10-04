@@ -1320,7 +1320,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const titleEl = document.getElementById('aircraft-window-title');
         const contentEl = document.getElementById('aircraft-window-content');
-        // ✅ FIX: Added a fallback for username
         const usernameDisplay = flightProps.username || 'N/A';
         titleEl.innerHTML = `${flightProps.callsign} <small>(${usernameDisplay})</small>`;
         contentEl.innerHTML = `<div class="spinner-small"></div><p>Loading flight data...</p>`;
@@ -1332,11 +1331,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/route`)
             ]);
 
-            if (!planRes.ok) throw new Error('No flight plan data available.');
-            const planData = await planRes.json();
-            if (!planData.ok) throw new Error(planData.error || 'Flight plan not found.');
-            
-            populateAircraftInfoWindow(flightProps, planData.plan);
+            // FIX: The planData can be valid even if there's no route data.
+            // We will pass the base flight properties along with the plan.
+            const planData = planRes.ok ? await planRes.json() : null;
+            const plan = (planData && planData.ok) ? planData.plan : null;
+
+            populateAircraftInfoWindow(flightProps, plan);
 
             // Now, plot the flight trail if data is available
             if (routeRes.ok) {
@@ -1345,6 +1345,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const trailCoords = routeData.route.map(p => [p.longitude, p.latitude]);
                     const trailId = `live-trail-${flightProps.flightId}`;
                     sectorOpsLiveFlightPathLayerId = trailId;
+
+                    if(sectorOpsMap.getSource(trailId)) {
+                        sectorOpsMap.removeLayer(trailId);
+                        sectorOpsMap.removeSource(trailId);
+                    }
 
                     sectorOpsMap.addSource(trailId, {
                         type: 'geojson',
@@ -1371,41 +1376,102 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         } catch (error) {
             console.error("Error fetching aircraft details:", error);
-            contentEl.innerHTML = `<p class="error-text">${error.message}</p>`;
+            contentEl.innerHTML = `<p class="error-text">Could not retrieve flight details. The aircraft may have landed or disconnected.</p>`;
         }
     }
 
-    
-    // UPDATED: Function to generate and inject the aircraft window's HTML content.
+
+    // FULLY CORRECTED: Function to generate and inject the aircraft window's HTML content.
     function populateAircraftInfoWindow(baseProps, plan) {
         const contentEl = document.getElementById('aircraft-window-content');
-        // ✅ FIX: Changed plan.aircraftType to plan.aircraft?.name to look inside the nested aircraft object.
-        const aircraftInfo = AIRCRAFT_SELECTION_LIST.find(ac => ac.name === plan.aircraft?.name) || { name: plan.aircraft?.name || 'Unknown Aircraft', value: '' };
-        
         const usernameDisplay = baseProps.username || 'N/A';
-        document.getElementById('aircraft-window-title').innerHTML = `${baseProps.callsign} <small>(${usernameDisplay}) - ${aircraftInfo.name}</small>`;
-    
-        const waypoints = plan.flightPlanItems || [];
-        const departureIcao = waypoints.length > 0 ? waypoints[0].identifier : 'N/A';
-        const arrivalIcao = waypoints.length > 1 ? waypoints[waypoints.length - 1].identifier : 'N/A';
-    
+
+        // FIX: The aircraft name is not in the plan. We show the callsign/username only.
+        document.getElementById('aircraft-window-title').innerHTML = `${baseProps.callsign} <small>(${usernameDisplay})</small>`;
+
+        // If no plan is filed, show a message and basic flight data.
+        if (!plan || !plan.flightPlanItems || plan.flightPlanItems.length === 0) {
+            contentEl.innerHTML = `
+                <div class="pilot-info-item">
+                    <label>Pilot</label>
+                    <span>${usernameDisplay}</span>
+                </div>
+                <div class="flight-info-grid">
+                    <div class="info-item">
+                        <label>Altitude</label>
+                        <span>${Math.round(baseProps.altitude).toLocaleString()} ft</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Ground Speed</label>
+                        <span>${Math.round(baseProps.speed)} kts</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Heading</label>
+                        <span>${Math.round(baseProps.heading)}°</span>
+                    </div>
+                     <div class="info-item">
+                        <label>Vert. Speed</label>
+                        <span>${Math.round(baseProps.verticalSpeed)} fpm</span>
+                    </div>
+                </div>
+                <div class="flight-plan-route">
+                    <label>Filed Route</label>
+                    <code>No flight plan filed.</code>
+                </div>
+            `;
+            return;
+        }
+
+        // FIX: Recursively extract all waypoints from the nested structure
+        const allWaypoints = [];
+        const extractWps = (items) => {
+            for (const item of items) {
+                // Only add waypoints with valid locations [cite: 6, 7]
+                if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
+                    allWaypoints.push(item);
+                }
+                if (Array.isArray(item.children)) { // [cite: 7, 19]
+                    extractWps(item.children); // [cite: 16]
+                }
+            }
+        };
+        extractWps(plan.flightPlanItems);
+
+        if (allWaypoints.length === 0) {
+             populateAircraftInfoWindow(baseProps, null); // Re-run with null plan to show "No flight plan"
+             return;
+        }
+
+        const departureIcao = allWaypoints[0]?.name || 'N/A'; // 
+        const arrivalIcao = allWaypoints[allWaypoints.length - 1]?.name || 'N/A'; // 
+        
+        // FIX: Build the route string from the extracted waypoints.
+        const routeString = allWaypoints.map(wp => wp.name).join(' '); // 
+
+        // FIX: Calculate total distance for the progress bar
+        let totalDistanceKm = 0;
+        for (let i = 0; i < allWaypoints.length - 1; i++) {
+            const wp1 = allWaypoints[i].location;
+            const wp2 = allWaypoints[i + 1].location;
+            totalDistanceKm += getDistanceKm(wp1.latitude, wp1.longitude, wp2.latitude, wp2.longitude);
+        }
+        const totalDistanceNM = totalDistanceKm / 1.852;
+
         let progress = 0;
-        const totalDistanceNM = plan.totalDistance || 0;
-    
-        if (totalDistanceNM > 0 && baseProps.position && waypoints.length > 0) {
+        if (totalDistanceNM > 0 && baseProps.position) {
             const currentLat = baseProps.position.lat;
             const currentLon = baseProps.position.lon;
-            const destinationWaypoint = waypoints[waypoints.length - 1];
+            const destWp = allWaypoints[allWaypoints.length - 1];
             
-            if (destinationWaypoint && destinationWaypoint.location) {
-                const destLat = destinationWaypoint.location.latitude;
-                const destLon = destinationWaypoint.location.longitude;
+            if (destWp && destWp.location) {
+                const destLat = destWp.location.latitude;
+                const destLon = destWp.location.longitude;
                 const remainingDistanceKm = getDistanceKm(currentLat, currentLon, destLat, destLon);
                 const remainingDistanceNM = remainingDistanceKm / 1.852;
                 progress = Math.max(0, Math.min(100, (1 - (remainingDistanceNM / totalDistanceNM)) * 100));
             }
         }
-    
+
         contentEl.innerHTML = `
             <div class="pilot-info-item">
                 <label>Pilot</label>
@@ -1440,8 +1506,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
             <div class="flight-plan-route">
                 <label>Filed Route</label>
-                {/* ✅ FIX: Changed plan.route to plan.route to access the correct property. */}
-                <code>${plan.route || 'No route filed.'}</code>
+                <code>${routeString}</code>
             </div>
         `;
     }
