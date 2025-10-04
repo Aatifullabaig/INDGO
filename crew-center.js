@@ -90,10 +90,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     let activeAtcFacilities = []; // To store fetched ATC data
     let activeNotams = []; // To store fetched NOTAMs data
     let atcPopup = null; // To manage a single, shared popup instance
-    // NEW: State for the airport info window
+    // State for the airport info window
     let airportInfoWindow = null;
     let airportInfoWindowRecallBtn = null;
     let currentAirportInWindow = null;
+    // NEW: State for the aircraft info window
+    let aircraftInfoWindow = null;
+    let aircraftInfoWindowRecallBtn = null;
+    let currentFlightInWindow = null; // Stores the flightId of the last selected aircraft
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -117,8 +121,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (document.getElementById(styleId)) return;
 
         const css = `
-            /* Airport Info Window */
-            .airport-info-window {
+            /* Airport & Aircraft Info Window Base Styles */
+            .info-window {
                 position: absolute;
                 top: 80px;
                 right: 20px;
@@ -134,10 +138,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 border: 1px solid #33384f;
                 overflow: hidden;
             }
-            .airport-info-window.visible {
+            .info-window.visible {
                 display: flex;
             }
-            .airport-window-header {
+            .info-window-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
@@ -146,17 +150,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 border-bottom: 1px solid #33384f;
                 flex-shrink: 0;
             }
-            .airport-window-header h3 {
+            .info-window-header h3 {
                 margin: 0;
                 font-size: 1.1rem;
                 color: #fff;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
-            .airport-window-header h3 small {
+            .info-window-header h3 small {
                 font-weight: 300;
                 color: #aaa;
                 font-size: 0.9rem;
             }
-            .airport-window-actions button {
+            .info-window-actions button {
                 background: none;
                 border: none;
                 color: #aaa;
@@ -166,27 +173,28 @@ document.addEventListener('DOMContentLoaded', async () => {
                 line-height: 1;
                 transition: color 0.2s;
             }
-            .airport-window-actions button:hover {
+            .info-window-actions button:hover {
                 color: #fff;
             }
-            .airport-window-content {
+            .info-window-content {
                 overflow-y: auto;
                 flex-grow: 1;
-            }
-            .airport-window-content .airport-popup-content {
                 padding: 15px;
             }
+             .info-window-content .airport-popup-content {
+                padding: 0; /* Override padding for nested content */
+            }
 
-            /* Toolbar Recall Button */
-            #airport-recall-btn {
+            /* Toolbar Recall Buttons */
+            #airport-recall-btn, #aircraft-recall-btn {
                 display: none;
                 font-size: 1.1rem;
                 position: relative;
             }
-            #airport-recall-btn.visible {
+            #airport-recall-btn.visible, #aircraft-recall-btn.visible {
                 display: inline-block;
             }
-            #airport-recall-btn.palpitate {
+            #airport-recall-btn.palpitate, #aircraft-recall-btn.palpitate {
                 animation: palpitate 0.5s ease-in-out 2;
             }
             @keyframes palpitate {
@@ -194,56 +202,81 @@ document.addEventListener('DOMContentLoaded', async () => {
                 50% { transform: scale(1.3); color: #fff; }
             }
 
-            /* --- Styles for Active ATC Markers on Sector Ops Map (MODIFIED) --- */
-    @keyframes atc-pulse {
-        0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
-        70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
-    }
-
-    /* NEW KEYFRAMES FOR THE AURA */
-    @keyframes atc-breathe {
-        0% {
-            transform: scale(0.95);
-            opacity: 0.6;
-        }
-        50% {
-            transform: scale(1.4);
-            opacity: 0.9;
-        }
-        100% {
-            transform: scale(0.95);
-            opacity: 0.6;
-        }
-    }
-
-    .atc-active-marker {
-    width: 15px;
-    height: 15px;
-    background-color: #dc3545;
-    border-radius: 50%;
-    border: 2px solid #fff;
-    cursor: pointer;
-    animation: atc-pulse 2s infinite;
-    /* --- MODIFICATIONS START HERE --- */
-    display: grid;
-    place-items: center;
-}
-
-/* NEW CLASS and PSEUDO-ELEMENT for the AURA */
-.atc-approach-active::before {
-    content: '';
-    /* Place the aura in the same grid cell as the parent */
-    grid-area: 1 / 1; 
-    width: 250%;
-    height: 250%;
-    border-radius: 50%;
-    background-color: rgba(240, 173, 78, 0.8);
-    /* The z-index sends it behind the main dot */
-    z-index: -1; 
-    animation: atc-breathe 4s ease-in-out infinite;
-    /* We no longer need top, left, transform, or position */
-}
+            /* Aircraft Info Window Specifics */
+            .flight-info-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+                gap: 15px;
+                margin-top: 15px;
+            }
+            .info-item {
+                background-color: rgba(0,0,0,0.2);
+                padding: 10px;
+                border-radius: 5px;
+            }
+            .info-item label {
+                display: block;
+                font-size: 0.8rem;
+                color: #aaa;
+                margin-bottom: 5px;
+            }
+            .info-item span {
+                font-size: 1.1rem;
+                font-weight: 500;
+                color: #fff;
+            }
+            .flight-progress-bar {
+                width: 100%;
+                height: 8px;
+                background-color: #333;
+                border-radius: 4px;
+                overflow: hidden;
+                margin-top: 10px;
+            }
+            .flight-progress-bar-inner {
+                height: 100%;
+                width: 0%;
+                background-color: #00a8ff;
+                transition: width 0.5s ease-out;
+            }
+            .flight-plan-route {
+                margin-top: 15px;
+                background-color: rgba(0,0,0,0.2);
+                padding: 10px;
+                border-radius: 5px;
+            }
+             .flight-plan-route label {
+                font-size: 0.8rem; color: #aaa; margin-bottom: 5px;
+            }
+            .flight-plan-route code {
+                display: block;
+                white-space: pre-wrap;
+                word-break: break-all;
+                font-size: 0.85rem;
+                color: #ddd;
+            }
+            
+            /* --- Styles for Active ATC Markers on Sector Ops Map --- */
+            @keyframes atc-pulse {
+                0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+                70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+                100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+            }
+            @keyframes atc-breathe {
+                0% { transform: scale(0.95); opacity: 0.6; }
+                50% { transform: scale(1.4); opacity: 0.9; }
+                100% { transform: scale(0.95); opacity: 0.6; }
+            }
+            .atc-active-marker {
+                width: 15px; height: 15px; background-color: #dc3545; border-radius: 50%;
+                border: 2px solid #fff; cursor: pointer; animation: atc-pulse 2s infinite;
+                display: grid; place-items: center;
+            }
+            .atc-approach-active::before {
+                content: ''; grid-area: 1 / 1; width: 250%; height: 250%; border-radius: 50%;
+                background-color: rgba(240, 173, 78, 0.8); z-index: -1; 
+                animation: atc-breathe 4s ease-in-out infinite;
+            }
         `;
 
         const style = document.createElement('style');
@@ -1010,6 +1043,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         airportInfoWindow.dataset.eventsAttached = 'true';
     }
+    
+    // NEW: Function to set up event listeners for the Aircraft Info Window
+    function setupAircraftWindowEvents() {
+        if (!aircraftInfoWindow || aircraftInfoWindow.dataset.eventsAttached === 'true') return;
+        const closeBtn = document.getElementById('aircraft-window-close-btn');
+        const hideBtn = document.getElementById('aircraft-window-hide-btn');
+
+        closeBtn.addEventListener('click', () => {
+            aircraftInfoWindow.classList.remove('visible');
+            aircraftInfoWindowRecallBtn.classList.remove('visible');
+            currentFlightInWindow = null;
+        });
+
+        hideBtn.addEventListener('click', () => {
+            aircraftInfoWindow.classList.remove('visible');
+            if (currentFlightInWindow) {
+                aircraftInfoWindowRecallBtn.classList.add('visible', 'palpitate');
+                setTimeout(() => aircraftInfoWindowRecallBtn.classList.remove('palpitate'), 1000);
+            }
+        });
+        
+        aircraftInfoWindowRecallBtn.addEventListener('click', () => {
+            if (currentFlightInWindow) {
+                aircraftInfoWindow.classList.add('visible');
+                aircraftInfoWindowRecallBtn.classList.remove('visible');
+            }
+        });
+        
+        aircraftInfoWindow.dataset.eventsAttached = 'true';
+    }
 
 
     /**
@@ -1025,32 +1088,60 @@ document.addEventListener('DOMContentLoaded', async () => {
         mainContentLoader.classList.add('active');
 
         try {
-            // NEW: Create and inject the Airport Info Window and its recall button
+            // NEW: Create and inject the Info Windows and their recall buttons
             if (!document.getElementById('airport-info-window')) {
                 const windowHtml = `
-                    <div id="airport-info-window" class="airport-info-window">
-                        <div class="airport-window-header">
+                    <div id="airport-info-window" class="info-window">
+                        <div id="airport-window-header" class="info-window-header">
                             <h3 id="airport-window-title"></h3>
-                            <div class="airport-window-actions">
-                                <button id="airport-window-hide-btn" title="Hide Window"><i class="fa-solid fa-compress"></i></button>
+                            <div class="info-window-actions">
+                                <button id="airport-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
                                 <button id="airport-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
                             </div>
                         </div>
-                        <div id="airport-window-content" class="airport-window-content"></div>
+                        <div id="airport-window-content" class="info-window-content"></div>
                     </div>
                 `;
                 document.getElementById('view-rosters').insertAdjacentHTML('beforeend', windowHtml);
             }
-            const toolbarToggleBtn = document.getElementById('toolbar-toggle-panel-btn');
-            if (toolbarToggleBtn && !document.getElementById('airport-recall-btn')) {
-                 toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
-                    <button id="airport-recall-btn" class="toolbar-btn" title="Show Airport Info">
-                        <i class="fa-solid fa-location-dot"></i>
-                    </button>
-                 `);
+            if (!document.getElementById('aircraft-info-window')) {
+                 const windowHtml = `
+                    <div id="aircraft-info-window" class="info-window">
+                        <div id="aircraft-window-header" class="info-window-header">
+                            <h3 id="aircraft-window-title"></h3>
+                            <div class="info-window-actions">
+                                <button id="aircraft-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
+                                <button id="aircraft-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                        </div>
+                        <div id="aircraft-window-content" class="info-window-content"></div>
+                    </div>
+                `;
+                document.getElementById('view-rosters').insertAdjacentHTML('beforeend', windowHtml);
             }
+            
+            const toolbarToggleBtn = document.getElementById('toolbar-toggle-panel-btn');
+            if (toolbarToggleBtn) {
+                 if (!document.getElementById('airport-recall-btn')) {
+                    toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
+                        <button id="airport-recall-btn" class="toolbar-btn" title="Show Airport Info">
+                            <i class="fa-solid fa-location-dot"></i>
+                        </button>
+                    `);
+                 }
+                 if (!document.getElementById('aircraft-recall-btn')) {
+                      toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
+                        <button id="aircraft-recall-btn" class="toolbar-btn" title="Show Aircraft Info">
+                            <i class="fa-solid fa-plane-up"></i>
+                        </button>
+                    `);
+                 }
+            }
+            
             airportInfoWindow = document.getElementById('airport-info-window');
             airportInfoWindowRecallBtn = document.getElementById('airport-recall-btn');
+            aircraftInfoWindow = document.getElementById('aircraft-info-window');
+            aircraftInfoWindowRecallBtn = document.getElementById('aircraft-recall-btn');
 
 
             // 1. Get pilot's available hubs
@@ -1080,6 +1171,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // 5. Set up all event listeners
             setupSectorOpsEventListeners();
             setupAirportWindowEvents();
+            setupAircraftWindowEvents(); // NEW
 
             // 6. Start the live data loop.
             startSectorOpsLiveLoop();
@@ -1183,7 +1275,82 @@ document.addEventListener('DOMContentLoaded', async () => {
              currentAirportInWindow = null;
         }
     }
+    
+    // NEW: Handler for clicking an aircraft on the Sector Ops map.
+    async function handleAircraftClick(flightProps, sessionId) {
+        if (!flightProps || !flightProps.flightId) return;
 
+        currentFlightInWindow = flightProps.flightId; // Store for recall
+        aircraftInfoWindow.classList.add('visible');
+        aircraftInfoWindowRecallBtn.classList.remove('visible');
+
+        const titleEl = document.getElementById('aircraft-window-title');
+        const contentEl = document.getElementById('aircraft-window-content');
+        titleEl.innerHTML = `${flightProps.callsign} <small>(${flightProps.username})</small>`;
+        contentEl.innerHTML = `<div class="spinner-small"></div><p>Loading flight plan...</p>`;
+        
+        try {
+            const planRes = await fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/plan`);
+            if (!planRes.ok) throw new Error('No flight plan data available.');
+            const planData = await planRes.json();
+            if (!planData.ok) throw new Error(planData.error || 'Flight plan not found.');
+            
+            populateAircraftInfoWindow(flightProps, planData.plan);
+
+        } catch (error) {
+            console.error("Error fetching aircraft plan:", error);
+            contentEl.innerHTML = `<p class="error-text">${error.message}</p>`;
+        }
+    }
+
+    // NEW: Function to generate and inject the aircraft window's HTML content.
+    function populateAircraftInfoWindow(baseProps, plan) {
+        const contentEl = document.getElementById('aircraft-window-content');
+        const aircraftInfo = AIRCRAFT_SELECTION_LIST.find(ac => ac.value === plan.aircraftType) || { name: plan.aircraftType };
+        
+        // Update window title with more info
+        document.getElementById('aircraft-window-title').innerHTML = `${baseProps.callsign} <small>- ${aircraftInfo.name}</small>`;
+
+        const progress = (1 - (plan.distanceToDestination / plan.totalDistance)) * 100;
+
+        contentEl.innerHTML = `
+            <div class="pilot-info-item">
+                <label>Pilot</label>
+                <span>${baseProps.username}</span>
+            </div>
+            <div class="flight-progress">
+                <div class="progress-labels">
+                    <span>${plan.departureIcao}</span>
+                    <span>${plan.arrivalIcao}</span>
+                </div>
+                <div class="flight-progress-bar">
+                    <div class="flight-progress-bar-inner" style="width: ${progress.toFixed(2)}%;"></div>
+                </div>
+            </div>
+            <div class="flight-info-grid">
+                <div class="info-item">
+                    <label>Altitude</label>
+                    <span>${Math.round(baseProps.altitude).toLocaleString()} ft</span>
+                </div>
+                <div class="info-item">
+                    <label>Ground Speed</label>
+                    <span>${Math.round(baseProps.speed)} kts</span>
+                </div>
+                <div class="info-item">
+                    <label>Heading</label>
+                    <span>${Math.round(baseProps.heading)}°</span>
+                </div>
+                 <div class="info-item">
+                    <label>Vert. Speed</label>
+                    <span>${Math.round(baseProps.verticalSpeed)} fpm</span>
+                </div>
+            </div>
+            <div class="flight-plan-route">
+                <label>Filed Route</label>
+                <code>${plan.route || 'No route filed.'}</code>
+            </div>
+        `;
+    }
 
     /**
      * (NEW) Clears old routes and draws all new routes originating from a selected airport.
@@ -1471,12 +1638,6 @@ document.addEventListener('DOMContentLoaded', async () => {
      * NEW / REFACTORED: Renders all airport markers based on current route and ATC data.
      * This single, efficient function replaces the previous separate functions.
      */
-
-
-    /**
-     * NEW / REFACTORED: Renders all airport markers based on current route and ATC data.
-     * This single, efficient function replaces the previous separate functions.
-     */
     function renderAirportMarkers() {
         if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -1591,11 +1752,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                         coordinates: [flight.position.lon, flight.position.lat]
                     },
                     properties: {
+                        flightId: flight.flightId, // IMPORTANT: Pass flightId for detail fetching
                         callsign: flight.callsign,
                         username: flight.username,
                         altitude: flight.position.alt_ft,
                         speed: flight.position.gs_kt,
-                        heading: flight.position.track_deg || 0
+                        heading: flight.position.track_deg || 0,
+                        verticalSpeed: flight.position.vs_fpm || 0
                     }
                 };
             }).filter(Boolean);
@@ -1632,16 +1795,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 });
 
+                // REWRITTEN CLICK HANDLER to open the info window
                 sectorOpsMap.on('click', layerId, (e) => {
-                    const coordinates = e.features[0].geometry.coordinates.slice();
-                    const props = e.features[0].properties;
-                    while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
-                        coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
-                    }
-                    new mapboxgl.Popup()
-                        .setLngLat(coordinates)
-                        .setHTML(`<strong>${props.callsign}</strong><br><em>${props.username}</em><br>Altitude: ${Math.round(props.altitude)} ft<br>Speed: ${Math.round(props.speed)} kts`)
-                        .addTo(sectorOpsMap);
+                    const flightProps = e.features[0].properties;
+                    handleAircraftClick(flightProps, expertSession.id);
                 });
 
                 sectorOpsMap.on('mouseenter', layerId, () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
