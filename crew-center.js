@@ -1320,7 +1320,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const titleEl = document.getElementById('aircraft-window-title');
         const contentEl = document.getElementById('aircraft-window-content');
-        titleEl.innerHTML = `${flightProps.callsign} <small>(${flightProps.username})</small>`;
+        // ✅ FIX: Added a fallback for username
+        const usernameDisplay = flightProps.username || 'N/A';
+        titleEl.innerHTML = `${flightProps.callsign} <small>(${usernameDisplay})</small>`;
         contentEl.innerHTML = `<div class="spinner-small"></div><p>Loading flight data...</p>`;
 
         try {
@@ -1373,48 +1375,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    
     // UPDATED: Function to generate and inject the aircraft window's HTML content.
     function populateAircraftInfoWindow(baseProps, plan) {
         const contentEl = document.getElementById('aircraft-window-content');
-        const aircraftInfo = AIRCRAFT_SELECTION_LIST.find(ac => ac.name === plan.aircraftType) || { name: plan.aircraftType, value: '' };
+        // ✅ FIX: Changed plan.aircraftType to plan.aircraft?.name to look inside the nested aircraft object.
+        const aircraftInfo = AIRCRAFT_SELECTION_LIST.find(ac => ac.name === plan.aircraft?.name) || { name: plan.aircraft?.name || 'Unknown Aircraft', value: '' };
         
-        // ✅ FIX: Include the username in the final, updated title
-        document.getElementById('aircraft-window-title').innerHTML = `${baseProps.callsign} <small>(${baseProps.username}) - ${aircraftInfo.name}</small>`;
+        const usernameDisplay = baseProps.username || 'N/A';
+        document.getElementById('aircraft-window-title').innerHTML = `${baseProps.callsign} <small>(${usernameDisplay}) - ${aircraftInfo.name}</small>`;
     
         const waypoints = plan.flightPlanItems || [];
         const departureIcao = waypoints.length > 0 ? waypoints[0].identifier : 'N/A';
         const arrivalIcao = waypoints.length > 1 ? waypoints[waypoints.length - 1].identifier : 'N/A';
     
-        // ✅ START: Calculate remaining distance manually
         let progress = 0;
-        const totalDistanceNM = plan.totalDistance || 0; // This is in Nautical Miles
+        const totalDistanceNM = plan.totalDistance || 0;
     
         if (totalDistanceNM > 0 && baseProps.position && waypoints.length > 0) {
-            // 1. Get current aircraft position
             const currentLat = baseProps.position.lat;
             const currentLon = baseProps.position.lon;
-    
-            // 2. Get destination waypoint from the flight plan
             const destinationWaypoint = waypoints[waypoints.length - 1];
             
             if (destinationWaypoint && destinationWaypoint.location) {
                 const destLat = destinationWaypoint.location.latitude;
                 const destLon = destinationWaypoint.location.longitude;
-    
-                // 3. Calculate distance in KM and convert to Nautical Miles
                 const remainingDistanceKm = getDistanceKm(currentLat, currentLon, destLat, destLon);
-                const remainingDistanceNM = remainingDistanceKm / 1.852; // Convert KM to NM
-    
-                // 4. Calculate progress percentage
+                const remainingDistanceNM = remainingDistanceKm / 1.852;
                 progress = Math.max(0, Math.min(100, (1 - (remainingDistanceNM / totalDistanceNM)) * 100));
             }
         }
-        // ✅ END: Calculation logic
     
         contentEl.innerHTML = `
             <div class="pilot-info-item">
                 <label>Pilot</label>
-                <span>${baseProps.username}</span>
+                <span>${usernameDisplay}</span>
             </div>
             <div class="flight-progress">
                 <div class="progress-labels">
@@ -1445,6 +1440,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
             <div class="flight-plan-route">
                 <label>Filed Route</label>
+                {/* ✅ FIX: Changed plan.route to plan.route to access the correct property. */}
                 <code>${plan.route || 'No route filed.'}</code>
             </div>
         `;
