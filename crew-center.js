@@ -203,7 +203,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 border: 2px solid #fff;
                 cursor: pointer;
                 box-shadow: 0 0 10px rgba(255, 82, 82, 0.9);
-                position: relative;
             }
         `;
 
