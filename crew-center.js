@@ -194,43 +194,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 50% { transform: scale(1.3); color: #fff; }
             }
 
-/* --- Styles for Active ATC Markers on Sector Ops Map (FIXED) --- */
-.atc-active-marker {
-    width: 15px;
-    height: 15px;
-    background-color: #dc3545;
-    border-radius: 50%;
-    border: 2px solid #fff;
-    cursor: pointer;
-    box-shadow: 0 0 10px rgba(255, 82, 82, 0.9);
-    position: relative;
-    transform: translate(-50%, -50%); 
-}
-
-.atc-active-marker::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    background-color: #dc3545;
-    animation: atc-pulse 2s infinite ease-out;
-    z-index: -1;
-    
-}
-
-@keyframes atc-pulse {
-    0% {
-        transform: scale(1);
-        opacity: 0.7;
-    }
-    100% {
-        transform: scale(3);
-        opacity: 0;
-    }
-}
+            /* --- Styles for Active ATC Markers on Sector Ops Map (MODIFIED) --- */
+            .atc-active-marker {
+                width: 15px;
+                height: 15px;
+                background-color: #dc3545;
+                border-radius: 50%;
+                border: 2px solid #fff;
+                cursor: pointer;
+                box-shadow: 0 0 10px rgba(255, 82, 82, 0.9);
+                position: relative;
+                transform: translate(-50%, -50%); 
+            }
         `;
 
         const style = document.createElement('style');
