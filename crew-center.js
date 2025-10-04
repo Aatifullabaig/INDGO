@@ -204,7 +204,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 cursor: pointer;
                 box-shadow: 0 0 10px rgba(255, 82, 82, 0.9);
                 position: relative;
-                transform: translate(-50%, -50%); 
             }
         `;
 
