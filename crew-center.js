@@ -195,15 +195,54 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             /* --- Styles for Active ATC Markers on Sector Ops Map (MODIFIED) --- */
-            .atc-active-marker {
-                width: 15px;
-                height: 15px;
-                background-color: #dc3545;
-                border-radius: 50%;
-                border: 2px solid #fff;
-                cursor: pointer;
-                box-shadow: 0 0 10px rgba(255, 82, 82, 0.9);
-            }
+            /* --- Styles for Active ATC Markers on Sector Ops Map (MODIFIED) --- */
+    @keyframes atc-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+    }
+
+    /* NEW KEYFRAMES FOR THE AURA */
+    @keyframes atc-breathe {
+        0% {
+            transform: scale(0.95);
+            opacity: 0.6;
+        }
+        50% {
+            transform: scale(1.4);
+            opacity: 0.9;
+        }
+        100% {
+            transform: scale(0.95);
+            opacity: 0.6;
+        }
+    }
+
+    .atc-active-marker {
+        width: 15px;
+        height: 15px;
+        background-color: #dc3545;
+        border-radius: 50%;
+        border: 2px solid #fff;
+        cursor: pointer;
+        animation: atc-pulse 2s infinite;
+    }
+
+    /* NEW CLASS and PSEUDO-ELEMENT for the AURA */
+    .atc-approach-active::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 250%; /* Makes the aura larger than the dot */
+        height: 250%;
+        border-radius: 50%;
+        background-color: rgba(240, 173, 78, 0.8); /* Yellowish aura */
+        /* The z-index sends it behind the main dot */
+        z-index: -1; 
+        animation: atc-breathe 4s ease-in-out infinite;
+    }
         `;
 
         const style = document.createElement('style');
@@ -1431,6 +1470,12 @@ document.addEventListener('DOMContentLoaded', async () => {
      * NEW / REFACTORED: Renders all airport markers based on current route and ATC data.
      * This single, efficient function replaces the previous separate functions.
      */
+
+
+    /**
+     * NEW / REFACTORED: Renders all airport markers based on current route and ATC data.
+     * This single, efficient function replaces the previous separate functions.
+     */
     function renderAirportMarkers() {
         if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -1438,17 +1483,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         Object.values(airportAndAtcMarkers).forEach(({ marker }) => marker.remove());
         airportAndAtcMarkers = {};
 
-        // Get the set of airports with active ATC
         const atcAirportIcaos = new Set(activeAtcFacilities.map(f => f.airportName).filter(Boolean));
         
-        // Get the set of all unique airports from our available routes
         const allRouteAirports = new Set();
         ALL_AVAILABLE_ROUTES.forEach(route => {
             allRouteAirports.add(route.departure);
             allRouteAirports.add(route.arrival);
         });
 
-        // Combine all airports that need a marker (from routes and active ATC)
         const allAirportsToRender = new Set([...allRouteAirports, ...atcAirportIcaos]);
 
         allAirportsToRender.forEach(icao => {
@@ -1456,26 +1498,41 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!airport || airport.lat == null || airport.lon == null) return;
 
             const hasAtc = atcAirportIcaos.has(icao);
-            
-            // **Decision Logic**: Use the pulsating red marker if ATC is active, otherwise use the standard blue one.
-            const markerClass = hasAtc ? 'atc-active-marker' : 'destination-marker';
-            const title = `${icao}: ${airport.name || 'Unknown Airport'}${hasAtc ? ' (Active ATC)' : ''}`;
+            let markerClass; // Use 'let' to allow modification
+            let title = `${icao}: ${airport.name || 'Unknown Airport'}`;
 
+            if (hasAtc) {
+                const airportAtc = activeAtcFacilities.filter(f => f.airportName === icao);
+                // Check for Approach (type 4) or Departure (type 5)
+                const hasApproachOrDeparture = airportAtc.some(f => f.type === 4 || f.type === 5);
+
+                // Start with the base class for any staffed airport
+                markerClass = 'atc-active-marker';
+                title += ' (Active ATC)';
+
+                // Add the aura class if Approach/Departure is active
+                if (hasApproachOrDeparture) {
+                    markerClass += ' atc-approach-active';
+                    title += ' - Approach/Departure';
+                }
+
+            } else {
+                markerClass = 'destination-marker'; // For non-ATC airports
+            }
+            
             const el = document.createElement('div');
             el.className = markerClass;
             el.title = title;
 
             const marker = new mapboxgl.Marker({ element: el })
-            .setLngLat([airport.lon, airport.lat])
-            .addTo(sectorOpsMap);
+                .setLngLat([airport.lon, airport.lat])
+                .addTo(sectorOpsMap);
 
-            // Add the same universal click handler to all markers
             el.addEventListener('click', (e) => {
                 e.stopPropagation();
                 handleAirportClick(icao);
             });
 
-            // Store the marker for future cleanup
             airportAndAtcMarkers[icao] = { marker: marker, className: markerClass };
         });
     }
