@@ -320,6 +320,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- Helper Functions ---
+
+    /**
+     * Calculates the distance between two coordinates in kilometers using the Haversine formula.
+     */
+    function getDistanceKm(lat1, lon1, lat2, lon2) {
+      const R = 6371; // Radius of the Earth in km
+      const toRad = (v) => (v * Math.PI) / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+    
     function getRankBadgeHTML(rankName, options = {}) {
         const defaults = {
             showImage: true,
@@ -1360,24 +1376,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     // UPDATED: Function to generate and inject the aircraft window's HTML content.
     function populateAircraftInfoWindow(baseProps, plan) {
         const contentEl = document.getElementById('aircraft-window-content');
-        // The raw plan from the API uses 'aircraftType', not 'icaocode' like Simbrief
         const aircraftInfo = AIRCRAFT_SELECTION_LIST.find(ac => ac.name === plan.aircraftType) || { name: plan.aircraftType, value: '' };
         
-        // Update window title with more info
-        document.getElementById('aircraft-window-title').innerHTML = `${baseProps.callsign} <small>- ${aircraftInfo.name}</small>`;
-
-        // --- CORRECTED DATA EXTRACTION ---
+        // ✅ FIX: Include the username in the final, updated title
+        document.getElementById('aircraft-window-title').innerHTML = `${baseProps.callsign} <small>(${baseProps.username}) - ${aircraftInfo.name}</small>`;
+    
         const waypoints = plan.flightPlanItems || [];
         const departureIcao = waypoints.length > 0 ? waypoints[0].identifier : 'N/A';
         const arrivalIcao = waypoints.length > 1 ? waypoints[waypoints.length - 1].identifier : 'N/A';
-
-        // Calculate progress using the live distance from baseProps and total from the plan
-        const totalDistance = plan.totalDistance || 0;
-        const remainingDistance = baseProps.distanceToDestination || 0;
-        // Ensure progress doesn't go below 0 or above 100
-        const progress = totalDistance > 0 ? Math.max(0, Math.min(100, (1 - (remainingDistance / totalDistance)) * 100)) : 0;
-        // --- END CORRECTION ---
-
+    
+        // ✅ START: Calculate remaining distance manually
+        let progress = 0;
+        const totalDistanceNM = plan.totalDistance || 0; // This is in Nautical Miles
+    
+        if (totalDistanceNM > 0 && baseProps.position && waypoints.length > 0) {
+            // 1. Get current aircraft position
+            const currentLat = baseProps.position.lat;
+            const currentLon = baseProps.position.lon;
+    
+            // 2. Get destination waypoint from the flight plan
+            const destinationWaypoint = waypoints[waypoints.length - 1];
+            
+            if (destinationWaypoint && destinationWaypoint.location) {
+                const destLat = destinationWaypoint.location.latitude;
+                const destLon = destinationWaypoint.location.longitude;
+    
+                // 3. Calculate distance in KM and convert to Nautical Miles
+                const remainingDistanceKm = getDistanceKm(currentLat, currentLon, destLat, destLon);
+                const remainingDistanceNM = remainingDistanceKm / 1.852; // Convert KM to NM
+    
+                // 4. Calculate progress percentage
+                progress = Math.max(0, Math.min(100, (1 - (remainingDistanceNM / totalDistanceNM)) * 100));
+            }
+        }
+        // ✅ END: Calculation logic
+    
         contentEl.innerHTML = `
             <div class="pilot-info-item">
                 <label>Pilot</label>
@@ -1824,8 +1857,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         speed: flight.position.gs_kt,
                         heading: flight.position.track_deg || 0,
                         verticalSpeed: flight.position.vs_fpm || 0,
-                        // V-- THIS IS THE FIX FROM PREVIOUS STEP --V
-                        distanceToDestination: flight.distanceToDestination
+                        // Pass the whole position object for the calculation
+                        position: flight.position 
                     }
                 };
             }).filter(Boolean);
@@ -1864,7 +1897,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // REWRITTEN CLICK HANDLER to open the info window
                 sectorOpsMap.on('click', layerId, (e) => {
-                    const flightProps = e.features[0].properties;
+                    // Reconstruct flightProps to match what handleAircraftClick expects
+                    const props = e.features[0].properties;
+                    const flightProps = {
+                        ...props,
+                        position: JSON.parse(props.position) // The position gets stringified in the geojson
+                    };
                     handleAircraftClick(flightProps, expertSession.id);
                 });
 
