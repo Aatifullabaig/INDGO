@@ -1426,12 +1426,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const allWaypoints = [];
         const extractWps = (items) => {
             for (const item of items) {
-                // Only add waypoints with valid locations [cite: 6, 7]
+                // Only add waypoints with valid locations
                 if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
                     allWaypoints.push(item);
                 }
-                if (Array.isArray(item.children)) { // [cite: 7, 19]
-                    extractWps(item.children); // [cite: 16]
+                if (Array.isArray(item.children)) { //
+                    extractWps(item.children); //
                 }
             }
         };
@@ -2289,18 +2289,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const renderOnDutyContent = async (pilot) => {
-        if (!pilot.currentRoster) return `<div class="content-card"><p>Error: On duty but no roster data found.</p></div>`;
+        // The pilot.currentRoster field holds the ID of the active roster.
+        if (!pilot.currentRoster) {
+            return `<div class="content-card"><p>Error: On duty but no roster data found.</p></div>`;
+        }
 
         try {
+            // --- START OF FIX ---
+            // Fetch the specific active roster using the new endpoint, and PIREPs in parallel.
             const [rosterRes, pirepsRes] = await Promise.all([
-                fetch(`${API_BASE_URL}/api/rosters`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch(`${API_BASE_URL}/api/rosters/by-id/${pilot.currentRoster}`, { headers: { 'Authorization': `Bearer ${token}` } }),
                 fetch(`${API_BASE_URL}/api/me/pireps`, { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
-            if (!rosterRes.ok || !pirepsRes.ok) throw new Error('Could not load duty details.');
 
-            const [allRosters, allPireps] = await Promise.all([rosterRes.json(), pirepsRes.json()]);
-            const currentRoster = allRosters.find(r => r._id === pilot.currentRoster);
-            if (!currentRoster) throw new Error('Could not find your assigned roster.');
+            if (!rosterRes.ok) throw new Error('Could not load your assigned roster details.');
+            if (!pirepsRes.ok) throw new Error('Could not load your duty details.');
+
+            const [currentRoster, allPireps] = await Promise.all([rosterRes.json(), pirepsRes.json()]);
+            // --- END OF FIX ---
 
             const filedPirepsForRoster = allPireps.filter(p => p.rosterLeg?.rosterId === currentRoster.rosterId);
             const filedFlightNumbers = new Set(filedPirepsForRoster.map(p => p.flightNumber));
