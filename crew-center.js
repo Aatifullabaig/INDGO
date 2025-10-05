@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         this.camera.projectionMatrix.elements = matrix;
         this.camera.projectionMatrix = m.multiply(l);
-        this.renderer.state.reset();
+        // this.renderer.state.reset(); // <-- FIX: REMOVED this line. It was interfering with Mapbox's rendering state.
         this.renderer.render(this.scene, this.camera);
         this.map.triggerRepaint();
     },
