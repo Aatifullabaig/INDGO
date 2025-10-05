@@ -152,36 +152,37 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.loader.load(
                 modelPath,
                 (gltf) => {
-        this.model = gltf.scene;
+                    this.model = gltf.scene;
 
-        // --- ADD THIS CODE ---
-        // Traverse the model and force all materials to render on both sides.
-        this.model.traverse((child) => {
-    if (child.isMesh) {
-        const materials = Array.isArray(child.material) ? child.material : [child.material];
-        materials.forEach(material => {
-            // Ensure textures are visible under scene lighting
-            material.side = THREE.DoubleSide;
-            material.needsUpdate = true;
-            material.toneMapped = true;
-            material.emissiveIntensity = 0.2; // small self-illumination
-        });
-    }
-});
+                    // --- FIX FOR TEXTURE RENDERING ---
+                    // Traverse the model and force all materials to render on both sides.
+                    this.model.traverse((child) => {
+                        if (child.isMesh) {
+                            const materials = Array.isArray(child.material) ? child.material : [child.material];
+                            materials.forEach(material => {
+                                // Ensure textures are visible under scene lighting
+                                material.side = THREE.DoubleSide;
+                                material.needsUpdate = true;
+                                material.toneMapped = true;
+                                material.emissiveIntensity = 0.2; // small self-illumination
+                            });
+                        }
+                    });
 
-// Add extra neutral lighting to brighten textures
-const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-hemiLight.position.set(0, 200, 0);
-this.scene.add(hemiLight);
+                    // Add extra neutral lighting to brighten textures
+                    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+                    hemiLight.position.set(0, 200, 0);
+                    this.scene.add(hemiLight);
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-dirLight.position.set(50, 200, 100);
-this.scene.add(dirLight);
+                    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                    dirLight.position.set(50, 200, 100);
+                    this.scene.add(dirLight);
 
-// Make sure renderer uses correct tone mapping for GLTF
-this.renderer.outputEncoding = THREE.sRGBEncoding;
-this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-this.renderer.toneMappingExposure = 1.2;
+                    // Make sure renderer uses correct tone mapping for GLTF
+                    this.renderer.outputEncoding = THREE.sRGBEncoding;
+                    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                    this.renderer.toneMappingExposure = 1.2;
+                    // --- END OF FIX ---
 
                     this.model.rotation.y = rotation * (Math.PI / 180);
                     this.scene.add(this.model);
