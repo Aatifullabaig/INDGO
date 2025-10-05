@@ -70,149 +70,147 @@ document.addEventListener('DOMContentLoaded', async () => {
     ];
 
     const threeJS_Layer = {
-        id: '3d-model-layer',
-        type: 'custom',
+  id: '3d-model-layer',
+  type: 'custom',
 
-        onAdd: function (map, gl) {
-            this.camera = new THREE.Camera();
-            this.scene = new THREE.Scene();
+  onAdd: function (map, gl) {
+    this.camera = new THREE.Camera();
+    this.scene = new THREE.Scene();
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
-            this.scene.add(ambientLight);
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-            directionalLight.position.set(0, -70, 100).normalize();
-            this.scene.add(directionalLight);
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+    this.scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(0, -70, 100).normalize();
+    this.scene.add(directionalLight);
 
-            this.map = map;
+    this.map = map;
 
-            this.renderer = new THREE.WebGLRenderer({
-                canvas: map.getCanvas(),
-                context: gl,
-                antialias: true,
-            });
+    // Share Mapbox's WebGL context with Three.js
+    this.renderer = new THREE.WebGLRenderer({
+      canvas: map.getCanvas(),
+      context: gl,
+      antialias: true,
+    });
 
-            this.renderer.autoClear = false;
-            this.loader = new THREE.GLTFLoader();
-            this.model = null;
-        },
+    // Important renderer settings for Mapbox + Three interop
+    this.renderer.autoClear = false;          // don't clear color; Mapbox handles it
+    this.renderer.autoClearDepth = true;      // DO clear depth each frame
+    this.renderer.autoClearColor = false;
+    this.renderer.autoClearStencil = false;
 
-        render: function (gl, matrix) {
-            // =================================================================
-            // --- FIX: Conditional Rendering ---
-            // This is the primary fix. The render function now exits immediately
-            // if there is no 3D model to display. This prevents the Three.js
-            // renderer from interfering with Mapbox's own rendering loop,
-            // which allows the 2D plane icons to show up correctly.
-            if (!this.model) {
-                return;
-            }
-            // =================================================================
+    // GLTF loader + model handles
+    this.loader = new THREE.GLTFLoader();
+    this.model = null;
 
-            const m = new THREE.Matrix4().fromArray(matrix);
+    // Optional: tone mapping best for GLTF
+    this.renderer.outputEncoding = THREE.sRGBEncoding;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.2;
+  },
 
-            // The heading is passed in degrees and converted to radians when the model is loaded.
-            // We retrieve it here for the render loop.
-            const headingRadians = this.model ? this.model.rotation.y : 0;
+  render: function (gl, matrix) {
+    // Only render if a model is present
+    if (!this.model) return;
 
-            // Define the necessary rotation matrices for orientation.
-            const rotationX_pitch = new THREE.Matrix4().makeRotationX(Math.PI / 2); // Pitches the model to be level.
-            const rotationY_offset = new THREE.Matrix4().makeRotationY(Math.PI);    // Corrects the model's default forward direction.
-            const rotationZ_heading = new THREE.Matrix4().makeRotationZ(headingRadians); // Applies the live heading.
+    const m = new THREE.Matrix4().fromArray(matrix);
 
-            // Build the final transformation matrix for the model.
-            const l = new THREE.Matrix4()
-                // 1. Translate the model to its correct geographic coordinates.
-                .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
-                
-                // 2. Scale the model to an appropriate size.
-                // FIX: Using a positive Y-scale to prevent the model from being flipped upside down.
-                .scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale))
-                
-                // 3. Apply rotations in the correct order to orient the model.
-                // The order of multiplication is crucial: pitch, then yaw offset, then heading.
-                .multiply(rotationX_pitch)
-                .multiply(rotationY_offset)
-                .multiply(rotationZ_heading);
+    // Heading is stored on model.rotation.y (radians)
+    const headingRadians = this.model ? this.model.rotation.y : 0;
 
-            this.camera.projectionMatrix.elements = matrix;
-            this.camera.projectionMatrix = m.multiply(l);
-            this.renderer.render(this.scene, this.camera);
-            this.map.triggerRepaint();
-        },
+    // Orientation matrices
+    const rotationX_pitch = new THREE.Matrix4().makeRotationX(Math.PI / 2); // level
+    const rotationY_offset = new THREE.Matrix4().makeRotationY(Math.PI);    // forward dir
+    const rotationZ_heading = new THREE.Matrix4().makeRotationZ(headingRadians); // live heading
 
-        displayModel: function(modelPath, lngLat, rotation = 0) {
+    // Compose final transform
+    const l = new THREE.Matrix4()
+      .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
+      .scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale))
+      .multiply(rotationX_pitch)
+      .multiply(rotationY_offset)
+      .multiply(rotationZ_heading);
+
+    this.camera.projectionMatrix.elements = matrix;
+    this.camera.projectionMatrix = m.multiply(l);
+
+    // ✅ Critical for fixing “transparent/ghost” model:
+    // reset state & clear depth so map tiles don't pollute our depth buffer
+    this.renderer.state.reset();
+    this.renderer.clearDepth();
+
+    this.renderer.render(this.scene, this.camera);
+    this.map.triggerRepaint();
+  },
+
+  displayModel: function (modelPath, lngLat, rotation = 0) {
     if (this.model) {
-        this.scene.remove(this.model);
+      this.scene.remove(this.model);
+      this.model = null;
     }
 
     const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
-    this.modelPosition = { x: modelAsMercator.x, y: modelAsMercator.y, z: modelAsMercator.z };
+    this.modelPosition = {
+      x: modelAsMercator.x,
+      y: modelAsMercator.y,
+      z: modelAsMercator.z
+    };
     this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 1.5;
 
     this.loader.load(
-        modelPath,
-        (gltf) => {
-            this.model = gltf.scene;
+      modelPath,
+      (gltf) => {
+        this.model = gltf.scene;
 
-            // --- FIX FOR ALL MATERIAL PROPERTIES ---
-            this.model.traverse((child) => {
-                if (child.isMesh) {
-                    const materials = Array.isArray(child.material) ? child.material : [child.material];
-                    materials.forEach(material => {
-                        // --- ADD THIS LINE TO FIX TRANSPARENCY ---
-                        material.depthWrite = true;
-
-                        // --- Previous fixes (keep these) ---
-                        material.transparent = false;
-                        material.opacity = 1.0;
-                        material.side = THREE.DoubleSide;
-                        material.needsUpdate = true;
-                        material.toneMapped = true;
-                        material.emissiveIntensity = 0.2;
-                    });
-                }
+        // Ensure opaque, correct depth behavior for ALL sub-meshes/materials
+        this.model.traverse((child) => {
+          if (child.isMesh) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((material) => {
+              material.transparent = false;
+              material.opacity = 1.0;
+              material.depthWrite = true;       // key for avoiding see-through
+              material.depthTest = true;
+              material.side = THREE.DoubleSide; // in case normals are mixed
+              material.toneMapped = true;
+              material.needsUpdate = true;
+              material.emissiveIntensity = 0.2;
             });
+          }
+        });
 
-            // Add extra neutral lighting to brighten textures
-            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-            hemiLight.position.set(0, 200, 0);
-            this.scene.add(hemiLight);
+        // Extra neutral lighting for texture legibility
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+        hemiLight.position.set(0, 200, 0);
+        this.scene.add(hemiLight);
 
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            dirLight.position.set(50, 200, 100);
-            this.scene.add(dirLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(50, 200, 100);
+        this.scene.add(dirLight);
 
-            // Make sure renderer uses correct tone mapping for GLTF
-            this.renderer.outputEncoding = THREE.sRGBEncoding;
-            this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            this.renderer.toneMappingExposure = 1.2;
-            // --- END OF FIX ---
+        // Apply initial heading (degrees -> radians)
+        this.model.rotation.y = rotation * (Math.PI / 180);
 
-            this.model.rotation.y = rotation * (Math.PI / 180);
-            this.scene.add(this.model);
-            this.map.triggerRepaint();
-        },
-        undefined,
-        (error) => {
-            console.error('An error happened while loading the 3D model:', error);
-        }
+        this.scene.add(this.model);
+        this.map.triggerRepaint();
+      },
+      undefined,
+      (error) => {
+        console.error('An error happened while loading the 3D model:', error);
+      }
     );
-},
-        
-        // =================================================================
-        // --- FIX: Add Model Cleanup Function ---
-        // This new helper function removes the 3D model from the scene.
-        // It's called when the aircraft info window is closed to ensure
-        // the model doesn't persist.
-        clearModel: function() {
-            if (this.model) {
-                this.scene.remove(this.model);
-                this.model = null;
-                this.map.triggerRepaint();
-            }
-        }
-        // =================================================================
-    };
+  },
+
+  // Cleanup helper to remove model and refresh view
+  clearModel: function () {
+    if (this.model) {
+      this.scene.remove(this.model);
+      this.model = null;
+      this.map.triggerRepaint();
+    }
+  }
+};
+
 
     // --- State Variables ---
     let MAPBOX_ACCESS_TOKEN = null;
