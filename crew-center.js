@@ -69,6 +69,88 @@ document.addEventListener('DOMContentLoaded', async () => {
         { value: 'MD90', name: 'McDonnell Douglas MD-90' },
     ];
 
+    const threeJS_Layer = {
+    id: '3d-model-layer',
+    type: 'custom',
+
+    // Called when the layer is added to the map.
+    onAdd: function (map, gl) {
+        this.camera = new THREE.Camera();
+        this.scene = new THREE.Scene();
+
+        // Add lighting to the scene. Without light, the model will be black.
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        this.scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(0, 1, 1);
+        this.scene.add(directionalLight);
+
+        this.map = map;
+
+        // Use the Mapbox WebGL context.
+        this.renderer = new THREE.WebGLRenderer({
+            canvas: map.getCanvas(),
+            context: gl,
+            antialias: true,
+        });
+
+        this.renderer.autoClear = false;
+        this.loader = new THREE.GLTFLoader();
+        this.model = null; // To hold the currently displayed model
+    },
+
+    // Called every frame to render the scene.
+    render: function (gl, matrix) {
+        const rotationX = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+        const rotationY = new THREE.Matrix4().makeRotationY(this.model ? this.model.rotation.y : 0);
+        const rotationZ = new THREE.Matrix4().makeRotationZ(Math.PI);
+
+        const m = new THREE.Matrix4().fromArray(matrix);
+        const l = new THREE.Matrix4()
+            .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
+            .scale(new THREE.Vector3(this.modelScale, -this.modelScale, this.modelScale))
+            .multiply(rotationX)
+            .multiply(rotationY)
+            .multiply(rotationZ);
+
+        this.camera.projectionMatrix.elements = matrix;
+        this.camera.projectionMatrix = m.multiply(l);
+        this.renderer.state.reset();
+        this.renderer.render(this.scene, this.camera);
+        this.map.triggerRepaint();
+    },
+
+    // Helper function to display a model at a specific location
+    displayModel: function(modelPath, lngLat, rotation = 0) {
+        // Clear any existing model from the scene
+        if (this.model) {
+            this.scene.remove(this.model);
+        }
+
+        const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
+
+        this.modelPosition = { x: modelAsMercator.x, y: modelAsMercator.y, z: modelAsMercator.z };
+        
+        // Calculate model scale based on zoom and latitude
+        const latRad = lngLat.lat * (Math.PI / 180);
+        this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 20; // Scale model to be ~20 meters
+        
+        this.loader.load(
+            modelPath,
+            (gltf) => {
+                this.model = gltf.scene;
+                this.model.rotation.y = rotation * (Math.PI / 180); // Set initial heading
+                this.scene.add(this.model);
+                this.map.triggerRepaint(); // Redraw the map to show the model
+            },
+            undefined, // onProgress callback (optional)
+            (error) => {
+                console.error('An error happened while loading the 3D model:', error);
+            }
+        );
+    }
+};
+
     // --- State Variables ---
     let MAPBOX_ACCESS_TOKEN = null;
     let DYNAMIC_FLEET = [];
@@ -1323,6 +1405,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         return new Promise(resolve => {
             sectorOpsMap.on('load', () => {
                 // Load the icon for live aircraft markers. Assumes an icon exists at this path.
+                sectorOpsMap.addLayer(threeJS_Layer);
+                
                 sectorOpsMap.loadImage(
                     '/images/whiteplane.png',
                     (error, image) => {
@@ -1418,6 +1502,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     // NEW & UPDATED: Handler for clicking an aircraft on the Sector Ops map.
     async function handleAircraftClick(flightProps, sessionId) {
         if (!flightProps || !flightProps.flightId) return;
+
+        const lngLat = { lon: flightProps.position.lon, lat: flightProps.position.lat };
+    const heading = flightProps.heading || 0;
+
+    // Define the path to your model
+    // In a real app, you might map aircraft types to different model files
+    const modelPath = 'assets/models/a320/scene.gltf'; // UPDATE THIS PATH
+
+    // Call the custom layer's function to display the model
+    threeJS_Layer.displayModel(modelPath, lngLat, heading);
+    
+    // Fly the camera to the model's location for a better view
+    sectorOpsMap.flyTo({
+        center: lngLat,
+        zoom: 15, // Zoom in close
+        pitch: 60, // Tilt the camera for a 3D perspective
+        bearing: heading, // Align camera with aircraft heading
+        speed: 0.8
+    });
 
         clearLiveFlightPath(); // Clear any previous trail first
 
