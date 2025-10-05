@@ -116,167 +116,239 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // --- [MODIFIED] Helper to inject custom CSS for new features ---
-    // --- [MODIFIED] Helper to inject custom CSS for new features ---
+    // --- [REHAULED] Helper to inject custom CSS for new features ---
     function injectCustomStyles() {
         const styleId = 'sector-ops-custom-styles';
         if (document.getElementById(styleId)) return;
 
         const css = `
-            /* --- Base Info Window: Futuristic HUD / Aurora Theme --- */
+            /* --- [FIX] Sector Ops View Layout --- */
+            /* This ensures the map fills the entire screen area */
+            #view-rosters {
+                display: grid;
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr;
+                height: 100%;
+                width: 100%;
+                overflow: hidden; /* Prevent scrollbars on the view itself */
+                position: relative; /* Establish positioning context for children */
+            }
+            #sector-ops-map-fullscreen {
+                grid-column: 1 / -1;
+                grid-row: 1 / -1;
+                width: 100%;
+                height: 100%;
+            }
+            
+            /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
             .info-window {
                 position: absolute;
-                top: 80px;
+                top: 20px;    /* Adjusted for better spacing */
                 right: 20px;
-                width: 420px; /* Slightly wider */
+                width: 420px; /* Slightly wider for more content */
                 max-width: 90vw;
-                max-height: 85vh;
-                background: rgba(12, 18, 38, 0.85); /* Deeper, less transparent blue */
-                backdrop-filter: blur(20px) saturate(150%);
-                -webkit-backdrop-filter: blur(20px) saturate(150%);
-                border-radius: 16px;
-                box-shadow: 0 10px 40px rgba(0,0,0,0.6), inset 0 0 0 1.5px rgba(255, 255, 255, 0.1);
+                max-height: calc(100vh - 40px); /* Fill most of the screen height */
+                background: rgba(18, 20, 38, 0.75); /* Darker, less transparent base */
+                backdrop-filter: blur(20px) saturate(180%);
+                -webkit-backdrop-filter: blur(20px) saturate(180%);
+                border-radius: 16px; /* Softer radius */
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                box-shadow: 0 12px 40px rgba(0,0,0,0.6);
                 z-index: 1050;
-                display: none;
+                display: none; /* Initially hidden */
                 flex-direction: column;
                 overflow: hidden;
-                color: #e8eaf6;
-                /* Aurora Borealis Border Effect */
-                border: 2px solid transparent;
-                background-clip: padding-box;
-                -webkit-background-clip: padding-box;
-                border-image: linear-gradient(135deg, #00d9ff, #9c33ff, #ff33a1) 1;
-                /* Entrance Animation */
-                transform: translateX(50px);
+                color: #e8eaf6; /* Lighter text for better contrast */
+                transition: opacity 0.3s ease, transform 0.3s ease;
                 opacity: 0;
-                transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s ease;
+                transform: translateX(20px);
             }
-            .info-window.visible {
-                display: flex;
-                transform: translateX(0);
+            .info-window.visible { 
+                display: flex; 
                 opacity: 1;
+                transform: translateX(0);
             }
-
             .info-window-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                padding: 10px 20px;
-                background: linear-gradient(180deg, rgba(30, 38, 68, 0.7), rgba(12, 18, 38, 0));
+                padding: 16px 20px;
+                background: rgba(10, 12, 26, 0.6); /* Header with subtle transparency */
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
                 flex-shrink: 0;
-                border-bottom: 1px solid rgba(156, 51, 255, 0.2);
             }
             .info-window-header h3 {
-                margin: 0; font-size: 1.1rem; color: #fff;
-                font-weight: 500;
-                text-shadow: 0 1px 5px rgba(0, 217, 255, 0.5);
+                margin: 0; 
+                font-size: 1.3rem; 
+                color: #fff;
+                font-weight: 600;
+                text-shadow: 0 2px 5px rgba(0,0,0,0.4);
             }
-            .info-window-header h3 small { font-weight: 300; color: #b0b8d1; font-size: 0.9rem; }
+            .info-window-header h3 small { 
+                font-weight: 300; 
+                color: #c5cae9; 
+                font-size: 0.9rem; 
+                margin-left: 5px;
+            }
             .info-window-actions button {
-                background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-                color: #b0b8d1; cursor: pointer; border-radius: 50%;
-                width: 30px; height: 30px; line-height: 1;
-                display: grid; place-items: center; transition: all 0.2s;
+                background: rgba(255,255,255,0.05); 
+                border: 1px solid rgba(255,255,255,0.1);
+                color: #c5cae9; 
+                cursor: pointer;
+                font-size: 1rem; 
+                width: 32px; height: 32px;
+                border-radius: 50%;
+                margin-left: 8px;
+                line-height: 1; 
+                display: grid;
+                place-items: center;
+                transition: all 0.2s ease-in-out;
             }
-            .info-window-actions button:hover {
-                color: #fff; background: rgba(0, 217, 255, 0.3);
-                border-color: rgba(0, 217, 255, 0.7); transform: scale(1.1) rotate(90deg);
+            .info-window-actions button:hover { 
+                background: #00a8ff;
+                color: #fff; 
+                transform: scale(1.1) rotate(90deg);
+                border-color: #00a8ff;
             }
-            .info-window-content { overflow-y: auto; flex-grow: 1; padding: 0; }
+            .info-window-content { 
+                overflow-y: auto; 
+                flex-grow: 1; 
+                padding: 0;
+            }
+            /* Custom Scrollbar */
+            .info-window-content::-webkit-scrollbar { width: 8px; }
+            .info-window-content::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+            .info-window-content::-webkit-scrollbar-thumb { background-color: #00a8ff; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
+            .info-window-content::-webkit-scrollbar-thumb:hover { background-color: #33c1ff; }
 
-            /* --- Airport Window: Hero Header & Weather Display --- */
-            .airport-hero {
-                padding: 20px; text-align: center;
-                background: linear-gradient(135deg, rgba(0, 12, 54, 0.2), rgba(28, 0, 70, 0.5));
-                border-bottom: 1px solid rgba(156, 51, 255, 0.3);
-            }
-            .airport-hero-icao { font-size: 3.5rem; font-weight: 700; color: #fff; letter-spacing: 4px; }
-            .airport-hero-name { font-size: 1rem; color: #b0b8d1; margin-top: -10px; }
+            /* --- [OVERHAUL] Airport Window: Weather & Tabs --- */
             .airport-info-weather {
-                display: flex; align-items: stretch; justify-content: space-between;
-                padding: 15px 20px;
-                background: rgba(0,0,0,0.2);
+                padding: 20px;
+                display: grid;
+                grid-template-columns: auto 1fr;
+                gap: 15px 20px;
+                align-items: center;
+                background: linear-gradient(135deg, rgba(0, 168, 255, 0.15), rgba(0, 100, 200, 0.25));
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             }
-            .weather-flight-rules {
-                display: flex; flex-direction: column; justify-content: center; align-items: center;
-                font-size: 1.8rem; font-weight: bold; padding: 10px 15px; border-radius: 10px;
-                flex-shrink: 0; text-shadow: 0 0 10px rgba(0,0,0,0.5);
+            .weather-flight-rules { 
+                font-size: 1.8rem; font-weight: 700; 
+                padding: 12px 18px; border-radius: 10px;
+                grid-row: 1 / 3;
+                text-shadow: 1px 1px 3px rgba(0,0,0,0.3);
             }
-            .flight-rules-vfr { background: #28a745; color: white; box-shadow: 0 0 15px #28a745; }
-            .flight-rules-mvfr { background: #007bff; color: white; box-shadow: 0 0 15px #007bff; }
-            .flight-rules-ifr { background: #dc3545; color: white; box-shadow: 0 0 15px #dc3545; }
-            .flight-rules-lifr { background: #9c33ff; color: white; box-shadow: 0 0 15px #9c33ff; }
-            .weather-details-grid {
-                display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px;
-                text-align: left; padding-left: 20px; width: 100%;
+            .flight-rules-vfr { background-color: #28a745; color: white; }
+            .flight-rules-mvfr { background-color: #007bff; color: white; }
+            .flight-rules-ifr { background-color: #dc3545; color: white; }
+            .flight-rules-lifr { background-color: #a33ea3; color: white; } /* Better magenta */
+            .weather-details-grid { 
+                display: grid; grid-template-columns: 1fr 1fr; 
+                gap: 10px 15px; text-align: left;
             }
             .weather-details-grid span { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; }
-            .weather-details-grid i { color: #00d9ff; width: 18px; text-align: center; }
-
-            /* --- Tab System --- */
-            .info-window-tabs { display: flex; background: rgba(0,0,0,0.25); padding: 5px; gap: 5px; }
-            .info-tab-btn {
-                flex-grow: 1; text-align: center;
-                padding: 10px 12px; border: none; background: rgba(255,255,255,0.05);
-                color: #b0b8d1; cursor: pointer; font-size: 0.9rem; font-weight: 500;
-                border-radius: 8px; transition: all 0.2s;
+            .weather-details-grid .fa-solid { color: #00a8ff; width: 16px; text-align: center; }
+            .metar-code {
+                grid-column: 1 / -1; font-family: 'Courier New', Courier, monospace;
+                background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px;
+                font-size: 0.8rem; color: #e0e0e0; margin-top: 5px;
             }
-            .info-tab-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
-            .info-tab-btn.active { color: #fff; background: #9c33ff; box-shadow: 0 0 10px #9c33ff; }
-            .info-tab-content { display: none; padding: 15px; }
-            .info-tab-content.active { display: block; animation: fadeIn 0.5s; }
-            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-            /* --- Aircraft Window: Dynamic Header & Data Pods --- */
-            .aircraft-hero-route {
-                display: flex; justify-content: space-around; align-items: center;
-                padding: 20px;
-                background: linear-gradient(135deg, rgba(0, 12, 54, 0.2), rgba(28, 0, 70, 0.5));
-                border-bottom: 1px solid rgba(156, 51, 255, 0.3);
-            }
-            .hero-airport { text-align: center; }
-            .hero-airport-icao { font-size: 2.5rem; font-weight: 700; color: #fff; }
-            .hero-airport-name { font-size: 0.8rem; color: #b0b8d1; margin-top: -5px; }
-            .hero-plane-icon { font-size: 2rem; color: #00d9ff; text-shadow: 0 0 10px #00d9ff; }
-            .aircraft-image-container {
-                padding: 15px; text-align: center; background: rgba(0,0,0,0.2);
-            }
-            .aircraft-image-container img {
-                max-height: 80px; filter: drop-shadow(0 5px 15px rgba(0,0,0,0.5));
-            }
-            .aircraft-info-body { padding: 20px; }
-            .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-            .stat-box { /* Data Pod Style */
-                background: linear-gradient(160deg, rgba(30, 38, 68, 0.9), rgba(12, 18, 38, 0.8));
-                padding: 15px; border-radius: 12px;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            }
-            .stat-box label {
-                display: flex; align-items: center; gap: 8px; font-size: 0.8rem;
-                color: #b0b8d1; margin-bottom: 8px; text-transform: uppercase;
-            }
-            .stat-box label i { color: #00d9ff; }
-            .stat-box .stat-value { font-size: 1.6rem; font-weight: 500; color: #fff; }
             
-            /* Enhanced Progress Bar */
-            .flight-progress { margin-top: 10px; }
-            .progress-labels { display: flex; justify-content: space-between; font-size: 0.8rem; color: #b0b8d1; margin-bottom: 8px; }
-            .flight-progress-bar { width: 100%; height: 12px; background-color: rgba(0,0,0,0.4); border-radius: 6px; overflow: hidden; }
+            .info-window-tabs { display: flex; background: rgba(10, 12, 26, 0.4); padding: 5px 15px 0 15px; }
+            .info-tab-btn {
+                padding: 14px 18px; border: none; background: none; color: #c5cae9;
+                cursor: pointer; font-size: 0.9rem; font-weight: 600;
+                border-bottom: 3px solid transparent; transition: all 0.25s;
+                display: flex; align-items: center; gap: 8px;
+            }
+            .info-tab-btn:hover { color: #fff; }
+            .info-tab-btn.active { color: #00a8ff; border-bottom-color: #00a8ff; }
+            .info-tab-content { display: none; padding: 20px; animation: fadeIn 0.4s; }
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            .info-tab-content.active { display: block; }
+            .info-tab-content ul { list-style: none; padding: 0; margin: 0; }
+            .info-tab-content li { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
+            .info-tab-content li:last-child { border-bottom: none; }
+            .muted-text { color: #9fa8da; text-align: center; padding: 2rem; }
+
+            /* --- [OVERHAUL] Aircraft Window: Modern Stats --- */
+            .aircraft-info-header {
+                padding: 20px; text-align: center;
+                background: linear-gradient(135deg, rgba(0, 168, 255, 0.15), rgba(0, 100, 200, 0.25));
+            }
+            .aircraft-info-header .route-display { display: flex; justify-content: space-around; align-items: center; }
+            .aircraft-info-header .icao { font-size: 2rem; font-weight: 700; color: #fff; }
+            .aircraft-info-header .fa-plane { font-size: 1.5rem; color: #00a8ff; }
+            
+            .aircraft-info-body { padding: 20px; }
+            .stat-grid {
+                display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px;
+            }
+            .stat-box {
+                background: rgba(10, 12, 26, 0.5); padding: 16px; border-radius: 10px;
+                border-left: 4px solid #00a8ff; transition: transform 0.2s, box-shadow 0.2s;
+            }
+            .stat-box:hover { transform: translateY(-3px); box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+            .stat-box label { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: #c5cae9; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .stat-box .stat-value { font-size: 1.6rem; font-weight: 600; color: #fff; }
+            
+            .flight-progress { margin-bottom: 20px; }
+            .progress-labels { display: flex; justify-content: space-between; font-size: 0.85rem; color: #c5cae9; margin-bottom: 8px; }
+            .flight-progress-bar { width: 100%; height: 12px; background-color: rgba(10, 12, 26, 0.7); border-radius: 6px; overflow: hidden; }
             .flight-progress-bar-inner {
                 height: 100%; width: 0%; border-radius: 6px;
-                background: linear-gradient(90deg, #9c33ff, #00d9ff);
-                transition: width 0.5s ease-out; position: relative;
+                background: linear-gradient(90deg, #00a8ff, #005f9e);
+                transition: width 0.5s ease-out; 
+                display:flex; align-items:center; justify-content:flex-end;
+                box-shadow: 0 0 10px rgba(0, 168, 255, 0.5);
             }
-            /* Pulsing effect at the end of the bar */
-            .flight-progress-bar-inner::after {
-                content: '';
-                position: absolute; right: 0; top: 0; bottom: 0;
-                width: 20px;
-                background: radial-gradient(circle at center, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 70%);
-                animation: pulse 2s infinite;
+            .progress-bar-label { color: white; font-size: 0.7rem; font-weight: bold; padding-right: 5px; }
+            
+            .flight-plan-route-box {
+                background: rgba(10, 12, 26, 0.5); padding: 16px; border-radius: 10px;
             }
-            @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+            .flight-plan-route-box label { font-size: 0.8rem; color: #c5cae9; margin-bottom: 10px; display: block; text-transform: uppercase; }
+            .flight-plan-route-box code {
+                display: block; white-space: pre-wrap; word-break: break-all;
+                font-family: 'Courier New', Courier, monospace;
+                font-size: 0.95rem; color: #e8eaf6; background: none; padding: 0; line-height: 1.6;
+            }
+
+            /* Toolbar Recall Buttons */
+            #airport-recall-btn, #aircraft-recall-btn {
+                display: none; font-size: 1.1rem; position: relative;
+            }
+            #airport-recall-btn.visible, #aircraft-recall-btn.visible {
+                display: inline-block;
+            }
+            #airport-recall-btn.palpitate, #aircraft-recall-btn.palpitate {
+                animation: palpitate 0.5s ease-in-out 2;
+            }
+            @keyframes palpitate {
+                0%, 100% { transform: scale(1); color: #00a8ff; }
+                50% { transform: scale(1.3); color: #fff; }
+            }
+            
+            /* Styles for Active ATC Markers on Sector Ops Map */
+            @keyframes atc-pulse {
+                0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+                70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+                100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+            }
+            @keyframes atc-breathe {
+                0% { transform: scale(0.95); opacity: 0.6; }
+                50% { transform: scale(1.4); opacity: 0.9; }
+                100% { transform: scale(0.95); opacity: 0.6; }
+            }
+            .atc-active-marker {
+                width: 15px; height: 15px; background-color: #dc3545; border-radius: 50%;
+                border: 2px solid #fff; cursor: pointer; animation: atc-pulse 2s infinite;
+                display: grid; place-items: center;
+            }
+            .atc-approach-active::before {
+                content: ''; grid-area: 1 / 1; width: 250%; height: 250%; border-radius: 50%;
+                background-color: rgba(240, 173, 78, 0.8); z-index: -1; 
+                animation: atc-breathe 4s ease-in-out infinite;
+            }
         `;
 
         const style = document.createElement('style');
@@ -656,7 +728,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
     }
 
-/**
+    /**
      * --- [REVAMPED] Creates the rich HTML content for the airport information window.
      * This now includes a live weather widget and a tabbed interface.
      */
@@ -664,7 +736,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const atcForAirport = activeAtcFacilities.filter(f => f.airportName === icao);
         const notamsForAirport = activeNotams.filter(n => n.airportIcao === icao);
         const routesFromAirport = ALL_AVAILABLE_ROUTES.filter(r => r.departure === icao);
-        const airportName = airportsData[icao]?.name || 'Unknown Airport';
 
         // Fetch weather
         let weatherHtml = '';
@@ -675,19 +746,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (weatherData.data && weatherData.data.length > 0) {
                      const metar = weatherData.data[0];
                      const flightCategory = metar.flight_category || 'N/A';
-                     const flightCategoryLower = flightCategory.toLowerCase();
                      weatherHtml = `
                         <div class="airport-info-weather">
-                            <span class="weather-flight-rules flight-rules-${flightCategoryLower}" title="${flightCategory}">
-                                ${flightCategory}
-                                <small style="font-size:0.7rem; font-weight: 300;">METAR</small>
-                            </span>
+                            <span class="weather-flight-rules flight-rules-${flightCategory.toLowerCase()}">${flightCategory}</span>
                             <div class="weather-details-grid">
                                 <span><i class="fa-solid fa-temperature-half"></i> ${metar.temperature?.celsius || '--'}°C</span>
+                                <span><i class="fa-solid fa-droplet"></i> ${metar.dewpoint?.celsius || '--'}°C</span>
                                 <span><i class="fa-solid fa-wind"></i> ${metar.wind?.degrees || '---'}° @ ${metar.wind?.speed_kts || '--'} kts</span>
-                                <span><i class="fa-solid fa-down-left-and-up-right-to-center"></i> ${metar.barometer?.hpa || '----'} hPa</span>
+                                <span><i class="fa-solid fa-gauge"></i> ${metar.barometer?.hpa || '----'} hPa</span>
                                 <span><i class="fa-solid fa-eye"></i> ${metar.visibility?.miles || '--'} SM</span>
+                                <span><i class="fa-solid fa-cloud"></i> ${metar.clouds?.[0]?.text || 'Clear'}</span>
                             </div>
+                            <code class="metar-code">${metar.raw_text}</code>
                         </div>
                      `;
                 }
@@ -697,11 +767,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             weatherHtml = '<div class="airport-info-weather"><p>Weather data unavailable.</p></div>';
         }
 
+        // If there's no data at all (besides weather), don't show a popup
         if (atcForAirport.length === 0 && notamsForAirport.length === 0 && routesFromAirport.length === 0) {
             return null;
         }
 
-        let atcHtml = '<p class="muted">No active ATC reported.</p>';
+        let atcHtml = '<p class="muted-text">No active ATC reported.</p>';
         if (atcForAirport.length > 0) {
             atcHtml = `
                 <ul class="atc-frequencies">
@@ -716,51 +787,72 @@ document.addEventListener('DOMContentLoaded', async () => {
             `;
         }
 
-        let notamsHtml = '<p class="muted">No active NOTAMs.</p>';
+        let notamsHtml = '<p class="muted-text">No active NOTAMs.</p>';
         if (notamsForAirport.length > 0) {
-            notamsHtml = `<ul class="notam-list">${notamsForAirport.map(n => `<li>${n.message}</li>`).join('')}</ul>`;
+            notamsHtml = `
+                <ul class="notam-list">
+                    ${notamsForAirport.map(n => `<li>${n.message}</li>`).join('')}
+                </ul>
+            `;
         }
         
-        let routesHtml = '<p class="muted">No departing routes from this airport in our database.</p>';
+        let routesHtml = '<p class="muted-text">No departing routes from this airport in our database.</p>';
         if (routesFromAirport.length > 0) {
-            routesHtml = `<ul class="popup-routes-list">${routesFromAirport.map(route => {
-                const airlineCode = extractAirlineCode(route.flightNumber);
-                const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : '';
-                const aircraftInfo = AIRCRAFT_SELECTION_LIST.find(ac => ac.value === route.aircraft);
-                const aircraftName = aircraftInfo ? aircraftInfo.name : route.aircraft;
-                const routeDataString = JSON.stringify(route).replace(/'/g, "&apos;");
-                return `
-                <li class="popup-route-item">
-                    <div class="route-item-header">
-                        <img src="${logoPath}" class="route-item-airline-logo" alt="${airlineCode}" onerror="this.style.display='none'">
-                        <div class="route-item-flight-details">
-                            <span class="flight-number">${route.flightNumber}</span>
-                            <span class="destination">to ${route.arrival}</span>
-                        </div>
-                        <button class="cta-button plan-flight-from-explorer-btn" data-route='${routeDataString}'>Plan</button>
-                    </div>
-                    <div class="route-item-footer">
-                        <span><i class="fa-solid fa-plane"></i> ${aircraftName}</span>
-                        ${getRankBadgeHTML(route.rankUnlock || deduceRankFromAircraftFE(route.aircraft), { showImage: true, imageClass: 'roster-req-rank-badge' })}
-                    </div>
-                </li>`;
-            }).join('')}</ul>`;
+            routesHtml = `
+                <ul class="popup-routes-list">
+                    ${routesFromAirport.map(route => {
+                        const airlineCode = extractAirlineCode(route.flightNumber);
+                        const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : '';
+                        const aircraftInfo = AIRCRAFT_SELECTION_LIST.find(ac => ac.value === route.aircraft);
+                        const aircraftName = aircraftInfo ? aircraftInfo.name : route.aircraft;
+                        const aircraftImagePath = `Images/planesForCC/${route.aircraft}.png`;
+                        
+                        const routeDataString = JSON.stringify(route).replace(/'/g, "&apos;");
+
+                        return `
+                        <li class="popup-route-item">
+                            <div class="route-item-header">
+                                <div class="route-item-info">
+                                    <img src="${logoPath}" class="route-item-airline-logo" alt="${airlineCode}" onerror="this.style.display='none'">
+                                    <div class="route-item-flight-details">
+                                        <span class="flight-number">${route.flightNumber}</span>
+                                        <span class="destination">to ${route.arrival}</span>
+                                    </div>
+                                </div>
+                                <div class="route-item-actions">
+                                     <button class="cta-button plan-flight-from-explorer-btn" data-route='${routeDataString}'>Plan</button>
+                                </div>
+                            </div>
+                            <div class="route-item-footer">
+                                <div class="route-item-aircraft-info">
+                                    <img src="${aircraftImagePath}" class="route-item-aircraft-img" alt="${aircraftName}" onerror="this.style.display='none'">
+                                    <span>${aircraftName}</span>
+                                </div>
+                                ${getRankBadgeHTML(route.rankUnlock || deduceRankFromAircraftFE(route.aircraft), { showImage: true, imageClass: 'roster-req-rank-badge' })}
+                            </div>
+                        </li>
+                        `;
+                    }).join('')}
+                </ul>
+            `;
         }
 
         return `
-            <div class="airport-hero">
-                <div class="airport-hero-icao">${icao}</div>
-                <div class="airport-hero-name">${airportName}</div>
-            </div>
             ${weatherHtml}
             <div class="info-window-tabs">
                 <button class="info-tab-btn active" data-tab="airport-routes"><i class="fa-solid fa-route"></i> Routes</button>
                 <button class="info-tab-btn" data-tab="airport-atc"><i class="fa-solid fa-headset"></i> ATC</button>
                 <button class="info-tab-btn" data-tab="airport-notams"><i class="fa-solid fa-triangle-exclamation"></i> NOTAMs</button>
             </div>
-            <div id="airport-routes" class="info-tab-content active">${routesHtml}</div>
-            <div id="airport-atc" class="info-tab-content">${atcHtml}</div>
-            <div id="airport-notams" class="info-tab-content">${notamsHtml}</div>
+            <div id="airport-routes" class="info-tab-content active">
+                ${routesHtml}
+            </div>
+            <div id="airport-atc" class="info-tab-content">
+                ${atcHtml}
+            </div>
+            <div id="airport-notams" class="info-tab-content">
+                ${notamsHtml}
+            </div>
         `;
     }
 
@@ -1104,17 +1196,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function initializeSectorOpsView() {
         const selector = document.getElementById('departure-hub-selector');
         const mapContainer = document.getElementById('sector-ops-map-fullscreen');
+        const viewContainer = document.getElementById('view-rosters'); // The main view container
         if (!selector || !mapContainer) return;
 
-        // Use the main content loader instead of a local one
         mainContentLoader.classList.add('active');
 
         try {
-            // NEW: Create and inject the Info Windows and their recall buttons
+            // Create and inject the Info Windows and their recall buttons into the main view container
             if (!document.getElementById('airport-info-window')) {
                 const windowHtml = `
                     <div id="airport-info-window" class="info-window">
-                        <div id="airport-window-header" class="info-window-header">
+                        <div class="info-window-header">
                             <h3 id="airport-window-title"></h3>
                             <div class="info-window-actions">
                                 <button id="airport-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
@@ -1124,12 +1216,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <div id="airport-window-content" class="info-window-content"></div>
                     </div>
                 `;
-                document.getElementById('view-rosters').insertAdjacentHTML('beforeend', windowHtml);
+                viewContainer.insertAdjacentHTML('beforeend', windowHtml);
             }
             if (!document.getElementById('aircraft-info-window')) {
                  const windowHtml = `
                     <div id="aircraft-info-window" class="info-window">
-                        <div id="aircraft-window-header" class="info-window-header">
+                        <div class="info-window-header">
                             <h3 id="aircraft-window-title"></h3>
                             <div class="info-window-actions">
                                 <button id="aircraft-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
@@ -1139,7 +1231,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <div id="aircraft-window-content" class="info-window-content"></div>
                     </div>
                 `;
-                document.getElementById('view-rosters').insertAdjacentHTML('beforeend', windowHtml);
+                viewContainer.insertAdjacentHTML('beforeend', windowHtml);
             }
             
             const toolbarToggleBtn = document.getElementById('toolbar-toggle-panel-btn');
@@ -1402,16 +1494,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const usernameDisplay = baseProps.username || 'N/A';
         document.getElementById('aircraft-window-title').innerHTML = `${baseProps.callsign} <small>(${usernameDisplay})</small>`;
 
-        // Find aircraft type from our main list to get the ICAO code for the image
-        const aircraftInfo = AIRCRAFT_SELECTION_LIST.find(ac => ac.name.includes(baseProps.aircraftType)) || {};
-        const aircraftIcao = aircraftInfo.value || 'A320'; // Default to A320 if not found
-        const aircraftImagePath = `Images/planesForCC/${aircraftIcao}.png`;
-
+        // If no plan is filed, show a simplified view
         if (!plan || !plan.flightPlanItems || plan.flightPlanItems.length === 0) {
             contentEl.innerHTML = `
-                <div class="aircraft-image-container">
-                    <img src="${aircraftImagePath}" alt="${baseProps.aircraftType}" onerror="this.style.display='none'">
-                </div>
                 <div class="aircraft-info-body">
                     <div class="stat-grid">
                         <div class="stat-box">
@@ -1422,8 +1507,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                             <label><i class="fa-solid fa-gauge-high"></i> Ground Speed</label>
                             <span class="stat-value">${Math.round(baseProps.speed)} kts</span>
                         </div>
+                        <div class="stat-box">
+                            <label><i class="fa-solid fa-compass"></i> Heading</label>
+                            <span class="stat-value">${Math.round(baseProps.heading)}°</span>
+                        </div>
+                         <div class="stat-box">
+                            <label><i class="fa-solid fa-arrow-trend-up"></i> Vert. Speed</label>
+                            <span class="stat-value">${Math.round(baseProps.verticalSpeed)} fpm</span>
+                        </div>
                     </div>
-                    <div class="flight-plan-route-box" style="text-align: center;">
+                    <div class="flight-plan-route-box">
                         <label>Filed Route</label>
                         <code>No flight plan filed.</code>
                     </div>
@@ -1432,6 +1525,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        // Extract waypoints
         const allWaypoints = [];
         const extractWps = (items) => {
             for (const item of items) {
@@ -1444,7 +1538,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         extractWps(plan.flightPlanItems);
 
         if (allWaypoints.length < 2) {
-             populateAircraftInfoWindow(baseProps, null);
+             populateAircraftInfoWindow(baseProps, null); // Re-run with null plan
              return;
         }
 
@@ -1452,9 +1546,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const arrivalIcao = allWaypoints[allWaypoints.length - 1]?.name || 'N/A';
         const routeString = allWaypoints.map(wp => wp.name).join(' ');
 
+        // Calculate total distance for the progress bar
         let totalDistanceKm = 0;
         for (let i = 0; i < allWaypoints.length - 1; i++) {
-            totalDistanceKm += getDistanceKm(allWaypoints[i].location.latitude, allWaypoints[i].location.longitude, allWaypoints[i+1].location.latitude, allWaypoints[i+1].location.longitude);
+            const wp1 = allWaypoints[i].location;
+            const wp2 = allWaypoints[i + 1].location;
+            totalDistanceKm += getDistanceKm(wp1.latitude, wp1.longitude, wp2.latitude, wp2.longitude);
         }
         const totalDistanceNM = totalDistanceKm / 1.852;
 
@@ -1462,38 +1559,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         let ete = 'N/A';
         if (totalDistanceNM > 0 && baseProps.position) {
             const destWp = allWaypoints[allWaypoints.length - 1];
-            if (destWp?.location) {
-                const remainingDistanceNM = getDistanceKm(baseProps.position.lat, baseProps.position.lon, destWp.location.latitude, destWp.location.longitude) / 1.852;
+            if (destWp && destWp.location) {
+                const remainingDistanceKm = getDistanceKm(baseProps.position.lat, baseProps.position.lon, destWp.location.latitude, destWp.location.longitude);
+                const remainingDistanceNM = remainingDistanceKm / 1.852;
                 progress = Math.max(0, Math.min(100, (1 - (remainingDistanceNM / totalDistanceNM)) * 100));
                 
-                if (baseProps.speed > 50) {
+                if (baseProps.speed > 50) { // Only calculate ETE if moving
                     const timeHours = remainingDistanceNM / baseProps.speed;
-                    ete = formatDuration(timeHours * 3600);
+                    const hours = Math.floor(timeHours);
+                    const minutes = Math.round((timeHours - hours) * 60);
+                    ete = `${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}`;
                 }
             }
         }
 
         contentEl.innerHTML = `
-            <div class="aircraft-hero-route">
-                <div class="hero-airport">
-                    <div class="hero-airport-icao">${departureIcao}</div>
-                    <div class="hero-airport-name">${airportsData[departureIcao]?.name || ''}</div>
+            <div class="aircraft-info-header">
+                <div class="route-display">
+                    <span class="icao">${departureIcao}</span>
+                    <i class="fa-solid fa-plane"></i>
+                    <span class="icao">${arrivalIcao}</span>
                 </div>
-                <div class="hero-plane-icon"><i class="fa-solid fa-plane"></i></div>
-                 <div class="hero-airport">
-                    <div class="hero-airport-icao">${arrivalIcao}</div>
-                    <div class="hero-airport-name">${airportsData[arrivalIcao]?.name || ''}</div>
-                </div>
-            </div>
-            <div class="aircraft-image-container">
-                <img src="${aircraftImagePath}" alt="${baseProps.aircraftType}" onerror="this.style.display='none'">
             </div>
             <div class="aircraft-info-body">
                 <div class="flight-progress">
-                    <div class="progress-labels"><span>Progress (${progress.toFixed(0)}%)</span><span>ETE: ${ete}</span></div>
-                    <div class="flight-progress-bar"><div class="flight-progress-bar-inner" style="width: ${progress.toFixed(1)}%;"></div></div>
+                    <div class="progress-labels">
+                        <span>Progress</span>
+                        <span>ETE: ${ete}</span>
+                    </div>
+                    <div class="flight-progress-bar">
+                        <div class="flight-progress-bar-inner" style="width: ${progress.toFixed(1)}%;">
+                             <span class="progress-bar-label">${progress.toFixed(0)}%</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="stat-grid" style="margin-top: 20px;">
+
+                <div class="stat-grid">
                     <div class="stat-box">
                         <label><i class="fa-solid fa-arrows-up-down"></i> Altitude</label>
                         <span class="stat-value">${Math.round(baseProps.altitude).toLocaleString()} ft</span>
@@ -1511,6 +1612,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <span class="stat-value">${Math.round(baseProps.verticalSpeed)} fpm</span>
                     </div>
                 </div>
+                
                 <div class="flight-plan-route-box">
                     <label>Filed Route</label>
                     <code>${routeString}</code>
