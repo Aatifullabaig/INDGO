@@ -1506,7 +1506,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const lngLat = [flightProps.position.lon, flightProps.position.lat];
         const heading = flightProps.heading || 0;
-        const modelPath = 'assets/models/a320/scene.gltf';
+        const modelPath = 'assets/models/a320/source/A320.glb';
 
         threeJS_Layer.displayModel(modelPath, lngLat, heading);
     
