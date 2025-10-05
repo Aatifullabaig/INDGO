@@ -108,17 +108,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             // =================================================================
 
-            const rotationX = new THREE.Matrix4().makeRotationX(Math.PI / 2);
-            const rotationY = new THREE.Matrix4().makeRotationY(this.model ? this.model.rotation.y : 0);
-            const rotationZ = new THREE.Matrix4().makeRotationZ(Math.PI);
-
             const m = new THREE.Matrix4().fromArray(matrix);
+
+            // The heading is passed in degrees and converted to radians when the model is loaded.
+            // We retrieve it here for the render loop.
+            const headingRadians = this.model ? this.model.rotation.y : 0;
+
+            // Define the necessary rotation matrices for orientation.
+            const rotationX_pitch = new THREE.Matrix4().makeRotationX(Math.PI / 2); // Pitches the model to be level.
+            const rotationY_offset = new THREE.Matrix4().makeRotationY(Math.PI);    // Corrects the model's default forward direction.
+            const rotationZ_heading = new THREE.Matrix4().makeRotationZ(headingRadians); // Applies the live heading.
+
+            // Build the final transformation matrix for the model.
             const l = new THREE.Matrix4()
+                // 1. Translate the model to its correct geographic coordinates.
                 .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
-                .scale(new THREE.Vector3(this.modelScale, -this.modelScale, this.modelScale))
-                .multiply(rotationX)
-                .multiply(rotationY)
-                .multiply(rotationZ);
+                
+                // 2. Scale the model to an appropriate size.
+                // FIX: Using a positive Y-scale to prevent the model from being flipped upside down.
+                .scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale))
+                
+                // 3. Apply rotations in the correct order to orient the model.
+                // The order of multiplication is crucial: pitch, then yaw offset, then heading.
+                .multiply(rotationX_pitch)
+                .multiply(rotationY_offset)
+                .multiply(rotationZ_heading);
 
             this.camera.projectionMatrix.elements = matrix;
             this.camera.projectionMatrix = m.multiply(l);
