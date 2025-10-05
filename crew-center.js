@@ -157,22 +157,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         // --- ADD THIS CODE ---
         // Traverse the model and force all materials to render on both sides.
         this.model.traverse((child) => {
-            if (child.isMesh && child.material) {
-                // Ensure we can handle single or multiple materials
-                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach(material => {
-                    // Force material to be opaque to fix transparency sorting issues.
-                    material.transparent = false;
-                    material.depthWrite = true;
-
-                    // Keep DoubleSide rendering to prevent holes in the model.
-                    material.side = THREE.DoubleSide;
-                    
-                    // Tell Three.js that the material has been updated.
-                    material.needsUpdate = true;
-                });
-            }
+    if (child.isMesh) {
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.forEach(material => {
+            // Ensure textures are visible under scene lighting
+            material.side = THREE.DoubleSide;
+            material.needsUpdate = true;
+            material.toneMapped = true;
+            material.emissiveIntensity = 0.2; // small self-illumination
         });
+    }
+});
+
+// Add extra neutral lighting to brighten textures
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+hemiLight.position.set(0, 200, 0);
+this.scene.add(hemiLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(50, 200, 100);
+this.scene.add(dirLight);
+
+// Make sure renderer uses correct tone mapping for GLTF
+this.renderer.outputEncoding = THREE.sRGBEncoding;
+this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+this.renderer.toneMappingExposure = 1.2;
 
                     this.model.rotation.y = rotation * (Math.PI / 180);
                     this.scene.add(this.model);
