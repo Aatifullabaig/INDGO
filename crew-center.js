@@ -70,160 +70,155 @@ document.addEventListener('DOMContentLoaded', async () => {
     ];
 
     const threeJS_Layer = {
-  id: '3d-model-layer',
-  type: 'custom',
-
-  onAdd: function (map, gl) {
-    this.camera = new THREE.Camera();
-    this.scene = new THREE.Scene();
-
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
-    this.scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(0, -70, 100).normalize();
-    this.scene.add(directionalLight);
-
-    this.map = map;
-
-    // Share Mapbox's WebGL context with Three.js
-    this.renderer = new THREE.WebGLRenderer({
-      canvas: map.getCanvas(),
-      context: gl,
-      antialias: true,
-    });
-
-    // Important renderer settings for Mapbox + Three interop
-    this.renderer.autoClear = false;          // don't clear color; Mapbox handles it
-    this.renderer.autoClearDepth = true;      // DO clear depth each frame
-    this.renderer.autoClearColor = false;
-    this.renderer.autoClearStencil = false;
-
-    // GLTF loader + model handles
-    this.loader = new THREE.GLTFLoader();
-    this.model = null;
-
-    // Optional: tone mapping best for GLTF
-    this.renderer.outputEncoding = THREE.sRGBEncoding;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
-  },
-
-  render: function (gl, matrix) {
-    // Only render if a model is present
-    if (!this.model) return;
-
-    const m = new THREE.Matrix4().fromArray(matrix);
-
-    // Heading is stored on model.rotation.y (radians)
-    const headingRadians = this.model ? this.model.rotation.y : 0;
-
-    // Orientation matrices
-    const rotationX_pitch = new THREE.Matrix4().makeRotationX(Math.PI / 2); // level
-    const rotationY_offset = new THREE.Matrix4().makeRotationY(Math.PI);    // forward dir
-    const rotationZ_heading = new THREE.Matrix4().makeRotationZ(headingRadians); // live heading
-
-    // Compose final transform
-    const l = new THREE.Matrix4()
-      .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
-      .scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale))
-      .multiply(rotationX_pitch)
-      .multiply(rotationY_offset)
-      .multiply(rotationZ_heading);
-
-    this.camera.projectionMatrix.elements = matrix;
-    this.camera.projectionMatrix = m.multiply(l);
-
-    // ✅ Critical for fixing “transparent/ghost” model:
-    // reset state & clear depth so map tiles don't pollute our depth buffer
-    this.renderer.state.reset();
-    this.renderer.clearDepth();
-
-    this.renderer.render(this.scene, this.camera);
-    this.map.triggerRepaint();
-  },
-
-  displayModel: function (modelPath, lngLat, rotation = 0) {
-  if (this.model) {
-    this.scene.remove(this.model);
-  }
-
-  const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
-  this.modelPosition = {
-    x: modelAsMercator.x,
-    y: modelAsMercator.y,
-    z: modelAsMercator.z
-  };
-  this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 1.5;
-
-  this.loader.load(
-    modelPath,
-    (gltf) => {
-      this.model = gltf.scene;
-
-      this.model.traverse((child) => {
-        if (child.isMesh) {
-          const mats = Array.isArray(child.material)
-            ? child.material
-            : [child.material];
-          mats.forEach((mat) => {
-            // ✅ Correct color space
-            if (mat.map) {
-              mat.map.encoding = THREE.sRGBEncoding;
-              mat.map.needsUpdate = true;
-            }
-
-            // ✅ Handle alpha correctly
-            mat.transparent = mat.alphaTest > 0 || !!mat.alphaMap;
-            mat.opacity = 1.0;
-            mat.depthWrite = true;
-            mat.depthTest = true;
-            mat.side = THREE.DoubleSide;
-            mat.blending = THREE.NormalBlending;
-
-            // ✅ Ensure proper tone mapping
-            mat.toneMapped = true;
-            mat.needsUpdate = true;
-          });
-        }
-      });
-
-      // ✅ Lighting that reveals texture
-      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.9);
-      hemiLight.position.set(0, 200, 0);
-      this.scene.add(hemiLight);
-
-      const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
-      keyLight.position.set(100, 200, 300);
-      this.scene.add(keyLight);
-
-      // ✅ Renderer color space & tone mapping
-      if (this.renderer.outputEncoding !== undefined) {
+      id: '3d-model-layer',
+      type: 'custom',
+    
+      onAdd: function (map, gl) {
+        this.camera = new THREE.Camera();
+        this.scene = new THREE.Scene();
+    
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+        this.scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(0, -70, 100).normalize();
+        this.scene.add(directionalLight);
+    
+        this.map = map;
+    
+        // Share Mapbox's WebGL context with Three.js
+        this.renderer = new THREE.WebGLRenderer({
+          canvas: map.getCanvas(),
+          context: gl,
+          antialias: true,
+        });
+    
+        // --- FIX for transparency/ghosting issue ---
+        // This is crucial for integrating with Mapbox. Mapbox handles clearing
+        // the color buffer, but we MUST handle the depth buffer ourselves.
+        this.renderer.autoClear = false;
+    
+        // GLTF loader + model handles
+        this.loader = new THREE.GLTFLoader();
+        this.model = null;
+    
+        // Optional: tone mapping best for GLTF
         this.renderer.outputEncoding = THREE.sRGBEncoding;
-      } else if (this.renderer.outputColorSpace !== undefined) {
-        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        this.renderer.toneMappingExposure = 1.2;
+      },
+    
+      render: function (gl, matrix) {
+        // Only render if a model is present
+        if (!this.model) return;
+    
+        const m = new THREE.Matrix4().fromArray(matrix);
+    
+        // Heading is stored on model.rotation.y (radians)
+        const headingRadians = this.model ? this.model.rotation.y : 0;
+    
+        // --- FIX for mirrored/flipped textures ---
+        // The original `rotationY_offset` of PI (180 degrees) was flipping the
+        // model and mirroring its textures. This new matrix composition correctly
+        // orients the model to be level with the map and then applies its heading.
+        const rotationX_pitch = new THREE.Matrix4().makeRotationX(Math.PI / 2); // makes the model 'level'
+        const rotationZ_heading = new THREE.Matrix4().makeRotationZ(headingRadians); // applies the live heading
+    
+        // Compose final transform
+        const l = new THREE.Matrix4()
+          .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
+          .scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale))
+          .multiply(rotationX_pitch) // First, level the plane
+          .multiply(rotationZ_heading); // Then, apply its direction
+    
+        this.camera.projectionMatrix.elements = matrix;
+        this.camera.projectionMatrix = m.multiply(l);
+    
+        // --- FIX for transparency/ghosting issue ---
+        // We must reset the WebGL state and clear the depth buffer before rendering.
+        // This prevents Mapbox's map tiles from interfering with the 3D model's pixels.
+        this.renderer.state.reset();
+        this.renderer.clearDepth();
+    
+        this.renderer.render(this.scene, this.camera);
+        this.map.triggerRepaint();
+      },
+    
+      displayModel: function (modelPath, lngLat, rotation = 0) {
+        if (this.model) {
+          this.scene.remove(this.model);
+        }
+    
+        const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
+        this.modelPosition = {
+          x: modelAsMercator.x,
+          y: modelAsMercator.y,
+          z: modelAsMercator.z
+        };
+        this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 1.5;
+    
+        this.loader.load(
+          modelPath,
+          (gltf) => {
+            this.model = gltf.scene;
+    
+            this.model.traverse((child) => {
+              if (child.isMesh) {
+                const mats = Array.isArray(child.material) ?
+                  child.material :
+                  [child.material];
+                mats.forEach((mat) => {
+                  if (mat.map) {
+                    mat.map.encoding = THREE.sRGBEncoding;
+                    mat.map.needsUpdate = true;
+                  }
+    
+                  // --- FIX for rendering artifacts ---
+                  // Ensure materials are configured for correct depth sorting and visibility.
+                  mat.transparent = mat.alphaTest > 0 || !!mat.alphaMap;
+                  mat.opacity = 1.0;
+                  mat.depthWrite = true; // Crucial: model must write to the depth buffer
+                  mat.depthTest = true; // Crucial: model must check against the depth buffer
+                  mat.side = THREE.DoubleSide; // Renders both sides, useful for some models
+                  mat.needsUpdate = true;
+                });
+              }
+            });
+    
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.9);
+            hemiLight.position.set(0, 200, 0);
+            this.scene.add(hemiLight);
+    
+            const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            keyLight.position.set(100, 200, 300);
+            this.scene.add(keyLight);
+    
+            if (this.renderer.outputEncoding !== undefined) {
+              this.renderer.outputEncoding = THREE.sRGBEncoding;
+            } else if (this.renderer.outputColorSpace !== undefined) {
+              this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+            }
+            this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            this.renderer.toneMappingExposure = 1.0;
+    
+            // Set the rotation in radians for the render loop to use
+            this.model.rotation.y = rotation * (Math.PI / 180);
+            this.scene.add(this.model);
+            this.map.triggerRepaint();
+          },
+          undefined,
+          (error) => console.error('Error loading model:', error)
+        );
+      },
+    
+      clearModel: function () {
+        if (this.model) {
+          this.scene.remove(this.model);
+          this.model = null;
+          this.map.triggerRepaint();
+        }
       }
-      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.0;
-
-      this.model.rotation.y = rotation * (Math.PI / 180);
-      this.scene.add(this.model);
-      this.map.triggerRepaint();
-    },
-    undefined,
-    (error) => console.error('Error loading model:', error)
-  );
-},
-
-  // Cleanup helper to remove model and refresh view
-  clearModel: function () {
-    if (this.model) {
-      this.scene.remove(this.model);
-      this.model = null;
-      this.map.triggerRepaint();
-    }
-  }
-};
+    };
 
 
     // --- State Variables ---
@@ -1281,11 +1276,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             clearLiveFlightPath();
             currentFlightInWindow = null;
 
-            // =================================================================
-            // --- FIX: Cleanup 3D Model and View ---
-            // When the window is closed, this calls the new clearModel function
-            // on the custom layer and resets the map's camera pitch for a
-            // better user experience.
             if (threeJS_Layer) {
                 threeJS_Layer.clearModel();
             }
@@ -1296,7 +1286,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     speed: 0.5
                 });
             }
-            // =================================================================
         });
 
         hideBtn.addEventListener('click', () => {
