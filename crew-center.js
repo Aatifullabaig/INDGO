@@ -144,62 +144,76 @@ document.addEventListener('DOMContentLoaded', async () => {
   },
 
   displayModel: function (modelPath, lngLat, rotation = 0) {
-    if (this.model) {
-      this.scene.remove(this.model);
-      this.model = null;
-    }
+  if (this.model) {
+    this.scene.remove(this.model);
+  }
 
-    const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
-    this.modelPosition = {
-      x: modelAsMercator.x,
-      y: modelAsMercator.y,
-      z: modelAsMercator.z
-    };
-    this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 1.5;
+  const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
+  this.modelPosition = {
+    x: modelAsMercator.x,
+    y: modelAsMercator.y,
+    z: modelAsMercator.z
+  };
+  this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 1.5;
 
-    this.loader.load(
-      modelPath,
-      (gltf) => {
-        this.model = gltf.scene;
+  this.loader.load(
+    modelPath,
+    (gltf) => {
+      this.model = gltf.scene;
 
-        // Ensure opaque, correct depth behavior for ALL sub-meshes/materials
-        this.model.traverse((child) => {
-          if (child.isMesh) {
-            const materials = Array.isArray(child.material) ? child.material : [child.material];
-            materials.forEach((material) => {
-              material.transparent = false;
-              material.opacity = 1.0;
-              material.depthWrite = true;       // key for avoiding see-through
-              material.depthTest = true;
-              material.side = THREE.DoubleSide; // in case normals are mixed
-              material.toneMapped = true;
-              material.needsUpdate = true;
-              material.emissiveIntensity = 0.2;
-            });
-          }
-        });
+      this.model.traverse((child) => {
+        if (child.isMesh) {
+          const mats = Array.isArray(child.material)
+            ? child.material
+            : [child.material];
+          mats.forEach((mat) => {
+            // ✅ Correct color space
+            if (mat.map) {
+              mat.map.encoding = THREE.sRGBEncoding;
+              mat.map.needsUpdate = true;
+            }
 
-        // Extra neutral lighting for texture legibility
-        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-        hemiLight.position.set(0, 200, 0);
-        this.scene.add(hemiLight);
+            // ✅ Handle alpha correctly
+            mat.transparent = mat.alphaTest > 0 || !!mat.alphaMap;
+            mat.opacity = 1.0;
+            mat.depthWrite = true;
+            mat.depthTest = true;
+            mat.side = THREE.DoubleSide;
+            mat.blending = THREE.NormalBlending;
 
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(50, 200, 100);
-        this.scene.add(dirLight);
+            // ✅ Ensure proper tone mapping
+            mat.toneMapped = true;
+            mat.needsUpdate = true;
+          });
+        }
+      });
 
-        // Apply initial heading (degrees -> radians)
-        this.model.rotation.y = rotation * (Math.PI / 180);
+      // ✅ Lighting that reveals texture
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.9);
+      hemiLight.position.set(0, 200, 0);
+      this.scene.add(hemiLight);
 
-        this.scene.add(this.model);
-        this.map.triggerRepaint();
-      },
-      undefined,
-      (error) => {
-        console.error('An error happened while loading the 3D model:', error);
+      const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      keyLight.position.set(100, 200, 300);
+      this.scene.add(keyLight);
+
+      // ✅ Renderer color space & tone mapping
+      if (this.renderer.outputEncoding !== undefined) {
+        this.renderer.outputEncoding = THREE.sRGBEncoding;
+      } else if (this.renderer.outputColorSpace !== undefined) {
+        this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       }
-    );
-  },
+      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      this.renderer.toneMappingExposure = 1.0;
+
+      this.model.rotation.y = rotation * (Math.PI / 180);
+      this.scene.add(this.model);
+      this.map.triggerRepaint();
+    },
+    undefined,
+    (error) => console.error('Error loading model:', error)
+  );
+},
 
   // Cleanup helper to remove model and refresh view
   clearModel: function () {
