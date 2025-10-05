@@ -1220,12 +1220,13 @@ input, textarea, select {
 
 /* This makes the main view container a positioning context for its children */
 #view-rosters.active {
-    position: relative;
-    /* Full viewport height minus the main content's vertical padding (2rem top + 2rem bottom) */
-    height: calc(100vh - 4rem); 
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     overflow: hidden;
-    padding: 0 !important; /* Override parent padding */
-    margin: -2rem -3rem; /* Counteract parent padding to be truly full-screen */
+    padding: 0 !important;
 }
 
 #sector-ops-map-fullscreen {
