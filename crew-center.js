@@ -158,13 +158,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Traverse the model and force all materials to render on both sides.
         this.model.traverse((child) => {
             if (child.isMesh && child.material) {
-                // Ensure the material is an array or make it one
+                // Ensure we can handle single or multiple materials
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 materials.forEach(material => {
+                    // Force material to be opaque to fix transparency sorting issues.
+                    material.transparent = false;
+                    material.depthWrite = true;
+
+                    // Keep DoubleSide rendering to prevent holes in the model.
                     material.side = THREE.DoubleSide;
+                    
+                    // Tell Three.js that the material has been updated.
+                    material.needsUpdate = true;
                 });
             }
         });
+
                     this.model.rotation.y = rotation * (Math.PI / 180);
                     this.scene.add(this.model);
                     this.map.triggerRepaint();
