@@ -117,11 +117,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Heading is stored on model.rotation.y (radians)
         const headingRadians = this.model ? this.model.rotation.y : 0;
     
-        // --- FIX for mirrored/flipped textures ---
-        // The original `rotationY_offset` of PI (180 degrees) was flipping the
-        // model and mirroring its textures. This new matrix composition correctly
-        // orients the model to be level with the map and then applies its heading.
-        const rotationX_pitch = new THREE.Matrix4().makeRotationX(Math.PI / 2); // makes the model 'level'
+        // --- CORRECTED FIX for mirrored/flipped textures ---
+        // The original positive rotation was incorrect for the model, causing it to render inside-out.
+        // Changing to a negative rotation (-90 degrees) corrects the model's pitch and orientation.
+        const rotationX_pitch = new THREE.Matrix4().makeRotationX(-Math.PI / 2); // makes the model 'level'
         const rotationZ_heading = new THREE.Matrix4().makeRotationZ(headingRadians); // applies the live heading
     
         // Compose final transform
