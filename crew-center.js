@@ -138,7 +138,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.loader.load(
                 modelPath,
                 (gltf) => {
-                    this.model = gltf.scene;
+        this.model = gltf.scene;
+
+        // --- ADD THIS CODE ---
+        // Traverse the model and force all materials to render on both sides.
+        this.model.traverse((child) => {
+            if (child.isMesh && child.material) {
+                // Ensure the material is an array or make it one
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach(material => {
+                    material.side = THREE.DoubleSide;
+                });
+            }
+        });
                     this.model.rotation.y = rotation * (Math.PI / 180);
                     this.scene.add(this.model);
                     this.map.triggerRepaint();
