@@ -133,7 +133,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
             this.modelPosition = { x: modelAsMercator.x, y: modelAsMercator.y, z: modelAsMercator.z };
-            this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 20;
+            this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 2;
 
             this.loader.load(
                 modelPath,
