@@ -1,4 +1,4 @@
-// Crew Center – Merged Script with Sector Ops Command Revamp
+// Crew Center – Merged Script with Sector Ops Command Revamp & 3D Models
 document.addEventListener('DOMContentLoaded', async () => {
     // --- Global Configuration ---
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
@@ -100,15 +100,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     let aircraftInfoWindowRecallBtn = null;
     let currentFlightInWindow = null; // Stores the flightId of the last selected aircraft
 
-    // --- [3D-MODEL-UPDATE] --- State variables for Babylon.js 3D model integration
-    let babylonLayer = null;
-    let active3DModel = {
-        flightId: null,
-        mesh: null,
-        targetPosition: new BABYLON.Vector3(0, 0, 0),
-        targetQuaternion: new BABYLON.Quaternion()
-    };
-    let plane3DAsset = null; // Will hold the loaded 3D model asset for cloning
+    // --- NEW: 3D Model State ---
+    let threeScene, threeCamera, threeRenderer;
+    let gltfModel = null;
+    let selectedFlightIdFor3D = null; // Holds the flightId of the aircraft to render in 3D
+    const MODEL_URI = '/models/a320.glb'; // Path to your 3D model
+    const MODEL_SCALE = 25; // This value may need tweaking depending on your model's original size
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -1167,7 +1164,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         airportInfoWindow.dataset.eventsAttached = 'true';
     }
     
-    // --- [3D-MODEL-UPDATE] --- Updated function to also clear the 3D model
+    // MODIFIED: Function to set up event listeners for the Aircraft Info Window
     function setupAircraftWindowEvents() {
         if (!aircraftInfoWindow || aircraftInfoWindow.dataset.eventsAttached === 'true') return;
         const closeBtn = document.getElementById('aircraft-window-close-btn');
@@ -1176,9 +1173,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         closeBtn.addEventListener('click', () => {
             aircraftInfoWindow.classList.remove('visible');
             aircraftInfoWindowRecallBtn.classList.remove('visible');
-            clearLiveFlightPath(); 
-            clearActive3DModel(); // --- [3D-MODEL-UPDATE] --- Clear 3D model on close
+            clearLiveFlightPath(); // NEW: Clear the flight trail when closing the window
             currentFlightInWindow = null;
+            
+            // NEW: Hide the 3D model and restore the 2D icon when the window is closed
+            update3DModelVisibility(null);
         });
 
         hideBtn.addEventListener('click', () => {
@@ -1311,82 +1310,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // --- [3D-MODEL-UPDATE] --- Babylon.js Custom Layer for Mapbox GL JS
-    const BabylonLayer = {
-        id: 'babylon-3d-layer',
-        type: 'custom',
-        renderingMode: '3d',
-        
-        onAdd: function (map, gl) {
-            if (!window.BABYLON) {
-                console.error("Babylon.js is not loaded.");
-                return;
-            }
-            this.engine = new BABYLON.Engine(gl, true, {
-                useHighPrecisionMatrix: true
-            }, true);
-            this.scene = new BABYLON.Scene(this.engine);
-            this.scene.useRightHandedSystem = true; // Crucial for matching Mapbox's coordinate system
-
-            // A camera is necessary for Babylon, but its view/projection will be controlled by Mapbox
-            this.camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, 0), this.scene);
-            
-            // Add a light to the scene
-            new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), this.scene);
-            
-            // Load the 3D model asset. We will clone this for performance.
-            BABYLON.SceneLoader.ImportMeshAsync("", "/models/", "a320.glb", this.scene).then((result) => {
-                const rootMesh = result.meshes[0];
-                rootMesh.scaling.scaleInPlace(0.3); // Adjust scale as needed
-                rootMesh.setEnabled(false); // Hide the template mesh
-                plane3DAsset = rootMesh;
-                console.log("3D aircraft asset loaded successfully.");
-            }).catch(error => {
-                console.error("Failed to load 3D model:", error);
-                showNotification("Could not load 3D aircraft model.", "error");
-            });
-
-            this.map = map;
-        },
-
-        render: function (gl, matrix) {
-            if (!this.engine || !this.scene) return;
-            
-            const bMatrix = BABYLON.Matrix.FromValues(...matrix);
-            this.scene.getTransformMatrix = () => bMatrix;
-
-            // Update active 3D model's position smoothly
-            if (active3DModel.mesh && active3DModel.mesh.isEnabled()) {
-                // Smooth position (interpolation)
-                BABYLON.Vector3.LerpToRef(
-                    active3DModel.mesh.position,
-                    active3DModel.targetPosition,
-                    0.1, // Adjust this value for faster/slower interpolation
-                    active3DModel.mesh.position
-                );
-                
-                // Smooth rotation (spherical interpolation)
-                BABYLON.Quaternion.SlerpToRef(
-                    active3DModel.mesh.rotationQuaternion,
-                    active3DModel.targetQuaternion,
-                    0.1,
-                    active3DModel.mesh.rotationQuaternion
-                );
-            }
-
-            this.scene.render(false);
-            this.map.triggerRepaint();
-        },
-
-        onRemove: function() {
-            if (this.scene) this.scene.dispose();
-            if (this.engine) this.engine.dispose();
-        }
-    };
-
-
     /**
-     * Initializes or resets the main Sector Ops Mapbox map.
+     * MODIFIED: Initializes or resets the main Sector Ops Mapbox map.
      */
     async function initializeSectorOpsMap(centerICAO) {
         if (!MAPBOX_ACCESS_TOKEN) {
@@ -1402,8 +1327,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             style: 'mapbox://styles/mapbox/dark-v11',
             center: centerCoords,
             zoom: 4.5,
-            pitch: 45, // --- [3D-MODEL-UPDATE] --- Add initial pitch to better see 3D models
-            interactive: true
+            interactive: true,
+            antialias: true // NEW: Good practice for custom WebGL layers
         });
 
         return new Promise(resolve => {
@@ -1419,17 +1344,133 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 sectorOpsMap.addImage('plane-icon', image);
                             }
                         }
+                        // NEW: Initialize the Three.js layer once the map is ready
+                        initializeThreeJSLayer();
                         
-                        // --- [3D-MODEL-UPDATE] --- Add the custom Babylon.js layer to the map
-                        babylonLayer = BabylonLayer;
-                        sectorOpsMap.addLayer(babylonLayer, 'waterway-label'); // Add it before a label layer
-                        
-                        resolve(); // Resolve the promise once the image and 3D layer are setup
+                        resolve(); // Resolve the promise once the image is loaded or fails
                     }
                 );
             });
         });
     }
+    
+    // --- [START] NEW 3D MODEL FUNCTIONS ---
+
+    /**
+     * NEW: Sets up the Three.js scene and the custom layer for the 3D model.
+     */
+    function initializeThreeJSLayer() {
+        const customThreeJSLayer = {
+            id: 'three-d-model-layer',
+            type: 'custom',
+            renderingMode: '3d',
+
+            onAdd: function (map, gl) {
+                this.camera = new THREE.Camera();
+                this.scene = new THREE.Scene();
+                threeScene = this.scene; // Expose for global access
+                threeCamera = this.camera;
+
+                // Add lighting
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+                this.scene.add(ambientLight);
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.75);
+                directionalLight.position.set(0, -70, 100).normalize();
+                this.scene.add(directionalLight);
+
+                // Use the map's GL context
+                this.renderer = new THREE.WebGLRenderer({
+                    canvas: map.getCanvas(),
+                    context: gl,
+                    antialias: true,
+                });
+                this.renderer.autoClear = false;
+                threeRenderer = this.renderer;
+
+                // Load the GLTF model
+                const loader = new GLTFLoader();
+                loader.load(MODEL_URI, (gltf) => {
+                    gltfModel = gltf.scene;
+                    // Set initial properties
+                    gltfModel.scale.set(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE);
+                    gltfModel.visible = false; // Initially hidden
+                    this.scene.add(gltfModel);
+                    console.log('3D aircraft model loaded successfully.');
+                }, undefined, (error) => {
+                    console.error('An error happened while loading the 3D model:', error);
+                    showNotification('Could not load 3D aircraft model.', 'error');
+                });
+            },
+
+            render: function (gl, matrix) {
+                const rotationX = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+                const rotationY = new THREE.Matrix4().makeRotationY(0); // Adjust if model is not facing north
+                const rotationZ = new THREE.Matrix4().makeRotationZ(0);
+
+                const m = new THREE.Matrix4().fromArray(matrix);
+                const l = new THREE.Matrix4()
+                    .makeTranslation(0, 0, 0) // placeholder, position is set on the model directly
+                    .scale(new THREE.Vector3(1, 1, 1))
+                    .multiply(rotationX)
+                    .multiply(rotationY)
+                    .multiply(rotationZ);
+
+                this.camera.projectionMatrix = m.multiply(l);
+                this.renderer.resetState();
+                this.renderer.render(this.scene, this.camera);
+                sectorOpsMap.triggerRepaint();
+            }
+        };
+
+        if (!sectorOpsMap.getLayer(customThreeJSLayer.id)) {
+            sectorOpsMap.addLayer(customThreeJSLayer);
+        }
+    }
+
+    /**
+     * NEW: Central function to control the 3D model's visibility, position, and rotation.
+     */
+    function update3DModelVisibility(flightProps) {
+        if (!gltfModel) return; // Don't do anything if the model hasn't loaded
+
+        const layerId = 'sector-ops-live-flights-layer';
+
+        if (flightProps && flightProps.flightId) {
+            selectedFlightIdFor3D = flightProps.flightId;
+            const { position, heading } = flightProps;
+            const coords = [position.lon, position.lat];
+
+            // Convert LngLat to Mercator coordinates for Three.js positioning
+            const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(coords, position.alt_ft);
+
+            gltfModel.position.set(modelAsMercator.x, modelAsMercator.y, modelAsMercator.z);
+            
+            // Rotate the model to match the aircraft's heading
+            // Note: rotation order is Y, X, Z in Three.js. We rotate around Z-axis for heading.
+            gltfModel.rotation.set(Math.PI / 2, 0, (90 - heading) * (Math.PI / 180));
+
+            gltfModel.visible = true;
+
+        } else {
+            selectedFlightIdFor3D = null;
+            gltfModel.visible = false;
+        }
+
+        // Use a Mapbox expression to hide the 2D icon of the selected flight
+        if (sectorOpsMap.getLayer(layerId)) {
+            sectorOpsMap.setLayoutProperty(layerId, 'icon-opacity', [
+                'case',
+                ['==', ['get', 'flightId'], selectedFlightIdFor3D || ''],
+                0, // Opacity 0 if flightId matches
+                1  // Opacity 1 otherwise
+            ]);
+        }
+        
+        sectorOpsMap.triggerRepaint();
+    }
+
+    // --- [END] NEW 3D MODEL FUNCTIONS ---
+
 
     /**
      * (REFACTORED) Clears only the route line layers from the map.
@@ -1452,21 +1493,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 sectorOpsMap.removeSource(sectorOpsLiveFlightPathLayerId);
             }
             sectorOpsLiveFlightPathLayerId = null;
-        }
-    }
-
-    // --- [3D-MODEL-UPDATE] --- Helper to remove the active 3D model
-    function clearActive3DModel() {
-        if (active3DModel.mesh) {
-            active3DModel.mesh.dispose();
-        }
-        active3DModel.mesh = null;
-        const oldFlightId = active3DModel.flightId;
-        active3DModel.flightId = null;
-
-        // Make the 2D icon visible again
-        if (oldFlightId && sectorOpsMap && sectorOpsMap.getLayer('sector-ops-live-flights-layer')) {
-            sectorOpsMap.setFilter('sector-ops-live-flights-layer', null); // Reset filter to show all
         }
     }
 
@@ -1521,27 +1547,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
-    // --- [3D-MODEL-UPDATE] --- Updated to handle 3D model creation
+    // MODIFIED: Handler for clicking an aircraft on the Sector Ops map.
     async function handleAircraftClick(flightProps, sessionId) {
         if (!flightProps || !flightProps.flightId) return;
 
         clearLiveFlightPath(); // Clear any previous trail first
-        clearActive3DModel(); // Clear any existing 3D model
-
-        // Can't show a 3D model if the asset isn't loaded yet
-        if (plane3DAsset) {
-            const newClone = plane3DAsset.clone(`plane-${flightProps.flightId}`, null, true);
-            newClone.setEnabled(true);
-            active3DModel.mesh = newClone;
-            active3DModel.flightId = flightProps.flightId;
-            active3DModel.mesh.rotationQuaternion = new BABYLON.Quaternion(); // Initialize quaternion
-
-            // Hide the 2D icon for this flight
-            sectorOpsMap.setFilter('sector-ops-live-flights-layer', ['!=', 'flightId', flightProps.flightId]);
-        } else {
-            showNotification("3D model asset is not ready yet. Please wait.", "info");
-        }
-
+        
+        // NEW: Update the 3D model to this aircraft's position and heading
+        update3DModelVisibility(flightProps);
 
         currentFlightInWindow = flightProps.flightId;
         aircraftInfoWindow.classList.add('visible');
@@ -2131,32 +2144,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.warn('Sector Ops Map: Could not fetch live flights.');
                 return;
             }
-            
-            // --- [3D-MODEL-UPDATE] --- Update the active 3D model's position if it exists
-            if (active3DModel.flightId && active3DModel.mesh) {
-                const updatedFlight = flightsData.flights.find(f => f.flightId === active3DModel.flightId);
-                if (updatedFlight && updatedFlight.position) {
-                    const { lat, lon, alt_ft, track_deg } = updatedFlight.position;
-                    const mercator = mapboxgl.MercatorCoordinate.fromLngLat({ lon, lat }, alt_ft);
-                    
-                    // The model is scaled, so we need a large-ish value to see it. Adjust as needed.
-                    const modelAltitudeScale = 3.0; 
-
-                    active3DModel.targetPosition.set(mercator.x, mercator.y, mercator.z * modelAltitudeScale);
-
-                    // Set rotation. Babylon uses a right-handed system.
-                    // A heading of 0 (North) in Mapbox should correspond to rotation around the Z-axis in Babylon.
-                    // We need to convert heading to radians and account for the initial model orientation.
-                    // Assuming the model points along its local Z-axis when rotation is (0,0,0).
-                    const headingRad = (track_deg || 0) * (Math.PI / 180);
-                    BABYLON.Quaternion.FromEulerAnglesToRef(0, -headingRad, 0, active3DModel.targetQuaternion);
-
-                } else {
-                    // Flight is no longer active, remove the model
-                    clearActive3DModel();
-                }
-            }
-
 
             const flightFeatures = flightsData.flights.map(flight => {
                 if (!flight.position || flight.position.lat == null || flight.position.lon == null) {
