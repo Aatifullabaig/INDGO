@@ -96,8 +96,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.model = null;
         },
 
-        render: function (gl, matrix) {
-    if (!this.model) return;
+    render: function (gl, matrix) {
+    if (!this.model || !this.modelPosition || typeof this.modelScale === 'undefined') return;
 
     const m = new THREE.Matrix4().fromArray(matrix);
 
@@ -114,16 +114,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         .multiply(rotationY_offset)
         .multiply(rotationZ_heading);
 
-    this.camera.projectionMatrix.elements = matrix;
-    this.camera.projectionMatrix = m.multiply(l);
+        this.camera.projectionMatrix.elements = matrix;
+        this.camera.projectionMatrix = m.multiply(l);
 
     // === FIXED: WebGL state and depth clear ===
-    this.renderer.state.reset();
-    this.renderer.clearDepth(); // clear depth buffer
-    this.renderer.render(this.scene, this.camera);
+        this.renderer.state.reset();
+        this.renderer.clearDepth(); // clear depth buffer
+        this.renderer.render(this.scene, this.camera);
 
-    this.map.triggerRepaint();
-}
+        this.map.triggerRepaint();
+    },
 
 
         displayModel: function(modelPath, lngLat, rotation = 0) {
