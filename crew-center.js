@@ -124,50 +124,69 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
     displayModel: function(modelPath, lngLat, rotation = 0) {
+    console.log("--- STARTING DIAGNOSTIC RUN ---");
     if (this.model) {
         this.scene.remove(this.model);
+        console.log("Previous model removed from scene.");
     }
 
     const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
     this.modelPosition = { x: modelAsMercator.x, y: modelAsMercator.y, z: modelAsMercator.z };
     this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 1.5;
+    console.log("Calculated Position:", this.modelPosition);
+    console.log("Calculated Scale:", this.modelScale);
+
+    if (!this.loader) {
+        console.error("!!! GLTF Loader not initialized !!!");
+        return;
+    }
 
     this.loader.load(
         modelPath,
         (gltf) => {
+            console.log("SUCCESS: GLTF model loaded successfully.", gltf);
             this.model = gltf.scene;
 
+            const box = new THREE.Box3().setFromObject(this.model);
+            const size = box.getSize(new THREE.Vector3());
+            console.log("Model Bounding Box Size:", { width: size.x, height: size.y, depth: size.z });
+
             this.model.traverse((child) => {
-                // Fix for material transparency and "inside-out" appearance
+                console.log("Traversing child:", child.name, "| Type:", child.type);
+                
+                const originalQuaternion = child.quaternion.clone();
+                child.quaternion.normalize();
+                console.log(
+                    `- Quaternion for '${child.name}':`, 
+                    { isNormalized: Math.abs(child.quaternion.lengthSq() - 1) < 0.0001 }
+                );
+
                 if (child.isMesh) {
+                    console.log(`- Child '${child.name}' is a Mesh.`);
                     const materials = Array.isArray(child.material) ? child.material : [child.material];
-                    materials.forEach(material => {
-                        material.depthWrite = true; // Prevents transparency
+                    materials.forEach((material, index) => {
+                        console.log(`  - Material #${index}:`, material.name);
+                        material.depthWrite = true;
                         material.transparent = false;
-                        material.side = THREE.DoubleSide; // Prevents "inside-out" look
+                        material.side = THREE.DoubleSide;
                         material.needsUpdate = true;
                     });
                 }
-                
-                // Fix for "ROTATION_NON_UNIT" error from the model file
-                child.quaternion.normalize();
             });
-
-            // Lighting and rendering settings
-            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-            this.scene.add(hemiLight);
-            this.renderer.outputEncoding = THREE.sRGBEncoding;
-            this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-
-            // Set the model's heading
-            this.model.rotation.y = rotation * (Math.PI / 180);
             
+            this.model.rotation.y = rotation * (Math.PI / 180);
+            console.log("Final model rotation (Euler Y):", this.model.rotation.y);
+
             this.scene.add(this.model);
+            console.log("Model added to the scene.");
             this.map.triggerRepaint();
+            console.log("--- DIAGNOSTIC RUN COMPLETE ---");
         },
-        undefined,
+        (xhr) => {
+            console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+        },
         (error) => {
-            console.error('An error happened while loading the 3D model:', error);
+            console.error("!!! CRITICAL: An error happened while loading the 3D model !!!", error);
         }
     );
 },
