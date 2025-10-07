@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
     this.modelPosition = { x: modelAsMercator.x, y: modelAsMercator.y, z: modelAsMercator.z };
-    this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 40;
+    this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 200;
     console.log("Calculated Position:", this.modelPosition);
     console.log("Calculated Scale:", this.modelScale);
 
