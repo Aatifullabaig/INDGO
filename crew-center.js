@@ -136,6 +136,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             this.camera.projectionMatrix.elements = matrix;
             this.camera.projectionMatrix = m.multiply(l);
+
+            // --- FIX: Reset WebGL state to prevent conflicts with Mapbox ---
+            this.renderer.state.reset();
+            
             this.renderer.render(this.scene, this.camera);
             this.map.triggerRepaint();
         },
@@ -1408,9 +1412,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
         if (sectorOpsMap) sectorOpsMap.remove();
-
+    
         const centerCoords = airportsData[centerICAO] ? [airportsData[centerICAO].lon, airportsData[centerICAO].lat] : [77.2, 28.6];
-
+    
         sectorOpsMap = new mapboxgl.Map({
             container: 'sector-ops-map-fullscreen',
             style: 'mapbox://styles/mapbox/dark-v11',
@@ -1418,22 +1422,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             zoom: 4.5,
             interactive: true
         });
-
+    
+        // --- FIX: Return a new Promise that wraps the entire asynchronous loading process ---
         return new Promise(resolve => {
             sectorOpsMap.on('load', () => {
                 sectorOpsMap.addLayer(threeJS_Layer);
                 
+                // Load the image inside the 'load' event listener
                 sectorOpsMap.loadImage(
                     '/images/whiteplane.png',
                     (error, image) => {
                         if (error) {
                             console.warn('Could not load plane icon for map.');
+                            // Resolve anyway so the app doesn't hang, but the icon will be missing
+                            resolve(); 
                         } else {
                             if (!sectorOpsMap.hasImage('plane-icon')) {
                                 sectorOpsMap.addImage('plane-icon', image);
                             }
+                            // Only resolve the promise AFTER the image has been added
+                            resolve(); 
                         }
-                        resolve();
                     }
                 );
             });
