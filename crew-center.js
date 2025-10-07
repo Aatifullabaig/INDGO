@@ -97,52 +97,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         },
 
         render: function (gl, matrix) {
-            // =================================================================
-            // --- FIX: Conditional Rendering ---
-            // This is the primary fix. The render function now exits immediately
-            // if there is no 3D model to display. This prevents the Three.js
-            // renderer from interfering with Mapbox's own rendering loop,
-            // which allows the 2D plane icons to show up correctly.
-            if (!this.model) {
-                return;
-            }
-            // =================================================================
+    if (!this.model) return;
 
-            const m = new THREE.Matrix4().fromArray(matrix);
+    const m = new THREE.Matrix4().fromArray(matrix);
 
-            // The heading is passed in degrees and converted to radians when the model is loaded.
-            // We retrieve it here for the render loop.
-            const headingRadians = this.model ? this.model.rotation.y : 0;
+    const headingRadians = this.model ? this.model.rotation.y : 0;
 
-            // Define the necessary rotation matrices for orientation.
-            const rotationX_pitch = new THREE.Matrix4().makeRotationX(Math.PI / 2); // Pitches the model to be level.
-            const rotationY_offset = new THREE.Matrix4().makeRotationY(Math.PI); // Corrects the model's default forward direction.
-            const rotationZ_heading = new THREE.Matrix4().makeRotationZ(headingRadians); // Applies the live heading.
+    // === FIXED: Rotation adjustment ===
+    const rotationY_offset = new THREE.Matrix4().makeRotationY(Math.PI); // flips model forward
+    const rotationZ_heading = new THREE.Matrix4().makeRotationZ(headingRadians); // applies heading
 
-            // Build the final transformation matrix for the model.
-            const l = new THREE.Matrix4()
-                // 1. Translate the model to its correct geographic coordinates.
-                .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
-                
-                // 2. Scale the model to an appropriate size.
-                // FIX: Using a positive Y-scale to prevent the model from being flipped upside down.
-                .scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale))
-                
-                // 3. Apply rotations in the correct order to orient the model.
-                // The order of multiplication is crucial: pitch, then yaw offset, then heading.
-                .multiply(rotationX_pitch)
-                .multiply(rotationY_offset)
-                .multiply(rotationZ_heading);
+    // === FIXED: Removed rotationX_pitch to prevent mirroring issues ===
+    const l = new THREE.Matrix4()
+        .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
+        .scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale))
+        .multiply(rotationY_offset)
+        .multiply(rotationZ_heading);
 
-            this.camera.projectionMatrix.elements = matrix;
-            this.camera.projectionMatrix = m.multiply(l);
+    this.camera.projectionMatrix.elements = matrix;
+    this.camera.projectionMatrix = m.multiply(l);
 
-            // --- FIX: Reset WebGL state to prevent conflicts with Mapbox ---
-            this.renderer.state.reset();
-            
-            this.renderer.render(this.scene, this.camera);
-            this.map.triggerRepaint();
-        },
+    // === FIXED: WebGL state and depth clear ===
+    this.renderer.state.reset();
+    this.renderer.clearDepth(); // clear depth buffer
+    this.renderer.render(this.scene, this.camera);
+
+    this.map.triggerRepaint();
+}
+
 
         displayModel: function(modelPath, lngLat, rotation = 0) {
     if (this.model) {
@@ -168,7 +150,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                         // --- Previous fixes (keep these) ---
                         material.transparent = false;
-                        material.opacity = 1.0;
+                        material.opacity = 100.0;
                         material.side = THREE.DoubleSide;
                         material.needsUpdate = true;
                         material.toneMapped = true;
