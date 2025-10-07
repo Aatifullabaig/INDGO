@@ -69,11 +69,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         { value: 'MD90', name: 'McDonnell Douglas MD-90' },
     ];
 
-    const threeJS_Layer = {
-        id: '3d-model-layer',
-        type: 'custom',
-
-        onAdd: function (map, gl) {
+    // =========================================================================
+    // --- REFACTORED: Standalone 3D Model Manager ---
+    // This object now handles all Three.js logic, separating it from the Mapbox layer.
+    const ThreeJSManager = {
+        init: function (map, gl) {
+            this.map = map;
             this.camera = new THREE.Camera();
             this.scene = new THREE.Scene();
 
@@ -82,8 +83,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
             directionalLight.position.set(0, -70, 100).normalize();
             this.scene.add(directionalLight);
-
-            this.map = map;
 
             this.renderer = new THREE.WebGLRenderer({
                 canvas: map.getCanvas(),
@@ -96,108 +95,70 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.model = null;
         },
 
-    render: function (gl, matrix) {
-    if (!this.model || !this.modelPosition || typeof this.modelScale === 'undefined') return;
+        render: function (matrix) {
+            if (!this.model || !this.modelPosition || typeof this.modelScale === 'undefined') return;
 
-    const m = new THREE.Matrix4().fromArray(matrix);
-    const headingRadians = this.model ? this.model.rotation.y : 0;
+            const m = new THREE.Matrix4().fromArray(matrix);
+            const headingRadians = this.model.rotation.y;
 
-    const rotationX_orientation = new THREE.Matrix4().makeRotationX(Math.PI / 2);
-    const rotationY_heading = new THREE.Matrix4().makeRotationY(headingRadians);
+            const rotationX_orientation = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+            const rotationY_heading = new THREE.Matrix4().makeRotationY(headingRadians);
 
-    const l = new THREE.Matrix4()
-        .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
-        .scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale))
-        .multiply(rotationX_orientation)
-        .multiply(rotationY_heading);
+            const l = new THREE.Matrix4()
+                .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
+                .scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale))
+                .multiply(rotationX_orientation)
+                .multiply(rotationY_heading);
 
-    this.camera.projectionMatrix = m.multiply(l);
+            this.camera.projectionMatrix = m.multiply(l);
 
-    this.renderer.state.reset();
-    
-    // --- ADD THIS LINE ---
-    this.renderer.clearDepth(); // ✅ Gives the 3D model a clean depth slate
-    // ---------------------
+            this.renderer.state.reset();
+            this.renderer.clearDepth(); // This is the critical line to prevent depth issues
 
-    this.renderer.render(this.scene, this.camera);
+            this.renderer.render(this.scene, this.camera);
+        },
 
-    this.map.triggerRepaint();
-},
+        displayModel: function(modelPath, lngLat, rotation = 0) {
+            if (this.model) {
+                this.scene.remove(this.model);
+            }
 
+            const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
+            this.modelPosition = { x: modelAsMercator.x, y: modelAsMercator.y, z: modelAsMercator.z };
+            this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 2;
 
-    displayModel: function(modelPath, lngLat, rotation = 0) {
-    console.log("--- STARTING DIAGNOSTIC RUN ---");
-    if (this.model) {
-        this.scene.remove(this.model);
-        console.log("Previous model removed from scene.");
-    }
+            if (!this.loader) {
+                console.error("GLTF Loader not initialized!");
+                return;
+            }
 
-    const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
-    this.modelPosition = { x: modelAsMercator.x, y: modelAsMercator.y, z: modelAsMercator.z };
-    this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 2;
-    console.log("Calculated Position:", this.modelPosition);
-    console.log("Calculated Scale:", this.modelScale);
-
-    if (!this.loader) {
-        console.error("!!! GLTF Loader not initialized !!!");
-        return;
-    }
-
-    this.loader.load(
-        modelPath,
-        (gltf) => {
-            console.log("SUCCESS: GLTF model loaded successfully.", gltf);
-            this.model = gltf.scene;
-
-            const box = new THREE.Box3().setFromObject(this.model);
-            const size = box.getSize(new THREE.Vector3());
-            console.log("Model Bounding Box Size:", { width: size.x, height: size.y, depth: size.z });
-
-            this.model.traverse((child) => {
-                console.log("Traversing child:", child.name, "| Type:", child.type);
-                
-                const originalQuaternion = child.quaternion.clone();
-                child.quaternion.normalize();
-                console.log(
-                    `- Quaternion for '${child.name}':`, 
-                    { isNormalized: Math.abs(child.quaternion.lengthSq() - 1) < 0.0001 }
-                );
-
-                if (child.isMesh) {
-                    console.log(`- Child '${child.name}' is a Mesh.`);
-                    const materials = Array.isArray(child.material) ? child.material : [child.material];
-                    materials.forEach((material, index) => {
-                        console.log(`  - Material #${index}:`, material.name);
-                        material.depthWrite = true;
-                        material.transparent = false;
-                        material.side = THREE.DoubleSide;
-                        material.needsUpdate = true;
+            this.loader.load(
+                modelPath,
+                (gltf) => {
+                    this.model = gltf.scene;
+                    this.model.traverse((child) => {
+                        if (child.isMesh) {
+                            const materials = Array.isArray(child.material) ? child.material : [child.material];
+                            materials.forEach((material) => {
+                                material.depthWrite = true;
+                                material.transparent = false;
+                                material.side = THREE.DoubleSide;
+                                material.needsUpdate = true;
+                            });
+                        }
                     });
+                    
+                    this.model.rotation.y = rotation * (Math.PI / 180);
+                    this.scene.add(this.model);
+                    this.map.triggerRepaint();
+                },
+                undefined,
+                (error) => {
+                    console.error("An error happened while loading the 3D model:", error);
                 }
-            });
-            
-            this.model.rotation.y = rotation * (Math.PI / 180);
-            console.log("Final model rotation (Euler Y):", this.model.rotation.y);
-
-            this.scene.add(this.model);
-            console.log("Model added to the scene.");
-            this.map.triggerRepaint();
-            console.log("--- DIAGNOSTIC RUN COMPLETE ---");
+            );
         },
-        (xhr) => {
-            console.log((xhr.loaded / xhr.total * 100) + '% loaded');
-        },
-        (error) => {
-            console.error("!!! CRITICAL: An error happened while loading the 3D model !!!", error);
-        }
-    );
-},
         
-        // =================================================================
-        // --- FIX: Add Model Cleanup Function ---
-        // This new helper function removes the 3D model from the scene.
-        // It's called when the aircraft info window is closed to ensure
-        // the model doesn't persist.
         clearModel: function() {
             if (this.model) {
                 this.scene.remove(this.model);
@@ -205,8 +166,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.map.triggerRepaint();
             }
         }
-        // =================================================================
     };
+
+    // --- REFACTORED: Thin Mapbox Custom Layer ---
+    // This layer now acts as a simple wrapper, passing commands to the ThreeJSManager.
+    const threeJS_Layer = {
+        id: '3d-model-layer',
+        type: 'custom',
+        
+        onAdd: function (map, gl) {
+            ThreeJSManager.init(map, gl); // Initialize the separate 3D manager
+        },
+
+        render: function (gl, matrix) {
+            ThreeJSManager.render(matrix); // Pass the render command to the manager
+            this.map.triggerRepaint();
+        },
+
+        // --- Proxy methods to control the manager ---
+        displayModel: function(modelPath, lngLat, rotation) {
+            ThreeJSManager.displayModel(modelPath, lngLat, rotation);
+        },
+
+        clearModel: function() {
+            ThreeJSManager.clearModel();
+        }
+    };
+    // =========================================================================
+
 
     // --- State Variables ---
     let MAPBOX_ACCESS_TOKEN = null;
@@ -1263,11 +1250,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             clearLiveFlightPath();
             currentFlightInWindow = null;
 
-            // =================================================================
-            // --- FIX: Cleanup 3D Model and View ---
-            // When the window is closed, this calls the new clearModel function
-            // on the custom layer and resets the map's camera pitch for a
-            // better user experience.
+            // When the window is closed, clear the model from the 3D layer
             if (threeJS_Layer) {
                 threeJS_Layer.clearModel();
             }
@@ -1278,7 +1261,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     speed: 0.5
                 });
             }
-            // =================================================================
         });
 
         hideBtn.addEventListener('click', () => {
@@ -1413,24 +1395,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             interactive: true
         });
     
-        // --- FIX: Return a new Promise that wraps the entire asynchronous loading process ---
         return new Promise(resolve => {
             sectorOpsMap.on('load', () => {
                 sectorOpsMap.addLayer(threeJS_Layer);
                 
-                // Load the image inside the 'load' event listener
                 sectorOpsMap.loadImage(
                     '/images/whiteplane.png',
                     (error, image) => {
                         if (error) {
                             console.warn('Could not load plane icon for map.');
-                            // Resolve anyway so the app doesn't hang, but the icon will be missing
                             resolve(); 
                         } else {
                             if (!sectorOpsMap.hasImage('plane-icon')) {
                                 sectorOpsMap.addImage('plane-icon', image);
                             }
-                            // Only resolve the promise AFTER the image has been added
                             resolve(); 
                         }
                     }
