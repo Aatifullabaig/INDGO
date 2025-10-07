@@ -85,12 +85,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const canvas = document.getElementById(canvasId);
     
             this.scene = new THREE.Scene();
-            this.camera = new THREE.PerspectiveCamera(
-                map.transform.fov * (180 / Math.PI), // Match Mapbox FOV
-                map.transform.width / map.transform.height,
-                0.1,
-                100000000 // A large far plane for a global scale
-            );
+            // This camera setup is now simpler, as its properties will be
+            // fully managed by the syncCamera function on each frame.
+            this.camera = new THREE.Camera();
     
             this.renderer = new THREE.WebGLRenderer({
                 canvas: canvas,
@@ -110,29 +107,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             this.loader = new THREE.GLTFLoader();
         },
     
-        // Sync the Three.js camera to the Mapbox camera
+        // --- [FIXED] Sync the Three.js camera to the Mapbox camera ---
         syncCamera: function() {
             if (!this.map || !this.renderer) return;
     
-            const mapTransform = this.map.transform;
-            const { lng, lat } = this.map.getCenter();
-            
-            // Project center of map to a world coordinate
-            const center = mapboxgl.MercatorCoordinate.fromLngLat([lng, lat], 0);
+            // Get the view-projection matrix from Mapbox
+            const mapMatrix = this.map.transform.projMatrix;
     
-            // Calculate camera position and orientation
-            const cameraPosition = new THREE.Vector3(
-                center.x,
-                center.y,
-                center.z
-            );
-            cameraPosition.z += mapTransform.cameraToCenterDistance;
+            // Set the Three.js camera's projection matrix to match Mapbox's
+            this.camera.projectionMatrix.fromArray(mapMatrix);
     
-            this.camera.position.copy(cameraPosition);
-            this.camera.quaternion.setFromEuler(new THREE.Euler(mapTransform.pitch, -mapTransform.angle, 0, 'YXZ'));
+            // The view matrix is the inverse of the camera's world matrix.
+            // We need to set it to the identity matrix so that the view is
+            // controlled solely by the projection matrix from Mapbox.
+            this.camera.matrixWorldInverse.identity();
     
-            // Update model position and render
+            // Update the model's transformation (position, scale, rotation)
             this.updateModelTransform();
+            
+            // Render the Three.js scene
+            this.renderer.resetState();
             this.renderer.render(this.scene, this.camera);
         },
         
@@ -141,13 +135,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!this.model || !this.modelPosition) return;
     
             const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(this.modelPosition, 0);
+            
+            // Calculate scale based on the location to keep model size consistent
             const modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 2;
             
-            this.model.position.set(modelAsMercator.x, modelAsMercator.y, modelAsMercator.z);
-            this.model.scale.set(modelScale, modelScale, modelScale);
-            
-            this.model.quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0, 'YXZ'));
-            this.model.rotateZ(this.modelHeading * (Math.PI / 180));
+            // Set the model's world matrix
+            this.model.matrix.identity()
+                .makeTranslation(modelAsMercator.x, modelAsMercator.y, modelAsMercator.z)
+                .scale(new THREE.Vector3(modelScale, modelScale, modelScale))
+                .rotateX(Math.PI / 2) // Orient model upright
+                .rotateZ(this.modelHeading * (Math.PI / 180)); // Apply heading
+                
+            // Tell Three.js not to automatically update the matrix
+            this.model.matrixAutoUpdate = false;
         },
     
         // Load and display a new model
@@ -164,7 +164,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 this.scene.add(this.model);
                 
                 // Set initial transform and trigger a render
-                this.updateModelTransform();
                 this.syncCamera(); // Render the newly added model immediately
                 
             }, undefined, (error) => {
@@ -186,8 +185,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         resize: function() {
             if (!this.map || !this.renderer) return;
             this.renderer.setSize(this.map.transform.width, this.map.transform.height);
-            this.camera.aspect = this.map.transform.width / this.map.transform.height;
-            this.camera.updateProjectionMatrix();
+            // Camera aspect ratio is now handled by the projection matrix from Mapbox,
+            // so we don't need to update it here manually.
         }
     };
 
@@ -276,7 +275,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 #three-js-canvas-overlay {
     z-index: 1;
     pointer-events: none; 
-}
+}   
             
             /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
             .info-window {
