@@ -169,7 +169,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         // --- Previous fixes (keep these) ---
                         material.transparent = false;
                         material.opacity = 1.0;
-                        material.side = THREE.BackSide;
+                        material.side = THREE.DoubleSide;
                         material.needsUpdate = true;
                         material.toneMapped = true;
                         material.emissiveIntensity = 0.2;
