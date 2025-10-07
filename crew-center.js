@@ -102,11 +102,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const m = new THREE.Matrix4().fromArray(matrix);
     const headingRadians = this.model ? this.model.rotation.y : 0;
 
-    // Correct rotation logic for aircraft orientation
-    const rotationX_orientation = new THREE.Matrix4().makeRotationX(Math.PI / 2); // Pitches model to be flat
-    const rotationY_heading = new THREE.Matrix4().makeRotationY(headingRadians); // Applies heading around the 'up' axis
+    const rotationX_orientation = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+    const rotationY_heading = new THREE.Matrix4().makeRotationY(headingRadians);
 
-    // Combine all transformations
     const l = new THREE.Matrix4()
         .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
         .scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale))
@@ -115,7 +113,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     this.camera.projectionMatrix = m.multiply(l);
 
-    // Reset WebGL state to prevent conflicts with Mapbox
     this.renderer.state.reset();
     this.renderer.render(this.scene, this.camera);
 
@@ -132,7 +129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
     this.modelPosition = { x: modelAsMercator.x, y: modelAsMercator.y, z: modelAsMercator.z };
-    this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 1.5;
+    this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 40;
     console.log("Calculated Position:", this.modelPosition);
     console.log("Calculated Scale:", this.modelScale);
 
