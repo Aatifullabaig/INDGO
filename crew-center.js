@@ -69,131 +69,127 @@ document.addEventListener('DOMContentLoaded', async () => {
         { value: 'MD90', name: 'McDonnell Douglas MD-90' },
     ];
 
-    // =========================================================================
-    // --- REFACTORED: Standalone 3D Model Manager ---
-    // This object now handles all Three.js logic, separating it from the Mapbox layer.
-    const ThreeJSManager = {
-        init: function (map, gl) {
+    // --- NEW: Independent Three.js Overlay Manager ---
+    const threeJsOverlayManager = {
+        scene: null,
+        camera: null,
+        renderer: null,
+        loader: null,
+        model: null,
+        modelPosition: null, // Geographic position [lng, lat]
+        modelHeading: 0,
+    
+        // Initialize the Three.js scene on a separate canvas
+        init: function(map, canvasId) {
             this.map = map;
-            this.camera = new THREE.Camera();
+            const canvas = document.getElementById(canvasId);
+    
             this.scene = new THREE.Scene();
-
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
-            this.scene.add(ambientLight);
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-            directionalLight.position.set(0, -70, 100).normalize();
-            this.scene.add(directionalLight);
-
+            this.camera = new THREE.PerspectiveCamera(
+                map.transform.fov * (180 / Math.PI), // Match Mapbox FOV
+                map.transform.width / map.transform.height,
+                0.1,
+                100000000 // A large far plane for a global scale
+            );
+    
             this.renderer = new THREE.WebGLRenderer({
-                canvas: map.getCanvas(),
-                context: gl,
+                canvas: canvas,
+                alpha: true, // IMPORTANT: Allows transparent background
                 antialias: true,
             });
-
-            this.renderer.autoClear = false;
+            this.renderer.setSize(map.transform.width, map.transform.height);
+            this.renderer.setPixelRatio(window.devicePixelRatio);
+    
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+            this.scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            directionalLight.position.set(0, -70, 100).normalize();
+            this.scene.add(directionalLight);
+    
             this.loader = new THREE.GLTFLoader();
-            this.model = null;
         },
-
-        render: function (matrix) {
-            if (!this.model || !this.modelPosition || typeof this.modelScale === 'undefined') return;
-
-            const m = new THREE.Matrix4().fromArray(matrix);
-            const headingRadians = this.model.rotation.y;
-
-            const rotationX_orientation = new THREE.Matrix4().makeRotationX(Math.PI / 2);
-            const rotationY_heading = new THREE.Matrix4().makeRotationY(headingRadians);
-
-            const l = new THREE.Matrix4()
-                .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
-                .scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale))
-                .multiply(rotationX_orientation)
-                .multiply(rotationY_heading);
-
-            this.camera.projectionMatrix = m.multiply(l);
-
-            this.renderer.state.reset();
-            this.renderer.clearDepth(); // This is the critical line to prevent depth issues
-
+    
+        // Sync the Three.js camera to the Mapbox camera
+        syncCamera: function() {
+            if (!this.map || !this.renderer) return;
+    
+            const mapTransform = this.map.transform;
+            const { lng, lat } = this.map.getCenter();
+            
+            // Project center of map to a world coordinate
+            const center = mapboxgl.MercatorCoordinate.fromLngLat([lng, lat], 0);
+    
+            // Calculate camera position and orientation
+            const cameraPosition = new THREE.Vector3(
+                center.x,
+                center.y,
+                center.z
+            );
+            cameraPosition.z += mapTransform.cameraToCenterDistance;
+    
+            this.camera.position.copy(cameraPosition);
+            this.camera.quaternion.setFromEuler(new THREE.Euler(mapTransform.pitch, -mapTransform.angle, 0, 'YXZ'));
+    
+            // Update model position and render
+            this.updateModelTransform();
             this.renderer.render(this.scene, this.camera);
         },
-
+        
+        // Update the model's scale and position based on its geographic coords
+        updateModelTransform: function() {
+            if (!this.model || !this.modelPosition) return;
+    
+            const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(this.modelPosition, 0);
+            const modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 2;
+            
+            this.model.position.set(modelAsMercator.x, modelAsMercator.y, modelAsMercator.z);
+            this.model.scale.set(modelScale, modelScale, modelScale);
+            
+            this.model.quaternion.setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0, 'YXZ'));
+            this.model.rotateZ(this.modelHeading * (Math.PI / 180));
+        },
+    
+        // Load and display a new model
         displayModel: function(modelPath, lngLat, rotation = 0) {
             if (this.model) {
-                this.scene.remove(this.model);
+                this.clearModel(); // Clear previous model first
             }
-
-            const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
-            this.modelPosition = { x: modelAsMercator.x, y: modelAsMercator.y, z: modelAsMercator.z };
-            this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 2;
-
-            if (!this.loader) {
-                console.error("GLTF Loader not initialized!");
-                return;
-            }
-
-            this.loader.load(
-                modelPath,
-                (gltf) => {
-                    this.model = gltf.scene;
-                    this.model.traverse((child) => {
-                        if (child.isMesh) {
-                            const materials = Array.isArray(child.material) ? child.material : [child.material];
-                            materials.forEach((material) => {
-                                material.depthWrite = true;
-                                material.transparent = false;
-                                material.side = THREE.DoubleSide;
-                                material.needsUpdate = true;
-                            });
-                        }
-                    });
-                    
-                    this.model.rotation.y = rotation * (Math.PI / 180);
-                    this.scene.add(this.model);
-                    this.map.triggerRepaint();
-                },
-                undefined,
-                (error) => {
-                    console.error("An error happened while loading the 3D model:", error);
-                }
-            );
+    
+            this.modelPosition = lngLat;
+            this.modelHeading = rotation;
+    
+            this.loader.load(modelPath, (gltf) => {
+                this.model = gltf.scene;
+                this.scene.add(this.model);
+                
+                // Set initial transform and trigger a render
+                this.updateModelTransform();
+                this.syncCamera(); // Render the newly added model immediately
+                
+            }, undefined, (error) => {
+                console.error("An error happened while loading the 3D model:", error);
+            });
         },
-        
+    
+        // Remove the model from the scene
         clearModel: function() {
             if (this.model) {
                 this.scene.remove(this.model);
                 this.model = null;
-                this.map.triggerRepaint();
+                this.modelPosition = null;
+                this.syncCamera(); // Re-render the scene to show it's gone
             }
-        }
-    };
-
-    // --- REFACTORED: Thin Mapbox Custom Layer ---
-    // This layer now acts as a simple wrapper, passing commands to the ThreeJSManager.
-    const threeJS_Layer = {
-        id: '3d-model-layer',
-        type: 'custom',
+        },
         
-        onAdd: function (map, gl) {
-            ThreeJSManager.init(map, gl); // Initialize the separate 3D manager
-        },
-
-        render: function (gl, matrix) {
-            ThreeJSManager.render(matrix); // Pass the render command to the manager
-            this.map.triggerRepaint();
-        },
-
-        // --- Proxy methods to control the manager ---
-        displayModel: function(modelPath, lngLat, rotation) {
-            ThreeJSManager.displayModel(modelPath, lngLat, rotation);
-        },
-
-        clearModel: function() {
-            ThreeJSManager.clearModel();
+        // Handle map resizing
+        resize: function() {
+            if (!this.map || !this.renderer) return;
+            this.renderer.setSize(this.map.transform.width, this.map.transform.height);
+            this.camera.aspect = this.map.transform.width / this.map.transform.height;
+            this.camera.updateProjectionMatrix();
         }
     };
-    // =========================================================================
-
 
     // --- State Variables ---
     let MAPBOX_ACCESS_TOKEN = null;
@@ -256,11 +252,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                 overflow: hidden;
                 position: relative;
             }
-            #sector-ops-map-fullscreen {
+            #map-3d-container {
+                position: relative; /* Establishes a positioning context */
                 grid-column: 1 / -1;
                 grid-row: 1 / -1;
                 width: 100%;
                 height: 100%;
+            }
+            #sector-ops-map-fullscreen {
+                width: 100%;
+                height: 100%;
+            }
+            #three-js-canvas-overlay {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                /* This is crucial: makes the canvas click-through */
+                pointer-events: none; 
             }
             
             /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
@@ -1250,10 +1260,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             clearLiveFlightPath();
             currentFlightInWindow = null;
 
-            // When the window is closed, clear the model from the 3D layer
-            if (threeJS_Layer) {
-                threeJS_Layer.clearModel();
-            }
+            // Cleanup 3D Model and View
+            threeJsOverlayManager.clearModel();
             if (sectorOpsMap) {
                 sectorOpsMap.flyTo({
                     pitch: 0,
@@ -1388,7 +1396,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const centerCoords = airportsData[centerICAO] ? [airportsData[centerICAO].lon, airportsData[centerICAO].lat] : [77.2, 28.6];
     
         sectorOpsMap = new mapboxgl.Map({
-            container: 'sector-ops-map-fullscreen',
+            container: 'sector-ops-map-fullscreen', // The container for Mapbox
             style: 'mapbox://styles/mapbox/dark-v11',
             center: centerCoords,
             zoom: 4.5,
@@ -1397,20 +1405,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     
         return new Promise(resolve => {
             sectorOpsMap.on('load', () => {
-                sectorOpsMap.addLayer(threeJS_Layer);
+                // --- NEW INTEGRATION ---
+                // Initialize the 3D overlay manager
+                threeJsOverlayManager.init(sectorOpsMap, 'three-js-canvas-overlay');
+
+                // Sync the 3D camera whenever the map moves
+                sectorOpsMap.on('move', () => threeJsOverlayManager.syncCamera());
+                sectorOpsMap.on('resize', () => threeJsOverlayManager.resize());
                 
+                // Sync once initially
+                threeJsOverlayManager.syncCamera();
+                // -----------------------
+
                 sectorOpsMap.loadImage(
                     '/images/whiteplane.png',
                     (error, image) => {
                         if (error) {
                             console.warn('Could not load plane icon for map.');
-                            resolve(); 
-                        } else {
-                            if (!sectorOpsMap.hasImage('plane-icon')) {
-                                sectorOpsMap.addImage('plane-icon', image);
-                            }
-                            resolve(); 
+                        } else if (!sectorOpsMap.hasImage('plane-icon')) {
+                            sectorOpsMap.addImage('plane-icon', image);
                         }
+                        resolve(); // Resolve promise after setup is complete
                     }
                 );
             });
@@ -1489,7 +1504,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const heading = flightProps.heading || 0;
         const modelPath = 'assets/models/a320/source/A320.glb';
 
-        threeJS_Layer.displayModel(modelPath, lngLat, heading);
+        threeJsOverlayManager.displayModel(modelPath, lngLat, heading);
     
         sectorOpsMap.flyTo({
             center: lngLat,
