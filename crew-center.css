@@ -1220,22 +1220,17 @@ input, textarea, select {
 
 /* This makes the main view container a positioning context for its children */
 #view-rosters.active {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    display: flex;      /* Use flexbox for layout */
+    position: relative; /* Establish a positioning context for children */
+    height: 100%;       /* Ensure it fills the parent's height */
     overflow: hidden;
     padding: 0 !important;
 }
 
+/* Make the map grow to fill the available space in the flex container */
 #sector-ops-map-fullscreen {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
+    flex-grow: 1; /* This is the key change */
+    position: relative;
     height: 100%;
 }
 
