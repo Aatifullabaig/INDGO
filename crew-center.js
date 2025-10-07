@@ -102,32 +102,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     const m = new THREE.Matrix4().fromArray(matrix);
     const headingRadians = this.model ? this.model.rotation.y : 0;
 
-    // --- CORRECTED ROTATION LOGIC ---
-    // 1. First, orient the model to be flat. Most aircraft models import pointing
-    //    up, so we rotate it 90 degrees forward around the X-axis.
-    const rotationX_orientation = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+    // Correct rotation logic for aircraft orientation
+    const rotationX_orientation = new THREE.Matrix4().makeRotationX(Math.PI / 2); // Pitches model to be flat
+    const rotationY_heading = new THREE.Matrix4().makeRotationY(headingRadians); // Applies heading around the 'up' axis
 
-    // 2. Next, apply the heading (yaw) correctly around the Y-axis.
-    const rotationY_heading = new THREE.Matrix4().makeRotationY(headingRadians);
-
-    // 3. Combine the transformations. Order matters: scale, then orient, then rotate, then translate.
+    // Combine all transformations
     const l = new THREE.Matrix4()
         .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
         .scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale))
-        .multiply(rotationX_orientation) // Apply orientation first
-        .multiply(rotationY_heading);   // Then apply heading
+        .multiply(rotationX_orientation)
+        .multiply(rotationY_heading);
 
-    // The rest of the function remains the same
     this.camera.projectionMatrix = m.multiply(l);
 
+    // Reset WebGL state to prevent conflicts with Mapbox
     this.renderer.state.reset();
     this.renderer.render(this.scene, this.camera);
 
     this.map.triggerRepaint();
-    },
+},
 
 
-        displayModel: function(modelPath, lngLat, rotation = 0) {
+    displayModel: function(modelPath, lngLat, rotation = 0) {
     if (this.model) {
         this.scene.remove(this.model);
     }
@@ -141,41 +137,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         (gltf) => {
             this.model = gltf.scene;
 
-            // --- FIX FOR ALL MATERIAL PROPERTIES ---
             this.model.traverse((child) => {
+                // Fix for material transparency and "inside-out" appearance
                 if (child.isMesh) {
                     const materials = Array.isArray(child.material) ? child.material : [child.material];
                     materials.forEach(material => {
-                        // --- ADD THIS LINE TO FIX TRANSPARENCY ---
-                        material.depthWrite = true;
-
-                        // --- Previous fixes (keep these) ---
+                        material.depthWrite = true; // Prevents transparency
                         material.transparent = false;
-                        material.opacity = 100.0;
-                        material.side = THREE.DoubleSide;
+                        material.side = THREE.DoubleSide; // Prevents "inside-out" look
                         material.needsUpdate = true;
-                        material.toneMapped = true;
-                        material.emissiveIntensity = 0.2;
                     });
                 }
+                
+                // Fix for "ROTATION_NON_UNIT" error from the model file
+                child.quaternion.normalize();
             });
 
-            // Add extra neutral lighting to brighten textures
+            // Lighting and rendering settings
             const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-            hemiLight.position.set(0, 200, 0);
             this.scene.add(hemiLight);
-
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            dirLight.position.set(50, 200, 100);
-            this.scene.add(dirLight);
-
-            // Make sure renderer uses correct tone mapping for GLTF
             this.renderer.outputEncoding = THREE.sRGBEncoding;
             this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            this.renderer.toneMappingExposure = 1.2;
-            // --- END OF FIX ---
 
+            // Set the model's heading
             this.model.rotation.y = rotation * (Math.PI / 180);
+            
             this.scene.add(this.model);
             this.map.triggerRepaint();
         },
