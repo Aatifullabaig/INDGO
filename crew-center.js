@@ -1432,11 +1432,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Tell Mapbox that it needs to update the map view.
                 sectorOpsMap.triggerRepaint();
             }
+        };
 
         if (!sectorOpsMap.getLayer(customThreeJSLayer.id)) {
             sectorOpsMap.addLayer(customThreeJSLayer);
         }
-    };
+    }
+    
 
     /**
      * NEW: Central function to control the 3D model's visibility, position, and rotation.
