@@ -100,29 +100,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!this.model || !this.modelPosition || typeof this.modelScale === 'undefined') return;
 
     const m = new THREE.Matrix4().fromArray(matrix);
-
     const headingRadians = this.model ? this.model.rotation.y : 0;
 
-    // === FIXED: Rotation adjustment ===
-    const rotationY_offset = new THREE.Matrix4().makeRotationY(Math.PI); // flips model forward
-    const rotationZ_heading = new THREE.Matrix4().makeRotationZ(headingRadians); // applies heading
+    // --- CORRECTED ROTATION LOGIC ---
+    // 1. First, orient the model to be flat. Most aircraft models import pointing
+    //    up, so we rotate it 90 degrees forward around the X-axis.
+    const rotationX_orientation = new THREE.Matrix4().makeRotationX(Math.PI / 2);
 
-    // === FIXED: Removed rotationX_pitch to prevent mirroring issues ===
+    // 2. Next, apply the heading (yaw) correctly around the Y-axis.
+    const rotationY_heading = new THREE.Matrix4().makeRotationY(headingRadians);
+
+    // 3. Combine the transformations. Order matters: scale, then orient, then rotate, then translate.
     const l = new THREE.Matrix4()
         .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
         .scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale))
-        .multiply(rotationY_offset)
-        .multiply(rotationZ_heading);
+        .multiply(rotationX_orientation) // Apply orientation first
+        .multiply(rotationY_heading);   // Then apply heading
 
-        this.camera.projectionMatrix.elements = matrix;
-        this.camera.projectionMatrix = m.multiply(l);
+    // The rest of the function remains the same
+    this.camera.projectionMatrix = m.multiply(l);
 
-    // === FIXED: WebGL state and depth clear ===
-        this.renderer.state.reset();
-        this.renderer.clearDepth(); // clear depth buffer
-        this.renderer.render(this.scene, this.camera);
+    this.renderer.state.reset();
+    this.renderer.render(this.scene, this.camera);
 
-        this.map.triggerRepaint();
+    this.map.triggerRepaint();
     },
 
 
