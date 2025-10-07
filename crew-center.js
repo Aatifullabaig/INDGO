@@ -114,6 +114,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     this.camera.projectionMatrix = m.multiply(l);
 
     this.renderer.state.reset();
+    
+    // --- ADD THIS LINE ---
+    this.renderer.clearDepth(); // ✅ Gives the 3D model a clean depth slate
+    // ---------------------
+
     this.renderer.render(this.scene, this.camera);
 
     this.map.triggerRepaint();
@@ -163,7 +168,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const materials = Array.isArray(child.material) ? child.material : [child.material];
                     materials.forEach((material, index) => {
                         console.log(`  - Material #${index}:`, material.name);
-                        material.depthWrite = false;
+                        material.depthWrite = true;
+                        material.transparent = false;
+                        material.side = THREE.DoubleSide;
                         material.needsUpdate = true;
                     });
                 }
