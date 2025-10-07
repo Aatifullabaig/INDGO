@@ -1,4 +1,4 @@
-// Crew Center – Merged Script with Sector Ops Command Revamp & 3D Models
+// Crew Center – Merged Script with Sector Ops Command Revamp
 document.addEventListener('DOMContentLoaded', async () => {
     // --- Global Configuration ---
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
@@ -69,6 +69,151 @@ document.addEventListener('DOMContentLoaded', async () => {
         { value: 'MD90', name: 'McDonnell Douglas MD-90' },
     ];
 
+    const threeJS_Layer = {
+        id: '3d-model-layer',
+        type: 'custom',
+
+        onAdd: function (map, gl) {
+            this.camera = new THREE.Camera();
+            this.scene = new THREE.Scene();
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+            this.scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(0, -70, 100).normalize();
+            this.scene.add(directionalLight);
+
+            this.map = map;
+
+            this.renderer = new THREE.WebGLRenderer({
+                canvas: map.getCanvas(),
+                context: gl,
+                antialias: true,
+            });
+
+            this.renderer.autoClear = false;
+            this.loader = new THREE.GLTFLoader();
+            this.model = null;
+        },
+
+        render: function (gl, matrix) {
+            // =================================================================
+            // --- FIX: Conditional Rendering ---
+            // This is the primary fix. The render function now exits immediately
+            // if there is no 3D model to display. This prevents the Three.js
+            // renderer from interfering with Mapbox's own rendering loop,
+            // which allows the 2D plane icons to show up correctly.
+            if (!this.model) {
+                return;
+            }
+            // =================================================================
+
+            const m = new THREE.Matrix4().fromArray(matrix);
+
+            // The heading is passed in degrees and converted to radians when the model is loaded.
+            // We retrieve it here for the render loop.
+            const headingRadians = this.model ? this.model.rotation.y : 0;
+
+            // Define the necessary rotation matrices for orientation.
+            const rotationX_pitch = new THREE.Matrix4().makeRotationX(Math.PI / 2); // Pitches the model to be level.
+            const rotationY_offset = new THREE.Matrix4().makeRotationY(Math.PI);    // Corrects the model's default forward direction.
+            const rotationZ_heading = new THREE.Matrix4().makeRotationZ(headingRadians); // Applies the live heading.
+
+            // Build the final transformation matrix for the model.
+            const l = new THREE.Matrix4()
+                // 1. Translate the model to its correct geographic coordinates.
+                .makeTranslation(this.modelPosition.x, this.modelPosition.y, this.modelPosition.z)
+                
+                // 2. Scale the model to an appropriate size.
+                // FIX: Using a positive Y-scale to prevent the model from being flipped upside down.
+                .scale(new THREE.Vector3(this.modelScale, this.modelScale, this.modelScale))
+                
+                // 3. Apply rotations in the correct order to orient the model.
+                // The order of multiplication is crucial: pitch, then yaw offset, then heading.
+                .multiply(rotationX_pitch)
+                .multiply(rotationY_offset)
+                .multiply(rotationZ_heading);
+
+            this.camera.projectionMatrix.elements = matrix;
+            this.camera.projectionMatrix = m.multiply(l);
+            this.renderer.render(this.scene, this.camera);
+            this.map.triggerRepaint();
+        },
+
+        displayModel: function(modelPath, lngLat, rotation = 0) {
+    if (this.model) {
+        this.scene.remove(this.model);
+    }
+
+    const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
+    this.modelPosition = { x: modelAsMercator.x, y: modelAsMercator.y, z: modelAsMercator.z };
+    this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 1.5;
+
+    this.loader.load(
+        modelPath,
+        (gltf) => {
+            this.model = gltf.scene;
+
+            // --- FIX FOR ALL MATERIAL PROPERTIES ---
+            this.model.traverse((child) => {
+                if (child.isMesh) {
+                    const materials = Array.isArray(child.material) ? child.material : [child.material];
+                    materials.forEach(material => {
+                        // --- ADD THIS LINE TO FIX TRANSPARENCY ---
+                        material.depthWrite = true;
+
+                        // --- Previous fixes (keep these) ---
+                        material.transparent = false;
+                        material.opacity = 1.0;
+                        material.side = THREE.DoubleSide;
+                        material.needsUpdate = true;
+                        material.toneMapped = true;
+                        material.emissiveIntensity = 0.2;
+                    });
+                }
+            });
+
+            // Add extra neutral lighting to brighten textures
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+            hemiLight.position.set(0, 200, 0);
+            this.scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(50, 200, 100);
+            this.scene.add(dirLight);
+
+            // Make sure renderer uses correct tone mapping for GLTF
+            this.renderer.outputEncoding = THREE.sRGBEncoding;
+            this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            this.renderer.toneMappingExposure = 1.2;
+            // --- END OF FIX ---
+
+            this.model.rotation.y = rotation * (Math.PI / 180);
+            this.scene.add(this.model);
+            this.map.triggerRepaint();
+        },
+        undefined,
+        (error) => {
+            console.error('An error happened while loading the 3D model:', error);
+        }
+    );
+},
+        
+        // =================================================================
+        // --- FIX: Add Model Cleanup Function ---
+        // This new helper function removes the 3D model from the scene.
+        // It's called when the aircraft info window is closed to ensure
+        // the model doesn't persist.
+        clearModel: function() {
+            if (this.model) {
+                this.scene.remove(this.model);
+                this.model = null;
+                this.map.triggerRepaint();
+            }
+        }
+        // =================================================================
+    };
+
     // --- State Variables ---
     let MAPBOX_ACCESS_TOKEN = null;
     let DYNAMIC_FLEET = [];
@@ -77,35 +222,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     let CURRENT_OFP_DATA = null;
     let crewRestInterval = null;
     let airportsData = {};
-    let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
+    let ALL_AVAILABLE_ROUTES = [];
 
     // --- Map-related State ---
     let liveFlightsMap = null;
     let pilotMarkers = {};
     let liveFlightsInterval = null;
     let sectorOpsMap = null;
-    let airportAndAtcMarkers = {}; // Holds all airport markers (blue dots and red ATC dots)
+    let airportAndAtcMarkers = {};
     let sectorOpsMapRouteLayers = [];
-    let sectorOpsLiveFlightPathLayerId = null; // NEW: To track the live flight trail
+    let sectorOpsLiveFlightPathLayerId = null;
     let sectorOpsLiveFlightsInterval = null;
-    let activeAtcFacilities = []; // To store fetched ATC data
-    let activeNotams = []; // To store fetched NOTAMs data
-    let atcPopup = null; // To manage a single, shared popup instance
-    // State for the airport info window
+    let activeAtcFacilities = [];
+    let activeNotams = [];
+    let atcPopup = null;
     let airportInfoWindow = null;
     let airportInfoWindowRecallBtn = null;
     let currentAirportInWindow = null;
-    // NEW: State for the aircraft info window
     let aircraftInfoWindow = null;
     let aircraftInfoWindowRecallBtn = null;
-    let currentFlightInWindow = null; // Stores the flightId of the last selected aircraft
-
-    // --- NEW: 3D Model State ---
-    let threeScene, threeCamera, threeRenderer;
-    let gltfModel = null;
-    let selectedFlightIdFor3D = null; // Holds the flightId of the aircraft to render in 3D
-    const MODEL_URI = '/models/a320.glb'; // Path to your 3D model
-    const MODEL_SCALE = 25; // This value may need tweaking depending on your model's original size
+    let currentFlightInWindow = null;
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -130,15 +266,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const css = `
             /* --- [FIX] Sector Ops View Layout --- */
-            /* This ensures the map fills the entire screen area */
             #view-rosters {
                 display: grid;
                 grid-template-columns: 1fr;
                 grid-template-rows: 1fr;
                 height: 100%;
                 width: 100%;
-                overflow: hidden; /* Prevent scrollbars on the view itself */
-                position: relative; /* Establish positioning context for children */
+                overflow: hidden;
+                position: relative;
             }
             #sector-ops-map-fullscreen {
                 grid-column: 1 / -1;
@@ -150,22 +285,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
             .info-window {
                 position: absolute;
-                top: 20px;    /* Adjusted for better spacing */
+                top: 20px;
                 right: 20px;
-                width: 420px; /* Slightly wider for more content */
+                width: 420px;
                 max-width: 90vw;
-                max-height: calc(100vh - 40px); /* Fill most of the screen height */
-                background: rgba(18, 20, 38, 0.75); /* Darker, less transparent base */
+                max-height: calc(100vh - 40px);
+                background: rgba(18, 20, 38, 0.75);
                 backdrop-filter: blur(20px) saturate(180%);
                 -webkit-backdrop-filter: blur(20px) saturate(180%);
-                border-radius: 16px; /* Softer radius */
+                border-radius: 16px;
                 border: 1px solid rgba(255, 255, 255, 0.1);
                 box-shadow: 0 12px 40px rgba(0,0,0,0.6);
                 z-index: 1050;
-                display: none; /* Initially hidden */
+                display: none;
                 flex-direction: column;
                 overflow: hidden;
-                color: #e8eaf6; /* Lighter text for better contrast */
+                color: #e8eaf6;
                 transition: opacity 0.3s ease, transform 0.3s ease;
                 opacity: 0;
                 transform: translateX(20px);
@@ -180,7 +315,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 justify-content: space-between;
                 align-items: center;
                 padding: 16px 20px;
-                background: rgba(10, 12, 26, 0.6); /* Header with subtle transparency */
+                background: rgba(10, 12, 26, 0.6);
                 border-bottom: 1px solid rgba(255, 255, 255, 0.1);
                 flex-shrink: 0;
             }
@@ -222,7 +357,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 flex-grow: 1; 
                 padding: 0;
             }
-            /* Custom Scrollbar */
             .info-window-content::-webkit-scrollbar { width: 8px; }
             .info-window-content::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
             .info-window-content::-webkit-scrollbar-thumb { background-color: #00a8ff; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
@@ -247,7 +381,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             .flight-rules-vfr { background-color: #28a745; color: white; }
             .flight-rules-mvfr { background-color: #007bff; color: white; }
             .flight-rules-ifr { background-color: #dc3545; color: white; }
-            .flight-rules-lifr { background-color: #a33ea3; color: white; } /* Better magenta */
+            .flight-rules-lifr { background-color: #a33ea3; color: white; }
             .weather-details-grid { 
                 display: grid; grid-template-columns: 1fr 1fr; 
                 gap: 10px 15px; text-align: left;
@@ -398,10 +532,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- Helper Functions ---
-
-    /**
-     * Calculates the distance between two coordinates in kilometers using the Haversine formula.
-     */
     function getDistanceKm(lat1, lon1, lat2, lon2) {
       const R = 6371; // Radius of the Earth in km
       const toRad = (v) => (v * Math.PI) / 180;
@@ -448,7 +578,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return `<span class="${config.containerClass} ${rankSlug}">${imageHtml} ${nameHtml}</span>`;
         }
 
-        return `<span>${rankName}</span>`; // Fallback
+        return `<span>${rankName}</span>`;
     }
 
     function formatTime(ms) {
@@ -495,7 +625,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const populateDispatchPass = (container, plan, options = {}) => {
         if (!container || !plan) return;
 
-        // --- Data Formatters & Converters ---
         const isSimbriefPlan = !!plan.tlr;
         const lbsToKg = (lbs) => {
             if (isNaN(lbs) || lbs === null) return null;
@@ -514,7 +643,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         const formatSpeed = (kts) => (kts ? `${kts} kts` : '---');
 
-        // --- Performance & Weather Data Extraction ---
         const plannedTakeoffRunway = plan.tlr?.takeoff?.conditions?.planned_runway;
         const takeoffRunwayData = plan.tlr?.takeoff?.runway?.find(r => r.identifier === plannedTakeoffRunway);
         const takeoffFlaps = takeoffRunwayData?.flap_setting ?? '---';
@@ -534,7 +662,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const departureWeather = window.WeatherService.parseMetar(plan.departureWeather);
         const arrivalWeather = window.WeatherService.parseMetar(plan.arrivalWeather);
 
-        // --- Redesigned HTML Structure ---
         container.innerHTML = `
             <div class="dispatch-header">
                 <div class="header-left">
@@ -655,7 +782,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
         `;
 
-        // Add accordion functionality
         const accordionHeaders = container.querySelectorAll('.accordion-header');
         accordionHeaders.forEach(header => {
             header.addEventListener('click', () => {
@@ -674,7 +800,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
 
-        // Action Buttons & Map Plotting
         const actionsContainer = container.querySelector(`#dispatch-actions-${plan._id}`);
         if (options.isPreview) {
             actionsContainer.innerHTML = `
@@ -735,16 +860,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
     }
 
-    /**
-     * --- [REVAMPED] Creates the rich HTML content for the airport information window.
-     * This now includes a live weather widget and a tabbed interface.
-     */
     async function createAirportInfoWindowHTML(icao) {
         const atcForAirport = activeAtcFacilities.filter(f => f.airportName === icao);
         const notamsForAirport = activeNotams.filter(n => n.airportIcao === icao);
         const routesFromAirport = ALL_AVAILABLE_ROUTES.filter(r => r.departure === icao);
 
-        // Fetch weather
         let weatherHtml = '';
         try {
             const weatherRes = await fetch(`https://indgo-va.netlify.app/.netlify/functions/weather?icao=${icao}`);
@@ -774,7 +894,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             weatherHtml = '<div class="airport-info-weather"><p>Weather data unavailable.</p></div>';
         }
 
-        // If there's no data at all (besides weather), don't show a popup
         if (atcForAirport.length === 0 && notamsForAirport.length === 0 && routesFromAirport.length === 0) {
             return null;
         }
@@ -926,7 +1045,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const notificationsBell = document.getElementById('notifications-bell');
     const notificationsModal = document.getElementById('notifications-modal');
 
-    // Modals
     const promotionModal = document.getElementById('promotion-modal');
     const arriveFlightModal = document.getElementById('arrive-flight-modal');
 
@@ -938,10 +1056,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- Mapbox Plotting Functions ---
-
-    /**
-     * Plots a static route map for a dispatch pass using Mapbox GL JS.
-     */
     const plotDispatchMap = (mapContainerId, origin, dest, navlogFixes) => {
         const mapContainer = document.getElementById(mapContainerId);
         if (!mapContainer || !MAPBOX_ACCESS_TOKEN) return;
@@ -989,14 +1103,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     };
 
-    /**
-     * Initializes the live operations map.
-     */
     function initializeLiveMap() {
         if (!MAPBOX_ACCESS_TOKEN) return;
-        const mapContainer = document.getElementById('live-flights-map-container'); // Get the container
-        if (mapContainer && !liveFlightsMap) {
-            mapContainer.innerHTML = ''; // *** FIX: Clear the container before initializing the map ***
+        if (document.getElementById('live-flights-map-container') && !liveFlightsMap) {
             liveFlightsMap = new mapboxgl.Map({
                 container: 'live-flights-map-container',
                 style: 'mapbox://styles/mapbox/dark-v11',
@@ -1010,9 +1119,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    /**
-     * Starts or restarts the live flight update interval.
-     */
     function startLiveLoop() {
         if (!liveFlightsInterval) {
             updateLiveFlights();
@@ -1020,9 +1126,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    /**
-     * Helper to remove dynamic flight path layers from the map.
-     */
     function removeFlightPathLayers(map) {
         if (map.getLayer('flown-path')) map.removeLayer('flown-path');
         if (map.getSource('flown-path-source')) map.removeSource('flown-path-source');
@@ -1030,9 +1133,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (map.getSource('planned-path-source')) map.removeSource('planned-path-source');
     }
 
-    /**
-     * Fetches live flight data and updates the map.
-     */
     async function updateLiveFlights() {
         if (!liveFlightsMap || !liveFlightsMap.isStyleLoaded()) return;
 
@@ -1056,18 +1156,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const lngLat = [pos.lon, pos.lat];
 
                 if (pilotMarkers[flightId]) {
-                    // Update existing marker
                     const entry = pilotMarkers[flightId];
                     entry.marker.setLngLat(lngLat);
                     entry.marker.getElement().style.transform = `rotate(${pos.track_deg ?? 0}deg)`;
                 } else {
-                    // Create new marker
                     const el = document.createElement('div');
                     el.className = 'plane-marker';
                     const marker = new mapboxgl.Marker(el).setLngLat(lngLat).addTo(liveFlightsMap);
                     pilotMarkers[flightId] = { marker: marker };
 
-                    // Add click event listener
                     marker.getElement().addEventListener('click', async () => {
                         removeFlightPathLayers(liveFlightsMap);
                         const popup = new mapboxgl.Popup({ closeButton: false, offset: 25 }).setLngLat(lngLat).setHTML(`<b>${callsign}</b><br><i>Loading flight data...</i>`).addTo(liveFlightsMap);
@@ -1081,7 +1178,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                             const routeJson = await routeRes.json();
                             let allCoordsForBounds = [];
 
-                            // Flown path
                             const flownCoords = (routeRes.ok && routeJson.ok && Array.isArray(routeJson.route)) ? routeJson.route.map(p => [p.lon, p.lat]) : [];
                             if (flownCoords.length > 1) {
                                 allCoordsForBounds.push(...flownCoords);
@@ -1089,7 +1185,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 liveFlightsMap.addLayer({ id: 'flown-path', type: 'line', source: 'flown-path-source', paint: { 'line-color': '#00b894', 'line-width': 4 } });
                             }
 
-                            // Planned path
                             if (planRes.ok && planJson.ok && planJson.plan?.waypoints?.length > 0) {
                                 const plannedWps = planJson.plan.waypoints.map(wp => [wp.lon, wp.lat]);
                                 const remainingPathCoords = [lngLat, ...plannedWps];
@@ -1113,7 +1208,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
 
-            // Remove inactive markers
             Object.keys(pilotMarkers).forEach(fid => {
                 if (!activeFlightIds.has(String(fid))) {
                     pilotMarkers[fid].marker?.remove();
@@ -1127,10 +1221,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
     // ==========================================================
-    // START: SECTOR OPS / ROUTE EXPLORER LOGIC (INTERACTIVE AIRPORT MAP)
+    // START: SECTOR OPS / ROUTE EXPLORER LOGIC
     // ==========================================================
     
-    // NEW: Function to set up event listeners for the Airport Info Window
     function setupAirportWindowEvents() {
         if (!airportInfoWindow || airportInfoWindow.dataset.eventsAttached === 'true') return;
 
@@ -1140,7 +1233,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         closeBtn.addEventListener('click', () => {
             airportInfoWindow.classList.remove('visible');
             airportInfoWindowRecallBtn.classList.remove('visible');
-            clearRouteLayers(); // Closing also clears the map routes
+            clearRouteLayers();
             currentAirportInWindow = null;
         });
 
@@ -1148,11 +1241,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             airportInfoWindow.classList.remove('visible');
             if (currentAirportInWindow) {
                 airportInfoWindowRecallBtn.classList.add('visible');
-                // Trigger animation by adding and removing the class
                 airportInfoWindowRecallBtn.classList.add('palpitate');
                 setTimeout(() => {
                     airportInfoWindowRecallBtn.classList.remove('palpitate');
-                }, 1000); // Duration of 2 palpitations (0.5s each)
+                }, 1000);
             }
         });
 
@@ -1166,7 +1258,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         airportInfoWindow.dataset.eventsAttached = 'true';
     }
     
-    // MODIFIED: Function to set up event listeners for the Aircraft Info Window
     function setupAircraftWindowEvents() {
         if (!aircraftInfoWindow || aircraftInfoWindow.dataset.eventsAttached === 'true') return;
         const closeBtn = document.getElementById('aircraft-window-close-btn');
@@ -1175,11 +1266,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         closeBtn.addEventListener('click', () => {
             aircraftInfoWindow.classList.remove('visible');
             aircraftInfoWindowRecallBtn.classList.remove('visible');
-            clearLiveFlightPath(); // NEW: Clear the flight trail when closing the window
+            clearLiveFlightPath();
             currentFlightInWindow = null;
-            
-            // NEW: Hide the 3D model and restore the 2D icon when the window is closed
-            update3DModelVisibility(null);
+
+            // =================================================================
+            // --- FIX: Cleanup 3D Model and View ---
+            // When the window is closed, this calls the new clearModel function
+            // on the custom layer and resets the map's camera pitch for a
+            // better user experience.
+            if (threeJS_Layer) {
+                threeJS_Layer.clearModel();
+            }
+            if (sectorOpsMap) {
+                sectorOpsMap.flyTo({
+                    pitch: 0,
+                    bearing: 0,
+                    speed: 0.5
+                });
+            }
+            // =================================================================
         });
 
         hideBtn.addEventListener('click', () => {
@@ -1200,21 +1305,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         aircraftInfoWindow.dataset.eventsAttached = 'true';
     }
 
-
-    /**
-     * Main orchestrator for the Sector Ops view.
-     * Manages fetching data and orchestrating map and list updates.
-     */
     async function initializeSectorOpsView() {
         const selector = document.getElementById('departure-hub-selector');
         const mapContainer = document.getElementById('sector-ops-map-fullscreen');
-        const viewContainer = document.getElementById('view-rosters'); // The main view container
+        const viewContainer = document.getElementById('view-rosters');
         if (!selector || !mapContainer) return;
 
         mainContentLoader.classList.add('active');
 
         try {
-            // Create and inject the Info Windows and their recall buttons into the main view container
             if (!document.getElementById('airport-info-window')) {
                 const windowHtml = `
                     <div id="airport-info-window" class="info-window">
@@ -1269,37 +1368,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             aircraftInfoWindow = document.getElementById('aircraft-info-window');
             aircraftInfoWindowRecallBtn = document.getElementById('aircraft-recall-btn');
 
-
-            // 1. Get pilot's available hubs
             const rosterRes = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!rosterRes.ok) throw new Error('Could not determine your current location.');
             const rosterData = await rosterRes.json();
             const departureHubs = rosterData.searchCriteria?.searched || ['VIDP'];
 
-            // 2. Populate hub selector
             selector.innerHTML = departureHubs.map(h => `<option value="${h}">${airportsData[h]?.name || h}</option>`).join('');
             const selectedHub = selector.value;
 
-            // 3. Initialize the Mapbox map
             await initializeSectorOpsMap(selectedHub);
 
-            // 4. Fetch data for both tabs in parallel
             const [rosters, routes] = await Promise.all([
                 fetchAndRenderRosters(selectedHub),
                 fetchAndRenderRoutes()
             ]);
-            ALL_AVAILABLE_ROUTES = routes; // Store all routes for later use
+            ALL_AVAILABLE_ROUTES = routes;
 
-            // *** FIX APLIED HERE ***
-            // Immediately render markers with the static route data to prevent blank map on view switch
             renderAirportMarkers();
 
-            // 5. Set up all event listeners
             setupSectorOpsEventListeners();
             setupAirportWindowEvents();
-            setupAircraftWindowEvents(); // NEW
+            setupAircraftWindowEvents();
 
-            // 6. Start the live data loop.
             startSectorOpsLiveLoop();
 
         } catch (error) {
@@ -1312,9 +1402,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    /**
-     * MODIFIED: Initializes or resets the main Sector Ops Mapbox map.
-     */
     async function initializeSectorOpsMap(centerICAO) {
         if (!MAPBOX_ACCESS_TOKEN) {
             document.getElementById('sector-ops-map-fullscreen').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
@@ -1322,22 +1409,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         if (sectorOpsMap) sectorOpsMap.remove();
 
-        const centerCoords = airportsData[centerICAO] ? [airportsData[centerICAO].lon, airportsData[centerICAO].lat] : [77.2, 28.6]; // Default to Delhi
+        const centerCoords = airportsData[centerICAO] ? [airportsData[centerICAO].lon, airportsData[centerICAO].lat] : [77.2, 28.6];
 
         sectorOpsMap = new mapboxgl.Map({
-            container: 'sector-ops-map-fullscreen', // UPDATE: Target the new full-screen container
+            container: 'sector-ops-map-fullscreen',
             style: 'mapbox://styles/mapbox/dark-v11',
             center: centerCoords,
             zoom: 4.5,
-            interactive: true,
-            antialias: true // NEW: Good practice for custom WebGL layers
+            interactive: true
         });
 
         return new Promise(resolve => {
             sectorOpsMap.on('load', () => {
-                // Load the icon for live aircraft markers. Assumes an icon exists at this path.
+                sectorOpsMap.addLayer(threeJS_Layer);
+                
                 sectorOpsMap.loadImage(
-                    '/images/whiteplane.png', // *** FIX: Corrected path from /Images to /images ***
+                    '/images/whiteplane.png',
                     (error, image) => {
                         if (error) {
                             console.warn('Could not load plane icon for map.');
@@ -1346,162 +1433,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 sectorOpsMap.addImage('plane-icon', image);
                             }
                         }
-                        // NEW: Initialize the Three.js layer once the map is ready
-                        initializeThreeJSLayer();
-                        
-                        resolve(); // Resolve the promise once the image is loaded or fails
+                        resolve();
                     }
                 );
             });
         });
     }
-    
-    // --- [START] NEW 3D MODEL FUNCTIONS ---
 
-    /**
-     * NEW: Sets up the Three.js scene and the custom layer for the 3D model.
-     */
-    function initializeThreeJSLayer() {
-        const customThreeJSLayer = {
-            id: 'three-d-model-layer',
-            type: 'custom',
-            renderingMode: '3d',
-
-            onAdd: function (map, gl) {
-                this.camera = new THREE.Camera();
-                this.scene = new THREE.Scene();
-                threeScene = this.scene; // Expose for global access
-                threeCamera = this.camera;
-
-                // Add lighting
-                const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
-                this.scene.add(ambientLight);
-                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.75);
-                directionalLight.position.set(0, -70, 100).normalize();
-                this.scene.add(directionalLight);
-
-                // Use the map's GL context
-                this.renderer = new THREE.WebGLRenderer({
-                    canvas: map.getCanvas(),
-                    context: gl,
-                    antialias: true,
-                });
-                this.renderer.autoClear = false;
-                threeRenderer = this.renderer;
-
-                // Load the GLTF model
-                const loader = new GLTFLoader();
-                // --- START: DEBUGGER ADDED ---
-                console.log(`Attempting to load 3D model from: ${MODEL_URI}`);
-                loader.load(MODEL_URI, 
-                (gltf) => { // onSuccess
-                    gltfModel = gltf.scene;
-                    // Set initial properties
-                    gltfModel.scale.set(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE);
-                    gltfModel.visible = false; // Initially hidden
-                    this.scene.add(gltfModel);
-                    console.log('3D aircraft model loaded successfully.');
-                }, 
-                (event) => { // onProgress
-                    if (event.lengthComputable) {
-                        const percentComplete = event.loaded / event.total * 100;
-                        console.log(`3D Model Loading Progress: ${percentComplete.toFixed(2)}%`);
-                    } else {
-                        console.log(`3D Model Loading Progress: ${event.loaded} bytes loaded (total size unknown).`);
-                    }
-                }, 
-                (error) => { // onError
-                    console.error('An error happened while loading the 3D model:', error);
-                    showNotification('Could not load 3D aircraft model.', 'error');
-                });
-                // --- END: DEBUGGER ADDED ---
-            },
-
-            render: function (gl, matrix) {
-                // --- START OF FIX: Replaced entire render function logic ---
-
-                // First, check if the model is loaded and is set to be visible.
-                if (!gltfModel || !gltfModel.visible) {
-                    // Repaint to ensure the map updates if the model was just hidden.
-                    if (sectorOpsMap) sectorOpsMap.triggerRepaint();
-                    return;
-                }
-
-                // Set the Three.js camera's projection matrix from the Mapbox matrix.
-                // This matrix contains both the projection and view transformations needed.
-                this.camera.projectionMatrix.fromArray(matrix);
-
-                // It's good practice to reset the WebGL state and clear the depth buffer
-                // to prevent rendering artifacts from interfering with the map.
-                this.renderer.resetState();
-                this.renderer.clearDepth();
-
-                // Render the Three.js scene. The renderer will automatically use the model's
-                // world matrix (calculated from its position/rotation) and the camera's
-                // projection matrix to render the object correctly.
-                this.renderer.render(this.scene, this.camera);
-                
-                // Tell Mapbox that it needs to update the map view with our 3D object.
-                if (sectorOpsMap) sectorOpsMap.triggerRepaint();
-                
-                // --- END OF FIX ---
-            }
-        };
-
-        if (!sectorOpsMap.getLayer(customThreeJSLayer.id)) {
-            sectorOpsMap.addLayer(customThreeJSLayer);
-        }
-    }
-    
-
-    /**
-     * NEW: Central function to control the 3D model's visibility, position, and rotation.
-     */
-    function update3DModelVisibility(flightProps) {
-        if (!gltfModel) return; // Don't do anything if the model hasn't loaded
-
-        const layerId = 'sector-ops-live-flights-layer';
-
-        if (flightProps && flightProps.flightId) {
-            selectedFlightIdFor3D = flightProps.flightId;
-            const { position, heading } = flightProps;
-            const coords = [position.lon, position.lat];
-
-            // Convert LngLat to Mercator coordinates for Three.js positioning
-            const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(coords, position.alt_ft);
-
-            gltfModel.position.set(modelAsMercator.x, modelAsMercator.y, modelAsMercator.z);
-            
-            // Rotate the model to match the aircraft's heading
-            // Note: rotation order is Y, X, Z in Three.js. We rotate around Z-axis for heading.
-            gltfModel.rotation.set(Math.PI / 2, 0, (90 - heading) * (Math.PI / 180));
-
-            gltfModel.visible = true;
-
-        } else {
-            selectedFlightIdFor3D = null;
-            gltfModel.visible = false;
-        }
-
-        // Use a Mapbox expression to hide the 2D icon of the selected flight
-        if (sectorOpsMap.getLayer(layerId)) {
-            sectorOpsMap.setLayoutProperty(layerId, 'icon-opacity', [
-                'case',
-                ['==', ['get', 'flightId'], selectedFlightIdFor3D || ''],
-                0, // Opacity 0 if flightId matches
-                1  // Opacity 1 otherwise
-            ]);
-        }
-        
-        sectorOpsMap.triggerRepaint();
-    }
-
-    // --- [END] NEW 3D MODEL FUNCTIONS ---
-
-
-    /**
-     * (REFACTORED) Clears only the route line layers from the map.
-     */
     function clearRouteLayers() {
         sectorOpsMapRouteLayers.forEach(id => {
             if (sectorOpsMap.getLayer(id)) sectorOpsMap.removeLayer(id);
@@ -1510,7 +1448,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         sectorOpsMapRouteLayers = [];
     }
 
-    // NEW: Helper to clear the live flight trail from the map
     function clearLiveFlightPath() {
         if (sectorOpsMap && sectorOpsLiveFlightPathLayerId) {
             if (sectorOpsMap.getLayer(sectorOpsLiveFlightPathLayerId)) {
@@ -1523,11 +1460,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-
-    /**
-     * --- [MODIFIED] Centralized handler for clicking any airport marker.
-     * This now opens the persistent info window instead of a popup.
-     */
     async function handleAirportClick(icao) {
         if (currentAirportInWindow && currentAirportInWindow !== icao) {
             airportInfoWindow.classList.remove('visible');
@@ -1544,7 +1476,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const contentEl = document.getElementById('airport-window-content');
         
         titleEl.innerHTML = `${icao} <small>- ${airport.name || 'Airport'}</small>`;
-        contentEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div>`; // Loading state
+        contentEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div>`;
 
         airportInfoWindow.classList.add('visible');
         airportInfoWindowRecallBtn.classList.remove('visible');
@@ -1556,7 +1488,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             contentEl.innerHTML = windowContentHTML;
             contentEl.scrollTop = 0;
 
-            // Add event listeners for the new tabs
             const tabContainer = contentEl.querySelector('.info-window-tabs');
             tabContainer.addEventListener('click', (e) => {
                 const tabBtn = e.target.closest('.info-tab-btn');
@@ -1574,14 +1505,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
-    // MODIFIED: Handler for clicking an aircraft on the Sector Ops map.
     async function handleAircraftClick(flightProps, sessionId) {
         if (!flightProps || !flightProps.flightId) return;
 
-        clearLiveFlightPath(); // Clear any previous trail first
-        
-        // NEW: Update the 3D model to this aircraft's position and heading
-        update3DModelVisibility(flightProps);
+        const lngLat = [flightProps.position.lon, flightProps.position.lat];
+        const heading = flightProps.heading || 0;
+        const modelPath = 'assets/models/a320/source/A320.glb';
+
+        threeJS_Layer.displayModel(modelPath, lngLat, heading);
+    
+        sectorOpsMap.flyTo({
+            center: lngLat,
+            zoom: 15,
+            pitch: 60,
+            bearing: heading,
+            speed: 0.8
+        });
+
+        clearLiveFlightPath();
 
         currentFlightInWindow = flightProps.flightId;
         aircraftInfoWindow.classList.add('visible');
@@ -1594,7 +1535,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         contentEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
 
         try {
-            // Fetch plan and route in parallel for speed
             const [planRes, routeRes] = await Promise.all([
                 fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/plan`),
                 fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/route`)
@@ -1605,7 +1545,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             populateAircraftInfoWindow(flightProps, plan);
 
-            // Now, plot the flight trail if data is available
             if (routeRes.ok) {
                 const routeData = await routeRes.json();
                 if (routeData.ok && Array.isArray(routeData.route) && routeData.route.length > 1) {
@@ -1622,21 +1561,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                         type: 'geojson',
                         data: {
                             type: 'Feature',
-                            geometry: {
-                                type: 'LineString',
-                                coordinates: trailCoords
-                            }
+                            geometry: { type: 'LineString', coordinates: trailCoords }
                         }
                     });
                     sectorOpsMap.addLayer({
                         id: trailId,
                         type: 'line',
                         source: trailId,
-                        paint: {
-                            'line-color': '#00b894', // A bright green for the trail
-                            'line-width': 3,
-                            'line-opacity': 0.8
-                        }
+                        paint: { 'line-color': '#00b894', 'line-width': 3, 'line-opacity': 0.8 }
                     });
                 }
             }
@@ -1647,16 +1579,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-
-    /**
-     * --- [COMPLETELY REWRITTEN] Generates and injects the aircraft window's HTML content with a modern UI.
-     */
     function populateAircraftInfoWindow(baseProps, plan) {
         const contentEl = document.getElementById('aircraft-window-content');
         const usernameDisplay = baseProps.username || 'N/A';
         document.getElementById('aircraft-window-title').innerHTML = `${baseProps.callsign} <small>(${usernameDisplay})</small>`;
 
-        // If no plan is filed, show a simplified view
         if (!plan || !plan.flightPlanItems || plan.flightPlanItems.length === 0) {
             contentEl.innerHTML = `
                 <div class="aircraft-info-body">
@@ -1687,7 +1614,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // Extract waypoints
         const allWaypoints = [];
         const extractWps = (items) => {
             for (const item of items) {
@@ -1700,7 +1626,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         extractWps(plan.flightPlanItems);
 
         if (allWaypoints.length < 2) {
-             populateAircraftInfoWindow(baseProps, null); // Re-run with null plan
+             populateAircraftInfoWindow(baseProps, null);
              return;
         }
 
@@ -1708,7 +1634,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const arrivalIcao = allWaypoints[allWaypoints.length - 1]?.name || 'N/A';
         const routeString = allWaypoints.map(wp => wp.name).join(' ');
 
-        // Calculate total distance for the progress bar
         let totalDistanceKm = 0;
         for (let i = 0; i < allWaypoints.length - 1; i++) {
             const wp1 = allWaypoints[i].location;
@@ -1726,7 +1651,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const remainingDistanceNM = remainingDistanceKm / 1.852;
                 progress = Math.max(0, Math.min(100, (1 - (remainingDistanceNM / totalDistanceNM)) * 100));
                 
-                if (baseProps.speed > 50) { // Only calculate ETE if moving
+                if (baseProps.speed > 50) {
                     const timeHours = remainingDistanceNM / baseProps.speed;
                     const hours = Math.floor(timeHours);
                     const minutes = Math.round((timeHours - hours) * 60);
@@ -1783,11 +1708,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         `;
     }
 
-    /**
-     * (NEW) Clears old routes and draws all new routes originating from a selected airport.
-     */
     function plotRoutesFromAirport(departureICAO) {
-        clearRouteLayers(); // Clear only the lines, not the airport markers
+        clearRouteLayers();
 
         const departureAirport = airportsData[departureICAO];
         if (!departureAirport) return;
@@ -1799,7 +1721,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        // Create line features for each route
         const routeLineFeatures = routesFromHub.map(route => {
             const arrivalAirport = airportsData[route.arrival];
             if (arrivalAirport) {
@@ -1812,7 +1733,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 };
             }
             return null;
-        }).filter(Boolean); // Filter out any routes with missing arrival data
+        }).filter(Boolean);
 
         const routeLinesId = `routes-from-${departureICAO}`;
         sectorOpsMap.addSource(routeLinesId, {
@@ -1825,15 +1746,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             type: 'line',
             source: routeLinesId,
             paint: {
-                'line-color': '#00a8ff', // A bright blue for visibility
+                'line-color': '#00a8ff',
                 'line-width': 2,
                 'line-opacity': 0.8
             }
         });
 
-        sectorOpsMapRouteLayers.push(routeLinesId); // Track the new layer for cleanup
+        sectorOpsMapRouteLayers.push(routeLinesId);
 
-        // Fly to the selected airport
         sectorOpsMap.flyTo({
             center: departureCoords,
             zoom: 5,
@@ -1841,9 +1761,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    /**
-     * Fetches and renders the curated rosters for the selected hub.
-     */
     async function fetchAndRenderRosters(departureICAO) {
         const container = document.getElementById('roster-list-container');
         container.innerHTML = '<div class="spinner-small"></div><p>Loading recommended rosters...</p>';
@@ -1910,9 +1827,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    /**
-     * Fetches ALL available routes from the backend.
-     */
     async function fetchAndRenderRoutes() {
         const container = document.getElementById('route-list-container');
         container.innerHTML = '<div class="spinner-small"></div><p>Exploring all available routes...</p>';
@@ -1932,7 +1846,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const airlineCode = extractAirlineCode(route.flightNumber);
                 const logoPath = airlineCode ? `Images/vas/${airlineCode}.png` : '';
                 const requiredRank = route.rankUnlock || deduceRankFromAircraftFE(route.aircraft);
-                // Safely stringify the route data for the data attribute
                 const routeDataString = JSON.stringify(route).replace(/'/g, "&apos;");
 
                 return `
@@ -1962,22 +1875,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    /**
-     * MODIFIED: Sets up event listeners for the Sector Ops view, including the new toolbar.
-     */
     function setupSectorOpsEventListeners() {
         const panel = document.getElementById('sector-ops-floating-panel');
         if (!panel || panel.dataset.listenersAttached === 'true') return;
         panel.dataset.listenersAttached = 'true';
 
-        // --- START: REFACTORED for Toolbar and Panel Toggle ---
         const internalToggleBtn = document.getElementById('sector-ops-toggle-btn');
         const toolbarToggleBtn = document.getElementById('toolbar-toggle-panel-btn');
 
         const togglePanel = () => {
             const isNowCollapsed = panel.classList.toggle('panel-collapsed');
             
-            // Update UI state for both buttons
             if (internalToggleBtn) {
                 internalToggleBtn.setAttribute('aria-expanded', !isNowCollapsed);
             }
@@ -1985,11 +1893,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 toolbarToggleBtn.classList.toggle('active', !isNowCollapsed);
             }
 
-            // Resize the map
             if (sectorOpsMap) {
                 setTimeout(() => {
                     sectorOpsMap.resize();
-                }, 400); // Match CSS transition duration
+                }, 400);
             }
         };
 
@@ -1999,9 +1906,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (toolbarToggleBtn) {
             toolbarToggleBtn.addEventListener('click', togglePanel);
         }
-        // --- END: REFACTORED for Toolbar and Panel Toggle ---
 
-        // Tab switching now ONLY changes the panel content
         panel.querySelector('.panel-tabs')?.addEventListener('click', (e) => {
             const tabLink = e.target.closest('.tab-link');
             if (!tabLink) return;
@@ -2012,13 +1917,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             panel.querySelector(`#${tabId}`).classList.add('active');
         });
 
-        // Hub selector only updates the roster list. Map is independent.
         panel.querySelector('#departure-hub-selector')?.addEventListener('change', async (e) => {
             const selectedHub = e.target.value;
             await fetchAndRenderRosters(selectedHub);
         });
 
-        // Route search/filter (for the global list)
         panel.querySelector('#route-search-input')?.addEventListener('input', (e) => {
             const searchTerm = e.target.value.toUpperCase().trim();
             document.querySelectorAll('#route-list-container .route-card').forEach(card => {
@@ -2043,21 +1946,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ==========================================================
 
     // ====================================================================
-    // START: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
+    // START: LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
 
-    /**
-     * Starts the polling loop for live flights specifically for the Sector Ops map.
-     */
     function startSectorOpsLiveLoop() {
-        stopSectorOpsLiveLoop(); // Ensure no duplicate intervals are running
-        updateSectorOpsLiveFlights(); // Fetch immediately
-        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 30000); // Then update every 30 seconds
+        stopSectorOpsLiveLoop();
+        updateSectorOpsLiveFlights();
+        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 30000);
     }
 
-    /**
-     * Stops the polling loop for Sector Ops live flights to save resources.
-     */
     function stopSectorOpsLiveLoop() {
         if (sectorOpsLiveFlightsInterval) {
             clearInterval(sectorOpsLiveFlightsInterval);
@@ -2065,14 +1962,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    /**
-     * NEW / REFACTORED: Renders all airport markers based on current route and ATC data.
-     * This single, efficient function replaces the previous separate functions.
-     */
     function renderAirportMarkers() {
         if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
-        // Clear all previously rendered airport markers to ensure a fresh state
         Object.values(airportAndAtcMarkers).forEach(({ marker }) => marker.remove());
         airportAndAtcMarkers = {};
 
@@ -2091,26 +1983,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!airport || airport.lat == null || airport.lon == null) return;
 
             const hasAtc = atcAirportIcaos.has(icao);
-            let markerClass; // Use 'let' to allow modification
+            let markerClass;
             let title = `${icao}: ${airport.name || 'Unknown Airport'}`;
 
             if (hasAtc) {
                 const airportAtc = activeAtcFacilities.filter(f => f.airportName === icao);
-                // Check for Approach (type 4) or Departure (type 5)
                 const hasApproachOrDeparture = airportAtc.some(f => f.type === 4 || f.type === 5);
 
-                // Start with the base class for any staffed airport
                 markerClass = 'atc-active-marker';
                 title += ' (Active ATC)';
 
-                // Add the aura class if Approach/Departure is active
                 if (hasApproachOrDeparture) {
                     markerClass += ' atc-approach-active';
                     title += ' - Approach/Departure';
                 }
 
             } else {
-                markerClass = 'destination-marker'; // For non-ATC airports
+                markerClass = 'destination-marker';
             }
             
             const el = document.createElement('div');
@@ -2130,16 +2019,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    /**
-     * Fetches all live data (flights, ATC, NOTAMs) and plots them on the Sector Ops map.
-     */
     async function updateSectorOpsLiveFlights() {
         if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
         const LIVE_FLIGHTS_BACKEND = 'https://acars-backend-uxln.onrender.com';
 
         try {
-            // 1. Fetch the server session ID
             const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
             const sessionsData = await sessionsRes.json();
             const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
@@ -2149,23 +2034,20 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            // 2. Fetch ALL live data in parallel for efficiency
             const [flightsRes, atcRes, notamsRes] = await Promise.all([
                 fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
                 fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
                 fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
             ]);
             
-            // 3. Process ATC and NOTAM data, then render all airport markers
             const atcData = await atcRes.json();
             activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
             
             const notamsData = await notamsRes.json();
             activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
 
-            renderAirportMarkers(); // This now handles plotting all airport dots correctly
+            renderAirportMarkers();
 
-            // 4. Process flight data
             const flightsData = await flightsRes.json();
             if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
                 console.warn('Sector Ops Map: Could not fetch live flights.');
@@ -2190,8 +2072,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         speed: flight.position.gs_kt,
                         heading: flight.position.track_deg || 0,
                         verticalSpeed: flight.position.vs_fpm || 0,
-                        // Pass the whole position object for the calculation
-                        position: flight.position 
+                        position: flight.position
                     }
                 };
             }).filter(Boolean);
@@ -2201,7 +2082,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 features: flightFeatures
             };
 
-            // 5. Update the flight map source and layer
             const sourceId = 'sector-ops-live-flights-source';
             const layerId = 'sector-ops-live-flights-layer';
             const source = sectorOpsMap.getSource(sourceId);
@@ -2228,15 +2108,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 });
 
-                // REWRITTEN CLICK HANDLER to open the info window
                 sectorOpsMap.on('click', layerId, (e) => {
-                    // Reconstruct flightProps to match what handleAircraftClick expects
-                    const props = e.features[0].properties;
-                    const flightProps = {
-                        ...props,
-                        position: JSON.parse(props.position) // The position gets stringified in the geojson
-                    };
-                    handleAircraftClick(flightProps, expertSession.id);
+                    if (e.features.length > 0) {
+                        const props = e.features[0].properties;
+                        // The position object gets stringified when passed as a geojson property.
+                        // We need to parse it back into an object for the handler function.
+                        const flightProps = { ...props, position: JSON.parse(props.position) };
+                        handleAircraftClick(flightProps, expertSession.id);
+                    }
                 });
 
                 sectorOpsMap.on('mouseenter', layerId, () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
@@ -2248,12 +2127,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     // ====================================================================
-    // END: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
+    // END: LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
 
-    /**
-     * Main view switching logic.
-     */
     const switchView = (viewId) => {
         sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
         mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
@@ -2266,21 +2142,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             newView.classList.add('active');
         }
 
-        // Stop the dashboard live map loop
         if (liveFlightsInterval) {
             clearInterval(liveFlightsInterval);
             liveFlightsInterval = null;
         }
         
-        // Stop the Sector Ops live map loop
         stopSectorOpsLiveLoop();
 
         if (sectorOpsMap) {
-            // Ensure map is resized if sidebar state changes while view is inactive
             setTimeout(() => sectorOpsMap.resize(), 400); 
         }
 
-        // Conditionally start the correct loop based on the new view
         if (viewId === 'view-duty-status') {
             initializeLiveMap();
         } else if (viewId === 'view-rosters') {
@@ -2288,8 +2160,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-
-    // --- New function to fetch fleet data ---
     async function fetchFleetData() {
         try {
             const response = await fetch(`${API_BASE_URL}/api/aircrafts`, {
@@ -2306,8 +2176,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-
-    // --- Main Data Fetch & Render Cycle ---
     const fetchPilotData = async () => {
         try {
             const oldRank = CURRENT_PILOT ? CURRENT_PILOT.rank : null;
@@ -2385,10 +2253,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         confirmBtn.addEventListener('click', closeHandler);
     };
 
-    // --- View Rendering Logic ---
     const renderAllViews = async (pilot) => {
         const leaderboardsHTML = await fetchAndDisplayLeaderboards();
-
         renderPilotHubView(pilot, leaderboardsHTML);
         await renderFlightPlanView(pilot);
         await fetchPirepHistory();
@@ -2436,14 +2302,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         const dashboardContainer = document.querySelector('.dashboard-container');
         if (dashboardContainer && pilot.rank) {
             const rankSlug = 'rank-' + pilot.rank.toLowerCase().replace(/\s+/g, '-');
-
             const classList = Array.from(dashboardContainer.classList);
             for (const c of classList) {
                 if (c.startsWith('rank-')) {
                     dashboardContainer.classList.remove(c);
                 }
             }
-
             dashboardContainer.classList.add(rankSlug);
         }
 
@@ -2561,14 +2425,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const renderOnDutyContent = async (pilot) => {
-        // The pilot.currentRoster field holds the ID of the active roster.
         if (!pilot.currentRoster) {
             return `<div class="content-card"><p>Error: On duty but no roster data found.</p></div>`;
         }
 
         try {
-            // --- START OF FIX ---
-            // Fetch the specific active roster using the new endpoint, and PIREPs in parallel.
             const [rosterRes, pirepsRes] = await Promise.all([
                 fetch(`${API_BASE_URL}/api/rosters/by-id/${pilot.currentRoster}`, { headers: { 'Authorization': `Bearer ${token}` } }),
                 fetch(`${API_BASE_URL}/api/me/pireps`, { headers: { 'Authorization': `Bearer ${token}` } })
@@ -2578,7 +2439,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!pirepsRes.ok) throw new Error('Could not load your duty details.');
 
             const [currentRoster, allPireps] = await Promise.all([rosterRes.json(), pirepsRes.json()]);
-            // --- END OF FIX ---
 
             const filedPirepsForRoster = allPireps.filter(p => p.rosterLeg?.rosterId === currentRoster.rosterId);
             const filedFlightNumbers = new Set(filedPirepsForRoster.map(p => p.flightNumber));
@@ -2626,11 +2486,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-
-    // --- Flight Plan View ---
     const renderFlightPlanView = async (pilot) => {
         const viewContainer = document.getElementById('view-flight-plan');
-        const manualDispatchContainer = document.getElementById('manual-dispatch-container');
         const simbriefDisplay = document.getElementById('dispatch-pass-display');
 
         simbriefDisplay.style.display = 'none';
@@ -2685,7 +2542,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const updateDispatchFormState = () => {
-        const formContainer = document.getElementById('manual-dispatch-container');
         const formLockout = document.getElementById('dispatch-form-lockout');
         const form = document.getElementById('file-flight-plan-form');
 
@@ -2700,7 +2556,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    // --- Other Data Display Functions ---
     const renderLeaderboardList = (title, data, valueKey) => {
         if (!data || data.length === 0) return `<h4>Top by ${title}</h4><p class="muted">No data available yet.</p>`;
 
@@ -2796,7 +2651,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    // --- Navigation ---
     sidebarNav.addEventListener('click', (e) => {
         const link = e.target.closest('.nav-link');
         if (!link) return;
@@ -2808,7 +2662,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // --- Global Event Listeners for Actions ---
     mainContentContainer.addEventListener('submit', async (e) => {
         if (e.target.id === 'file-flight-plan-form') {
             e.preventDefault();
@@ -2856,7 +2709,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     mainContentContainer.addEventListener('click', async (e) => {
         const target = e.target;
 
-        // MODIFIED: Global listener for "Plan Flight" buttons
         const planButton = target.closest('.plan-flight-from-explorer-btn');
         if (planButton) {
             try {
@@ -2874,7 +2726,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 showNotification(`Pre-filled dispatch for ${routeData.flightNumber}. Please generate with SimBrief or file manually.`, 'info');
                 
-                // Close the map window if it is open
                 if(airportInfoWindow && airportInfoWindow.classList.contains('visible')) {
                     document.getElementById('airport-window-close-btn').click();
                 }
@@ -3205,7 +3056,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // --- Modal Handlers ---
     document.getElementById('arrive-flight-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const planId = e.target.dataset.planId;
@@ -3250,7 +3100,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Notifications Modal Logic
     notificationsBell.addEventListener('click', async (e) => {
         e.preventDefault();
         const container = document.getElementById('notifications-list-container');
@@ -3301,7 +3150,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // --- SimBrief Return Handler ---
     const handleSimbriefReturn = async () => {
         const urlParams = new URLSearchParams(window.location.search);
         const ofpId = urlParams.get('ofp_id');
@@ -3370,14 +3218,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    // --- Initial Load ---
     async function initializeApp() {
         mainContentLoader.classList.add('active');
 
-        // NEW: Inject all custom CSS needed for new features
         injectCustomStyles();
 
-        // Fetch essential data in parallel
         await Promise.all([
             fetchMapboxToken(),
             fetchAirportsData()
@@ -3385,12 +3230,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         await fetchPilotData();
 
-        // Initial view setup
         const urlParams = new URLSearchParams(window.location.search);
         const initialView = urlParams.get('view') || 'view-duty-status';
         switchView(initialView);
 
-        // Sidebar state
         if (localStorage.getItem('sidebarState') === 'collapsed') {
             dashboardContainer.classList.add('sidebar-collapsed');
         }
@@ -3398,7 +3241,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             dashboardContainer.classList.toggle('sidebar-collapsed');
             localStorage.setItem('sidebarState', dashboardContainer.classList.contains('sidebar-collapsed') ? 'collapsed' : 'expanded');
             
-            // Trigger map resize after sidebar transition
             if (sectorOpsMap) {
                 setTimeout(() => sectorOpsMap.resize(), 400); 
             }
@@ -3412,6 +3254,5 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Start the application
     initializeApp();
 });
