@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Define the necessary rotation matrices for orientation.
             const rotationX_pitch = new THREE.Matrix4().makeRotationX(Math.PI / 2); // Pitches the model to be level.
-            const rotationY_offset = new THREE.Matrix4().makeRotationY(Math.PI);    // Corrects the model's default forward direction.
+            const rotationY_offset = new THREE.Matrix4().makeRotationY(Math.PI); // Corrects the model's default forward direction.
             const rotationZ_heading = new THREE.Matrix4().makeRotationZ(headingRadians); // Applies the live heading.
 
             // Build the final transformation matrix for the model.
@@ -165,7 +165,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         // --- Previous fixes (keep these) ---
                         material.transparent = false;
                         material.opacity = 1.0;
-                        material.side = THREE.DoubleSide;
+                        material.side = THREE.BackSide;
                         material.needsUpdate = true;
                         material.toneMapped = true;
                         material.emissiveIntensity = 0.2;
