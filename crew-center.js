@@ -1436,7 +1436,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!sectorOpsMap.getLayer(customThreeJSLayer.id)) {
             sectorOpsMap.addLayer(customThreeJSLayer);
         }
-    }
+    };
 
     /**
      * NEW: Central function to control the 3D model's visibility, position, and rotation.
