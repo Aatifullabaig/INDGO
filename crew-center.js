@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(lngLat, 0);
     this.modelPosition = { x: modelAsMercator.x, y: modelAsMercator.y, z: modelAsMercator.z };
-    this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 200;
+    this.modelScale = modelAsMercator.meterInMercatorCoordinateUnits() * 2;
     console.log("Calculated Position:", this.modelPosition);
     console.log("Calculated Scale:", this.modelScale);
 
@@ -163,9 +163,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const materials = Array.isArray(child.material) ? child.material : [child.material];
                     materials.forEach((material, index) => {
                         console.log(`  - Material #${index}:`, material.name);
-                        material.depthWrite = true;
-                        material.transparent = false;
-                        material.side = THREE.DoubleSide;
+                        material.depthWrite = false;
                         material.needsUpdate = true;
                     });
                 }
