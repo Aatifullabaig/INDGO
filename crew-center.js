@@ -994,7 +994,9 @@ document.addEventListener('DOMContentLoaded', async () => {
      */
     function initializeLiveMap() {
         if (!MAPBOX_ACCESS_TOKEN) return;
-        if (document.getElementById('live-flights-map-container') && !liveFlightsMap) {
+        const mapContainer = document.getElementById('live-flights-map-container'); // Get the container
+        if (mapContainer && !liveFlightsMap) {
+            mapContainer.innerHTML = ''; // *** FIX: Clear the container before initializing the map ***
             liveFlightsMap = new mapboxgl.Map({
                 container: 'live-flights-map-container',
                 style: 'mapbox://styles/mapbox/dark-v11',
@@ -1335,7 +1337,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             sectorOpsMap.on('load', () => {
                 // Load the icon for live aircraft markers. Assumes an icon exists at this path.
                 sectorOpsMap.loadImage(
-                    '/images/whiteplane.png',
+                    '/Images/whiteplane.png', // *** FIX: Changed path from /images to /Images ***
                     (error, image) => {
                         if (error) {
                             console.warn('Could not load plane icon for map.');
@@ -1403,34 +1405,33 @@ document.addEventListener('DOMContentLoaded', async () => {
             },
 
             render: function (gl, matrix) {
+                // --- START OF FIX: Replaced entire render function logic ---
+
                 // First, check if the model is loaded and is set to be visible.
-                // If not, there's nothing to render, so we exit early.
                 if (!gltfModel || !gltfModel.visible) {
+                    // Repaint to ensure the map updates if the model was just hidden.
+                    if (sectorOpsMap) sectorOpsMap.triggerRepaint();
                     return;
                 }
 
-                // The 'matrix' from Mapbox is the camera's view-projection matrix.
-                const m = new THREE.Matrix4().fromArray(matrix);
+                // Set the Three.js camera's projection matrix from the Mapbox matrix.
+                // This matrix contains both the projection and view transformations needed.
+                this.camera.projectionMatrix.fromArray(matrix);
 
-                // In your 'update3DModelVisibility' function, you already set the model's
-                // position, rotation, and scale. Three.js uses these to automatically
-                // compute the model's final transformation matrix ('gltfModel.matrix').
-                // We will use that computed matrix directly. This is the key fix.
-                const modelTransform = gltfModel.matrix;
-
-                // Combine the Mapbox camera matrix with the model's transformation matrix.
-                this.camera.projectionMatrix = m.multiply(modelTransform);
-                
                 // It's good practice to reset the WebGL state and clear the depth buffer
-                // to prevent rendering artifacts (like the transparency issue you saw before).
+                // to prevent rendering artifacts from interfering with the map.
                 this.renderer.resetState();
-                this.renderer.clearDepth(); // Explicitly clear the depth buffer
+                this.renderer.clearDepth();
 
-                // Render the Three.js scene.
+                // Render the Three.js scene. The renderer will automatically use the model's
+                // world matrix (calculated from its position/rotation) and the camera's
+                // projection matrix to render the object correctly.
                 this.renderer.render(this.scene, this.camera);
                 
-                // Tell Mapbox that it needs to update the map view.
-                sectorOpsMap.triggerRepaint();
+                // Tell Mapbox that it needs to update the map view with our 3D object.
+                if (sectorOpsMap) sectorOpsMap.triggerRepaint();
+                
+                // --- END OF FIX ---
             }
         };
 
