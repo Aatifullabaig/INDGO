@@ -1335,23 +1335,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         return new Promise(resolve => {
             sectorOpsMap.on('load', () => {
-                // Load the icon for live aircraft markers. Assumes an icon exists at this path.
+                // --- START OF REVISED FIX ---
+                // We will attempt to load the icon, but we will not let it block
+                // the initialization of other critical map features like the 3D layer.
                 sectorOpsMap.loadImage(
-                    '/Images/whiteplane.png', // *** FIX: Changed path from /images to /Images ***
+                    'images/whiteplane.png', // Switched to a relative path, which is often more reliable. Check network tab for 404 if this fails.
                     (error, image) => {
                         if (error) {
-                            console.warn('Could not load plane icon for map.');
-                        } else {
+                            // This error is now expected if the path is wrong. The map will function without it.
+                            console.warn('Could not load the 2D plane icon for the map. Live flights will appear as dots until this is fixed. 3D models should still work.');
+                        } else if (image) {
+                            // If loading is successful, add the image to the map.
                             if (!sectorOpsMap.hasImage('plane-icon')) {
                                 sectorOpsMap.addImage('plane-icon', image);
                             }
                         }
-                        // NEW: Initialize the Three.js layer once the map is ready
-                        initializeThreeJSLayer();
-                        
-                        resolve(); // Resolve the promise once the image is loaded or fails
                     }
                 );
+    
+                // Initialize the 3D layer immediately after starting the image load.
+                // This no longer waits for the loadImage callback, ensuring it always runs.
+                initializeThreeJSLayer();
+    
+                // The promise is resolved, allowing the UI to continue loading.
+                resolve();
+                // --- END OF REVISED FIX ---
             });
         });
     }
@@ -1388,6 +1396,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
                 this.renderer.autoClear = false;
                 threeRenderer = this.renderer;
+                console.log('[3D-DEBUG] Three.js renderer initialized.'); // DEBUGGING LOG
 
                 // Load the GLTF model
                 const loader = new GLTFLoader();
@@ -1397,7 +1406,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     gltfModel.scale.set(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE);
                     gltfModel.visible = false; // Initially hidden
                     this.scene.add(gltfModel);
-                    console.log('3D aircraft model loaded successfully.');
+                    console.log('[3D-DEBUG] 3D aircraft model loaded successfully into the scene.'); // DEBUGGING LOG
                 }, undefined, (error) => {
                     console.error('An error happened while loading the 3D model:', error);
                     showNotification('Could not load 3D aircraft model.', 'error');
@@ -1405,33 +1414,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             },
 
             render: function (gl, matrix) {
-                // --- START OF FIX: Replaced entire render function logic ---
-
                 // First, check if the model is loaded and is set to be visible.
                 if (!gltfModel || !gltfModel.visible) {
-                    // Repaint to ensure the map updates if the model was just hidden.
                     if (sectorOpsMap) sectorOpsMap.triggerRepaint();
                     return;
                 }
 
                 // Set the Three.js camera's projection matrix from the Mapbox matrix.
-                // This matrix contains both the projection and view transformations needed.
                 this.camera.projectionMatrix.fromArray(matrix);
 
-                // It's good practice to reset the WebGL state and clear the depth buffer
-                // to prevent rendering artifacts from interfering with the map.
+                // Reset the WebGL state and clear the depth buffer to prevent rendering artifacts.
                 this.renderer.resetState();
                 this.renderer.clearDepth();
 
-                // Render the Three.js scene. The renderer will automatically use the model's
-                // world matrix (calculated from its position/rotation) and the camera's
-                // projection matrix to render the object correctly.
+                // Render the Three.js scene.
                 this.renderer.render(this.scene, this.camera);
                 
-                // Tell Mapbox that it needs to update the map view with our 3D object.
+                // Tell Mapbox that it needs to update the map view.
                 if (sectorOpsMap) sectorOpsMap.triggerRepaint();
-                
-                // --- END OF FIX ---
             }
         };
 
@@ -1440,12 +1440,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
-
     /**
      * NEW: Central function to control the 3D model's visibility, position, and rotation.
      */
     function update3DModelVisibility(flightProps) {
-        if (!gltfModel) return; // Don't do anything if the model hasn't loaded
+        if (!gltfModel) {
+            // This can happen normally on first load, so a warning isn't necessary unless it persists.
+            return;
+        }
 
         const layerId = 'sector-ops-live-flights-layer';
 
@@ -1454,18 +1456,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             const { position, heading } = flightProps;
             const coords = [position.lon, position.lat];
 
+            console.log(`[3D-DEBUG] Updating model for flight ${flightProps.flightId} at [${position.lon}, ${position.lat}]`); // DEBUGGING LOG
+
             // Convert LngLat to Mercator coordinates for Three.js positioning
             const modelAsMercator = mapboxgl.MercatorCoordinate.fromLngLat(coords, position.alt_ft);
 
             gltfModel.position.set(modelAsMercator.x, modelAsMercator.y, modelAsMercator.z);
             
             // Rotate the model to match the aircraft's heading
-            // Note: rotation order is Y, X, Z in Three.js. We rotate around Z-axis for heading.
             gltfModel.rotation.set(Math.PI / 2, 0, (90 - heading) * (Math.PI / 180));
 
             gltfModel.visible = true;
 
         } else {
+            console.log('[3D-DEBUG] Hiding 3D model.'); // DEBUGGING LOG
             selectedFlightIdFor3D = null;
             gltfModel.visible = false;
         }
@@ -1480,7 +1484,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             ]);
         }
         
-        sectorOpsMap.triggerRepaint();
+        if (sectorOpsMap) sectorOpsMap.triggerRepaint();
     }
 
     // --- [END] NEW 3D MODEL FUNCTIONS ---
@@ -2211,7 +2215,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                         'icon-rotate': ['get', 'heading'],
                         'icon-rotation-alignment': 'map',
                         'icon-allow-overlap': true,
-                        'icon-ignore-placement': true
+                        'icon-ignore-placement': true,
+                        // If the icon fails to load, this prevents ugly default markers
+                        'text-field': '',
                     }
                 });
 
