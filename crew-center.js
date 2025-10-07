@@ -2096,6 +2096,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
         mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
 
+        // =====================================================================
+        // --- FIX: START ---
+        // Explicitly hide Sector Ops pop-out windows and their recall buttons
+        // when switching away to prevent them from appearing over other tabs.
+        if (viewId !== 'view-rosters') {
+            const airportWindow = document.getElementById('airport-info-window');
+            const aircraftWindow = document.getElementById('aircraft-info-window');
+            const airportRecall = document.getElementById('airport-recall-btn');
+            const aircraftRecall = document.getElementById('aircraft-recall-btn');
+
+            if (airportWindow) airportWindow.classList.remove('visible');
+            if (aircraftWindow) aircraftWindow.classList.remove('visible');
+            if (airportRecall) airportRecall.classList.remove('visible');
+            if (aircraftRecall) aircraftRecall.classList.remove('visible');
+        }
+        // --- FIX: END ---
+        // =====================================================================
+
         const newLink = sidebarNav.querySelector(`.nav-link[data-view="${viewId}"]`);
         const newView = document.getElementById(viewId);
 
