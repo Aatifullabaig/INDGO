@@ -252,26 +252,31 @@ document.addEventListener('DOMContentLoaded', async () => {
                 overflow: hidden;
                 position: relative;
             }
-            #map-3d-container {
-                position: relative; /* Establishes a positioning context */
-                grid-column: 1 / -1;
-                grid-row: 1 / -1;
-                width: 100%;
-                height: 100%;
-            }
-            #sector-ops-map-fullscreen {
-                width: 100%;
-                height: 100%;
-            }
-            #three-js-canvas-overlay {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                /* This is crucial: makes the canvas click-through */
-                pointer-events: none; 
-            }
+/* The main container must be the positioning reference */
+#map-3d-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Position BOTH the map and the canvas absolutely inside the container */
+#sector-ops-map-fullscreen,
+#three-js-canvas-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* Crucially, set the canvas's z-index higher than the map's 
+  (which is 0 by default) and make it ignore mouse clicks.
+*/
+#three-js-canvas-overlay {
+    z-index: 1;
+    pointer-events: none; 
+}
             
             /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
             .info-window {
