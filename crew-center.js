@@ -1403,24 +1403,35 @@ document.addEventListener('DOMContentLoaded', async () => {
             },
 
             render: function (gl, matrix) {
-                const rotationX = new THREE.Matrix4().makeRotationX(Math.PI / 2);
-                const rotationY = new THREE.Matrix4().makeRotationY(0); // Adjust if model is not facing north
-                const rotationZ = new THREE.Matrix4().makeRotationZ(0);
+                // First, check if the model is loaded and is set to be visible.
+                // If not, there's nothing to render, so we exit early.
+                if (!gltfModel || !gltfModel.visible) {
+                    return;
+                }
 
+                // The 'matrix' from Mapbox is the camera's view-projection matrix.
                 const m = new THREE.Matrix4().fromArray(matrix);
-                const l = new THREE.Matrix4()
-                    .makeTranslation(0, 0, 0) // placeholder, position is set on the model directly
-                    .scale(new THREE.Vector3(1, 1, 1))
-                    .multiply(rotationX)
-                    .multiply(rotationY)
-                    .multiply(rotationZ);
 
-                this.camera.projectionMatrix = m.multiply(l);
+                // In your 'update3DModelVisibility' function, you already set the model's
+                // position, rotation, and scale. Three.js uses these to automatically
+                // compute the model's final transformation matrix ('gltfModel.matrix').
+                // We will use that computed matrix directly. This is the key fix.
+                const modelTransform = gltfModel.matrix;
+
+                // Combine the Mapbox camera matrix with the model's transformation matrix.
+                this.camera.projectionMatrix = m.multiply(modelTransform);
+                
+                // It's good practice to reset the WebGL state and clear the depth buffer
+                // to prevent rendering artifacts (like the transparency issue you saw before).
                 this.renderer.resetState();
+                this.renderer.clearDepth(); // Explicitly clear the depth buffer
+
+                // Render the Three.js scene.
                 this.renderer.render(this.scene, this.camera);
+                
+                // Tell Mapbox that it needs to update the map view.
                 sectorOpsMap.triggerRepaint();
             }
-        };
 
         if (!sectorOpsMap.getLayer(customThreeJSLayer.id)) {
             sectorOpsMap.addLayer(customThreeJSLayer);
