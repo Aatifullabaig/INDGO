@@ -1507,7 +1507,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return waypoints;
     }
 
-    // --- [COMPLETELY REWRITTEN] Handles aircraft clicks, data fetching, map plotting, and window population.
+    // --- [COMPLETELY REWRITTEN & FIXED] Handles aircraft clicks, data fetching, map plotting, and window population.
     async function handleAircraftClick(flightProps, sessionId) {
         if (!flightProps || !flightProps.flightId) return;
 
@@ -1539,7 +1539,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // First, populate the info window UI with all available data
             populateAircraftInfoWindow(flightProps, plan);
 
-            // --- [REDESIGNED] Map Plotting Logic ---
+            // --- Map Plotting Logic ---
             const currentPosition = [flightProps.position.lon, flightProps.position.lat];
             const flownLayerId = `flown-path-${flightProps.flightId}`;
             const plannedLayerId = `planned-path-${flightProps.flightId}`;
@@ -1551,7 +1551,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 : [];
             
             if (historicalRoute.length > 0) {
-                // The complete flown path includes all historical points plus the current live position
                 const completeFlownPath = [...historicalRoute, currentPosition];
                 allCoordsForBounds.push(...historicalRoute);
 
@@ -1569,16 +1568,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // 3. Process and plot the Planned Path (The Future)
             if (plan && plan.flightPlanItems) {
-                const allWaypoints = flattenWaypointsFromPlan(plan.flightPlanItems);
-                
-                // Use nextWaypointIndex (defaulting to 0) to find the remaining waypoints
+                // --- START OF FIX ---
+                // Get the index of the next high-level waypoint from the API. This index
+                // corresponds to the original, nested `flightPlanItems` array.
                 const nextWaypointIndex = plan.nextWaypointIndex || 0;
+
+                // Slice the original, nested flight plan array to get only the items remaining on the route.
+                const remainingPlanItems = plan.flightPlanItems.slice(nextWaypointIndex);
                 
-                // Ensure the index is within the bounds of our flattened waypoint array
-                if (allWaypoints.length > 0 && nextWaypointIndex < allWaypoints.length) {
-                    const remainingWaypoints = allWaypoints.slice(nextWaypointIndex);
-                    
-                    // The planned path starts at the current position and connects to all future waypoints
+                // Now, flatten only the remaining part of the flight plan to get the future coordinates.
+                const remainingWaypoints = flattenWaypointsFromPlan(remainingPlanItems);
+                
+                if (remainingWaypoints.length > 0) {
+                    // The planned path starts at the current position and connects to all future waypoints.
                     const completePlannedPath = [currentPosition, ...remainingWaypoints];
                     allCoordsForBounds.push(...remainingWaypoints);
                     
@@ -1593,6 +1595,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         paint: { 'line-color': '#e84393', 'line-width': 3, 'line-dasharray': [2, 2] }
                     });
                 }
+                // --- END OF FIX ---
             }
             
             // Store the layer IDs for cleanup later
