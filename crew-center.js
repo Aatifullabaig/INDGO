@@ -1140,8 +1140,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                             }
 
                             // Planned path
-                            if (planRes.ok && planJson.ok && planJson.plan?.waypoints?.length > 0) {
-                                const plannedWps = planJson.plan.waypoints.map(wp => [wp.lon, wp.lat]);
+                            if (planRes.ok && planJson.ok && Array.isArray(planJson?.plan?.flightPlanItems) && planJson.plan.flightPlanItems.length > 0) {
+                                const nextIdx = (typeof planJson?.plan?.nextWaypointIndex === 'number') ? planJson.plan.nextWaypointIndex : 0;
+                                const items = Array.isArray(planJson.plan.flightPlanItems) ? planJson.plan.flightPlanItems.slice(nextIdx) : [];
+                                const plannedWps = flattenWaypointsFromPlan(items);
                                 const remainingPathCoords = [lngLat, ...plannedWps];
                                 allCoordsForBounds.push(...remainingPathCoords);
                                 liveFlightsMap.addSource('planned-path-source', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: remainingPathCoords } } });
@@ -1551,8 +1553,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 : [];
             
             if (historicalRoute.length > 0) {
-                const completeFlownPath = [...historicalRoute, currentPosition];
-                allCoordsForBounds.push(...historicalRoute);
+                const completeFlownPath = [.....historicalRoute, currentPosition];
+                allCoordsForBounds.push(.....historicalRoute);
 
                 sectorOpsMap.addSource(flownLayerId, {
                     type: 'geojson',
@@ -1581,8 +1583,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 if (remainingWaypoints.length > 0) {
                     // The planned path starts at the current position and connects to all future waypoints.
-                    const completePlannedPath = [currentPosition, ...remainingWaypoints];
-                    allCoordsForBounds.push(...remainingWaypoints);
+                    const completePlannedPath = [currentPosition, .....remainingWaypoints];
+                    allCoordsForBounds.push(.....remainingWaypoints);
                     
                     sectorOpsMap.addSource(plannedLayerId, {
                         type: 'geojson',
