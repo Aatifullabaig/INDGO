@@ -1526,7 +1526,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (plan && plan.flightPlanItems?.length > 0) {
                 const allWaypoints = [];
                 const extractWps = items => items.forEach(item => {
-                    if (item.location) allWaypoints.push([item.location.longitude, item.location.latitude]);
+                    // ✅ FIX: Filter out invalid (0,0) or null coordinates to prevent broken paths
+                    if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
+                        allWaypoints.push([item.location.longitude, item.location.latitude]);
+                    }
                     if (item.children) extractWps(item.children);
                 });
                 extractWps(plan.flightPlanItems);
