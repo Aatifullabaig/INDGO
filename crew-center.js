@@ -1478,9 +1478,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     /**
-     * --- [NEW HELPER] ---
+     * --- [FIXED HELPER] ---
      * Recursively flattens the nested flightPlanItems from the SimBrief API plan
      * into a single, clean array of [longitude, latitude] coordinates.
+     * This version correctly handles nested procedures like SIDs and STARs.
      * @param {Array} items - The flightPlanItems array from the API response.
      * @returns {Array<[number, number]>} A flat array of coordinates.
      */
@@ -1490,13 +1491,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const extract = (planItems) => {
             for (const item of planItems) {
-                // Ensure the item has a valid location with non-zero/null coordinates
-                if (item.location && typeof item.location.longitude === 'number' && typeof item.location.latitude === 'number' && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
-                    waypoints.push([item.location.longitude, item.location.latitude]);
-                }
-                // Recursively process any children waypoints (e.g., for procedures)
-                if (Array.isArray(item.children)) {
+                // If an item is a container for a procedure (like a SID/STAR),
+                // ignore its own coordinates and process its children instead.
+                if (Array.isArray(item.children) && item.children.length > 0) {
                     extract(item.children);
+                } 
+                // Otherwise, if it's a simple waypoint, add its coordinates.
+                else if (item.location && typeof item.location.longitude === 'number' && typeof item.location.latitude === 'number' && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
+                    waypoints.push([item.location.longitude, item.location.latitude]);
                 }
             }
         };
