@@ -116,465 +116,198 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+
     // --- [REHAULED] Helper to inject custom CSS for new features ---
-    function injectCustomStyles() {
-        const styleId = 'sector-ops-custom-styles';
-        if (document.getElementById(styleId)) return;
+function injectCustomStyles() {
+  const styleId = 'sector-ops-custom-styles';
+  if (document.getElementById(styleId)) return;
 
-        const css = `
-            /* --- [FIX] Sector Ops View Layout --- */
-            #view-rosters {
-                display: grid;
-                grid-template-columns: 1fr;
-                grid-template-rows: 1fr;
-                height: 100%;
-                width: 100%;
-                overflow: hidden;
-                position: relative;
-            }
-            #sector-ops-map-fullscreen {
-                grid-column: 1 / -1;
-                grid-row: 1 / -1;
-                width: 100%;
-                height: 100%;
-            }
-            
-            /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
-            .info-window {
-                position: absolute;
-                top: 20px;
-                right: 20px;
-                width: 420px;
-                max-width: 90vw;
-                max-height: calc(100vh - 40px);
-                background: rgba(18, 20, 38, 0.75);
-                backdrop-filter: blur(20px) saturate(180%);
-                -webkit-backdrop-filter: blur(20px) saturate(180%);
-                border-radius: 16px;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                box-shadow: 0 12px 40px rgba(0,0,0,0.6);
-                z-index: 1050;
-                display: none;
-                flex-direction: column;
-                overflow: hidden;
-                color: #e8eaf6;
-                transition: opacity 0.3s ease, transform 0.3s ease;
-                opacity: 0;
-                transform: translateX(20px);
-            }
-            .info-window.visible { 
-                display: flex; 
-                opacity: 1;
-                transform: translateX(0);
-            }
-            .info-window-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 16px 20px;
-                background: rgba(10, 12, 26, 0.6);
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-                flex-shrink: 0;
-            }
-            .info-window-header h3 {
-                margin: 0; 
-                font-size: 1.3rem; 
-                color: #fff;
-                font-weight: 600;
-                text-shadow: 0 2px 5px rgba(0,0,0,0.4);
-            }
-            .info-window-header h3 small { 
-                font-weight: 300; 
-                color: #c5cae9; 
-                font-size: 0.9rem; 
-                margin-left: 5px;
-            }
-            .info-window-actions button {
-                background: rgba(255,255,255,0.05); 
-                border: 1px solid rgba(255,255,255,0.1);
-                color: #c5cae9; 
-                cursor: pointer;
-                font-size: 1rem; 
-                width: 32px; height: 32px;
-                border-radius: 50%;
-                margin-left: 8px;
-                line-height: 1; 
-                display: grid;
-                place-items: center;
-                transition: all 0.2s ease-in-out;
-            }
-            .info-window-actions button:hover { 
-                background: #00a8ff;
-                color: #fff; 
-                transform: scale(1.1) rotate(90deg);
-                border-color: #00a8ff;
-            }
-            .info-window-content { 
-                overflow-y: auto; 
-                flex-grow: 1; 
-                padding: 0;
-            }
-            /* Custom Scrollbar */
-            .info-window-content::-webkit-scrollbar { width: 8px; }
-            .info-window-content::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
-            .info-window-content::-webkit-scrollbar-thumb { background-color: #00a8ff; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
-            .info-window-content::-webkit-scrollbar-thumb:hover { background-color: #33c1ff; }
-
-            /* --- [OVERHAUL] Airport Window: Weather & Tabs --- */
-            .airport-info-weather {
-                padding: 20px;
-                display: grid;
-                grid-template-columns: auto 1fr;
-                gap: 15px 20px;
-                align-items: center;
-                background: linear-gradient(135deg, rgba(0, 168, 255, 0.15), rgba(0, 100, 200, 0.25));
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            }
-            .weather-flight-rules { 
-                font-size: 1.8rem; font-weight: 700; 
-                padding: 12px 18px; border-radius: 10px;
-                grid-row: 1 / 3;
-                text-shadow: 1px 1px 3px rgba(0,0,0,0.3);
-            }
-            .flight-rules-vfr { background-color: #28a745; color: white; }
-            .flight-rules-mvfr { background-color: #007bff; color: white; }
-            .flight-rules-ifr { background-color: #dc3545; color: white; }
-            .flight-rules-lifr { background-color: #a33ea3; color: white; }
-            .weather-details-grid { 
-                display: grid; grid-template-columns: 1fr 1fr; 
-                gap: 10px 15px; text-align: left;
-            }
-            .weather-details-grid span { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; }
-            .weather-details-grid .fa-solid { color: #00a8ff; width: 16px; text-align: center; }
-            .metar-code {
-                grid-column: 1 / -1; font-family: 'Courier New', Courier, monospace;
-                background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px;
-                font-size: 0.8rem; color: #e0e0e0; margin-top: 5px;
-            }
-            
-            .info-window-tabs { display: flex; background: rgba(10, 12, 26, 0.4); padding: 5px 15px 0 15px; }
-            .info-tab-btn {
-                padding: 14px 18px; border: none; background: none; color: #c5cae9;
-                cursor: pointer; font-size: 0.9rem; font-weight: 600;
-                border-bottom: 3px solid transparent; transition: all 0.25s;
-                display: flex; align-items: center; gap: 8px;
-            }
-            .info-tab-btn:hover { color: #fff; }
-            .info-tab-btn.active { color: #00a8ff; border-bottom-color: #00a8ff; }
-            .info-tab-content { display: none; animation: fadeIn 0.4s; }
-            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-            .info-tab-content.active { display: block; }
-            .info-tab-content ul { list-style: none; padding: 0; margin: 0; }
-            .info-tab-content li { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
-            .info-tab-content li:last-child { border-bottom: none; }
-            .muted-text { color: #9fa8da; text-align: center; padding: 2rem; }
-
-            /* --- [NEW] UNIFIED FLIGHT DISPLAY FOR AIRCRAFT WINDOW --- */
-            .unified-display-container {
-                display: flex;
-                flex-direction: column;
-                height: 100%;
-                padding: 16px;
-                gap: 12px;
-                font-family: 'Segoe UI', sans-serif;
-            }
-            .unified-display-header {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            }
-            .flight-id-block {
-                flex-shrink: 0;
-            }
-            .flight-id-block .flight-number {
-                font-size: 1.5rem; font-weight: 700; color: #fff;
-            }
-            .flight-id-block .pilot-callsign {
-                font-size: 0.9rem; color: #c5cae9;
-            }
-            .flight-progress-block {
-                flex-grow: 1; display: flex; align-items: center; gap: 10px;
-            }
-            .flight-phase-badge {
-                padding: 4px 10px; border-radius: 15px; font-size: 0.8rem; font-weight: 600;
-                background-color: rgba(0, 168, 255, 0.2);
-                border: 1px solid #00a8ff;
-                color: #89f7fe;
-            }
-            .route-progress-bar {
-                display: flex; align-items: center; width: 100%;
-            }
-            .route-progress-bar .icao {
-                font-family: 'Courier New', monospace; font-weight: bold; font-size: 1.1rem;
-            }
-            .progress-bar-container {
-                flex-grow: 1; height: 8px; background: rgba(10, 12, 26, 0.7);
-                border-radius: 4px; margin: 0 10px; overflow: hidden;
-            }
-            .progress-bar-fill {
-                height: 100%; width: 0%;
-                background: linear-gradient(90deg, #00a8ff, #89f7fe);
-                transition: width 0.5s ease-out;
-            }
-            .unified-display-main {
-                flex-grow: 1;
-                display: grid;
-                grid-template-columns: 1fr; /* Changed for PFD */
-                gap: 12px;
-                background: rgba(10, 12, 26, 0.5);
-                border-radius: 12px;
-                padding: 12px;
-                min-height: 250px;
-            }
-            .unified-display-footer {
-                display: grid;
-                grid-template-columns: repeat(4, 1fr);
-                gap: 10px;
-            }
-            .readout-box {
-                background: rgba(10, 12, 26, 0.6);
-                padding: 12px; border-radius: 8px; text-align: center;
-            }
-            .readout-box .label {
-                font-size: 0.75rem; text-transform: uppercase; color: #c5cae9;
-                margin-bottom: 4px;
-            }
-            .readout-box .value {
-                font-size: 1.5rem; font-weight: 600; color: #fff;
-                font-family: 'Courier New', monospace;
-            }
-            .readout-box .value .unit { font-size: 0.9rem; color: #9fa8da; }
-            .readout-box .value .fa-solid { font-size: 0.9rem; margin-right: 5px; color: #00a8ff; }
-
-            /* --- [NEW & OVERHAULED] PFD (Primary Flight Display) Styles --- */
-            .pfd-container {
-                background: #000;
-                border-radius: 8px;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                padding: 5px;
-                position: relative;
-                overflow: hidden;
-                font-family: 'SF Mono', 'Consolas', 'Courier New', monospace;
-                font-weight: bold;
-                color: #fff;
-                height: 250px; /* Give it a fixed height */
-            }
-            /* Tapes (Airspeed & Altitude) */
-            .pfd-tape {
-                position: relative;
-                width: 70px;
-                height: 100%;
-                background: #1a1a1a;
-                overflow: hidden;
-                border-radius: 4px;
-            }
-            .tape-strip {
-                position: absolute;
-                width: 100%;
-                will-change: transform;
-                transition: transform 0.2s linear;
-            }
-            .tape-marker-window {
-                position: absolute;
-                width: 100%;
-                top: 50%;
-                transform: translateY(-50%);
-                height: 30px;
-                background: rgba(0,0,0,0.5);
-                border: 2px solid #000;
-                border-left: none;
-                border-right: none;
-            }
-            .tape-readout {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                font-size: 1.5rem;
-                color: #4CAF50; /* Green */
-                text-shadow: 0 0 5px #4CAF50;
-            }
-            .tape-pointer {
-                position: absolute;
-                top: 50%;
-                transform: translateY(-50%);
-                width: 0; height: 0;
-            }
-            #speed-tape .tape-pointer {
-                left: -2px;
-                border-top: 10px solid transparent;
-                border-bottom: 10px solid transparent;
-                border-left: 10px solid #f1c40f; /* Yellow */
-            }
-            #alt-tape .tape-pointer {
-                right: -2px;
-                border-top: 10px solid transparent;
-                border-bottom: 10px solid transparent;
-                border-right: 10px solid #f1c40f; /* Yellow */
-            }
-            .tape-line {
-                height: 2px;
-                background: #fff;
-                position: absolute;
-                width: 25%;
-            }
-            .tape-line.major { width: 40%; }
-            #speed-tape .tape-line { left: 0; }
-            #alt-tape .tape-line { right: 0; }
-            .tape-line-label {
-                position: absolute;
-                font-size: 0.9rem;
-            }
-            #speed-tape .tape-line-label { left: 35px; transform: translateY(-50%); }
-            #alt-tape .tape-line-label { right: 35px; transform: translateY(-50%); }
-
-            /* Attitude Indicator (ADI) */
-            .attitude-indicator {
-                width: 250px;
-                height: 250px;
-                border-radius: 50%;
-                background: #1a1a1a;
-                position: relative;
-                overflow: hidden;
-                border: 3px solid #888;
-                margin: 0 5px;
-                flex-shrink: 0;
-            }
-            .horizon-sphere {
-                width: 100%; height: 100%;
-                position: absolute;
-                left: 0; top: 0;
-                will-change: transform;
-                transition: transform 0.2s linear;
-            }
-            .sky {
-                position: absolute;
-                width: 100%; height: 50%;
-                top: 0; background: #0091ea; /* Sky Blue */
-            }
-            .ground {
-                position: absolute;
-                width: 100%; height: 50%;
-                bottom: 0; background: #8d6e63; /* Earth Brown */
-            }
-            .pitch-ladder {
-                position: absolute; width: 100%; height: 100%;
-            }
-            .pitch-line {
-                position: absolute; left: 50%;
-                transform: translateX(-50%);
-                height: 2px; background: #fff;
-            }
-            .pitch-line[data-deg="5"], .pitch-line[data-deg="-5"] { width: 60px; }
-            .pitch-line[data-deg="10"], .pitch-line[data-deg="-10"] { width: 100px; }
-            .pitch-line[data-deg="15"], .pitch-line[data-deg="-15"] { width: 60px; }
-            .pitch-line[data-deg="20"], .pitch-line[data-deg="-20"] { width: 100px; }
-            .pitch-label {
-                position: absolute; top: -10px; font-size: 0.9rem;
-            }
-            .pitch-label-left { left: -25px; }
-            .pitch-label-right { right: -25px; }
-            
-            .roll-scale-container {
-                position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-                will-change: transform;
-                transition: transform 0.2s linear;
-            }
-            .roll-pointer {
-                position: absolute; top: 8px; left: 50%;
-                transform: translateX(-50%);
-                width: 0; height: 0;
-                border-left: 12px solid transparent;
-                border-right: 12px solid transparent;
-                border-top: 12px solid #f1c40f;
-                z-index: 5;
-            }
-            .roll-mark {
-                position: absolute; top: 25px; left: 50%;
-                height: 10px; width: 2px; background: #fff;
-                transform-origin: 0px 100px; /* Adjust based on ADI radius */
-            }
-            .roll-mark.thirty { height: 15px; }
-            .roll-mark.fortyfive {
-                height: 0; width: 0;
-                border-left: 8px solid transparent;
-                border-right: 8px solid transparent;
-                border-bottom: 12px solid #fff;
-                background: transparent;
-                transform: translate(-50%, -50%);
-            }
-            .slip-skid-indicator {
-                position: absolute; top: 30px; left: 50%;
-                width: 20px; height: 12px;
-                background: #f1c40f;
-                border: 2px solid black;
-                border-radius: 2px;
-                transform: translateX(-50%);
-                z-index: 5;
-            }
-
-            .static-plane-symbol {
-                position: absolute; top: 50%; left: 50%;
-                transform: translate(-50%, -50%);
-                width: 120px; height: 40px;
-                z-index: 4;
-            }
-            .static-plane-symbol svg {
-                width: 100%; height: 100%;
-                stroke: #f1c40f;
-                stroke-width: 5;
-                stroke-linejoin: round;
-                fill: #000;
-            }
-
-            /* --- Toolbar Recall Buttons --- */
-            #airport-recall-btn, #aircraft-recall-btn {
-                display: none; font-size: 1.1rem; position: relative;
-            }
-            #airport-recall-btn.visible, #aircraft-recall-btn.visible {
-                display: inline-block;
-            }
-            #airport-recall-btn.palpitate, #aircraft-recall-btn.palpitate {
-                animation: palpitate 0.5s ease-in-out 2;
-            }
-            @keyframes palpitate {
-                0%, 100% { transform: scale(1); color: #00a8ff; }
-                50% { transform: scale(1.3); color: #fff; }
-            }
-            
-            /* Styles for Active ATC Markers on Sector Ops Map */
-            @keyframes atc-pulse {
-                0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
-                70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
-                100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
-            }
-            @keyframes atc-breathe {
-                0% { transform: scale(0.95); opacity: 0.6; }
-                50% { transform: scale(1.4); opacity: 0.9; }
-                100% { transform: scale(0.95); opacity: 0.6; }
-            }
-            .atc-active-marker {
-                width: 15px; height: 15px; background-color: #dc3545; border-radius: 50%;
-                border: 2px solid #fff; cursor: pointer; animation: atc-pulse 2s infinite;
-                display: grid; place-items: center;
-            }
-            .atc-approach-active::before {
-                content: ''; grid-area: 1 / 1; width: 250%; height: 250%; border-radius: 50%;
-                background-color: rgba(240, 173, 78, 0.8); z-index: -1; 
-                animation: atc-breathe 4s ease-in-out infinite;
-            }
-        `;
-
-        const style = document.createElement('style');
-        style.id = styleId;
-        style.type = 'text/css';
-        style.appendChild(document.createTextNode(css));
-        document.head.appendChild(style);
+  const css = `
+    /* --- [FIX] Sector Ops View Layout --- */
+    #view-rosters {
+      display: grid;
+      grid-template-columns: 1fr;
+      grid-template-rows: 1fr;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      position: relative;
     }
+    #sector-ops-map-fullscreen {
+      grid-column: 1 / -1;
+      grid-row: 1 / -1;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
+    .info-window {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 420px;
+      max-width: 90vw;
+      max-height: calc(100vh - 40px);
+      background: rgba(18, 20, 38, 0.75);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+      z-index: 1050;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      color: #e8eaf6;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      opacity: 0; transform: translateX(20px);
+    }
+    .info-window.visible { display: flex; opacity: 1; transform: translateX(0); }
+    .info-window-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 20px; background: rgba(10, 12, 26, 0.6);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1); flex-shrink: 0;
+    }
+    .info-window-header h3 { margin: 0; font-size: 1.3rem; color: #fff; font-weight: 600; text-shadow: 0 2px 5px rgba(0,0,0,0.4); }
+    .info-window-header h3 small { font-weight: 300; color: #c5cae9; font-size: 0.9rem; margin-left: 5px; }
+    .info-window-actions button {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      color: #c5cae9; cursor: pointer; font-size: 1rem; width: 32px; height: 32px;
+      border-radius: 50%; margin-left: 8px; line-height: 1; display: grid; place-items: center;
+      transition: all 0.2s ease-in-out;
+    }
+    .info-window-actions button:hover { background: #00a8ff; color: #fff; transform: scale(1.1) rotate(90deg); border-color: #00a8ff; }
+    .info-window-content { overflow-y: auto; flex-grow: 1; padding: 0; }
+    .info-window-content::-webkit-scrollbar { width: 8px; }
+    .info-window-content::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+    .info-window-content::-webkit-scrollbar-thumb { background-color: #00a8ff; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
+    .info-window-content::-webkit-scrollbar-thumb:hover { background-color: #33c1ff; }
+
+    /* --- Airport Weather Header --- */
+    .airport-info-weather {
+      padding: 20px; display: grid; grid-template-columns: auto 1fr; gap: 15px 20px; align-items: center;
+      background: linear-gradient(135deg, rgba(0,168,255,0.15), rgba(0,100,200,0.25));
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .weather-flight-rules { font-size: 1.8rem; font-weight: 700; padding: 12px 18px; border-radius: 10px; grid-row: 1 / 3; text-shadow: 1px 1px 3px rgba(0,0,0,0.3); }
+    .flight-rules-vfr { background:#28a745; color:#fff; }
+    .flight-rules-mvfr { background:#007bff; color:#fff; }
+    .flight-rules-ifr { background:#dc3545; color:#fff; }
+    .flight-rules-lifr { background:#a33ea3; color:#fff; }
+    .weather-details-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 15px; text-align:left; }
+    .weather-details-grid span { display:flex; align-items:center; gap:8px; font-size:.95rem; }
+    .weather-details-grid .fa-solid { color:#00a8ff; width:16px; text-align:center; }
+    .metar-code { grid-column:1 / -1; font-family:'Courier New', Courier, monospace; background:rgba(0,0,0,0.2); padding:8px; border-radius:4px; font-size:.8rem; color:#e0e0e0; margin-top:5px; }
+
+    /* --- Tabs --- */
+    .info-window-tabs { display:flex; background: rgba(10,12,26,0.4); padding: 5px 15px 0 15px; }
+    .info-tab-btn {
+      padding: 14px 18px; border: none; background: none; color: #c5cae9; cursor: pointer;
+      font-size: .9rem; font-weight: 600; border-bottom: 3px solid transparent; transition: .25s;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .info-tab-btn:hover { color:#fff; }
+    .info-tab-btn.active { color:#00a8ff; border-bottom-color:#00a8ff; }
+    .info-tab-content { display:none; animation: fadeIn .4s; }
+    @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+    .info-tab-content.active { display:block; }
+    .info-tab-content ul { list-style:none; padding:0; margin:0; }
+    .info-tab-content li { padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.08); }
+    .info-tab-content li:last-child { border-bottom:none; }
+    .muted-text { color:#9fa8da; text-align:center; padding:2rem; }
+
+    /* --- Unified Flight Display container (holds PFD) --- */
+    .unified-display-container { display:flex; flex-direction:column; height:100%; padding:16px; gap:12px; font-family:'Segoe UI', sans-serif; }
+    .unified-display-header { display:flex; align-items:center; gap:12px; padding-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.1); }
+    .flight-id-block .flight-number { font-size:1.5rem; font-weight:700; color:#fff; }
+    .flight-id-block .pilot-callsign { font-size:.9rem; color:#c5cae9; }
+    .flight-progress-block { flex:1; display:flex; align-items:center; gap:10px; }
+    .flight-phase-badge { padding:4px 10px; border-radius:15px; font-size:.8rem; font-weight:600; background:rgba(0,168,255,0.2); border:1px solid #00a8ff; color:#89f7fe; }
+    .route-progress-bar { display:flex; align-items:center; width:100%; }
+    .route-progress-bar .icao { font-family:'Courier New', monospace; font-weight:bold; font-size:1.1rem; }
+    .progress-bar-container { flex:1; height:8px; background:rgba(10,12,26,0.7); border-radius:4px; margin:0 10px; overflow:hidden; }
+    .progress-bar-fill { height:100%; width:0%; background:linear-gradient(90deg,#00a8ff,#89f7fe); transition:width .5s ease-out; }
+    .unified-display-main { flex:1; display:grid; grid-template-columns:1fr; gap:12px; background:rgba(10,12,26,0.5); border-radius:12px; padding:12px; min-height:250px; }
+    .unified-display-footer { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+    .readout-box { background:rgba(10,12,26,0.6); padding:12px; border-radius:8px; text-align:center; }
+    .readout-box .label { font-size:.68rem; text-transform:uppercase; color:#c5cae9; margin-bottom:4px; }
+    .readout-box .value { font-size:1.1rem; font-weight:600; color:#fff; font-family:'Courier New', monospace; }
+    .readout-box .value .unit { font-size:.85rem; color:#9fa8da; }
+    .readout-box .value .fa-solid { font-size:.9rem; margin-right:5px; color:#00a8ff; }
+
+    /* --- [REALISTIC + COMPACT] PFD Styles --- */
+    .pfd-container{
+      background:#000;border-radius:8px;display:flex;align-items:center;justify-content:center;
+      gap:6px;padding:2px;height:180px;color:#fff;font-family:"SF Mono","Consolas","Courier New",monospace
+    }
+
+    /* Airspeed / Altitude tapes */
+    .pfd-tape{position:relative;width:50px;height:100%;background:#141414;border-radius:3px;overflow:hidden}
+    .tape-strip{position:absolute;left:0;width:100%;transition:transform .15s linear;will-change:transform}
+    .tape-marker-window{position:absolute;left:0;top:50%;transform:translateY(-50%);height:20px;width:100%;
+      background:rgba(0,0,0,.55);border-top:1px solid #000;border-bottom:1px solid #000}
+    #speed-tape .tape-readout{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+      font-size:.95rem;color:#fff}
+    #alt-tape .tape-readout{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+      font-size:.95rem;color:#00e6ff} /* cyan */
+    #speed-tape .tape-pointer{position:absolute;top:50%;left:-1px;transform:translateY(-50%);
+      border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:6px solid #f1c40f}
+    #alt-tape .tape-pointer{position:absolute;top:50%;right:-1px;transform:translateY(-50%);
+      border-top:6px solid transparent;border-bottom:6px solid transparent;border-right:6px solid #f1c40f}
+    .tape-line{position:absolute;height:1px;background:#fff;width:22%}
+    .tape-line.major{width:35%}
+    #speed-tape .tape-line{left:0} #alt-tape .tape-line{right:0}
+    .tape-line-label{position:absolute;font-size:.6rem}
+    #speed-tape .tape-line-label{left:28px;transform:translateY(-50%)}
+    #alt-tape .tape-line-label{right:28px;transform:translateY(-50%)}
+
+    /* Attitude Indicator */
+    .attitude-indicator{
+      position:relative;width:180px;height:180px;border-radius:50%;overflow:hidden;
+      border:2px solid #8a8a8a;background:#101010;flex:0 0 180px;margin:0 3px;
+    }
+    .horizon-sphere{position:absolute;inset:0;transition:transform .15s linear;will-change:transform}
+    .sky{position:absolute;top:0;height:50%;width:100%;background:#0091ea}
+    .ground{position:absolute;bottom:0;height:50%;width:100%;background:#7a5a4f}
+
+    .pitch-ladder{position:absolute;inset:0}
+    .pitch-line{position:absolute;left:50%;transform:translateX(-50%);height:1px;background:#fff}
+    .pitch-line[data-deg="10"],.pitch-line[data-deg="-10"]{width:70px}
+    .pitch-line[data-deg="20"],.pitch-line[data-deg="-20"]{width:50px}
+    .pitch-label{position:absolute;top:-9px;font-size:.6rem}
+    .pitch-label-left{left:-22px}.pitch-label-right{right:-22px}
+
+    .roll-scale-container{position:absolute;inset:0;transition:transform .15s linear}
+    .roll-pointer{position:absolute;top:5px;left:50%;transform:translateX(-50%);width:0;height:0;
+      border-left:8px solid transparent;border-right:8px solid transparent;border-top:8px solid #f1c40f}
+    .roll-mark{position:absolute;top:22px;left:50%;width:2px;height:8px;background:#fff;transform-origin:0 88px}
+    .roll-mark.thirty{height:12px}
+    .roll-mark.fortyfive{width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:10px solid #fff;background:transparent;transform:translate(-50%,-50%)}
+
+    /* Center airplane / velocity cue */
+    .static-plane-symbol{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:78px;height:24px}
+    .static-plane-symbol svg{width:100%;height:100%;stroke:#f1c40f;stroke-width:3;fill:none}
+
+    /* --- Toolbar Recall Buttons --- */
+    #airport-recall-btn, #aircraft-recall-btn { display: none; font-size: 1.1rem; position: relative; }
+    #airport-recall-btn.visible, #aircraft-recall-btn.visible { display: inline-block; }
+    #airport-recall-btn.palpitate, #aircraft-recall-btn.palpitate { animation: palpitate 0.5s ease-in-out 2; }
+    @keyframes palpitate { 0%,100%{ transform:scale(1); color:#00a8ff } 50%{ transform:scale(1.3); color:#fff } }
+
+    /* --- Active ATC markers --- */
+    @keyframes atc-pulse { 0%{ box-shadow:0 0 0 0 rgba(220,53,69,.7) } 70%{ box-shadow:0 0 0 10px rgba(220,53,69,0) } 100%{ box-shadow:0 0 0 0 rgba(220,53,69,0) } }
+    @keyframes atc-breathe { 0%{ transform:scale(.95); opacity:.6 } 50%{ transform:scale(1.4); opacity:.9 } 100%{ transform:scale(.95); opacity:.6 } }
+    .atc-active-marker { width:15px; height:15px; background:#dc3545; border-radius:50%; border:2px solid #fff; cursor:pointer; animation: atc-pulse 2s infinite; display:grid; place-items:center; }
+    .atc-approach-active::before { content:''; grid-area:1 / 1; width:250%; height:250%; border-radius:50%; background:rgba(240,173,78,.8); z-index:-1; animation: atc-breathe 4s ease-in-out infinite; }
+  `;
+
+  const style = document.createElement('style');
+  style.id = styleId;
+  style.type = 'text/css';
+  style.appendChild(document.createTextNode(css));
+  document.head.appendChild(style);
+}
+
 
     // --- NEW: Fetch Airport Coordinate Data ---
     async function fetchAirportsData() {
@@ -949,61 +682,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * --- [NEW] Updates the dynamic PFD elements based on flight data.
      */
-    function updatePfdDisplay(flightData) {
-        const pfd = document.getElementById('pfd-container');
-        if (!pfd) return;
+    function updatePfdDisplay(flightData){
+  const pfd = document.getElementById('pfd-container');
+  if(!pfd) return;
 
-        // --- Element Selectors ---
-        const horizonSphere = pfd.querySelector('.horizon-sphere');
-        const rollScaleContainer = pfd.querySelector('.roll-scale-container');
-        const speedStrip = pfd.querySelector('#speed-tape .tape-strip');
-        const altStrip = pfd.querySelector('#alt-tape .tape-strip');
-        const speedReadout = pfd.querySelector('#speed-tape .tape-readout');
-        const altReadout = pfd.querySelector('#alt-tape .tape-readout');
+  // elements
+  const horizonSphere   = pfd.querySelector('.horizon-sphere');
+  const rollScale       = pfd.querySelector('.roll-scale-container');
+  const speedStrip      = pfd.querySelector('#speed-tape .tape-strip');
+  const altStrip        = pfd.querySelector('#alt-tape .tape-strip');
+  const speedReadout    = pfd.querySelector('#speed-tape .tape-readout');
+  const altReadout      = pfd.querySelector('#alt-tape .tape-readout');
 
-        // --- Data ---
-        const { altitude, speed, verticalSpeed } = flightData;
+  // data
+  const speed = Math.max(0, Number(flightData.speed)||0);
+  const altitude = Math.max(0, Number(flightData.altitude)||0);
+  const vs = Number(flightData.verticalSpeed)||0;
+  const roll = Number(flightData.roll)||0;    // (0 if you don’t have roll yet)
+  
+  /* Scale tuned for 180px PFD */
+  const PX_PER_KT  = 2.2;      // major every 20 kts, readable window
+  const PX_PER_FT  = 0.08;     // major every 500 ft on the tape
+  const PITCH_PX   = 4.5;      // px per pitch degree inside the sphere
 
-        // --- PFD Logic & Calculations ---
+  // map VS to pitch deg (≈ 3° per 1000 fpm, clamped)
+  const pitchDeg = Math.max(-20, Math.min(20, vs / 300));
 
-        // 1. Pitch Simulation
-        // We'll derive a plausible pitch angle from vertical speed.
-        // A typical climb/descent angle is 2.5-5 degrees for +/- 1500 fpm.
-        // Let's map it so that +/- 2000 fpm = +/- 10 degrees pitch. Clamp for realism.
-        const pitch = Math.max(-20, Math.min(20, (verticalSpeed / 200)));
+  // move/rotate horizon & roll scale
+  if(horizonSphere) horizonSphere.style.transform = `translateY(${ -pitchDeg * PITCH_PX }px) rotate(${roll}deg)`;
+  if(rollScale)     rollScale.style.transform     = `rotate(${roll}deg)`;
 
-        // 2. Roll Simulation
-        // True roll requires heading change over time. For a static update, we'll assume wings level.
-        const roll = 0;
+  // move tapes (center current value at window)
+  if(speedStrip) speedStrip.style.transform = `translateY(calc(50% - ${speed * PX_PER_KT}px))`;
+  if(altStrip)   altStrip.style.transform   = `translateY(calc(50% - ${altitude * PX_PER_FT}px))`;
 
-        // 3. Tape Calculations
-        const pixels_per_knot = 5;
-        const pixels_per_foot = 0.25;
-        
-        const speed_translate = speed * pixels_per_knot;
-        const alt_translate = altitude * pixels_per_foot;
-        
-        // --- Apply DOM Transformations ---
-        if (horizonSphere && rollScaleContainer) {
-            // Apply pitch (translate) and roll (rotate) to the sphere.
-            horizonSphere.style.transform = `translateY(${pitch * 10}px) rotate(${roll}deg)`;
-            
-            // Apply roll to the separate roll scale container so the pointer stays static.
-            rollScaleContainer.style.transform = `rotate(${roll}deg)`;
-        }
+  // digital windows (realistic rounding)
+  if(speedReadout) speedReadout.textContent = Math.round(speed);        // white (via CSS)
+  if(altReadout)   altReadout.textContent   = Math.round(altitude/10)*10; // cyan (via CSS)
+}
 
-        if (speedStrip && altStrip) {
-            // Move the tapes up/down. We use CSS `calc` to center the strip on the current value.
-            speedStrip.style.transform = `translateY(calc(50% - ${speed_translate}px))`;
-            altStrip.style.transform = `translateY(calc(50% - ${alt_translate}px))`;
-        }
-
-        // --- Update Readouts ---
-        if (speedReadout && altReadout) {
-            speedReadout.textContent = Math.round(speed);
-            altReadout.textContent = Math.round(altitude / 10) * 10; // Round to nearest 10 feet
-        }
-    }
 
     /**
      * --- [REVAMPED] Creates the rich HTML content for the airport information window.
