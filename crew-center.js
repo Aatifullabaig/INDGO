@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let sectorOpsMap = null;
     let airportAndAtcMarkers = {}; // Holds all airport markers (blue dots and red ATC dots)
     let sectorOpsMapRouteLayers = [];
-    let sectorOpsLiveFlightPathLayerId = null; // NEW: To track the live flight trail
+    let sectorOpsLiveFlightPathLayers = {}; // NEW: To track multiple flight trails
     let sectorOpsLiveFlightsInterval = null;
     let activeAtcFacilities = []; // To store fetched ATC data
     let activeNotams = []; // To store fetched NOTAMs data
@@ -262,7 +262,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             .info-tab-btn:hover { color: #fff; }
             .info-tab-btn.active { color: #00a8ff; border-bottom-color: #00a8ff; }
-            .info-tab-content { display: none; padding: 20px; animation: fadeIn 0.4s; }
+            .info-tab-content { display: none; animation: fadeIn 0.4s; }
             @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
             .info-tab-content.active { display: block; }
             .info-tab-content ul { list-style: none; padding: 0; margin: 0; }
@@ -270,10 +270,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             .info-tab-content li:last-child { border-bottom: none; }
             .muted-text { color: #9fa8da; text-align: center; padding: 2rem; }
 
-            /* --- [OVERHAUL] Aircraft Window: Modern Stats --- */
+            /* --- [NEW/REDESIGN] Aircraft Window --- */
             .aircraft-info-header {
                 padding: 20px; text-align: center;
                 background: linear-gradient(135deg, rgba(0, 168, 255, 0.15), rgba(0, 100, 200, 0.25));
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             }
             .aircraft-info-header .route-display { display: flex; justify-content: space-around; align-items: center; }
             .aircraft-info-header .icao { font-size: 2rem; font-weight: 700; color: #fff; }
@@ -312,6 +313,64 @@ document.addEventListener('DOMContentLoaded', async () => {
                 font-family: 'Courier New', Courier, monospace;
                 font-size: 0.95rem; color: #e8eaf6; background: none; padding: 0; line-height: 1.6;
             }
+            
+            /* --- [NEW] Visual Altitude Display --- */
+            .flight-overview-display {
+                display: flex;
+                gap: 20px;
+                align-items: center;
+                padding: 20px;
+            }
+            .altitude-gauge {
+                width: 80px;
+                height: 200px;
+                background: rgba(10, 12, 26, 0.5);
+                border-radius: 10px;
+                padding: 10px 5px;
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-end;
+                position: relative;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            .altitude-bar {
+                background: linear-gradient(to top, #00a8ff, #89f7fe);
+                width: 100%;
+                border-radius: 5px;
+                transition: height 0.5s ease-out;
+                position: relative;
+                box-shadow: 0 0 15px rgba(0, 168, 255, 0.6);
+            }
+            .altitude-plane-icon {
+                position: absolute;
+                bottom: -10px; /* Start at the base of the bar */
+                left: 50%;
+                transform: translateX(-50%);
+                font-size: 1.5rem;
+                color: #fff;
+                transition: bottom 0.5s ease-out;
+                text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            }
+            .overview-stats {
+                flex-grow: 1;
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            .overview-stat-item {
+                 background: rgba(10, 12, 26, 0.5);
+                 padding: 12px 16px;
+                 border-radius: 8px;
+            }
+            .overview-stat-item label {
+                font-size: 0.8rem; color: #c5cae9;
+                display: flex; align-items: center; gap: 8px;
+                text-transform: uppercase; letter-spacing: 0.5px;
+            }
+            .overview-stat-item .value {
+                font-size: 1.5rem; font-weight: 600; color: #fff; margin-top: 4px;
+            }
+
 
             /* Toolbar Recall Buttons */
             #airport-recall-btn, #aircraft-recall-btn {
@@ -844,13 +903,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <button class="info-tab-btn" data-tab="airport-atc"><i class="fa-solid fa-headset"></i> ATC</button>
                 <button class="info-tab-btn" data-tab="airport-notams"><i class="fa-solid fa-triangle-exclamation"></i> NOTAMs</button>
             </div>
-            <div id="airport-routes" class="info-tab-content active">
+            <div id="airport-routes" class="info-tab-content active" style="padding: 20px;">
                 ${routesHtml}
             </div>
-            <div id="airport-atc" class="info-tab-content">
+            <div id="airport-atc" class="info-tab-content" style="padding: 20px;">
                 ${atcHtml}
             </div>
-            <div id="airport-notams" class="info-tab-content">
+            <div id="airport-notams" class="info-tab-content" style="padding: 20px;">
                 ${notamsHtml}
             </div>
         `;
@@ -1166,7 +1225,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         closeBtn.addEventListener('click', () => {
             aircraftInfoWindow.classList.remove('visible');
             aircraftInfoWindowRecallBtn.classList.remove('visible');
-            clearLiveFlightPath(); // NEW: Clear the flight trail when closing the window
+            clearLiveFlightPath(currentFlightInWindow); // Clear the flight trail when closing
             currentFlightInWindow = null;
         });
 
@@ -1352,16 +1411,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // NEW: Helper to clear the live flight trail from the map
-    function clearLiveFlightPath() {
-        if (sectorOpsMap && sectorOpsLiveFlightPathLayerId) {
-            if (sectorOpsMap.getLayer(sectorOpsLiveFlightPathLayerId)) {
-                sectorOpsMap.removeLayer(sectorOpsLiveFlightPathLayerId);
-            }
-            if (sectorOpsMap.getSource(sectorOpsLiveFlightPathLayerId)) {
-                sectorOpsMap.removeSource(sectorOpsLiveFlightPathLayerId);
-            }
-            sectorOpsLiveFlightPathLayerId = null;
-        }
+    function clearLiveFlightPath(flightId) {
+        if (!sectorOpsMap || !flightId) return;
+
+        const flownLayerId = `flown-path-${flightId}`;
+        const plannedLayerId = `planned-path-${flightId}`;
+
+        if (sectorOpsMap.getLayer(flownLayerId)) sectorOpsMap.removeLayer(flownLayerId);
+        if (sectorOpsMap.getSource(flownLayerId)) sectorOpsMap.removeSource(flownLayerId);
+        
+        if (sectorOpsMap.getLayer(plannedLayerId)) sectorOpsMap.removeLayer(plannedLayerId);
+        if (sectorOpsMap.getSource(plannedLayerId)) sectorOpsMap.removeSource(plannedLayerId);
+
+        delete sectorOpsLiveFlightPathLayers[flightId];
     }
 
 
@@ -1415,24 +1477,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
-    // NEW & UPDATED: Handler for clicking an aircraft on the Sector Ops map.
+    // --- [COMPLETELY REWRITTEN] Handles aircraft clicks, data fetching, map plotting, and window population.
     async function handleAircraftClick(flightProps, sessionId) {
         if (!flightProps || !flightProps.flightId) return;
 
-        clearLiveFlightPath(); // Clear any previous trail first
+        // Clear any previously selected flight's path
+        if (currentFlightInWindow && currentFlightInWindow !== flightProps.flightId) {
+            clearLiveFlightPath(currentFlightInWindow);
+        }
 
         currentFlightInWindow = flightProps.flightId;
         aircraftInfoWindow.classList.add('visible');
         aircraftInfoWindowRecallBtn.classList.remove('visible');
 
-        const titleEl = document.getElementById('aircraft-window-title');
-        const contentEl = document.getElementById('aircraft-window-content');
         const usernameDisplay = flightProps.username || 'N/A';
-        titleEl.innerHTML = `${flightProps.callsign} <small>(${usernameDisplay})</small>`;
+        document.getElementById('aircraft-window-title').innerHTML = `${flightProps.callsign} <small>(${usernameDisplay})</small>`;
+        const contentEl = document.getElementById('aircraft-window-content');
         contentEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
 
         try {
-            // Fetch plan and route in parallel for speed
+            // Fetch plan and route data in parallel
             const [planRes, routeRes] = await Promise.all([
                 fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/plan`),
                 fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/route`)
@@ -1440,131 +1504,110 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             const planData = planRes.ok ? await planRes.json() : null;
             const plan = (planData && planData.ok) ? planData.plan : null;
-
+            const routeData = routeRes.ok ? await routeRes.json() : null;
+            
+            // Populate the info window with the new tabbed layout
             populateAircraftInfoWindow(flightProps, plan);
 
-            // Now, plot the flight trail if data is available
-            if (routeRes.ok) {
-                const routeData = await routeRes.json();
-                if (routeData.ok && Array.isArray(routeData.route) && routeData.route.length > 1) {
-                    const trailCoords = routeData.route.map(p => [p.longitude, p.latitude]);
-                    const trailId = `live-trail-${flightProps.flightId}`;
-                    sectorOpsLiveFlightPathLayerId = trailId;
+            // --- Map Plotting Logic ---
+            let allCoordsForBounds = [];
+            const flownLayerId = `flown-path-${flightProps.flightId}`;
+            const plannedLayerId = `planned-path-${flightProps.flightId}`;
+            
+            // 1. Plot flown path (from /route)
+            const flownCoords = (routeData && routeData.ok && Array.isArray(routeData.route)) ? routeData.route.map(p => [p.longitude, p.latitude]) : [];
+            if (flownCoords.length > 1) {
+                allCoordsForBounds.push(...flownCoords);
+                sectorOpsMap.addSource(flownLayerId, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: flownCoords } } });
+                sectorOpsMap.addLayer({ id: flownLayerId, type: 'line', source: flownLayerId, paint: { 'line-color': '#00b894', 'line-width': 4, 'line-opacity': 0.9 } });
+            }
 
-                    if(sectorOpsMap.getSource(trailId)) {
-                        sectorOpsMap.removeLayer(trailId);
-                        sectorOpsMap.removeSource(trailId);
+            // 2. Plot planned path (from /plan)
+            if (plan && plan.flightPlanItems?.length > 0) {
+                const allWaypoints = [];
+                const extractWps = items => items.forEach(item => {
+                    if (item.location) allWaypoints.push([item.location.longitude, item.location.latitude]);
+                    if (item.children) extractWps(item.children);
+                });
+                extractWps(plan.flightPlanItems);
+
+                if (allWaypoints.length > 0) {
+                    const currentPos = [flightProps.position.lon, flightProps.position.lat];
+                    let remainingPathCoords;
+
+                    // If we have a flown path, connect from its end. Otherwise, connect from current position.
+                    const startOfPlannedPath = flownCoords.length > 1 ? flownCoords[flownCoords.length - 1] : currentPos;
+                    
+                    if (flownCoords.length === 0) {
+                        // Fallback: No /route data, so plot the whole flight plan as "planned"
+                        remainingPathCoords = allWaypoints;
+                        allCoordsForBounds.push(...remainingPathCoords);
+                    } else {
+                        // Normal case: Plot from current position to destination
+                        remainingPathCoords = [currentPos, ...allWaypoints.slice(plan.nextWaypointIndex || 0)];
+                        allCoordsForBounds.push(...remainingPathCoords);
                     }
-
-                    sectorOpsMap.addSource(trailId, {
-                        type: 'geojson',
-                        data: {
-                            type: 'Feature',
-                            geometry: {
-                                type: 'LineString',
-                                coordinates: trailCoords
-                            }
-                        }
-                    });
-                    sectorOpsMap.addLayer({
-                        id: trailId,
-                        type: 'line',
-                        source: trailId,
-                        paint: {
-                            'line-color': '#00b894', // A bright green for the trail
-                            'line-width': 3,
-                            'line-opacity': 0.8
-                        }
-                    });
+                    
+                    sectorOpsMap.addSource(plannedLayerId, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: remainingPathCoords } } });
+                    sectorOpsMap.addLayer({ id: plannedLayerId, type: 'line', source: plannedLayerId, paint: { 'line-color': '#e84393', 'line-width': 3, 'line-dasharray': [2, 2] } });
                 }
+            }
+            
+            sectorOpsLiveFlightPathLayers[flightProps.flightId] = { flown: flownLayerId, planned: plannedLayerId };
+
+            // 3. Fit map to bounds
+            if (allCoordsForBounds.length > 1) {
+                const bounds = allCoordsForBounds.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(allCoordsForBounds[0], allCoordsForBounds[0]));
+                sectorOpsMap.fitBounds(bounds, { padding: 80, maxZoom: 10, duration: 1000 });
             }
 
         } catch (error) {
             console.error("Error fetching aircraft details:", error);
-            contentEl.innerHTML = `<p class="error-text">Could not retrieve flight details. The aircraft may have landed or disconnected.</p>`;
+            contentEl.innerHTML = `<p class="error-text">Could not retrieve complete flight details. The aircraft may have landed or disconnected.</p>`;
         }
     }
 
 
     /**
-     * --- [COMPLETELY REWRITTEN] Generates and injects the aircraft window's HTML content with a modern UI.
+     * --- [COMPLETELY REWRITTEN] Generates and injects the aircraft window's HTML with a tabbed interface.
      */
     function populateAircraftInfoWindow(baseProps, plan) {
         const contentEl = document.getElementById('aircraft-window-content');
-        const usernameDisplay = baseProps.username || 'N/A';
-        document.getElementById('aircraft-window-title').innerHTML = `${baseProps.callsign} <small>(${usernameDisplay})</small>`;
 
-        // If no plan is filed, show a simplified view
-        if (!plan || !plan.flightPlanItems || plan.flightPlanItems.length === 0) {
-            contentEl.innerHTML = `
-                <div class="aircraft-info-body">
-                    <div class="stat-grid">
-                        <div class="stat-box">
-                            <label><i class="fa-solid fa-arrows-up-down"></i> Altitude</label>
-                            <span class="stat-value">${Math.round(baseProps.altitude).toLocaleString()} ft</span>
-                        </div>
-                        <div class="stat-box">
-                            <label><i class="fa-solid fa-gauge-high"></i> Ground Speed</label>
-                            <span class="stat-value">${Math.round(baseProps.speed)} kts</span>
-                        </div>
-                        <div class="stat-box">
-                            <label><i class="fa-solid fa-compass"></i> Heading</label>
-                            <span class="stat-value">${Math.round(baseProps.heading)}°</span>
-                        </div>
-                         <div class="stat-box">
-                            <label><i class="fa-solid fa-arrow-trend-up"></i> Vert. Speed</label>
-                            <span class="stat-value">${Math.round(baseProps.verticalSpeed)} fpm</span>
-                        </div>
-                    </div>
-                    <div class="flight-plan-route-box">
-                        <label>Filed Route</label>
-                        <code>No flight plan filed.</code>
-                    </div>
-                </div>
-            `;
-            return;
-        }
-
-        // Extract waypoints
+        // --- Data Extraction & Calculation ---
         const allWaypoints = [];
-        const extractWps = (items) => {
-            for (const item of items) {
-                if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
-                    allWaypoints.push(item);
+        if (plan && plan.flightPlanItems) {
+            const extractWps = (items) => {
+                for (const item of items) {
+                    if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
+                        allWaypoints.push(item);
+                    }
+                    if (Array.isArray(item.children)) { extractWps(item.children); }
                 }
-                if (Array.isArray(item.children)) { extractWps(item.children); }
+            };
+            extractWps(plan.flightPlanItems);
+        }
+        
+        const hasPlan = allWaypoints.length >= 2;
+        const departureIcao = hasPlan ? allWaypoints[0]?.name : 'N/A';
+        const arrivalIcao = hasPlan ? allWaypoints[allWaypoints.length - 1]?.name : 'N/A';
+        const routeString = hasPlan ? allWaypoints.map(wp => wp.name).join(' ') : 'No flight plan filed.';
+
+        let progress = 0, ete = 'N/A';
+        if (hasPlan) {
+            let totalDistanceKm = 0;
+            for (let i = 0; i < allWaypoints.length - 1; i++) {
+                totalDistanceKm += getDistanceKm(allWaypoints[i].location.latitude, allWaypoints[i].location.longitude, allWaypoints[i+1].location.latitude, allWaypoints[i+1].location.longitude);
             }
-        };
-        extractWps(plan.flightPlanItems);
-
-        if (allWaypoints.length < 2) {
-             populateAircraftInfoWindow(baseProps, null); // Re-run with null plan
-             return;
-        }
-
-        const departureIcao = allWaypoints[0]?.name || 'N/A';
-        const arrivalIcao = allWaypoints[allWaypoints.length - 1]?.name || 'N/A';
-        const routeString = allWaypoints.map(wp => wp.name).join(' ');
-
-        // Calculate total distance for the progress bar
-        let totalDistanceKm = 0;
-        for (let i = 0; i < allWaypoints.length - 1; i++) {
-            const wp1 = allWaypoints[i].location;
-            const wp2 = allWaypoints[i + 1].location;
-            totalDistanceKm += getDistanceKm(wp1.latitude, wp1.longitude, wp2.latitude, wp2.longitude);
-        }
-        const totalDistanceNM = totalDistanceKm / 1.852;
-
-        let progress = 0;
-        let ete = 'N/A';
-        if (totalDistanceNM > 0 && baseProps.position) {
-            const destWp = allWaypoints[allWaypoints.length - 1];
-            if (destWp && destWp.location) {
+            const totalDistanceNM = totalDistanceKm / 1.852;
+            
+            if (totalDistanceNM > 0) {
+                const destWp = allWaypoints[allWaypoints.length - 1];
                 const remainingDistanceKm = getDistanceKm(baseProps.position.lat, baseProps.position.lon, destWp.location.latitude, destWp.location.longitude);
                 const remainingDistanceNM = remainingDistanceKm / 1.852;
                 progress = Math.max(0, Math.min(100, (1 - (remainingDistanceNM / totalDistanceNM)) * 100));
                 
-                if (baseProps.speed > 50) { // Only calculate ETE if moving
+                if (baseProps.speed > 50) {
                     const timeHours = remainingDistanceNM / baseProps.speed;
                     const hours = Math.floor(timeHours);
                     const minutes = Math.round((timeHours - hours) * 60);
@@ -1572,7 +1615,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
         }
+        
+        const altitudePercent = Math.min(100, (baseProps.altitude / 45000) * 100); // Assume 45,000 ft is max for visual gauge
 
+        // --- HTML Structure ---
         contentEl.innerHTML = `
             <div class="aircraft-info-header">
                 <div class="route-display">
@@ -1581,44 +1627,82 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <span class="icao">${arrivalIcao}</span>
                 </div>
             </div>
-            <div class="aircraft-info-body">
-                <div class="flight-progress">
-                    <div class="progress-labels">
-                        <span>Progress</span>
-                        <span>ETE: ${ete}</span>
+            <div class="info-window-tabs">
+                <button class="info-tab-btn active" data-tab="aircraft-overview"><i class="fa-solid fa-tachograph-digital"></i> Overview</button>
+                <button class="info-tab-btn" data-tab="aircraft-fplan"><i class="fa-solid fa-route"></i> Flight Plan</button>
+            </div>
+
+            <div id="aircraft-overview" class="info-tab-content active">
+                <div class="flight-overview-display">
+                    <div class="altitude-gauge">
+                        <div class="altitude-bar" style="height: ${altitudePercent}%;">
+                            <i class="fa-solid fa-plane-up altitude-plane-icon" style="bottom: calc(${altitudePercent}% - 10px);"></i>
+                        </div>
                     </div>
-                    <div class="flight-progress-bar">
-                        <div class="flight-progress-bar-inner" style="width: ${progress.toFixed(1)}%;">
-                             <span class="progress-bar-label">${progress.toFixed(0)}%</span>
+                    <div class="overview-stats">
+                        <div class="overview-stat-item">
+                            <label><i class="fa-solid fa-arrows-up-down"></i> Altitude</label>
+                            <div class="value">${Math.round(baseProps.altitude).toLocaleString()} ft</div>
+                        </div>
+                        <div class="overview-stat-item">
+                            <label><i class="fa-solid fa-gauge-high"></i> Ground Speed</label>
+                            <div class="value">${Math.round(baseProps.speed)} kts</div>
+                        </div>
+                        <div class="overview-stat-item">
+                            <label><i class="fa-solid fa-arrow-trend-up"></i> Vert. Speed</label>
+                            <div class="value">${Math.round(baseProps.verticalSpeed)} fpm</div>
                         </div>
                     </div>
                 </div>
+                 <div class="aircraft-info-body" style="padding-top: 0;">
+                    <div class="flight-progress">
+                        <div class="progress-labels">
+                            <span>Progress</span>
+                            <span>ETE: ${ete}</span>
+                        </div>
+                        <div class="flight-progress-bar">
+                            <div class="flight-progress-bar-inner" style="width: ${progress.toFixed(1)}%;">
+                                 <span class="progress-bar-label">${progress.toFixed(0)}%</span>
+                            </div>
+                        </div>
+                    </div>
+                 </div>
+            </div>
 
-                <div class="stat-grid">
-                    <div class="stat-box">
-                        <label><i class="fa-solid fa-arrows-up-down"></i> Altitude</label>
-                        <span class="stat-value">${Math.round(baseProps.altitude).toLocaleString()} ft</span>
+            <div id="aircraft-fplan" class="info-tab-content">
+                <div class="aircraft-info-body">
+                    <div class="stat-grid">
+                        <div class="stat-box">
+                            <label><i class="fa-solid fa-compass"></i> Heading</label>
+                            <span class="stat-value">${Math.round(baseProps.heading)}°</span>
+                        </div>
+                         <div class="stat-box">
+                            <label><i class="fa-solid fa-user"></i> Pilot</label>
+                            <span class="stat-value" style="font-size: 1.2rem;">${baseProps.username || 'N/A'}</span>
+                        </div>
                     </div>
-                    <div class="stat-box">
-                        <label><i class="fa-solid fa-gauge-high"></i> Ground Speed</label>
-                        <span class="stat-value">${Math.round(baseProps.speed)} kts</span>
+                    <div class="flight-plan-route-box">
+                        <label>Filed Route</label>
+                        <code>${routeString}</code>
                     </div>
-                    <div class="stat-box">
-                        <label><i class="fa-solid fa-compass"></i> Heading</label>
-                        <span class="stat-value">${Math.round(baseProps.heading)}°</span>
-                    </div>
-                     <div class="stat-box">
-                        <label><i class="fa-solid fa-arrow-trend-up"></i> Vert. Speed</label>
-                        <span class="stat-value">${Math.round(baseProps.verticalSpeed)} fpm</span>
-                    </div>
-                </div>
-                
-                <div class="flight-plan-route-box">
-                    <label>Filed Route</label>
-                    <code>${routeString}</code>
                 </div>
             </div>
         `;
+        
+        // --- Add Tab Switching Logic ---
+        const tabContainer = contentEl.querySelector('.info-window-tabs');
+        tabContainer.addEventListener('click', (e) => {
+            const tabBtn = e.target.closest('.info-tab-btn');
+            if (!tabBtn) return;
+            
+            tabContainer.querySelector('.active').classList.remove('active');
+            const currentContent = contentEl.querySelector('.info-tab-content.active');
+            if(currentContent) currentContent.classList.remove('active');
+
+            tabBtn.classList.add('active');
+            const newContent = contentEl.querySelector(`#${tabBtn.dataset.tab}`);
+            if(newContent) newContent.classList.add('active');
+        });
     }
 
     /**
@@ -2028,8 +2112,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         speed: flight.position.gs_kt,
                         heading: flight.position.track_deg || 0,
                         verticalSpeed: flight.position.vs_fpm || 0,
-                        // Pass the whole position object for the calculation
-                        position: flight.position 
+                        position: JSON.stringify(flight.position) // Stringify to pass the whole object
                     }
                 };
             }).filter(Boolean);
@@ -2068,11 +2151,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // REWRITTEN CLICK HANDLER to open the info window
                 sectorOpsMap.on('click', layerId, (e) => {
-                    // Reconstruct flightProps to match what handleAircraftClick expects
                     const props = e.features[0].properties;
                     const flightProps = {
                         ...props,
-                        position: JSON.parse(props.position) // The position gets stringified in the geojson
+                        position: JSON.parse(props.position) // De-stringify the position object
                     };
                     handleAircraftClick(flightProps, expertSession.id);
                 });
