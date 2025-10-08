@@ -123,15 +123,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const css = `
             /* --- [FIX] Sector Ops View Layout --- */
-            /* This ensures the map fills the entire screen area */
             #view-rosters {
                 display: grid;
                 grid-template-columns: 1fr;
                 grid-template-rows: 1fr;
                 height: 100%;
                 width: 100%;
-                overflow: hidden; /* Prevent scrollbars on the view itself */
-                position: relative; /* Establish positioning context for children */
+                overflow: hidden;
+                position: relative;
             }
             #sector-ops-map-fullscreen {
                 grid-column: 1 / -1;
@@ -143,22 +142,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
             .info-window {
                 position: absolute;
-                top: 20px;    /* Adjusted for better spacing */
+                top: 20px;
                 right: 20px;
-                width: 420px; /* Slightly wider for more content */
+                width: 420px;
                 max-width: 90vw;
-                max-height: calc(100vh - 40px); /* Fill most of the screen height */
-                background: rgba(18, 20, 38, 0.75); /* Darker, less transparent base */
+                max-height: calc(100vh - 40px);
+                background: rgba(18, 20, 38, 0.75);
                 backdrop-filter: blur(20px) saturate(180%);
                 -webkit-backdrop-filter: blur(20px) saturate(180%);
-                border-radius: 16px; /* Softer radius */
+                border-radius: 16px;
                 border: 1px solid rgba(255, 255, 255, 0.1);
                 box-shadow: 0 12px 40px rgba(0,0,0,0.6);
                 z-index: 1050;
-                display: none; /* Initially hidden */
+                display: none;
                 flex-direction: column;
                 overflow: hidden;
-                color: #e8eaf6; /* Lighter text for better contrast */
+                color: #e8eaf6;
                 transition: opacity 0.3s ease, transform 0.3s ease;
                 opacity: 0;
                 transform: translateX(20px);
@@ -173,7 +172,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 justify-content: space-between;
                 align-items: center;
                 padding: 16px 20px;
-                background: rgba(10, 12, 26, 0.6); /* Header with subtle transparency */
+                background: rgba(10, 12, 26, 0.6);
                 border-bottom: 1px solid rgba(255, 255, 255, 0.1);
                 flex-shrink: 0;
             }
@@ -240,7 +239,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             .flight-rules-vfr { background-color: #28a745; color: white; }
             .flight-rules-mvfr { background-color: #007bff; color: white; }
             .flight-rules-ifr { background-color: #dc3545; color: white; }
-            .flight-rules-lifr { background-color: #a33ea3; color: white; } /* Better magenta */
+            .flight-rules-lifr { background-color: #a33ea3; color: white; }
             .weather-details-grid { 
                 display: grid; grid-template-columns: 1fr 1fr; 
                 gap: 10px 15px; text-align: left;
@@ -270,106 +269,120 @@ document.addEventListener('DOMContentLoaded', async () => {
             .info-tab-content li:last-child { border-bottom: none; }
             .muted-text { color: #9fa8da; text-align: center; padding: 2rem; }
 
-            /* --- [NEW/REDESIGN] Aircraft Window --- */
-            .aircraft-info-header {
-                padding: 20px; text-align: center;
-                background: linear-gradient(135deg, rgba(0, 168, 255, 0.15), rgba(0, 100, 200, 0.25));
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            }
-            .aircraft-info-header .route-display { display: flex; justify-content: space-around; align-items: center; }
-            .aircraft-info-header .icao { font-size: 2rem; font-weight: 700; color: #fff; }
-            .aircraft-info-header .fa-plane { font-size: 1.5rem; color: #00a8ff; }
-            
-            .aircraft-info-body { padding: 20px; }
-            .stat-grid {
-                display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 20px;
-            }
-            .stat-box {
-                background: rgba(10, 12, 26, 0.5); padding: 16px; border-radius: 10px;
-                border-left: 4px solid #00a8ff; transition: transform 0.2s, box-shadow 0.2s;
-            }
-            .stat-box:hover { transform: translateY(-3px); box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-            .stat-box label { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: #c5cae9; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-            .stat-box .stat-value { font-size: 1.6rem; font-weight: 600; color: #fff; }
-            
-            .flight-progress { margin-bottom: 20px; }
-            .progress-labels { display: flex; justify-content: space-between; font-size: 0.85rem; color: #c5cae9; margin-bottom: 8px; }
-            .flight-progress-bar { width: 100%; height: 12px; background-color: rgba(10, 12, 26, 0.7); border-radius: 6px; overflow: hidden; }
-            .flight-progress-bar-inner {
-                height: 100%; width: 0%; border-radius: 6px;
-                background: linear-gradient(90deg, #00a8ff, #005f9e);
-                transition: width 0.5s ease-out; 
-                display:flex; align-items:center; justify-content:flex-end;
-                box-shadow: 0 0 10px rgba(0, 168, 255, 0.5);
-            }
-            .progress-bar-label { color: white; font-size: 0.7rem; font-weight: bold; padding-right: 5px; }
-            
-            .flight-plan-route-box {
-                background: rgba(10, 12, 26, 0.5); padding: 16px; border-radius: 10px;
-            }
-            .flight-plan-route-box label { font-size: 0.8rem; color: #c5cae9; margin-bottom: 10px; display: block; text-transform: uppercase; }
-            .flight-plan-route-box code {
-                display: block; white-space: pre-wrap; word-break: break-all;
-                font-family: 'Courier New', Courier, monospace;
-                font-size: 0.95rem; color: #e8eaf6; background: none; padding: 0; line-height: 1.6;
-            }
-            
-            /* --- [NEW] Visual Altitude Display --- */
-            .flight-overview-display {
-                display: flex;
-                gap: 20px;
-                align-items: center;
-                padding: 20px;
-            }
-            .altitude-gauge {
-                width: 80px;
-                height: 200px;
-                background: rgba(10, 12, 26, 0.5);
-                border-radius: 10px;
-                padding: 10px 5px;
+            /* --- [NEW] UNIFIED FLIGHT DISPLAY FOR AIRCRAFT WINDOW --- */
+            .unified-display-container {
                 display: flex;
                 flex-direction: column;
-                justify-content: flex-end;
-                position: relative;
-                border: 1px solid rgba(255, 255, 255, 0.1);
+                height: 100%;
+                padding: 16px;
+                gap: 12px;
+                font-family: 'Segoe UI', sans-serif;
             }
-            .altitude-bar {
-                background: linear-gradient(to top, #00a8ff, #89f7fe);
-                width: 100%;
-                border-radius: 5px;
-                transition: height 0.5s ease-out;
-                position: relative;
-                box-shadow: 0 0 15px rgba(0, 168, 255, 0.6);
+            .unified-display-header {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             }
-            .altitude-plane-icon {
-                position: absolute;
-                bottom: -10px; /* Start at the base of the bar */
-                left: 50%;
-                transform: translateX(-50%);
-                font-size: 1.5rem;
-                color: #fff;
-                transition: bottom 0.5s ease-out;
-                text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            .flight-id-block {
+                flex-shrink: 0;
             }
-            .overview-stats {
+            .flight-id-block .flight-number {
+                font-size: 1.5rem; font-weight: 700; color: #fff;
+            }
+            .flight-id-block .pilot-callsign {
+                font-size: 0.9rem; color: #c5cae9;
+            }
+            .flight-progress-block {
+                flex-grow: 1; display: flex; align-items: center; gap: 10px;
+            }
+            .flight-phase-badge {
+                padding: 4px 10px; border-radius: 15px; font-size: 0.8rem; font-weight: 600;
+                background-color: rgba(0, 168, 255, 0.2);
+                border: 1px solid #00a8ff;
+                color: #89f7fe;
+            }
+            .route-progress-bar {
+                display: flex; align-items: center; width: 100%;
+            }
+            .route-progress-bar .icao {
+                font-family: 'Courier New', monospace; font-weight: bold; font-size: 1.1rem;
+            }
+            .progress-bar-container {
+                flex-grow: 1; height: 8px; background: rgba(10, 12, 26, 0.7);
+                border-radius: 4px; margin: 0 10px; overflow: hidden;
+            }
+            .progress-bar-fill {
+                height: 100%; width: 0%;
+                background: linear-gradient(90deg, #00a8ff, #89f7fe);
+                transition: width 0.5s ease-out;
+            }
+            .unified-display-main {
                 flex-grow: 1;
                 display: grid;
-                grid-template-columns: 1fr;
-                gap: 15px;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+                background: rgba(10, 12, 26, 0.5);
+                border-radius: 12px;
+                padding: 12px;
+                min-height: 250px;
             }
-            .overview-stat-item {
-                 background: rgba(10, 12, 26, 0.5);
-                 padding: 12px 16px;
-                 border-radius: 8px;
+            .pfd-panel, .mfd-panel {
+                border-radius: 8px;
+                background: #0D101C;
+                padding: 10px;
+                display: flex; flex-direction: column;
+                justify-content: center; align-items: center;
+                border: 1px solid rgba(255,255,255,0.1);
             }
-            .overview-stat-item label {
-                font-size: 0.8rem; color: #c5cae9;
-                display: flex; align-items: center; gap: 8px;
-                text-transform: uppercase; letter-spacing: 0.5px;
+            .pfd-panel .panel-title, .mfd-panel .panel-title {
+                font-size: 0.7rem; text-transform: uppercase; color: #9fa8da;
+                margin-bottom: auto;
             }
-            .overview-stat-item .value {
-                font-size: 1.5rem; font-weight: 600; color: #fff; margin-top: 4px;
+            .pfd-content { text-align: center; }
+            .pfd-content .attitude-indicator {
+                width: 120px; height: 120px; border-radius: 50%;
+                background: linear-gradient(to bottom, #3498db 50%, #8b4513 50%);
+                border: 3px solid #e8eaf6; position: relative;
+                display: grid; place-items: center;
+                margin-bottom: 10px;
             }
+            .pfd-content .attitude-indicator::before {
+                content: ''; position: absolute; height: 3px; width: 100%; background: #e8eaf6;
+            }
+            .pfd-content .attitude-indicator::after {
+                content: '\\f072'; font-family: 'Font Awesome 5 Free'; font-weight: 900;
+                color: #f1c40f; font-size: 1.5rem; z-index: 1;
+            }
+            .pfd-readouts { display: flex; justify-content: space-between; width: 160px; }
+            .tape { font-family: 'Courier New', monospace; font-size: 1.2rem; font-weight: bold; }
+            .tape .label { font-size: 0.7rem; color: #9fa8da; display: block; }
+            .mfd-panel .vertical-profile-placeholder {
+                flex-grow: 1; width: 100%;
+                border: 1px dashed rgba(255,255,255,0.2);
+                border-radius: 4px; display: grid; place-items: center;
+                text-align: center; font-size: 0.8rem; color: #9fa8da;
+            }
+            .unified-display-footer {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 10px;
+            }
+            .readout-box {
+                background: rgba(10, 12, 26, 0.6);
+                padding: 12px; border-radius: 8px; text-align: center;
+            }
+            .readout-box .label {
+                font-size: 0.75rem; text-transform: uppercase; color: #c5cae9;
+                margin-bottom: 4px;
+            }
+            .readout-box .value {
+                font-size: 1.5rem; font-weight: 600; color: #fff;
+                font-family: 'Courier New', monospace;
+            }
+            .readout-box .value .unit { font-size: 0.9rem; color: #9fa8da; }
+            .readout-box .value .fa-solid { font-size: 0.9rem; margin-right: 5px; color: #00a8ff; }
 
 
             /* Toolbar Recall Buttons */
@@ -464,14 +477,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
-    }
-
-    /**
-     * Calculates the distance between two coordinates in nautical miles.
-     */
-    function getDistanceNm(lat1, lon1, lat2, lon2) {
-        const distKm = getDistanceKm(lat1, lon1, lat2, lon2);
-        return Math.round(distKm / 1.852); // Convert km to nautical miles and round
     }
     
     function getRankBadgeHTML(rankName, options = {}) {
@@ -1587,7 +1592,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /**
-     * --- [COMPLETELY REWRITTEN] Generates and injects the aircraft window's HTML with a tabbed interface.
+     * --- [MODIFIED] Generates the "Unified Flight Display" for the aircraft window.
      */
     function populateAircraftInfoWindow(baseProps, plan) {
         const contentEl = document.getElementById('aircraft-window-content');
@@ -1605,123 +1610,114 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
             extractWps(plan.flightPlanItems);
         }
-        
+
         const hasPlan = allWaypoints.length >= 2;
         const departureIcao = hasPlan ? allWaypoints[0]?.name : 'N/A';
         const arrivalIcao = hasPlan ? allWaypoints[allWaypoints.length - 1]?.name : 'N/A';
-        const routeString = hasPlan ? allWaypoints.map(wp => wp.name).join(' ') : 'No flight plan filed.';
 
-        let progress = 0, ete = 'N/A';
+        let progress = 0, ete = 'N/A', distanceToDestNM = 0;
         if (hasPlan) {
             let totalDistanceKm = 0;
             for (let i = 0; i < allWaypoints.length - 1; i++) {
-                totalDistanceKm += getDistanceKm(allWaypoints[i].location.latitude, allWaypoints[i].location.longitude, allWaypoints[i+1].location.latitude, allWaypoints[i+1].location.longitude);
+                totalDistanceKm += getDistanceKm(allWaypoints[i].location.latitude, allWaypoints[i].location.longitude, allWaypoints[i + 1].location.latitude, allWaypoints[i + 1].location.longitude);
             }
             const totalDistanceNM = totalDistanceKm / 1.852;
-            
+
             if (totalDistanceNM > 0) {
                 const destWp = allWaypoints[allWaypoints.length - 1];
                 const remainingDistanceKm = getDistanceKm(baseProps.position.lat, baseProps.position.lon, destWp.location.latitude, destWp.location.longitude);
-                const remainingDistanceNM = remainingDistanceKm / 1.852;
-                progress = Math.max(0, Math.min(100, (1 - (remainingDistanceNM / totalDistanceNM)) * 100));
-                
+                distanceToDestNM = remainingDistanceKm / 1.852;
+                progress = Math.max(0, Math.min(100, (1 - (distanceToDestNM / totalDistanceNM)) * 100));
+
                 if (baseProps.speed > 50) {
-                    const timeHours = remainingDistanceNM / baseProps.speed;
+                    const timeHours = distanceToDestNM / baseProps.speed;
                     const hours = Math.floor(timeHours);
                     const minutes = Math.round((timeHours - hours) * 60);
-                    ete = `${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}`;
+                    ete = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
                 }
             }
         }
-        
-        const altitudePercent = Math.min(100, (baseProps.altitude / 45000) * 100); // Assume 45,000 ft is max for visual gauge
 
-        // --- HTML Structure ---
+        // --- Flight Phase Logic ---
+        let flightPhase = 'ENROUTE';
+        let vs = baseProps.verticalSpeed;
+        if (vs > 500) flightPhase = 'CLIMB';
+        else if (vs < -500) flightPhase = 'DESCENT';
+        else if (baseProps.altitude > 28000 && Math.abs(vs) <= 500) flightPhase = 'CRUISE';
+        else if (baseProps.altitude < 12000 && distanceToDestNM < 40 && vs < -300) flightPhase = 'APPROACH';
+
+
+        // --- HTML Structure for Unified Display ---
         contentEl.innerHTML = `
-            <div class="aircraft-info-header">
-                <div class="route-display">
-                    <span class="icao">${departureIcao}</span>
-                    <i class="fa-solid fa-plane"></i>
-                    <span class="icao">${arrivalIcao}</span>
+            <div class="unified-display-container">
+                <div class="unified-display-header">
+                    <div class="flight-id-block">
+                        <div class="flight-number">${baseProps.callsign}</div>
+                        <div class="pilot-callsign">${baseProps.username || 'N/A'}</div>
+                    </div>
+                    <div class="flight-progress-block">
+                        <div class="route-progress-bar">
+                            <span class="icao">${departureIcao}</span>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill" style="width: ${progress.toFixed(1)}%;"></div>
+                            </div>
+                            <span class="icao">${arrivalIcao}</span>
+                        </div>
+                    </div>
+                    <div class="flight-phase-badge">${flightPhase}</div>
                 </div>
-            </div>
-            <div class="info-window-tabs">
-                <button class="info-tab-btn active" data-tab="aircraft-overview"><i class="fa-solid fa-tachograph-digital"></i> Overview</button>
-                <button class="info-tab-btn" data-tab="aircraft-fplan"><i class="fa-solid fa-route"></i> Flight Plan</button>
-            </div>
 
-            <div id="aircraft-overview" class="info-tab-content active">
-                <div class="flight-overview-display">
-                    <div class="altitude-gauge">
-                        <div class="altitude-bar" style="height: ${altitudePercent}%;">
-                            <i class="fa-solid fa-plane-up altitude-plane-icon" style="bottom: calc(${altitudePercent}% - 10px);"></i>
-                        </div>
-                    </div>
-                    <div class="overview-stats">
-                        <div class="overview-stat-item">
-                            <label><i class="fa-solid fa-arrows-up-down"></i> Altitude</label>
-                            <div class="value">${Math.round(baseProps.altitude).toLocaleString()} ft</div>
-                        </div>
-                        <div class="overview-stat-item">
-                            <label><i class="fa-solid fa-gauge-high"></i> Ground Speed</label>
-                            <div class="value">${Math.round(baseProps.speed)} kts</div>
-                        </div>
-                        <div class="overview-stat-item">
-                            <label><i class="fa-solid fa-arrow-trend-up"></i> Vert. Speed</label>
-                            <div class="value">${Math.round(baseProps.verticalSpeed)} fpm</div>
-                        </div>
-                    </div>
-                </div>
-                 <div class="aircraft-info-body" style="padding-top: 0;">
-                    <div class="flight-progress">
-                        <div class="progress-labels">
-                            <span>Progress</span>
-                            <span>ETE: ${ete}</span>
-                        </div>
-                        <div class="flight-progress-bar">
-                            <div class="flight-progress-bar-inner" style="width: ${progress.toFixed(1)}%;">
-                                 <span class="progress-bar-label">${progress.toFixed(0)}%</span>
+                <div class="unified-display-main">
+                    <div class="pfd-panel">
+                        <div class="panel-title">Primary Flight Display</div>
+                        <div class="pfd-content">
+                            <div class="attitude-indicator"></div>
+                            <div class="pfd-readouts">
+                                <div class="tape airspeed-tape">
+                                    <span class="label">SPEED</span>
+                                    ${Math.round(baseProps.speed)}
+                                </div>
+                                <div class="tape altitude-tape">
+                                    <span class="label">ALT</span>
+                                    ${Math.round(baseProps.altitude).toLocaleString()}
+                                </div>
                             </div>
                         </div>
                     </div>
-                 </div>
-            </div>
-
-            <div id="aircraft-fplan" class="info-tab-content">
-                <div class="aircraft-info-body">
-                    <div class="stat-grid">
-                        <div class="stat-box">
-                            <label><i class="fa-solid fa-compass"></i> Heading</label>
-                            <span class="stat-value">${Math.round(baseProps.heading)}°</span>
-                        </div>
-                         <div class="stat-box">
-                            <label><i class="fa-solid fa-user"></i> Pilot</label>
-                            <span class="stat-value" style="font-size: 1.2rem;">${baseProps.username || 'N/A'}</span>
+                    <div class="mfd-panel">
+                        <div class="panel-title">Vertical Situation Display</div>
+                        <div class="vertical-profile-placeholder">
+                            <i class="fa-solid fa-chart-area fa-2x" style="opacity: 0.3;"></i>
+                            <p>Vertical Profile View</p>
                         </div>
                     </div>
-                    <div class="flight-plan-route-box">
-                        <label>Filed Route</label>
-                        <code>${routeString}</code>
+                </div>
+
+                <div class="unified-display-footer">
+                    <div class="readout-box">
+                        <div class="label">Ground Speed</div>
+                        <div class="value">${Math.round(baseProps.speed)}<span class="unit"> kts</span></div>
+                    </div>
+                    <div class="readout-box">
+                        <div class="label">Vertical Speed</div>
+                        <div class="value">
+                            <i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i>
+                            ${Math.round(vs)}<span class="unit"> fpm</span>
+                        </div>
+                    </div>
+                    <div class="readout-box">
+                        <div class="label">Dist. to Dest.</div>
+                        <div class="value">${Math.round(distanceToDestNM)}<span class="unit"> NM</span></div>
+                    </div>
+                    <div class="readout-box">
+                        <div class="label">ETE</div>
+                        <div class="value">${ete}</div>
                     </div>
                 </div>
             </div>
         `;
-        
-        // --- Add Tab Switching Logic ---
-        const tabContainer = contentEl.querySelector('.info-window-tabs');
-        tabContainer.addEventListener('click', (e) => {
-            const tabBtn = e.target.closest('.info-tab-btn');
-            if (!tabBtn) return;
-            
-            tabContainer.querySelector('.active').classList.remove('active');
-            const currentContent = contentEl.querySelector('.info-tab-content.active');
-            if(currentContent) currentContent.classList.remove('active');
-
-            tabBtn.classList.add('active');
-            const newContent = contentEl.querySelector(`#${tabBtn.dataset.tab}`);
-            if(newContent) newContent.classList.add('active');
-        });
     }
+
 
     /**
      * (NEW) Clears old routes and draws all new routes originating from a selected airport.
@@ -2072,7 +2068,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     /**
      * Fetches all live data (flights, ATC, NOTAMs) and plots them on the Sector Ops map.
-     * NOW INCLUDES HUD data fetching for destination and distance.
      */
     async function updateSectorOpsLiveFlights() {
         if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
@@ -2104,7 +2099,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const notamsData = await notamsRes.json();
             activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
 
-            renderAirportMarkers();
+            renderAirportMarkers(); // This now handles plotting all airport dots correctly
 
             // 4. Process flight data
             const flightsData = await flightsRes.json();
@@ -2112,65 +2107,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.warn('Sector Ops Map: Could not fetch live flights.');
                 return;
             }
-            
-            // --- NEW: Asynchronously process each flight to add HUD data ---
-            const flightFeaturesPromises = flightsData.flights.map(async (flight) => {
+
+            const flightFeatures = flightsData.flights.map(flight => {
                 if (!flight.position || flight.position.lat == null || flight.position.lon == null) {
                     return null;
                 }
-                
-                const featureProperties = {
-                    flightId: flight.flightId,
-                    callsign: flight.callsign,
-                    username: flight.username,
-                    altitude: flight.position.alt_ft,
-                    speed: flight.position.gs_kt,
-                    heading: flight.position.track_deg || 0,
-                    verticalSpeed: flight.position.vs_fpm || 0,
-                    position: JSON.stringify(flight.position)
-                };
-
-                try {
-                    // Fetch the flight plan to get the destination
-                    const planRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}/${flight.flightId}/plan`);
-                    if (planRes.ok) {
-                        const planData = await planRes.json();
-                        if (planData.ok && Array.isArray(planData.plan?.flightPlanItems) && planData.plan.flightPlanItems.length > 0) {
-                            const items = planData.plan.flightPlanItems;
-                            const destinationIcao = items[items.length - 1].name;
-                            const destinationAirport = airportsData[destinationIcao];
-
-                            if (destinationAirport) {
-                                const distanceNm = getDistanceNm(
-                                    flight.position.lat, 
-                                    flight.position.lon, 
-                                    destinationAirport.lat, 
-                                    destinationAirport.lon
-                                );
-                                
-                                // Add destination and distance to the feature's properties
-                                featureProperties.destination = destinationIcao;
-                                featureProperties.distanceNm = distanceNm;
-                            }
-                        }
-                    }
-                } catch (err) {
-                    // Ignore errors for individual flight plans to not break the whole map
-                    // console.warn(`Could not fetch plan for ${flight.callsign}:`, err);
-                }
-
                 return {
                     type: 'Feature',
                     geometry: {
                         type: 'Point',
                         coordinates: [flight.position.lon, flight.position.lat]
                     },
-                    properties: featureProperties
+                    properties: {
+                        flightId: flight.flightId,
+                        callsign: flight.callsign,
+                        username: flight.username,
+                        altitude: flight.position.alt_ft,
+                        speed: flight.position.gs_kt,
+                        heading: flight.position.track_deg || 0,
+                        verticalSpeed: flight.position.vs_fpm || 0,
+                        position: JSON.stringify(flight.position) // Stringify to pass the whole object
+                    }
                 };
-            });
-
-            const flightFeatures = (await Promise.all(flightFeaturesPromises)).filter(Boolean);
-            // --- END NEW SECTION ---
+            }).filter(Boolean);
 
             const geojsonData = {
                 type: 'FeatureCollection',
@@ -2190,7 +2149,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     data: geojsonData
                 });
 
-                // --- MODIFIED: Add text properties to the layer definition ---
                 sectorOpsMap.addLayer({
                     id: layerId,
                     type: 'symbol',
@@ -2201,37 +2159,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                         'icon-rotate': ['get', 'heading'],
                         'icon-rotation-alignment': 'map',
                         'icon-allow-overlap': true,
-                        'icon-ignore-placement': true,
-
-                        // --- HUD TEXT CONFIGURATION ---
-                        // Display text only if 'destination' property exists
-                        'text-field': [
-                            'case',
-                            ['has', 'destination'],
-                            ['concat', '► ', ['get', 'destination'], ' ', ['get', 'distanceNm'], 'nm'],
-                            '' // Default to empty string if no destination
-                        ],
-                        'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-                        'text-size': 10,
-                        'text-anchor': 'left',      // Anchor text to the left of the icon's center
-                        'text-offset': [1.2, 0],    // Push text 1.2em to the right
-                        'text-allow-overlap': false, // Avoid text clutter
-                        'text-ignore-placement': false
-                    },
-                    paint: {
-                        // --- HUD TEXT STYLING ---
-                        'text-color': '#adefff', // A light, readable blue
-                        'text-halo-color': '#000',
-                        'text-halo-width': 1
+                        'icon-ignore-placement': true
                     }
                 });
-                // --- END MODIFICATION ---
 
+                // REWRITTEN CLICK HANDLER to open the info window
                 sectorOpsMap.on('click', layerId, (e) => {
                     const props = e.features[0].properties;
                     const flightProps = {
                         ...props,
-                        position: JSON.parse(props.position)
+                        position: JSON.parse(props.position) // De-stringify the position object
                     };
                     handleAircraftClick(flightProps, expertSession.id);
                 });
