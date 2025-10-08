@@ -348,193 +348,190 @@ document.addEventListener('DOMContentLoaded', async () => {
             .readout-box .value .unit { font-size: 0.9rem; color: #9fa8da; }
             .readout-box .value .fa-solid { font-size: 0.9rem; margin-right: 5px; color: #00a8ff; }
 
-
-            /* --- [NEW] PFD (Primary Flight Display) Styles --- */
+            /* --- [NEW & OVERHAULED] PFD (Primary Flight Display) Styles --- */
             .pfd-container {
-                grid-column: 1 / -1; /* Take up the full width */
                 background: #000;
                 border-radius: 8px;
-                border: 1px solid rgba(255, 255, 255, 0.2);
                 display: flex;
                 justify-content: center;
                 align-items: center;
-                padding: 10px;
+                padding: 5px;
                 position: relative;
                 overflow: hidden;
-                font-family: 'SF Mono', 'Courier New', monospace;
+                font-family: 'SF Mono', 'Consolas', 'Courier New', monospace;
                 font-weight: bold;
                 color: #fff;
+                height: 250px; /* Give it a fixed height */
             }
+            /* Tapes (Airspeed & Altitude) */
             .pfd-tape {
                 position: relative;
-                width: 80px;
-                height: 220px;
-                background: rgba(50, 50, 50, 0.5);
+                width: 70px;
+                height: 100%;
+                background: #1a1a1a;
                 overflow: hidden;
                 border-radius: 4px;
             }
             .tape-strip {
                 position: absolute;
                 width: 100%;
-                transition: transform 0.5s linear;
+                will-change: transform;
+                transition: transform 0.2s linear;
             }
-            .tape-marker {
+            .tape-marker-window {
                 position: absolute;
                 width: 100%;
                 top: 50%;
                 transform: translateY(-50%);
                 height: 30px;
-                background: rgba(0, 0, 0, 0.6);
-                border-top: 2px solid #f1c40f;
-                border-bottom: 2px solid #f1c40f;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 1.4rem;
-                color: #f1c40f;
+                background: rgba(0,0,0,0.5);
+                border: 2px solid #000;
+                border-left: none;
+                border-right: none;
+            }
+            .tape-readout {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-size: 1.5rem;
+                color: #4CAF50; /* Green */
+                text-shadow: 0 0 5px #4CAF50;
+            }
+            .tape-pointer {
+                position: absolute;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 0; height: 0;
+            }
+            #speed-tape .tape-pointer {
+                left: -2px;
+                border-top: 10px solid transparent;
+                border-bottom: 10px solid transparent;
+                border-left: 10px solid #f1c40f; /* Yellow */
+            }
+            #alt-tape .tape-pointer {
+                right: -2px;
+                border-top: 10px solid transparent;
+                border-bottom: 10px solid transparent;
+                border-right: 10px solid #f1c40f; /* Yellow */
             }
             .tape-line {
-                height: 1px;
-                background: #fff;
-                display: flex;
-                align-items: center;
-                font-size: 0.8rem;
-                position: relative;
-            }
-            .tape-line.major {
                 height: 2px;
-            }
-            .tape-line span {
+                background: #fff;
                 position: absolute;
-                left: 5px;
+                width: 25%;
             }
+            .tape-line.major { width: 40%; }
+            #speed-tape .tape-line { left: 0; }
+            #alt-tape .tape-line { right: 0; }
+            .tape-line-label {
+                position: absolute;
+                font-size: 0.9rem;
+            }
+            #speed-tape .tape-line-label { left: 35px; transform: translateY(-50%); }
+            #alt-tape .tape-line-label { right: 35px; transform: translateY(-50%); }
 
-            #speed-tape .tape-line { text-align: left; }
-            #alt-tape .tape-line { text-align: right; }
-            #alt-tape .tape-line span { right: 5px; left: auto; }
-
+            /* Attitude Indicator (ADI) */
             .attitude-indicator {
-                width: 220px;
-                height: 220px;
+                width: 250px;
+                height: 250px;
                 border-radius: 50%;
-                background: #000;
+                background: #1a1a1a;
                 position: relative;
                 overflow: hidden;
-                border: 3px solid #ccc;
-                margin: 0 10px;
+                border: 3px solid #888;
+                margin: 0 5px;
+                flex-shrink: 0;
             }
             .horizon-sphere {
-                width: 150%;
-                height: 150%;
+                width: 100%; height: 100%;
                 position: absolute;
-                left: -25%;
-                top: -25%;
-                background: linear-gradient(to bottom, #3498db 50%, #8b4513 50%);
-                transition: transform 0.5s linear;
+                left: 0; top: 0;
+                will-change: transform;
+                transition: transform 0.2s linear;
+            }
+            .sky {
+                position: absolute;
+                width: 100%; height: 50%;
+                top: 0; background: #0091ea; /* Sky Blue */
+            }
+            .ground {
+                position: absolute;
+                width: 100%; height: 50%;
+                bottom: 0; background: #8d6e63; /* Earth Brown */
             }
             .pitch-ladder {
-                position: absolute;
-                width: 100%;
-                height: 100%;
+                position: absolute; width: 100%; height: 100%;
             }
             .pitch-line {
-                position: absolute;
-                left: 50%;
+                position: absolute; left: 50%;
                 transform: translateX(-50%);
-                width: 40px;
-                height: 2px;
-                background: #fff;
+                height: 2px; background: #fff;
             }
-            .pitch-line.ten { width: 80px; }
-            .pitch-line span { position: absolute; top: -10px; }
-            .pitch-line.up span { left: -25px; }
-            .pitch-line.down span { left: -25px; color: #fff; }
-
-            .roll-indicator {
-                position: absolute;
-                top: 5px;
-                width: 100%;
-                height: 30px;
-                z-index: 3;
+            .pitch-line[data-deg="5"], .pitch-line[data-deg="-5"] { width: 60px; }
+            .pitch-line[data-deg="10"], .pitch-line[data-deg="-10"] { width: 100px; }
+            .pitch-line[data-deg="15"], .pitch-line[data-deg="-15"] { width: 60px; }
+            .pitch-line[data-deg="20"], .pitch-line[data-deg="-20"] { width: 100px; }
+            .pitch-label {
+                position: absolute; top: -10px; font-size: 0.9rem;
+            }
+            .pitch-label-left { left: -25px; }
+            .pitch-label-right { right: -25px; }
+            
+            .roll-scale-container {
+                position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                will-change: transform;
+                transition: transform 0.2s linear;
             }
             .roll-pointer {
-                position: absolute;
-                top: 0;
-                left: 50%;
+                position: absolute; top: 8px; left: 50%;
                 transform: translateX(-50%);
-                width: 0;
-                height: 0;
-                border-left: 10px solid transparent;
-                border-right: 10px solid transparent;
-                border-top: 10px solid #f1c40f;
-            }
-            .roll-scale {
-                position: absolute;
-                width: 100%;
-                height: 100%;
-                transition: transform 0.5s linear;
+                width: 0; height: 0;
+                border-left: 12px solid transparent;
+                border-right: 12px solid transparent;
+                border-top: 12px solid #f1c40f;
+                z-index: 5;
             }
             .roll-mark {
-                position: absolute;
-                bottom: 0;
-                left: 50%;
-                transform-origin: 0 210px; /* Center of ADI */
-                width: 2px;
-                height: 10px;
-                background: #fff;
+                position: absolute; top: 25px; left: 50%;
+                height: 10px; width: 2px; background: #fff;
+                transform-origin: 0px 100px; /* Adjust based on ADI radius */
+            }
+            .roll-mark.thirty { height: 15px; }
+            .roll-mark.fortyfive {
+                height: 0; width: 0;
+                border-left: 8px solid transparent;
+                border-right: 8px solid transparent;
+                border-bottom: 12px solid #fff;
+                background: transparent;
+                transform: translate(-50%, -50%);
+            }
+            .slip-skid-indicator {
+                position: absolute; top: 30px; left: 50%;
+                width: 20px; height: 12px;
+                background: #f1c40f;
+                border: 2px solid black;
+                border-radius: 2px;
+                transform: translateX(-50%);
+                z-index: 5;
             }
 
             .static-plane-symbol {
-                position: absolute;
-                top: 50%;
-                left: 50%;
+                position: absolute; top: 50%; left: 50%;
                 transform: translate(-50%, -50%);
-                width: 100px;
-                height: 20px;
-                z-index: 2;
+                width: 120px; height: 40px;
+                z-index: 4;
             }
-            .static-plane-symbol .wing {
-                position: absolute;
-                top: 50%;
-                left: 0;
-                width: 100%;
-                height: 4px;
-                background: #f1c40f;
-                transform: translateY(-50%);
-            }
-            .static-plane-symbol .center-dot {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                width: 8px;
-                height: 8px;
-                background: #f1c40f;
-                border-radius: 50%;
-                transform: translate(-50%, -50%);
+            .static-plane-symbol svg {
+                width: 100%; height: 100%;
+                stroke: #f1c40f;
+                stroke-width: 5;
+                stroke-linejoin: round;
+                fill: #000;
             }
 
-            .vsi-indicator {
-                width: 20px;
-                height: 220px;
-                position: relative;
-                border: 1px solid #555;
-                border-radius: 5px;
-                margin-left: 5px;
-            }
-            .vsi-pointer {
-                position: absolute;
-                left: 50%;
-                top: 50%;
-                width: 0;
-                height: 0;
-                border-top: 8px solid transparent;
-                border-bottom: 8px solid transparent;
-                border-left: 10px solid #0f0;
-                transform: translate(-50%, -50%);
-                transition: top 0.5s linear;
-            }
-
-            /* Toolbar Recall Buttons */
+            /* --- Toolbar Recall Buttons --- */
             #airport-recall-btn, #aircraft-recall-btn {
                 display: none; font-size: 1.1rem; position: relative;
             }
@@ -953,54 +950,59 @@ document.addEventListener('DOMContentLoaded', async () => {
      * --- [NEW] Updates the dynamic PFD elements based on flight data.
      */
     function updatePfdDisplay(flightData) {
-        // --- Element Selectors ---
         const pfd = document.getElementById('pfd-container');
         if (!pfd) return;
 
+        // --- Element Selectors ---
         const horizonSphere = pfd.querySelector('.horizon-sphere');
-        const rollScale = pfd.querySelector('.roll-scale');
+        const rollScaleContainer = pfd.querySelector('.roll-scale-container');
         const speedStrip = pfd.querySelector('#speed-tape .tape-strip');
         const altStrip = pfd.querySelector('#alt-tape .tape-strip');
-        const vsiPointer = pfd.querySelector('.vsi-pointer');
-        const speedReadout = pfd.querySelector('#speed-tape .tape-marker');
-        const altReadout = pfd.querySelector('#alt-tape .tape-marker');
+        const speedReadout = pfd.querySelector('#speed-tape .tape-readout');
+        const altReadout = pfd.querySelector('#alt-tape .tape-readout');
 
         // --- Data ---
-        const { altitude, speed, verticalSpeed, heading } = flightData;
+        const { altitude, speed, verticalSpeed } = flightData;
 
-        // --- Simulate Pitch & Roll ---
-        // Pitch simulation: based on vertical speed. Clamp between -20 and +20 degrees.
-        // A climb of 2000fpm will roughly correspond to 10 degrees pitch up.
+        // --- PFD Logic & Calculations ---
+
+        // 1. Pitch Simulation
+        // We'll derive a plausible pitch angle from vertical speed.
+        // A typical climb/descent angle is 2.5-5 degrees for +/- 1500 fpm.
+        // Let's map it so that +/- 2000 fpm = +/- 10 degrees pitch. Clamp for realism.
         const pitch = Math.max(-20, Math.min(20, (verticalSpeed / 200)));
 
-        // Roll simulation: requires tracking heading change. For a static display, we can't show active roll.
-        // In a real-time update loop, we'd calculate `(currentHeading - prevHeading)`.
-        // For now, we'll keep it at 0.
-        const roll = 0; // Static for now.
+        // 2. Roll Simulation
+        // True roll requires heading change over time. For a static update, we'll assume wings level.
+        const roll = 0;
 
-        // --- Calculations ---
-        const pitch_pixels_per_degree = 10;
-        const speed_pixels_per_knot = 4;
-        const alt_pixels_per_100ft = 20;
-
-        const pitch_translate = pitch * pitch_pixels_per_degree;
-        const speed_translate = (speed * speed_pixels_per_knot) - (speedStrip.clientHeight / 2);
-        const alt_translate = ((altitude / 100) * alt_pixels_per_100ft) - (altStrip.clientHeight / 2);
+        // 3. Tape Calculations
+        const pixels_per_knot = 5;
+        const pixels_per_foot = 0.25;
         
-        // VSI: Clamp value for display range. Map -3000fpm to 3000fpm to 100% to 0% of the container height.
-        const vs_clamped = Math.max(-3000, Math.min(3000, verticalSpeed));
-        const vsi_top_percent = 50 - (vs_clamped / 60); // 3000fpm = -50%, -3000fpm = +50%
+        const speed_translate = speed * pixels_per_knot;
+        const alt_translate = altitude * pixels_per_foot;
+        
+        // --- Apply DOM Transformations ---
+        if (horizonSphere && rollScaleContainer) {
+            // Apply pitch (translate) and roll (rotate) to the sphere.
+            horizonSphere.style.transform = `translateY(${pitch * 10}px) rotate(${roll}deg)`;
+            
+            // Apply roll to the separate roll scale container so the pointer stays static.
+            rollScaleContainer.style.transform = `rotate(${roll}deg)`;
+        }
 
-        // --- Apply Transformations ---
-        horizonSphere.style.transform = `rotate(${roll}deg) translateY(${pitch_translate}px)`;
-        rollScale.style.transform = `rotate(${roll}deg)`;
-        speedStrip.style.transform = `translateY(-${speed_translate}px)`;
-        altStrip.style.transform = `translateY(-${alt_translate}px)`;
-        vsiPointer.style.top = `${vsi_top_percent}%`;
+        if (speedStrip && altStrip) {
+            // Move the tapes up/down. We use CSS `calc` to center the strip on the current value.
+            speedStrip.style.transform = `translateY(calc(50% - ${speed_translate}px))`;
+            altStrip.style.transform = `translateY(calc(50% - ${alt_translate}px))`;
+        }
 
-        // Update readouts
-        speedReadout.textContent = Math.round(speed);
-        altReadout.textContent = Math.round(altitude / 10) * 10; // Round to nearest 10
+        // --- Update Readouts ---
+        if (speedReadout && altReadout) {
+            speedReadout.textContent = Math.round(speed);
+            altReadout.textContent = Math.round(altitude / 10) * 10; // Round to nearest 10 feet
+        }
     }
 
     /**
@@ -1797,10 +1799,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     /**
      * --- [COMPLETELY REWRITTEN] Generates the "Unified Flight Display" with a dynamic PFD.
      */
+    /**
+     * --- [COMPLETELY REWRITTEN] Generates the "Unified Flight Display" with a dynamic PFD.
+     */
     function populateAircraftInfoWindow(baseProps, plan) {
         const contentEl = document.getElementById('aircraft-window-content');
 
-        // --- Data Extraction & Calculation (same as before) ---
+        // --- Data Extraction & Calculation ---
         const allWaypoints = [];
         if (plan && plan.flightPlanItems) {
             const extractWps = (items) => {
@@ -1845,7 +1850,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         else if (baseProps.altitude > 28000 && Math.abs(vs) <= 500) flightPhase = 'CRUISE';
         else if (baseProps.altitude < 12000 && distanceToDestNM < 40 && vs < -300) flightPhase = 'APPROACH';
 
-        // --- [NEW] HTML Structure for PFD ---
+        // --- HTML Structure for PFD ---
         contentEl.innerHTML = `
             <div class="unified-display-container">
                 <div class="unified-display-header">
@@ -1866,33 +1871,35 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div class="unified-display-main">
                     <div id="pfd-container" class="pfd-container">
                         <div id="speed-tape" class="pfd-tape">
-                            <div class="tape-strip">
-                                </div>
-                            <div class="tape-marker">...</div>
+                            <div class="tape-strip"></div>
+                            <div class="tape-marker-window"></div>
+                            <div class="tape-pointer"></div>
+                            <div class="tape-readout">0</div>
                         </div>
 
                         <div class="attitude-indicator">
                             <div class="horizon-sphere">
-                                </div>
-                            <div class="roll-indicator">
-                                <div class="roll-scale">
-                                     </div>
+                                <div class="sky"></div>
+                                <div class="ground"></div>
+                                <div class="pitch-ladder"></div>
+                            </div>
+                            <div class="roll-scale-container">
                                 <div class="roll-pointer"></div>
+                                <div class="slip-skid-indicator"></div>
+                                <div class="roll-scale-marks"></div>
                             </div>
                             <div class="static-plane-symbol">
-                                <div class="wing"></div>
-                                <div class="center-dot"></div>
+                                <svg viewBox="0 0 120 40">
+                                    <path d="M 0 20 L 45 20 L 45 15 L 55 15 L 55 25 L 45 25 L 45 20 M 120 20 L 75 20 L 75 15 L 65 15 L 65 25 L 75 25 L 75 20" />
+                                </svg>
                             </div>
                         </div>
                         
                         <div id="alt-tape" class="pfd-tape">
-                            <div class="tape-strip">
-                                </div>
-                            <div class="tape-marker">...</div>
-                        </div>
-                        
-                        <div class="vsi-indicator">
-                            <div class="vsi-pointer"></div>
+                            <div class="tape-strip"></div>
+                            <div class="tape-marker-window"></div>
+                            <div class="tape-pointer"></div>
+                            <div class="tape-readout">0</div>
                         </div>
                     </div>
                 </div>
@@ -1906,32 +1913,54 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
         `;
         
-        // --- [NEW] Generate PFD Markings & Call Updater ---
+        // --- Generate PFD Markings ---
         const speedStrip = contentEl.querySelector('#speed-tape .tape-strip');
         let speedHtml = '';
-        for (let i = 0; i <= 600; i += 10) {
+        for (let i = 0; i <= 800; i += 10) {
             const isMajor = i % 20 === 0;
-            speedHtml += `<div class="tape-line ${isMajor ? 'major' : ''}" style="bottom: ${i * 4}px;"><span>${isMajor ? i : ''}</span></div>`;
+            if (isMajor) {
+                speedHtml += `<div class="tape-line major" style="bottom: ${i * 5}px;"></div><div class="tape-line-label" style="top: calc(100% - ${i * 5}px);">${i}</div>`;
+            } else {
+                speedHtml += `<div class="tape-line" style="bottom: ${i * 5}px;"></div>`;
+            }
         }
         speedStrip.innerHTML = speedHtml;
 
         const altStrip = contentEl.querySelector('#alt-tape .tape-strip');
         let altHtml = '';
-        for (let i = 0; i <= 600; i++) { // i represents hundreds of feet
+        for (let i = -10; i <= 600; i++) { // i represents hundreds of feet
             const isMajor = i % 5 === 0;
-            altHtml += `<div class="tape-line ${isMajor ? 'major' : ''}" style="bottom: ${i * 20}px;"><span>${isMajor ? i * 100 : ''}</span></div>`;
+            const altitude = i * 100;
+            if (isMajor) {
+                altHtml += `<div class="tape-line major" style="bottom: ${altitude * 0.25}px;"></div><div class="tape-line-label" style="top: calc(100% - ${altitude * 0.25}px);">${altitude}</div>`;
+            } else {
+                altHtml += `<div class="tape-line" style="bottom: ${altitude * 0.25}px;"></div>`;
+            }
         }
         altStrip.innerHTML = altHtml;
         
-        const horizonSphere = contentEl.querySelector('.horizon-sphere');
+        const pitchLadder = contentEl.querySelector('.pitch-ladder');
         let pitchHtml = '';
-        for(let i = -90; i <= 90; i += 5) {
-            if (i === 0) continue;
-            const isTen = i % 10 === 0;
-            pitchHtml += `<div class="pitch-line ${isTen ? 'ten' : ''}" style="top: calc(50% - ${i * 10}px);"></div>`;
-        }
-        horizonSphere.innerHTML = pitchHtml;
-        
+        [-20, -15, -10, -5, 5, 10, 15, 20].forEach(deg => {
+            let line = `<div class="pitch-line" data-deg="${deg}" style="top: calc(50% - ${deg * 10}px);">`;
+            if (Math.abs(deg) === 10 || Math.abs(deg) === 20) {
+                line += `<span class="pitch-label pitch-label-left">${Math.abs(deg)}</span><span class="pitch-label pitch-label-right">${Math.abs(deg)}</span>`;
+            }
+            line += `</div>`;
+            pitchHtml += line;
+        });
+        pitchLadder.innerHTML = pitchHtml;
+
+        const rollMarks = contentEl.querySelector('.roll-scale-marks');
+        let rollHtml = '';
+        [-60, -45, -30, -20, -10, 10, 20, 30, 45, 60].forEach(deg => {
+            let markClass = 'roll-mark';
+            if (Math.abs(deg) === 30) markClass += ' thirty';
+            if (Math.abs(deg) === 45) markClass += ' fortyfive';
+            rollHtml += `<div class="${markClass}" style="transform: rotate(${deg}deg);"></div>`;
+        });
+        rollMarks.innerHTML = rollHtml;
+
         // --- Call the update function to set initial state ---
         updatePfdDisplay({
             altitude: baseProps.altitude,
