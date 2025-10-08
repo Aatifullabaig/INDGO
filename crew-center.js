@@ -1553,8 +1553,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 : [];
             
             if (historicalRoute.length > 0) {
-                const completeFlownPath = [.....historicalRoute, currentPosition];
-                allCoordsForBounds.push(.....historicalRoute);
+                const completeFlownPath = [...historicalRoute, currentPosition];
+                allCoordsForBounds.push(...historicalRoute);
 
                 sectorOpsMap.addSource(flownLayerId, {
                     type: 'geojson',
@@ -1583,8 +1583,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 if (remainingWaypoints.length > 0) {
                     // The planned path starts at the current position and connects to all future waypoints.
-                    const completePlannedPath = [currentPosition, .....remainingWaypoints];
-                    allCoordsForBounds.push(.....remainingWaypoints);
+                    const completePlannedPath = [currentPosition, ...remainingWaypoints];
+                    allCoordsForBounds.push(...remainingWaypoints);
                     
                     sectorOpsMap.addSource(plannedLayerId, {
                         type: 'geojson',
