@@ -1417,14 +1417,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!sectorOpsMap || !flightId) return;
 
         const flownLayerId = `flown-path-${flightId}`;
-        const plannedLayerId = `planned-path-${flightId}`;
 
         if (sectorOpsMap.getLayer(flownLayerId)) sectorOpsMap.removeLayer(flownLayerId);
         if (sectorOpsMap.getSource(flownLayerId)) sectorOpsMap.removeSource(flownLayerId);
         
-        if (sectorOpsMap.getLayer(plannedLayerId)) sectorOpsMap.removeLayer(plannedLayerId);
-        if (sectorOpsMap.getSource(plannedLayerId)) sectorOpsMap.removeSource(plannedLayerId);
-
         delete sectorOpsLiveFlightPathLayers[flightId];
     }
 
@@ -1544,7 +1540,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             // --- Map Plotting Logic ---
             const currentPosition = [flightProps.position.lon, flightProps.position.lat];
             const flownLayerId = `flown-path-${flightProps.flightId}`;
-            const plannedLayerId = `planned-path-${flightProps.flightId}`;
             let allCoordsForBounds = [currentPosition]; // Start bounds with the plane's position
 
             // 2. Process and plot the Flown Path (The Past)
@@ -1567,41 +1562,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     paint: { 'line-color': '#00b894', 'line-width': 4, 'line-opacity': 0.9 }
                 });
             }
-
-            // 3. Process and plot the Planned Path (The Future)
-            if (plan && plan.flightPlanItems) {
-                // --- START OF FIX ---
-                // Get the index of the next high-level waypoint from the API. This index
-                // corresponds to the original, nested `flightPlanItems` array.
-                const nextWaypointIndex = plan.nextWaypointIndex || 0;
-
-                // Slice the original, nested flight plan array to get only the items remaining on the route.
-                const remainingPlanItems = plan.flightPlanItems.slice(nextWaypointIndex);
-                
-                // Now, flatten only the remaining part of the flight plan to get the future coordinates.
-                const remainingWaypoints = flattenWaypointsFromPlan(remainingPlanItems);
-                
-                if (remainingWaypoints.length > 0) {
-                    // The planned path starts at the current position and connects to all future waypoints.
-                    const completePlannedPath = [currentPosition, ...remainingWaypoints];
-                    allCoordsForBounds.push(...remainingWaypoints);
-                    
-                    sectorOpsMap.addSource(plannedLayerId, {
-                        type: 'geojson',
-                        data: { type: 'Feature', geometry: { type: 'LineString', coordinates: completePlannedPath } }
-                    });
-                    sectorOpsMap.addLayer({
-                        id: plannedLayerId,
-                        type: 'line',
-                        source: plannedLayerId,
-                        paint: { 'line-color': '#e84393', 'line-width': 3, 'line-dasharray': [2, 2] }
-                    });
-                }
-                // --- END OF FIX ---
-            }
             
             // Store the layer IDs for cleanup later
-            sectorOpsLiveFlightPathLayers[flightProps.flightId] = { flown: flownLayerId, planned: plannedLayerId };
+            sectorOpsLiveFlightPathLayers[flightProps.flightId] = { flown: flownLayerId };
 
             // 4. Fit map to the bounds of the entire flight path
             if (allCoordsForBounds.length > 1) {
