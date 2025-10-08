@@ -1477,6 +1477,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
+    /**
+     * --- [NEW HELPER] ---
+     * Recursively flattens the nested flightPlanItems from the SimBrief API plan
+     * into a single, clean array of [longitude, latitude] coordinates.
+     * @param {Array} items - The flightPlanItems array from the API response.
+     * @returns {Array<[number, number]>} A flat array of coordinates.
+     */
+    function flattenWaypointsFromPlan(items) {
+        const waypoints = [];
+        if (!Array.isArray(items)) return waypoints;
+
+        const extract = (planItems) => {
+            for (const item of planItems) {
+                // Ensure the item has a valid location with non-zero/null coordinates
+                if (item.location && typeof item.location.longitude === 'number' && typeof item.location.latitude === 'number' && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
+                    waypoints.push([item.location.longitude, item.location.latitude]);
+                }
+                // Recursively process any children waypoints (e.g., for procedures)
+                if (Array.isArray(item.children)) {
+                    extract(item.children);
+                }
+            }
+        };
+
+        extract(items);
+        return waypoints;
+    }
+
     // --- [COMPLETELY REWRITTEN] Handles aircraft clicks, data fetching, map plotting, and window population.
     async function handleAircraftClick(flightProps, sessionId) {
         if (!flightProps || !flightProps.flightId) return;
@@ -1496,7 +1524,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         contentEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
 
         try {
-            // Fetch plan and route data in parallel
+            // 1. Fetch plan and route data in parallel
             const [planRes, routeRes] = await Promise.all([
                 fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/plan`),
                 fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/route`)
@@ -1506,70 +1534,79 @@ document.addEventListener('DOMContentLoaded', async () => {
             const plan = (planData && planData.ok) ? planData.plan : null;
             const routeData = routeRes.ok ? await routeRes.json() : null;
             
-            // Populate the info window with the new tabbed layout
+            // First, populate the info window UI with all available data
             populateAircraftInfoWindow(flightProps, plan);
 
-            // --- Map Plotting Logic ---
-            let allCoordsForBounds = [];
+            // --- [REDESIGNED] Map Plotting Logic ---
+            const currentPosition = [flightProps.position.lon, flightProps.position.lat];
             const flownLayerId = `flown-path-${flightProps.flightId}`;
             const plannedLayerId = `planned-path-${flightProps.flightId}`;
+            let allCoordsForBounds = [currentPosition]; // Start bounds with the plane's position
+
+            // 2. Process and plot the Flown Path (The Past)
+            const historicalRoute = (routeData && routeData.ok && Array.isArray(routeData.route)) 
+                ? routeData.route.map(p => [p.longitude, p.latitude]) 
+                : [];
             
-            // 1. Plot flown path (from /route)
-            const flownCoords = (routeData && routeData.ok && Array.isArray(routeData.route)) ? routeData.route.map(p => [p.longitude, p.latitude]) : [];
-            if (flownCoords.length > 1) {
-                allCoordsForBounds.push(...flownCoords);
-                sectorOpsMap.addSource(flownLayerId, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: flownCoords } } });
-                sectorOpsMap.addLayer({ id: flownLayerId, type: 'line', source: flownLayerId, paint: { 'line-color': '#00b894', 'line-width': 4, 'line-opacity': 0.9 } });
+            if (historicalRoute.length > 0) {
+                // The complete flown path includes all historical points plus the current live position
+                const completeFlownPath = [...historicalRoute, currentPosition];
+                allCoordsForBounds.push(...historicalRoute);
+
+                sectorOpsMap.addSource(flownLayerId, {
+                    type: 'geojson',
+                    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: completeFlownPath } }
+                });
+                sectorOpsMap.addLayer({
+                    id: flownLayerId,
+                    type: 'line',
+                    source: flownLayerId,
+                    paint: { 'line-color': '#00b894', 'line-width': 4, 'line-opacity': 0.9 }
+                });
             }
 
-            // 2. Plot planned path (from /plan)
-            if (plan && plan.flightPlanItems?.length > 0) {
-                const allWaypoints = [];
-                const extractWps = items => items.forEach(item => {
-                    // ✅ FIX: Filter out invalid (0,0) or null coordinates to prevent broken paths
-                    if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
-                        allWaypoints.push([item.location.longitude, item.location.latitude]);
-                    }
-                    if (item.children) extractWps(item.children);
-                });
-                extractWps(plan.flightPlanItems);
-
-                if (allWaypoints.length > 0) {
-                    const currentPos = [flightProps.position.lon, flightProps.position.lat];
-                    let remainingPathCoords;
-
-                    // If we have a flown path, connect from its end. Otherwise, connect from current position.
-                    const startOfPlannedPath = flownCoords.length > 1 ? flownCoords[flownCoords.length - 1] : currentPos;
+            // 3. Process and plot the Planned Path (The Future)
+            if (plan && plan.flightPlanItems) {
+                const allWaypoints = flattenWaypointsFromPlan(plan.flightPlanItems);
+                
+                // Use nextWaypointIndex (defaulting to 0) to find the remaining waypoints
+                const nextWaypointIndex = plan.nextWaypointIndex || 0;
+                
+                // Ensure the index is within the bounds of our flattened waypoint array
+                if (allWaypoints.length > 0 && nextWaypointIndex < allWaypoints.length) {
+                    const remainingWaypoints = allWaypoints.slice(nextWaypointIndex);
                     
-                    if (flownCoords.length === 0) {
-                        // Fallback: No /route data, so plot the whole flight plan as "planned"
-                        remainingPathCoords = allWaypoints;
-                        allCoordsForBounds.push(...remainingPathCoords);
-                    } else {
-                        // Normal case: Plot from current position to destination
-                        remainingPathCoords = [currentPos, ...allWaypoints.slice(plan.nextWaypointIndex || 0)];
-                        allCoordsForBounds.push(...remainingPathCoords);
-                    }
+                    // The planned path starts at the current position and connects to all future waypoints
+                    const completePlannedPath = [currentPosition, ...remainingWaypoints];
+                    allCoordsForBounds.push(...remainingWaypoints);
                     
-                    sectorOpsMap.addSource(plannedLayerId, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: remainingPathCoords } } });
-                    sectorOpsMap.addLayer({ id: plannedLayerId, type: 'line', source: plannedLayerId, paint: { 'line-color': '#e84393', 'line-width': 3, 'line-dasharray': [2, 2] } });
+                    sectorOpsMap.addSource(plannedLayerId, {
+                        type: 'geojson',
+                        data: { type: 'Feature', geometry: { type: 'LineString', coordinates: completePlannedPath } }
+                    });
+                    sectorOpsMap.addLayer({
+                        id: plannedLayerId,
+                        type: 'line',
+                        source: plannedLayerId,
+                        paint: { 'line-color': '#e84393', 'line-width': 3, 'line-dasharray': [2, 2] }
+                    });
                 }
             }
             
+            // Store the layer IDs for cleanup later
             sectorOpsLiveFlightPathLayers[flightProps.flightId] = { flown: flownLayerId, planned: plannedLayerId };
 
-            // 3. Fit map to bounds
+            // 4. Fit map to the bounds of the entire flight path
             if (allCoordsForBounds.length > 1) {
                 const bounds = allCoordsForBounds.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(allCoordsForBounds[0], allCoordsForBounds[0]));
                 sectorOpsMap.fitBounds(bounds, { padding: 80, maxZoom: 10, duration: 1000 });
             }
 
         } catch (error) {
-            console.error("Error fetching aircraft details:", error);
+            console.error("Error fetching or plotting aircraft details:", error);
             contentEl.innerHTML = `<p class="error-text">Could not retrieve complete flight details. The aircraft may have landed or disconnected.</p>`;
         }
     }
-
 
     /**
      * --- [COMPLETELY REWRITTEN] Generates and injects the aircraft window's HTML with a tabbed interface.
