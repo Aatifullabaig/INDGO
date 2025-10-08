@@ -321,48 +321,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             .unified-display-main {
                 flex-grow: 1;
                 display: grid;
-                grid-template-columns: 1fr 1fr;
+                grid-template-columns: 1fr; /* Changed for PFD */
                 gap: 12px;
                 background: rgba(10, 12, 26, 0.5);
                 border-radius: 12px;
                 padding: 12px;
                 min-height: 250px;
-            }
-            .pfd-panel, .mfd-panel {
-                border-radius: 8px;
-                background: #0D101C;
-                padding: 10px;
-                display: flex; flex-direction: column;
-                justify-content: center; align-items: center;
-                border: 1px solid rgba(255,255,255,0.1);
-            }
-            .pfd-panel .panel-title, .mfd-panel .panel-title {
-                font-size: 0.7rem; text-transform: uppercase; color: #9fa8da;
-                margin-bottom: auto;
-            }
-            .pfd-content { text-align: center; }
-            .pfd-content .attitude-indicator {
-                width: 120px; height: 120px; border-radius: 50%;
-                background: linear-gradient(to bottom, #3498db 50%, #8b4513 50%);
-                border: 3px solid #e8eaf6; position: relative;
-                display: grid; place-items: center;
-                margin-bottom: 10px;
-            }
-            .pfd-content .attitude-indicator::before {
-                content: ''; position: absolute; height: 3px; width: 100%; background: #e8eaf6;
-            }
-            .pfd-content .attitude-indicator::after {
-                content: '\\f072'; font-family: 'Font Awesome 5 Free'; font-weight: 900;
-                color: #f1c40f; font-size: 1.5rem; z-index: 1;
-            }
-            .pfd-readouts { display: flex; justify-content: space-between; width: 160px; }
-            .tape { font-family: 'Courier New', monospace; font-size: 1.2rem; font-weight: bold; }
-            .tape .label { font-size: 0.7rem; color: #9fa8da; display: block; }
-            .mfd-panel .vertical-profile-placeholder {
-                flex-grow: 1; width: 100%;
-                border: 1px dashed rgba(255,255,255,0.2);
-                border-radius: 4px; display: grid; place-items: center;
-                text-align: center; font-size: 0.8rem; color: #9fa8da;
             }
             .unified-display-footer {
                 display: grid;
@@ -384,6 +348,191 @@ document.addEventListener('DOMContentLoaded', async () => {
             .readout-box .value .unit { font-size: 0.9rem; color: #9fa8da; }
             .readout-box .value .fa-solid { font-size: 0.9rem; margin-right: 5px; color: #00a8ff; }
 
+
+            /* --- [NEW] PFD (Primary Flight Display) Styles --- */
+            .pfd-container {
+                grid-column: 1 / -1; /* Take up the full width */
+                background: #000;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 10px;
+                position: relative;
+                overflow: hidden;
+                font-family: 'SF Mono', 'Courier New', monospace;
+                font-weight: bold;
+                color: #fff;
+            }
+            .pfd-tape {
+                position: relative;
+                width: 80px;
+                height: 220px;
+                background: rgba(50, 50, 50, 0.5);
+                overflow: hidden;
+                border-radius: 4px;
+            }
+            .tape-strip {
+                position: absolute;
+                width: 100%;
+                transition: transform 0.5s linear;
+            }
+            .tape-marker {
+                position: absolute;
+                width: 100%;
+                top: 50%;
+                transform: translateY(-50%);
+                height: 30px;
+                background: rgba(0, 0, 0, 0.6);
+                border-top: 2px solid #f1c40f;
+                border-bottom: 2px solid #f1c40f;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.4rem;
+                color: #f1c40f;
+            }
+            .tape-line {
+                height: 1px;
+                background: #fff;
+                display: flex;
+                align-items: center;
+                font-size: 0.8rem;
+                position: relative;
+            }
+            .tape-line.major {
+                height: 2px;
+            }
+            .tape-line span {
+                position: absolute;
+                left: 5px;
+            }
+
+            #speed-tape .tape-line { text-align: left; }
+            #alt-tape .tape-line { text-align: right; }
+            #alt-tape .tape-line span { right: 5px; left: auto; }
+
+            .attitude-indicator {
+                width: 220px;
+                height: 220px;
+                border-radius: 50%;
+                background: #000;
+                position: relative;
+                overflow: hidden;
+                border: 3px solid #ccc;
+                margin: 0 10px;
+            }
+            .horizon-sphere {
+                width: 150%;
+                height: 150%;
+                position: absolute;
+                left: -25%;
+                top: -25%;
+                background: linear-gradient(to bottom, #3498db 50%, #8b4513 50%);
+                transition: transform 0.5s linear;
+            }
+            .pitch-ladder {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+            }
+            .pitch-line {
+                position: absolute;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 40px;
+                height: 2px;
+                background: #fff;
+            }
+            .pitch-line.ten { width: 80px; }
+            .pitch-line span { position: absolute; top: -10px; }
+            .pitch-line.up span { left: -25px; }
+            .pitch-line.down span { left: -25px; color: #fff; }
+
+            .roll-indicator {
+                position: absolute;
+                top: 5px;
+                width: 100%;
+                height: 30px;
+                z-index: 3;
+            }
+            .roll-pointer {
+                position: absolute;
+                top: 0;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 0;
+                height: 0;
+                border-left: 10px solid transparent;
+                border-right: 10px solid transparent;
+                border-top: 10px solid #f1c40f;
+            }
+            .roll-scale {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                transition: transform 0.5s linear;
+            }
+            .roll-mark {
+                position: absolute;
+                bottom: 0;
+                left: 50%;
+                transform-origin: 0 210px; /* Center of ADI */
+                width: 2px;
+                height: 10px;
+                background: #fff;
+            }
+
+            .static-plane-symbol {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 100px;
+                height: 20px;
+                z-index: 2;
+            }
+            .static-plane-symbol .wing {
+                position: absolute;
+                top: 50%;
+                left: 0;
+                width: 100%;
+                height: 4px;
+                background: #f1c40f;
+                transform: translateY(-50%);
+            }
+            .static-plane-symbol .center-dot {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 8px;
+                height: 8px;
+                background: #f1c40f;
+                border-radius: 50%;
+                transform: translate(-50%, -50%);
+            }
+
+            .vsi-indicator {
+                width: 20px;
+                height: 220px;
+                position: relative;
+                border: 1px solid #555;
+                border-radius: 5px;
+                margin-left: 5px;
+            }
+            .vsi-pointer {
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                width: 0;
+                height: 0;
+                border-top: 8px solid transparent;
+                border-bottom: 8px solid transparent;
+                border-left: 10px solid #0f0;
+                transform: translate(-50%, -50%);
+                transition: top 0.5s linear;
+            }
 
             /* Toolbar Recall Buttons */
             #airport-recall-btn, #aircraft-recall-btn {
@@ -798,6 +947,60 @@ document.addEventListener('DOMContentLoaded', async () => {
         const hours = Math.floor(diffMs / 3600000);
         const minutes = Math.floor((diffMs % 3600000) / 60000);
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    }
+
+    /**
+     * --- [NEW] Updates the dynamic PFD elements based on flight data.
+     */
+    function updatePfdDisplay(flightData) {
+        // --- Element Selectors ---
+        const pfd = document.getElementById('pfd-container');
+        if (!pfd) return;
+
+        const horizonSphere = pfd.querySelector('.horizon-sphere');
+        const rollScale = pfd.querySelector('.roll-scale');
+        const speedStrip = pfd.querySelector('#speed-tape .tape-strip');
+        const altStrip = pfd.querySelector('#alt-tape .tape-strip');
+        const vsiPointer = pfd.querySelector('.vsi-pointer');
+        const speedReadout = pfd.querySelector('#speed-tape .tape-marker');
+        const altReadout = pfd.querySelector('#alt-tape .tape-marker');
+
+        // --- Data ---
+        const { altitude, speed, verticalSpeed, heading } = flightData;
+
+        // --- Simulate Pitch & Roll ---
+        // Pitch simulation: based on vertical speed. Clamp between -20 and +20 degrees.
+        // A climb of 2000fpm will roughly correspond to 10 degrees pitch up.
+        const pitch = Math.max(-20, Math.min(20, (verticalSpeed / 200)));
+
+        // Roll simulation: requires tracking heading change. For a static display, we can't show active roll.
+        // In a real-time update loop, we'd calculate `(currentHeading - prevHeading)`.
+        // For now, we'll keep it at 0.
+        const roll = 0; // Static for now.
+
+        // --- Calculations ---
+        const pitch_pixels_per_degree = 10;
+        const speed_pixels_per_knot = 4;
+        const alt_pixels_per_100ft = 20;
+
+        const pitch_translate = pitch * pitch_pixels_per_degree;
+        const speed_translate = (speed * speed_pixels_per_knot) - (speedStrip.clientHeight / 2);
+        const alt_translate = ((altitude / 100) * alt_pixels_per_100ft) - (altStrip.clientHeight / 2);
+        
+        // VSI: Clamp value for display range. Map -3000fpm to 3000fpm to 100% to 0% of the container height.
+        const vs_clamped = Math.max(-3000, Math.min(3000, verticalSpeed));
+        const vsi_top_percent = 50 - (vs_clamped / 60); // 3000fpm = -50%, -3000fpm = +50%
+
+        // --- Apply Transformations ---
+        horizonSphere.style.transform = `rotate(${roll}deg) translateY(${pitch_translate}px)`;
+        rollScale.style.transform = `rotate(${roll}deg)`;
+        speedStrip.style.transform = `translateY(-${speed_translate}px)`;
+        altStrip.style.transform = `translateY(-${alt_translate}px)`;
+        vsiPointer.style.top = `${vsi_top_percent}%`;
+
+        // Update readouts
+        speedReadout.textContent = Math.round(speed);
+        altReadout.textContent = Math.round(altitude / 10) * 10; // Round to nearest 10
     }
 
     /**
@@ -1592,12 +1795,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /**
-     * --- [MODIFIED] Generates the "Unified Flight Display" for the aircraft window.
+     * --- [COMPLETELY REWRITTEN] Generates the "Unified Flight Display" with a dynamic PFD.
      */
     function populateAircraftInfoWindow(baseProps, plan) {
         const contentEl = document.getElementById('aircraft-window-content');
 
-        // --- Data Extraction & Calculation ---
+        // --- Data Extraction & Calculation (same as before) ---
         const allWaypoints = [];
         if (plan && plan.flightPlanItems) {
             const extractWps = (items) => {
@@ -1610,11 +1813,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
             extractWps(plan.flightPlanItems);
         }
-
         const hasPlan = allWaypoints.length >= 2;
         const departureIcao = hasPlan ? allWaypoints[0]?.name : 'N/A';
         const arrivalIcao = hasPlan ? allWaypoints[allWaypoints.length - 1]?.name : 'N/A';
-
         let progress = 0, ete = 'N/A', distanceToDestNM = 0;
         if (hasPlan) {
             let totalDistanceKm = 0;
@@ -1637,8 +1838,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
         }
-
-        // --- Flight Phase Logic ---
         let flightPhase = 'ENROUTE';
         let vs = baseProps.verticalSpeed;
         if (vs > 500) flightPhase = 'CLIMB';
@@ -1646,8 +1845,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         else if (baseProps.altitude > 28000 && Math.abs(vs) <= 500) flightPhase = 'CRUISE';
         else if (baseProps.altitude < 12000 && distanceToDestNM < 40 && vs < -300) flightPhase = 'APPROACH';
 
-
-        // --- HTML Structure for Unified Display ---
+        // --- [NEW] HTML Structure for PFD ---
         contentEl.innerHTML = `
             <div class="unified-display-container">
                 <div class="unified-display-header">
@@ -1658,9 +1856,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="flight-progress-block">
                         <div class="route-progress-bar">
                             <span class="icao">${departureIcao}</span>
-                            <div class="progress-bar-container">
-                                <div class="progress-bar-fill" style="width: ${progress.toFixed(1)}%;"></div>
-                            </div>
+                            <div class="progress-bar-container"><div class="progress-bar-fill" style="width: ${progress.toFixed(1)}%;"></div></div>
                             <span class="icao">${arrivalIcao}</span>
                         </div>
                     </div>
@@ -1668,54 +1864,81 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
 
                 <div class="unified-display-main">
-                    <div class="pfd-panel">
-                        <div class="panel-title">Primary Flight Display</div>
-                        <div class="pfd-content">
-                            <div class="attitude-indicator"></div>
-                            <div class="pfd-readouts">
-                                <div class="tape airspeed-tape">
-                                    <span class="label">SPEED</span>
-                                    ${Math.round(baseProps.speed)}
+                    <div id="pfd-container" class="pfd-container">
+                        <div id="speed-tape" class="pfd-tape">
+                            <div class="tape-strip">
                                 </div>
-                                <div class="tape altitude-tape">
-                                    <span class="label">ALT</span>
-                                    ${Math.round(baseProps.altitude).toLocaleString()}
+                            <div class="tape-marker">...</div>
+                        </div>
+
+                        <div class="attitude-indicator">
+                            <div class="horizon-sphere">
                                 </div>
+                            <div class="roll-indicator">
+                                <div class="roll-scale">
+                                     </div>
+                                <div class="roll-pointer"></div>
+                            </div>
+                            <div class="static-plane-symbol">
+                                <div class="wing"></div>
+                                <div class="center-dot"></div>
                             </div>
                         </div>
-                    </div>
-                    <div class="mfd-panel">
-                        <div class="panel-title">Vertical Situation Display</div>
-                        <div class="vertical-profile-placeholder">
-                            <i class="fa-solid fa-chart-area fa-2x" style="opacity: 0.3;"></i>
-                            <p>Vertical Profile View</p>
+                        
+                        <div id="alt-tape" class="pfd-tape">
+                            <div class="tape-strip">
+                                </div>
+                            <div class="tape-marker">...</div>
+                        </div>
+                        
+                        <div class="vsi-indicator">
+                            <div class="vsi-pointer"></div>
                         </div>
                     </div>
                 </div>
 
                 <div class="unified-display-footer">
-                    <div class="readout-box">
-                        <div class="label">Ground Speed</div>
-                        <div class="value">${Math.round(baseProps.speed)}<span class="unit"> kts</span></div>
-                    </div>
-                    <div class="readout-box">
-                        <div class="label">Vertical Speed</div>
-                        <div class="value">
-                            <i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i>
-                            ${Math.round(vs)}<span class="unit"> fpm</span>
-                        </div>
-                    </div>
-                    <div class="readout-box">
-                        <div class="label">Dist. to Dest.</div>
-                        <div class="value">${Math.round(distanceToDestNM)}<span class="unit"> NM</span></div>
-                    </div>
-                    <div class="readout-box">
-                        <div class="label">ETE</div>
-                        <div class="value">${ete}</div>
-                    </div>
+                     <div class="readout-box"><div class="label">Ground Speed</div><div class="value">${Math.round(baseProps.speed)}<span class="unit"> kts</span></div></div>
+                     <div class="readout-box"><div class="label">Vertical Speed</div><div class="value"><i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit"> fpm</span></div></div>
+                     <div class="readout-box"><div class="label">Dist. to Dest.</div><div class="value">${Math.round(distanceToDestNM)}<span class="unit"> NM</span></div></div>
+                     <div class="readout-box"><div class="label">ETE</div><div class="value">${ete}</div></div>
                 </div>
             </div>
         `;
+        
+        // --- [NEW] Generate PFD Markings & Call Updater ---
+        const speedStrip = contentEl.querySelector('#speed-tape .tape-strip');
+        let speedHtml = '';
+        for (let i = 0; i <= 600; i += 10) {
+            const isMajor = i % 20 === 0;
+            speedHtml += `<div class="tape-line ${isMajor ? 'major' : ''}" style="bottom: ${i * 4}px;"><span>${isMajor ? i : ''}</span></div>`;
+        }
+        speedStrip.innerHTML = speedHtml;
+
+        const altStrip = contentEl.querySelector('#alt-tape .tape-strip');
+        let altHtml = '';
+        for (let i = 0; i <= 600; i++) { // i represents hundreds of feet
+            const isMajor = i % 5 === 0;
+            altHtml += `<div class="tape-line ${isMajor ? 'major' : ''}" style="bottom: ${i * 20}px;"><span>${isMajor ? i * 100 : ''}</span></div>`;
+        }
+        altStrip.innerHTML = altHtml;
+        
+        const horizonSphere = contentEl.querySelector('.horizon-sphere');
+        let pitchHtml = '';
+        for(let i = -90; i <= 90; i += 5) {
+            if (i === 0) continue;
+            const isTen = i % 10 === 0;
+            pitchHtml += `<div class="pitch-line ${isTen ? 'ten' : ''}" style="top: calc(50% - ${i * 10}px);"></div>`;
+        }
+        horizonSphere.innerHTML = pitchHtml;
+        
+        // --- Call the update function to set initial state ---
+        updatePfdDisplay({
+            altitude: baseProps.altitude,
+            speed: baseProps.speed,
+            verticalSpeed: baseProps.verticalSpeed,
+            heading: baseProps.heading,
+        });
     }
 
 
