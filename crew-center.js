@@ -465,6 +465,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     }
+
+    /**
+     * Calculates the distance between two coordinates in nautical miles.
+     */
+    function getDistanceNm(lat1, lon1, lat2, lon2) {
+        const distKm = getDistanceKm(lat1, lon1, lat2, lon2);
+        return Math.round(distKm / 1.852); // Convert km to nautical miles and round
+    }
     
     function getRankBadgeHTML(rankName, options = {}) {
         const defaults = {
@@ -2064,6 +2072,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     /**
      * Fetches all live data (flights, ATC, NOTAMs) and plots them on the Sector Ops map.
+     * NOW INCLUDES HUD data fetching for destination and distance.
      */
     async function updateSectorOpsLiveFlights() {
         if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
@@ -2095,7 +2104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const notamsData = await notamsRes.json();
             activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
 
-            renderAirportMarkers(); // This now handles plotting all airport dots correctly
+            renderAirportMarkers();
 
             // 4. Process flight data
             const flightsData = await flightsRes.json();
@@ -2103,29 +2112,65 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.warn('Sector Ops Map: Could not fetch live flights.');
                 return;
             }
-
-            const flightFeatures = flightsData.flights.map(flight => {
+            
+            // --- NEW: Asynchronously process each flight to add HUD data ---
+            const flightFeaturesPromises = flightsData.flights.map(async (flight) => {
                 if (!flight.position || flight.position.lat == null || flight.position.lon == null) {
                     return null;
                 }
+                
+                const featureProperties = {
+                    flightId: flight.flightId,
+                    callsign: flight.callsign,
+                    username: flight.username,
+                    altitude: flight.position.alt_ft,
+                    speed: flight.position.gs_kt,
+                    heading: flight.position.track_deg || 0,
+                    verticalSpeed: flight.position.vs_fpm || 0,
+                    position: JSON.stringify(flight.position)
+                };
+
+                try {
+                    // Fetch the flight plan to get the destination
+                    const planRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}/${flight.flightId}/plan`);
+                    if (planRes.ok) {
+                        const planData = await planRes.json();
+                        if (planData.ok && Array.isArray(planData.plan?.flightPlanItems) && planData.plan.flightPlanItems.length > 0) {
+                            const items = planData.plan.flightPlanItems;
+                            const destinationIcao = items[items.length - 1].name;
+                            const destinationAirport = airportsData[destinationIcao];
+
+                            if (destinationAirport) {
+                                const distanceNm = getDistanceNm(
+                                    flight.position.lat, 
+                                    flight.position.lon, 
+                                    destinationAirport.lat, 
+                                    destinationAirport.lon
+                                );
+                                
+                                // Add destination and distance to the feature's properties
+                                featureProperties.destination = destinationIcao;
+                                featureProperties.distanceNm = distanceNm;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    // Ignore errors for individual flight plans to not break the whole map
+                    // console.warn(`Could not fetch plan for ${flight.callsign}:`, err);
+                }
+
                 return {
                     type: 'Feature',
                     geometry: {
                         type: 'Point',
                         coordinates: [flight.position.lon, flight.position.lat]
                     },
-                    properties: {
-                        flightId: flight.flightId,
-                        callsign: flight.callsign,
-                        username: flight.username,
-                        altitude: flight.position.alt_ft,
-                        speed: flight.position.gs_kt,
-                        heading: flight.position.track_deg || 0,
-                        verticalSpeed: flight.position.vs_fpm || 0,
-                        position: JSON.stringify(flight.position) // Stringify to pass the whole object
-                    }
+                    properties: featureProperties
                 };
-            }).filter(Boolean);
+            });
+
+            const flightFeatures = (await Promise.all(flightFeaturesPromises)).filter(Boolean);
+            // --- END NEW SECTION ---
 
             const geojsonData = {
                 type: 'FeatureCollection',
@@ -2145,6 +2190,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     data: geojsonData
                 });
 
+                // --- MODIFIED: Add text properties to the layer definition ---
                 sectorOpsMap.addLayer({
                     id: layerId,
                     type: 'symbol',
@@ -2155,16 +2201,37 @@ document.addEventListener('DOMContentLoaded', async () => {
                         'icon-rotate': ['get', 'heading'],
                         'icon-rotation-alignment': 'map',
                         'icon-allow-overlap': true,
-                        'icon-ignore-placement': true
+                        'icon-ignore-placement': true,
+
+                        // --- HUD TEXT CONFIGURATION ---
+                        // Display text only if 'destination' property exists
+                        'text-field': [
+                            'case',
+                            ['has', 'destination'],
+                            ['concat', '► ', ['get', 'destination'], ' ', ['get', 'distanceNm'], 'nm'],
+                            '' // Default to empty string if no destination
+                        ],
+                        'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                        'text-size': 10,
+                        'text-anchor': 'left',      // Anchor text to the left of the icon's center
+                        'text-offset': [1.2, 0],    // Push text 1.2em to the right
+                        'text-allow-overlap': false, // Avoid text clutter
+                        'text-ignore-placement': false
+                    },
+                    paint: {
+                        // --- HUD TEXT STYLING ---
+                        'text-color': '#adefff', // A light, readable blue
+                        'text-halo-color': '#000',
+                        'text-halo-width': 1
                     }
                 });
+                // --- END MODIFICATION ---
 
-                // REWRITTEN CLICK HANDLER to open the info window
                 sectorOpsMap.on('click', layerId, (e) => {
                     const props = e.features[0].properties;
                     const flightProps = {
                         ...props,
-                        position: JSON.parse(props.position) // De-stringify the position object
+                        position: JSON.parse(props.position)
                     };
                     handleAircraftClick(flightProps, expertSession.id);
                 });
