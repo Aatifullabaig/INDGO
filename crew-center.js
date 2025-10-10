@@ -99,7 +99,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let aircraftInfoWindow = null;
     let aircraftInfoWindowRecallBtn = null;
     let currentFlightInWindow = null; // Stores the flightId of the last selected aircraft
-    let activePfdUpdateInterval = null; // NEW: Interval for updating the PFD display
+    let activePfdUpdateInterval = null; // Interval for updating the PFD display
+    let lastPfdState = { track_deg: 0, timestamp: 0 }; // NEW: For calculating turn rate
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -369,6 +370,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 height: 100%;
                 top: 0;
                 left: 0;
+            }
+
+            /* --- [NEW] PFD Animation --- */
+            #pfd-container svg #attitude_group {
+                transition: transform 0.5s ease-out;
             }
 
             /* --- Toolbar Recall Buttons --- */
@@ -946,7 +952,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     /**
-     * --- [NEW] Updates the PFD with live data.
+     * --- [UPGRADED] Updates the PFD with live data, now including simulated roll.
      * @param {object} pfdData - The position object from the live flight data.
      */
     function updatePfdDisplay(pfdData) {
@@ -966,10 +972,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !headingTapeGroup || !tensReelGroup) {
             return; // Exit if PFD elements aren't in the DOM yet
         }
+        
+        // --- [NEW] Bank Angle (Roll) Calculation ---
+        const currentTime = Date.now();
+        let roll_deg = 0;
 
-        // 1. Attitude Indicator (Simulated Pitch from VS, Roll is 0)
-        const pitch_deg = Math.max(-25, Math.min(25, (vs_fpm / 1000) * 4)); // Clamp pitch between -25 and +25 degrees
-        attitudeGroup.setAttribute('transform', `translate(0, ${pitch_deg * PFD_PITCH_SCALE})`);
+        if (lastPfdState.timestamp > 0 && gs_kt > 30) { // Only calculate if we have a previous state and are moving
+            const timeDelta_sec = (currentTime - lastPfdState.timestamp) / 1000;
+            if (timeDelta_sec > 0) {
+                // Handle heading wrap-around (e.g., 359° to 1°)
+                let track_diff = track_deg - lastPfdState.track_deg;
+                if (track_diff > 180) track_diff -= 360;
+                if (track_diff < -180) track_diff += 360;
+
+                const turn_rate_deg_sec = track_diff / timeDelta_sec;
+
+                // Physics formula to estimate bank angle from turn rate and speed
+                const velocity_mps = gs_kt * 0.514444; // Convert knots to meters/second
+                const g = 9.81; // Gravity
+                const bank_angle_rad = Math.atan((turn_rate_deg_sec * Math.PI / 180) * velocity_mps / g);
+                
+                // Convert to degrees and clamp to a reasonable value for an airliner
+                roll_deg = bank_angle_rad * (180 / Math.PI);
+                roll_deg = Math.max(-35, Math.min(35, roll_deg)); // Clamp between -35° and +35°
+            }
+        }
+        
+        // Update the state for the next calculation
+        lastPfdState = { track_deg: track_deg, timestamp: currentTime };
+        // --- END: Bank Angle Calculation ---
+
+        // 1. Attitude Indicator (Pitch from VS, Roll from calculation)
+        const pitch_deg = Math.max(-25, Math.min(25, (vs_fpm / 1000) * 4));
+        // Apply pitch (translate) and the new roll (rotate)
+        attitudeGroup.setAttribute('transform', `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(${roll_deg}, 401.5, 312.5)`); // The last two numbers are the center of rotation
 
         // 2. Speed Tape
         speedReadout.textContent = Math.round(gs_kt);
