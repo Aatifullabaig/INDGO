@@ -1005,7 +1005,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 1. Attitude Indicator (Pitch from VS, Roll from calculation)
         const pitch_deg = Math.max(-25, Math.min(25, (vs_fpm / 1000) * 4));
         // Apply pitch (translate) and the new roll (rotate)
-        attitudeGroup.setAttribute('transform', `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(${roll_deg}, 401.5, 312.5)`); // The last two numbers are the center of rotation
+        // **FIX APPLIED HERE**: Negated roll_deg to correct the horizon's rotation direction.
+        attitudeGroup.setAttribute('transform', `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(-${roll_deg}, 401.5, 312.5)`);
 
         // 2. Speed Tape
         speedReadout.textContent = Math.round(gs_kt);
