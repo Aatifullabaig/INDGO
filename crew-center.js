@@ -100,7 +100,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let aircraftInfoWindowRecallBtn = null;
     let currentFlightInWindow = null; // Stores the flightId of the last selected aircraft
     let activePfdUpdateInterval = null; // Interval for updating the PFD display
-    let lastPfdState = { track_deg: 0, timestamp: 0 }; // NEW: For calculating turn rate
+    // --- FIX: Added roll_deg to state to prevent flickering ---
+    let lastPfdState = { track_deg: 0, timestamp: 0, roll_deg: 0 };
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -973,11 +974,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             return; // Exit if PFD elements aren't in the DOM yet
         }
         
-        // --- [NEW] Bank Angle (Roll) Calculation ---
+        // --- [FIX] REVISED Bank Angle (Roll) Calculation to prevent flickering ---
         const currentTime = Date.now();
-        let roll_deg = 0;
+        let roll_deg = lastPfdState.roll_deg; // Start with the last known roll angle
 
-        if (lastPfdState.timestamp > 0 && gs_kt > 30) { // Only calculate if we have a previous state and are moving
+        if (lastPfdState.timestamp > 0 && gs_kt > 30) {
             const timeDelta_sec = (currentTime - lastPfdState.timestamp) / 1000;
             if (timeDelta_sec > 0) {
                 // Handle heading wrap-around (e.g., 359° to 1°)
@@ -985,27 +986,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (track_diff > 180) track_diff -= 360;
                 if (track_diff < -180) track_diff += 360;
 
-                const turn_rate_deg_sec = track_diff / timeDelta_sec;
+                // Only calculate a new roll angle if the plane is actively turning
+                if (Math.abs(track_diff) > 0.1) { // A small threshold to prevent noise from minor heading changes
+                    const turn_rate_deg_sec = track_diff / timeDelta_sec;
 
-                // Physics formula to estimate bank angle from turn rate and speed
-                const velocity_mps = gs_kt * 0.514444; // Convert knots to meters/second
-                const g = 9.81; // Gravity
-                const bank_angle_rad = Math.atan((turn_rate_deg_sec * Math.PI / 180) * velocity_mps / g);
-                
-                // Convert to degrees and clamp to a reasonable value for an airliner
-                roll_deg = bank_angle_rad * (180 / Math.PI);
-                roll_deg = Math.max(-35, Math.min(35, roll_deg)); // Clamp between -35° and +35°
+                    // Physics formula to estimate bank angle from turn rate and speed
+                    const velocity_mps = gs_kt * 0.514444; // Convert knots to meters/second
+                    const g = 9.81; // Gravity
+                    const bank_angle_rad = Math.atan((turn_rate_deg_sec * Math.PI / 180) * velocity_mps / g);
+                    
+                    // Convert to degrees and clamp to a reasonable value for an airliner
+                    roll_deg = bank_angle_rad * (180 / Math.PI);
+                    roll_deg = Math.max(-35, Math.min(35, roll_deg)); // Clamp between -35° and +35°
+                } else {
+                    // If there's no turn detected, gently decay the roll back to level.
+                    // This creates a smooth leveling of the wings instead of a snap.
+                    roll_deg *= 0.9;
+                }
             }
         }
         
         // Update the state for the next calculation
-        lastPfdState = { track_deg: track_deg, timestamp: currentTime };
-        // --- END: Bank Angle Calculation ---
+        lastPfdState = { track_deg: track_deg, timestamp: currentTime, roll_deg: roll_deg };
+        // --- END: Bank Angle Calculation FIX ---
 
         // 1. Attitude Indicator (Pitch from VS, Roll from calculation)
         const pitch_deg = Math.max(-25, Math.min(25, (vs_fpm / 1000) * 4));
-        // Apply pitch (translate) and the new roll (rotate)
-        // **FIX APPLIED HERE**: Negated roll_deg to correct the horizon's rotation direction.
+        
+        // --- FIX: This transform correctly moves the horizon (attitude_group) for pitch and roll ---
+        // --- while leaving the aircraft symbol (middle dot, wings) static, which is the correct behavior. ---
+        // The translate moves the group vertically for pitch, then the rotate pivots the result for roll.
         attitudeGroup.setAttribute('transform', `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(-${roll_deg}, 401.5, 312.5)`);
 
         // 2. Speed Tape
