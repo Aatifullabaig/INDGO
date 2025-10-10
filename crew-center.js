@@ -1041,36 +1041,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /**
-     * --- [NEW] Resets the PFD to a neutral state.
-     * This is called when the aircraft window is closed or hidden to prevent data carryover.
+     * --- [NEW] Resets the PFD state variables and visual attitude.
+     * This is called when closing/hiding the aircraft info window.
      */
-    function resetPfdDisplay() {
-        const attitudeGroup = document.getElementById('attitude_group');
-        const speedTapeGroup = document.getElementById('speed_tape_group');
-        const altitudeTapeGroup = document.getElementById('altitude_tape_group');
-        const tensReelGroup = document.getElementById('altitude_tens_reel_group');
-        const headingTapeGroup = document.getElementById('heading_tape_group');
-        const speedReadout = document.getElementById('speed_readout');
-        const altReadoutHund = document.getElementById('altitude_readout_hundreds');
-        const headingReadout = document.getElementById('heading_readout');
-
-        if (!attitudeGroup) return; // Exit if PFD elements aren't in the DOM
-
-        // 1. Reset visual transforms to their neutral positions
-        attitudeGroup.setAttribute('transform', 'translate(0, 0) rotate(0, 401.5, 312.5)');
-        speedTapeGroup.setAttribute('transform', `translate(0, ${(0 - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE})`);
-        altitudeTapeGroup.setAttribute('transform', 'translate(0, 0)');
-        tensReelGroup.setAttribute('transform', 'translate(0, 0)');
-        headingTapeGroup.setAttribute('transform', `translate(0, 0)`);
-        
-        // 2. Reset text readouts to default values
-        if(speedReadout) speedReadout.textContent = '---';
-        if(altReadoutHund) altReadoutHund.textContent = '0';
-        if(headingReadout) headingReadout.textContent = '---';
-
-        // 3. CRITICAL: Reset the state object to prevent stale roll/heading calculations
+    function resetPfdState() {
+        // Reset the state variable used for calculating bank angle
         lastPfdState = { track_deg: 0, timestamp: 0, roll_deg: 0 };
+
+        // Visually reset the attitude indicator in the SVG to a neutral position
+        const attitudeGroup = document.getElementById('attitude_group');
+        if (attitudeGroup) {
+            // Set transform to a neutral state (0 pitch, 0 roll)
+            attitudeGroup.setAttribute('transform', 'translate(0, 0) rotate(0, 401.5, 312.5)');
+        }
     }
+
 
     /**
      * --- [REVAMPED] Creates the rich HTML content for the airport information window.
@@ -1517,7 +1502,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 clearInterval(activePfdUpdateInterval);
                 activePfdUpdateInterval = null;
             }
-            resetPfdDisplay(); // *** ADDED THIS LINE ***
+            resetPfdState(); // ** NEW: Reset PFD state and visuals **
             currentFlightInWindow = null;
         };
 
@@ -1527,7 +1512,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 clearInterval(activePfdUpdateInterval);
                 activePfdUpdateInterval = null;
             }
-            resetPfdDisplay(); // *** AND ADDED THIS LINE ***
+            resetPfdState(); // ** NEW: Reset PFD state and visuals **
             if (currentFlightInWindow) {
                 aircraftInfoWindowRecallBtn.classList.add('visible', 'palpitate');
                 setTimeout(() => aircraftInfoWindowRecallBtn.classList.remove('palpitate'), 1000);
@@ -1833,6 +1818,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             clearInterval(activePfdUpdateInterval);
             activePfdUpdateInterval = null;
         }
+        
+        // ** FIX ** Reset PFD state before displaying the new one
+        resetPfdState();
 
         currentFlightInWindow = flightProps.flightId;
         aircraftInfoWindow.classList.add('visible');
@@ -2658,11 +2646,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (airportRecall) airportRecall.classList.remove('visible');
             if (aircraftRecall) aircraftRecall.classList.remove('visible');
 
-            // NEW: Stop the PFD update interval when leaving the view
+            // NEW: Stop the PFD update interval and reset its state when leaving the view
             if (activePfdUpdateInterval) {
                 clearInterval(activePfdUpdateInterval);
                 activePfdUpdateInterval = null;
             }
+            resetPfdState(); // ** NEW: Reset PFD state and visuals **
         }
         // --- FIX: END ---
 
