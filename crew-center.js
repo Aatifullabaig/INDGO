@@ -1041,6 +1041,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     /**
+     * --- [NEW] Resets the PFD to a neutral state.
+     * This is called when the aircraft window is closed or hidden to prevent data carryover.
+     */
+    function resetPfdDisplay() {
+        const attitudeGroup = document.getElementById('attitude_group');
+        const speedTapeGroup = document.getElementById('speed_tape_group');
+        const altitudeTapeGroup = document.getElementById('altitude_tape_group');
+        const tensReelGroup = document.getElementById('altitude_tens_reel_group');
+        const headingTapeGroup = document.getElementById('heading_tape_group');
+        const speedReadout = document.getElementById('speed_readout');
+        const altReadoutHund = document.getElementById('altitude_readout_hundreds');
+        const headingReadout = document.getElementById('heading_readout');
+
+        if (!attitudeGroup) return; // Exit if PFD elements aren't in the DOM
+
+        // 1. Reset visual transforms to their neutral positions
+        attitudeGroup.setAttribute('transform', 'translate(0, 0) rotate(0, 401.5, 312.5)');
+        speedTapeGroup.setAttribute('transform', `translate(0, ${(0 - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE})`);
+        altitudeTapeGroup.setAttribute('transform', 'translate(0, 0)');
+        tensReelGroup.setAttribute('transform', 'translate(0, 0)');
+        headingTapeGroup.setAttribute('transform', `translate(0, 0)`);
+        
+        // 2. Reset text readouts to default values
+        if(speedReadout) speedReadout.textContent = '---';
+        if(altReadoutHund) altReadoutHund.textContent = '0';
+        if(headingReadout) headingReadout.textContent = '---';
+
+        // 3. CRITICAL: Reset the state object to prevent stale roll/heading calculations
+        lastPfdState = { track_deg: 0, timestamp: 0, roll_deg: 0 };
+    }
+
+    /**
      * --- [REVAMPED] Creates the rich HTML content for the airport information window.
      * This now includes a live weather widget and a tabbed interface.
      */
@@ -1485,6 +1517,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 clearInterval(activePfdUpdateInterval);
                 activePfdUpdateInterval = null;
             }
+            resetPfdDisplay(); // *** ADDED THIS LINE ***
             currentFlightInWindow = null;
         };
 
@@ -1494,6 +1527,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 clearInterval(activePfdUpdateInterval);
                 activePfdUpdateInterval = null;
             }
+            resetPfdDisplay(); // *** AND ADDED THIS LINE ***
             if (currentFlightInWindow) {
                 aircraftInfoWindowRecallBtn.classList.add('visible', 'palpitate');
                 setTimeout(() => aircraftInfoWindowRecallBtn.classList.remove('palpitate'), 1000);
