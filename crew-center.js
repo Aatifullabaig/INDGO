@@ -99,6 +99,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let aircraftInfoWindow = null;
     let aircraftInfoWindowRecallBtn = null;
     let currentFlightInWindow = null; // Stores the flightId of the last selected aircraft
+    let activePfdUpdateInterval = null; // NEW: Interval for updating the PFD display
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -785,48 +786,44 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
     }
 
-    /**
-     * --- [NEW] Initializes the static SVG PFD by generating its dynamic elements like tapes and ladders.
-     */
-    function initializeStaticPfdDisplay() {
-        // --- CONSTANTS ---
-        const PITCH_SCALE = 8;
-        const MIN_SPEED = 0;
-        const MAX_SPEED = 999;
-        const MIN_ALTITUDE = -1000;
-        const MAX_ALTITUDE = 50000;
-        const SVG_NS = "http://www.w3.org/2000/svg";
-        const SPEED_SCALE = 7; 
-        const SPEED_CENTER_Y = 238;
-        const SPEED_REF_VALUE = 120; // Static reference value
-        const ALTITUDE_SCALE = 0.7;
-        const ALTITUDE_CENTER_Y = 234;
-        const ALTITUDE_REF_VALUE = 0; // Static reference value
-        const REEL_SPACING = 30;
-        const HEADING_SCALE = 5;
-        const HEADING_CENTER_X = 406;
-        const HEADING_REF_VALUE = 0; // Static reference value
+    // --- [NEW] PFD Constants and Functions ---
+    const PFD_PITCH_SCALE = 8;
+    const PFD_SPEED_SCALE = 7;
+    const PFD_SPEED_CENTER_Y = 238;
+    const PFD_SPEED_REF_VALUE = 120;
+    const PFD_ALTITUDE_SCALE = 0.7;
+    const PFD_ALTITUDE_CENTER_Y = 234;
+    const PFD_ALTITUDE_REF_VALUE = 0;
+    const PFD_REEL_SPACING = 30;
+    const PFD_HEADING_SCALE = 5;
+    const PFD_HEADING_CENTER_X = 406;
+    const PFD_HEADING_REF_VALUE = 0;
 
-        // --- DOM ELEMENT REFERENCES ---
+    /**
+     * Initializes the SVG PFD by generating its static elements like tapes and ladders.
+     * This function should only be called ONCE when the PFD container is first created.
+     */
+    function createPfdDisplay() {
+        const SVG_NS = "http://www.w3.org/2000/svg";
         const attitudeGroup = document.getElementById('attitude_group');
         const speedTapeGroup = document.getElementById('speed_tape_group');
         const altitudeTapeGroup = document.getElementById('altitude_tape_group');
         const tensReelGroup = document.getElementById('altitude_tens_reel_group');
         const headingTapeGroup = document.getElementById('heading_tape_group');
 
-        // Ensure elements exist before proceeding
-        if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !tensReelGroup || !headingTapeGroup) {
-            console.error("PFD SVG elements not found in the DOM. Cannot initialize display.");
+        if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !tensReelGroup || !headingTapeGroup || attitudeGroup.dataset.initialized) {
             return;
         }
 
-        // --- GENERATION FUNCTIONS ---
+        attitudeGroup.dataset.initialized = 'true'; // Prevent re-initialization
+
+        // --- GENERATION FUNCTIONS (unchanged from your original static function) ---
         function generateAttitudeIndicators() {
             const centerX = 401.5;
             const centerY = 312.5;
             for (let p = -90; p <= 90; p += 2.5) {
-                if (p === 0) continue; 
-                const y = centerY - (p * PITCH_SCALE);
+                if (p === 0) continue;
+                const y = centerY - (p * PFD_PITCH_SCALE);
                 const isMajor = (p % 10 === 0);
                 const isMinor = (p % 5 === 0);
                 if (isMajor || isMinor) {
@@ -860,148 +857,139 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
         }
-
         function generateSpeedTape() {
-            speedTapeGroup.innerHTML = ''; 
+            const MIN_SPEED = 0, MAX_SPEED = 999;
             for (let s = MIN_SPEED; s <= MAX_SPEED; s += 5) {
-                const yPos = SPEED_CENTER_Y - (s - SPEED_REF_VALUE) * SPEED_SCALE;
+                const yPos = PFD_SPEED_CENTER_Y - (s - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE;
                 const tick = document.createElementNS(SVG_NS, 'line');
-                tick.setAttribute('y1', yPos);
-                tick.setAttribute('y2', yPos);
-                tick.setAttribute('stroke', 'white');
-                tick.setAttribute('stroke-width', '2');
+                tick.setAttribute('y1', yPos); tick.setAttribute('y2', yPos);
+                tick.setAttribute('stroke', 'white'); tick.setAttribute('stroke-width', '2');
                 if (s % 10 === 0) {
-                    tick.setAttribute('x1', '67');
-                    tick.setAttribute('x2', '52');
+                    tick.setAttribute('x1', '67'); tick.setAttribute('x2', '52');
                     const text = document.createElementNS(SVG_NS, 'text');
-                    text.setAttribute('x', '37');
-                    text.setAttribute('y', yPos + 5); 
-                    text.setAttribute('fill', 'white');
-                    text.setAttribute('font-size', '18');
-                    text.setAttribute('text-anchor', 'middle');
-                    text.textContent = s;
+                    text.setAttribute('x', '37'); text.setAttribute('y', yPos + 5);
+                    text.setAttribute('fill', 'white'); text.setAttribute('font-size', '18');
+                    text.setAttribute('text-anchor', 'middle'); text.textContent = s;
                     speedTapeGroup.appendChild(text);
                 } else {
-                    tick.setAttribute('x1', '67');
-                    tick.setAttribute('x2', '60');
+                    tick.setAttribute('x1', '67'); tick.setAttribute('x2', '60');
                 }
                 speedTapeGroup.appendChild(tick);
             }
         }
-
         function generateAltitudeTape() {
-            altitudeTapeGroup.innerHTML = '';
+            const MIN_ALTITUDE = -1000, MAX_ALTITUDE = 50000;
             for (let alt = MIN_ALTITUDE; alt <= MAX_ALTITUDE; alt += 20) {
-                const yPos = ALTITUDE_CENTER_Y - (alt - ALTITUDE_REF_VALUE) * ALTITUDE_SCALE;
+                const yPos = PFD_ALTITUDE_CENTER_Y - (alt - PFD_ALTITUDE_REF_VALUE) * PFD_ALTITUDE_SCALE;
                 const tick = document.createElementNS(SVG_NS, 'line');
-                tick.setAttribute('y1', yPos);
-                tick.setAttribute('y2', yPos);
-                tick.setAttribute('stroke', 'white');
-                tick.setAttribute('stroke-width', '2');
-                tick.setAttribute('x1', '72'); 
+                tick.setAttribute('y1', yPos); tick.setAttribute('y2', yPos);
+                tick.setAttribute('stroke', 'white'); tick.setAttribute('stroke-width', '2');
+                tick.setAttribute('x1', '72');
                 if (alt % 100 === 0) {
-                    tick.setAttribute('x2', '52'); 
+                    tick.setAttribute('x2', '52');
                     const text = document.createElementNS(SVG_NS, 'text');
-                    text.setAttribute('x', '25'); 
-                    text.setAttribute('y', yPos + 5); 
-                    text.setAttribute('fill', 'white');
-                    text.setAttribute('font-size', '18');
-                    text.setAttribute('text-anchor', 'middle');
-                    text.textContent = alt / 100;
+                    text.setAttribute('x', '25'); text.setAttribute('y', yPos + 5);
+                    text.setAttribute('fill', 'white'); text.setAttribute('font-size', '18');
+                    text.setAttribute('text-anchor', 'middle'); text.textContent = alt / 100;
                     altitudeTapeGroup.appendChild(text);
                 } else {
-                    tick.setAttribute('x2', '62'); 
+                    tick.setAttribute('x2', '62');
                 }
                 altitudeTapeGroup.appendChild(tick);
             }
         }
-
         function generateAltitudeTensReel() {
-            tensReelGroup.innerHTML = '';
-            const center_y = 316; 
+            const center_y = 316;
             for (let i = -5; i < 10; i++) {
-                let value = (i * 20);
-                value = (value < 0) ? 100 + (value % 100) : value % 100;
+                let value = (i * 20); value = (value < 0) ? 100 + (value % 100) : value % 100;
                 const displayValue = String(value).padStart(2, '0');
-                const yPos = center_y + (i * REEL_SPACING);
+                const yPos = center_y + (i * PFD_REEL_SPACING);
                 const text = document.createElementNS(SVG_NS, 'text');
-                text.setAttribute('x', '745'); 
-                text.setAttribute('y', yPos);
-                text.setAttribute('fill', '#00FF00');
-                text.setAttribute('font-size', '32');
-                text.setAttribute('font-weight', 'bold');
-                text.textContent = displayValue;
+                text.setAttribute('x', '745'); text.setAttribute('y', yPos);
+                text.setAttribute('fill', '#00FF00'); text.setAttribute('font-size', '32');
+                text.setAttribute('font-weight', 'bold'); text.textContent = displayValue;
                 tensReelGroup.appendChild(text);
             }
         }
-
         function generateHeadingTape() {
-            headingTapeGroup.innerHTML = '';
-            const y_text = 650;
-            const y_tick_top = 620;
-            const y_tick_bottom_major = 635;
-            const y_tick_bottom_minor = 628;
+            const y_text = 650, y_tick_top = 620, y_tick_bottom_major = 635, y_tick_bottom_minor = 628;
             for (let h = -360; h <= 720; h += 5) {
-                const xPos = HEADING_CENTER_X + (h - HEADING_REF_VALUE) * HEADING_SCALE;
+                const xPos = PFD_HEADING_CENTER_X + (h - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
                 const normalizedH = (h + 360) % 360;
-                if (normalizedH % 90 === 0) continue; 
+                if (normalizedH % 90 === 0) continue;
                 const tick = document.createElementNS(SVG_NS, 'line');
-                tick.setAttribute('x1', xPos);
-                tick.setAttribute('x2', xPos);
-                tick.setAttribute('stroke', 'white');
-                tick.setAttribute('stroke-width', '1.5');
-                tick.setAttribute('y1', y_tick_top);
-                tick.setAttribute('y2', (h % 10 === 0) ? y_tick_bottom_major : y_tick_bottom_minor);
+                tick.setAttribute('x1', xPos); tick.setAttribute('x2', xPos);
+                tick.setAttribute('stroke', 'white'); tick.setAttribute('stroke-width', '1.5');
+                tick.setAttribute('y1', y_tick_top); tick.setAttribute('y2', (h % 10 === 0) ? y_tick_bottom_major : y_tick_bottom_minor);
                 headingTapeGroup.appendChild(tick);
             }
             for (let h = 0; h < 360; h += 10) {
                 for (let offset of [-360, 0, 360]) {
                     const currentH = h + offset;
-                    const xPos = HEADING_CENTER_X + (currentH - HEADING_REF_VALUE) * HEADING_SCALE;
+                    const xPos = PFD_HEADING_CENTER_X + (currentH - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
                     const text = document.createElementNS(SVG_NS, 'text');
-                    text.setAttribute('x', xPos);
-                    text.setAttribute('y', y_text);
-                    text.setAttribute('fill', 'white');
-                    text.setAttribute('font-size', '16');
+                    text.setAttribute('x', xPos); text.setAttribute('y', y_text);
+                    text.setAttribute('fill', 'white'); text.setAttribute('font-size', '16');
                     text.setAttribute('text-anchor', 'middle');
                     let displayVal = '';
-                    switch (h) {
-                        case 0:   displayVal = 'N'; break;
-                        case 90:  displayVal = 'E'; break;
-                        case 180: displayVal = 'S'; break;
-                        case 270: displayVal = 'W'; break;
-                        default:  if (h % 30 === 0) { displayVal = h / 10; }
-                    }
-                    if (displayVal !== '') {
-                        text.textContent = displayVal;
-                        headingTapeGroup.appendChild(text);
-                    }
+                    switch (h) { case 0: displayVal = 'N'; break; case 90: displayVal = 'E'; break; case 180: displayVal = 'S'; break; case 270: displayVal = 'W'; break; default: if (h % 30 === 0) { displayVal = h / 10; } }
+                    if (displayVal !== '') { text.textContent = displayVal; headingTapeGroup.appendChild(text); }
                 }
             }
         }
         
-        // --- INITIAL RENDER ---
         generateAttitudeIndicators();
         generateSpeedTape();
         generateAltitudeTape();
         generateAltitudeTensReel();
         generateHeadingTape();
+    }
+    
+    /**
+     * --- [NEW] Updates the PFD with live data.
+     * @param {object} pfdData - The position object from the live flight data.
+     */
+    function updatePfdDisplay(pfdData) {
+        if (!pfdData) return;
 
-        // Set static positions for tapes (you can change these values)
-        const staticSpeed = 150;
-        const staticAltitude = 3000;
-        const staticHeading = 360;
-        
-        document.getElementById('speed_readout').textContent = staticSpeed;
-        const speedYOffset = (staticSpeed - SPEED_REF_VALUE) * SPEED_SCALE;
+        const { gs_kt = 0, alt_ft = 0, track_deg = 0, vs_fpm = 0 } = pfdData;
+
+        const attitudeGroup = document.getElementById('attitude_group');
+        const speedTapeGroup = document.getElementById('speed_tape_group');
+        const altitudeTapeGroup = document.getElementById('altitude_tape_group');
+        const tensReelGroup = document.getElementById('altitude_tens_reel_group');
+        const headingTapeGroup = document.getElementById('heading_tape_group');
+        const speedReadout = document.getElementById('speed_readout');
+        const altReadoutHund = document.getElementById('altitude_readout_hundreds');
+        const headingReadout = document.getElementById('heading_readout');
+
+        if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !headingTapeGroup || !tensReelGroup) {
+            return; // Exit if PFD elements aren't in the DOM yet
+        }
+
+        // 1. Attitude Indicator (Simulated Pitch from VS, Roll is 0)
+        const pitch_deg = Math.max(-25, Math.min(25, (vs_fpm / 1000) * 4)); // Clamp pitch between -25 and +25 degrees
+        attitudeGroup.setAttribute('transform', `translate(0, ${pitch_deg * PFD_PITCH_SCALE})`);
+
+        // 2. Speed Tape
+        speedReadout.textContent = Math.round(gs_kt);
+        const speedYOffset = (gs_kt - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE;
         speedTapeGroup.setAttribute('transform', `translate(0, ${speedYOffset})`);
 
-        document.getElementById('altitude_readout_hundreds').textContent = Math.floor(staticAltitude / 100);
-        const tapeYOffset = staticAltitude * ALTITUDE_SCALE;
+        // 3. Altitude Tape
+        const altitude = Math.max(0, alt_ft);
+        altReadoutHund.textContent = Math.floor(altitude / 100);
+        const tapeYOffset = altitude * PFD_ALTITUDE_SCALE;
         altitudeTapeGroup.setAttribute('transform', `translate(0, ${tapeYOffset})`);
 
-        document.getElementById('heading_readout').textContent = String(staticHeading % 360).padStart(3, '0');
-        const xOffset = -(staticHeading - HEADING_REF_VALUE) * HEADING_SCALE;
+        // 4. Altitude Tens Reel
+        const tensValue = altitude % 100;
+        const reelYOffset = -(tensValue / 20) * PFD_REEL_SPACING;
+        tensReelGroup.setAttribute('transform', `translate(0, ${reelYOffset})`);
+
+        // 5. Heading Tape
+        headingReadout.textContent = String(Math.round(track_deg) % 360).padStart(3, '0');
+        const xOffset = -(track_deg - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
         headingTapeGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
     }
 
@@ -1442,25 +1430,54 @@ document.addEventListener('DOMContentLoaded', async () => {
         const closeBtn = document.getElementById('aircraft-window-close-btn');
         const hideBtn = document.getElementById('aircraft-window-hide-btn');
 
-        closeBtn.addEventListener('click', () => {
+        const closeAndCleanup = () => {
             aircraftInfoWindow.classList.remove('visible');
             aircraftInfoWindowRecallBtn.classList.remove('visible');
             clearLiveFlightPath(currentFlightInWindow); // Clear the flight trail when closing
+            if (activePfdUpdateInterval) {
+                clearInterval(activePfdUpdateInterval);
+                activePfdUpdateInterval = null;
+            }
             currentFlightInWindow = null;
-        });
+        };
 
-        hideBtn.addEventListener('click', () => {
+        const hideAndCleanup = () => {
             aircraftInfoWindow.classList.remove('visible');
+            if (activePfdUpdateInterval) {
+                clearInterval(activePfdUpdateInterval);
+                activePfdUpdateInterval = null;
+            }
             if (currentFlightInWindow) {
                 aircraftInfoWindowRecallBtn.classList.add('visible', 'palpitate');
                 setTimeout(() => aircraftInfoWindowRecallBtn.classList.remove('palpitate'), 1000);
             }
-        });
+        };
+
+        closeBtn.addEventListener('click', closeAndCleanup);
+        hideBtn.addEventListener('click', hideAndCleanup);
         
         aircraftInfoWindowRecallBtn.addEventListener('click', () => {
+            // Re-clicking the recall button should re-trigger the data fetch and interval
             if (currentFlightInWindow) {
-                aircraftInfoWindow.classList.add('visible');
-                aircraftInfoWindowRecallBtn.classList.remove('visible');
+                const layer = sectorOpsMap.getLayer('sector-ops-live-flights-layer');
+                if (layer) {
+                    const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+                    const features = source._data.features;
+                    const feature = features.find(f => f.properties.flightId === currentFlightInWindow);
+                    if (feature) {
+                        const props = feature.properties;
+                        const flightProps = { ...props, position: JSON.parse(props.position) };
+                        const expertSessionId = sectorOpsLiveFlightsInterval ? 'expert' : null; // A bit of a guess, need the session ID
+                        
+                        // To get the session ID reliably, we need to find it again
+                         fetch('https://acars-backend-uxln.onrender.com/if-sessions').then(res => res.json()).then(data => {
+                            const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
+                            if(expertSession) {
+                                handleAircraftClick(flightProps, expertSession.id);
+                            }
+                        });
+                    }
+                }
             }
         });
         
@@ -1727,9 +1744,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function handleAircraftClick(flightProps, sessionId) {
         if (!flightProps || !flightProps.flightId) return;
 
-        // Clear any previously selected flight's path
+        // Clear any previously selected flight's path and stop its update interval
         if (currentFlightInWindow && currentFlightInWindow !== flightProps.flightId) {
             clearLiveFlightPath(currentFlightInWindow);
+        }
+        if (activePfdUpdateInterval) {
+            clearInterval(activePfdUpdateInterval);
+            activePfdUpdateInterval = null;
         }
 
         currentFlightInWindow = flightProps.flightId;
@@ -1781,14 +1802,36 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
             }
             
-            // Store the layer IDs for cleanup later
             sectorOpsLiveFlightPathLayers[flightProps.flightId] = { flown: flownLayerId };
 
-            // 4. Fit map to the bounds of the entire flight path
             if (allCoordsForBounds.length > 1) {
                 const bounds = allCoordsForBounds.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(allCoordsForBounds[0], allCoordsForBounds[0]));
                 sectorOpsMap.fitBounds(bounds, { padding: 80, maxZoom: 10, duration: 1000 });
             }
+            
+            // 3. Start live PFD updates
+            activePfdUpdateInterval = setInterval(async () => {
+                try {
+                    const freshDataRes = await fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}`);
+                    if (!freshDataRes.ok) throw new Error("Flight data update failed.");
+                    
+                    const allFlights = await freshDataRes.json();
+                    const updatedFlight = allFlights.flights.find(f => f.flightId === flightProps.flightId);
+
+                    if (updatedFlight && updatedFlight.position) {
+                        updatePfdDisplay(updatedFlight.position);
+                        updateAircraftInfoWindow(updatedFlight, plan); // Update other details like footer
+                    } else {
+                        // Flight is gone, stop polling
+                        clearInterval(activePfdUpdateInterval);
+                        activePfdUpdateInterval = null;
+                    }
+                } catch (error) {
+                    console.error("Stopping PFD update due to error:", error);
+                    clearInterval(activePfdUpdateInterval);
+                    activePfdUpdateInterval = null;
+                }
+            }, 3000); // Poll for new data every 3 seconds
 
         } catch (error) {
             console.error("Error fetching or plotting aircraft details:", error);
@@ -1807,9 +1850,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (plan && plan.flightPlanItems) {
             const extractWps = (items) => {
                 for (const item of items) {
-                    if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
-                        allWaypoints.push(item);
-                    }
+                    if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) { allWaypoints.push(item); }
                     if (Array.isArray(item.children)) { extractWps(item.children); }
                 }
             };
@@ -1818,34 +1859,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         const hasPlan = allWaypoints.length >= 2;
         const departureIcao = hasPlan ? allWaypoints[0]?.name : 'N/A';
         const arrivalIcao = hasPlan ? allWaypoints[allWaypoints.length - 1]?.name : 'N/A';
-        let progress = 0, ete = 'N/A', distanceToDestNM = 0;
-        if (hasPlan) {
-            let totalDistanceKm = 0;
-            for (let i = 0; i < allWaypoints.length - 1; i++) {
-                totalDistanceKm += getDistanceKm(allWaypoints[i].location.latitude, allWaypoints[i].location.longitude, allWaypoints[i + 1].location.latitude, allWaypoints[i + 1].location.longitude);
-            }
-            const totalDistanceNM = totalDistanceKm / 1.852;
-
-            if (totalDistanceNM > 0) {
-                const destWp = allWaypoints[allWaypoints.length - 1];
-                const remainingDistanceKm = getDistanceKm(baseProps.position.lat, baseProps.position.lon, destWp.location.latitude, destWp.location.longitude);
-                distanceToDestNM = remainingDistanceKm / 1.852;
-                progress = Math.max(0, Math.min(100, (1 - (distanceToDestNM / totalDistanceNM)) * 100));
-
-                if (baseProps.speed > 50) {
-                    const timeHours = distanceToDestNM / baseProps.speed;
-                    const hours = Math.floor(timeHours);
-                    const minutes = Math.round((timeHours - hours) * 60);
-                    ete = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-                }
-            }
-        }
-        let flightPhase = 'ENROUTE';
-        let vs = baseProps.verticalSpeed;
-        if (vs > 500) flightPhase = 'CLIMB';
-        else if (vs < -500) flightPhase = 'DESCENT';
-        else if (baseProps.altitude > 28000 && Math.abs(vs) <= 500) flightPhase = 'CRUISE';
-        else if (baseProps.altitude < 12000 && distanceToDestNM < 40 && vs < -300) flightPhase = 'APPROACH';
 
         // --- HTML Structure for PFD ---
         contentEl.innerHTML = `
@@ -1858,11 +1871,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <div class="flight-progress-block">
                         <div class="route-progress-bar">
                             <span class="icao">${departureIcao}</span>
-                            <div class="progress-bar-container"><div class="progress-bar-fill" style="width: ${progress.toFixed(1)}%;"></div></div>
+                            <div class="progress-bar-container"><div class="progress-bar-fill"></div></div>
                             <span class="icao">${arrivalIcao}</span>
                         </div>
                     </div>
-                    <div class="flight-phase-badge">${flightPhase}</div>
+                    <div class="flight-phase-badge">ENROUTE</div>
                 </div>
 
                 <div class="unified-display-main">
@@ -1997,16 +2010,83 @@ document.addEventListener('DOMContentLoaded', async () => {
                 </div>
 
                 <div class="unified-display-footer">
-                     <div class="readout-box"><div class="label">Ground Speed</div><div class="value">${Math.round(baseProps.speed)}<span class="unit"> kts</span></div></div>
-                     <div class="readout-box"><div class="label">Vertical Speed</div><div class="value"><i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit"> fpm</span></div></div>
-                     <div class="readout-box"><div class="label">Dist. to Dest.</div><div class="value">${Math.round(distanceToDestNM)}<span class="unit"> NM</span></div></div>
-                     <div class="readout-box"><div class="label">ETE</div><div class="value">${ete}</div></div>
+                     <div class="readout-box"><div class="label">Ground Speed</div><div class="value" id="footer-gs">---<span class="unit"> kts</span></div></div>
+                     <div class="readout-box"><div class="label">Vertical Speed</div><div class="value" id="footer-vs">---<span class="unit"> fpm</span></div></div>
+                     <div class="readout-box"><div class="label">Dist. to Dest.</div><div class="value" id="footer-dist">---<span class="unit"> NM</span></div></div>
+                     <div class="readout-box"><div class="label">ETE</div><div class="value" id="footer-ete">--:--</div></div>
                 </div>
             </div>
         `;
         
-        // --- Call the function to set initial static state ---
-        initializeStaticPfdDisplay();
+        createPfdDisplay();
+        updatePfdDisplay(baseProps.position);
+        updateAircraftInfoWindow(baseProps, plan);
+    }
+    
+    /**
+     * --- [NEW] Updates the non-PFD parts of the Aircraft Info Window
+     */
+    function updateAircraftInfoWindow(baseProps, plan) {
+        // --- Data Extraction & Calculation ---
+        const allWaypoints = [];
+        if (plan && plan.flightPlanItems) {
+            const extractWps = (items) => {
+                for (const item of items) {
+                    if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) { allWaypoints.push(item); }
+                    if (Array.isArray(item.children)) { extractWps(item.children); }
+                }
+            };
+            extractWps(plan.flightPlanItems);
+        }
+        const hasPlan = allWaypoints.length >= 2;
+        let progress = 0, ete = '--:--', distanceToDestNM = 0;
+        
+        if (hasPlan) {
+            let totalDistanceKm = 0;
+            for (let i = 0; i < allWaypoints.length - 1; i++) {
+                totalDistanceKm += getDistanceKm(allWaypoints[i].location.latitude, allWaypoints[i].location.longitude, allWaypoints[i + 1].location.latitude, allWaypoints[i + 1].location.longitude);
+            }
+            const totalDistanceNM = totalDistanceKm / 1.852;
+
+            if (totalDistanceNM > 0) {
+                const destWp = allWaypoints[allWaypoints.length - 1];
+                const remainingDistanceKm = getDistanceKm(baseProps.position.lat, baseProps.position.lon, destWp.location.latitude, destWp.location.longitude);
+                distanceToDestNM = remainingDistanceKm / 1.852;
+                progress = Math.max(0, Math.min(100, (1 - (distanceToDestNM / totalDistanceNM)) * 100));
+
+                if (baseProps.position.gs_kt > 50) {
+                    const timeHours = distanceToDestNM / baseProps.position.gs_kt;
+                    const hours = Math.floor(timeHours);
+                    const minutes = Math.round((timeHours - hours) * 60);
+                    ete = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+                }
+            }
+        }
+        
+        let flightPhase = 'ENROUTE';
+        const vs = baseProps.position.vs_fpm || 0;
+        const altitude = baseProps.position.alt_ft || 0;
+        
+        if (vs > 500) flightPhase = 'CLIMB';
+        else if (vs < -500) flightPhase = 'DESCENT';
+        else if (altitude > 28000 && Math.abs(vs) <= 500) flightPhase = 'CRUISE';
+        else if (altitude < 12000 && distanceToDestNM < 40 && vs < -300) flightPhase = 'APPROACH';
+
+        // --- DOM Updates ---
+        const progressBarFill = document.querySelector('.progress-bar-fill');
+        const phaseBadge = document.querySelector('.flight-phase-badge');
+        const footerGS = document.getElementById('footer-gs');
+        const footerVS = document.getElementById('footer-vs');
+        const footerDist = document.getElementById('footer-dist');
+        const footerETE = document.getElementById('footer-ete');
+
+        if(progressBarFill) progressBarFill.style.width = `${progress.toFixed(1)}%`;
+        if(phaseBadge) phaseBadge.textContent = flightPhase;
+
+        if(footerGS) footerGS.innerHTML = `${Math.round(baseProps.position.gs_kt)}<span class="unit"> kts</span>`;
+        if(footerVS) footerVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit"> fpm</span>`;
+        if(footerDist) footerDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit"> NM</span>`;
+        if(footerETE) footerETE.textContent = ete;
     }
 
 
@@ -2483,7 +2563,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
         mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
 
-        // =====================================================================
         // --- FIX: START ---
         // Explicitly hide Sector Ops pop-out windows and their recall buttons
         // when switching away to prevent them from appearing over other tabs.
@@ -2497,9 +2576,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (aircraftWindow) aircraftWindow.classList.remove('visible');
             if (airportRecall) airportRecall.classList.remove('visible');
             if (aircraftRecall) aircraftRecall.classList.remove('visible');
+
+            // NEW: Stop the PFD update interval when leaving the view
+            if (activePfdUpdateInterval) {
+                clearInterval(activePfdUpdateInterval);
+                activePfdUpdateInterval = null;
+            }
         }
         // --- FIX: END ---
-        // =====================================================================
 
         const newLink = sidebarNav.querySelector(`.nav-link[data-view="${viewId}"]`);
         const newView = document.getElementById(viewId);
