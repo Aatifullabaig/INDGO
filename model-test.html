@@ -3,176 +3,490 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Model Transparency Test</title>
+    <title>My Interactive PFD</title>
     <style>
-        body {
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: #1a1a1a;
-            color: #e0e0e0;
-        }
-        #info {
-            position: absolute;
-            top: 10px;
-            width: 100%;
-            text-align: center;
-            z-index: 100;
-            display: block;
-            padding: 10px;
-            box-sizing: border-box;
-        }
-        #info h1 {
-            margin: 0 0 5px 0;
-            font-weight: 500;
-        }
-        #info p {
-            margin: 0;
-            font-size: 0.9rem;
-            opacity: 0.8;
-        }
-        #model-container {
-            width: 100vw;
-            height: 100vh;
-            display: block;
-        }
-        a { color: #00a8ff; }
+        body { background-color: #1a1a1a; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: monospace, sans-serif; color: white;}
+        #pfd-container { text-align: center; }
+        .control-arrow { cursor: pointer; fill: #aaa; fill-opacity: 0.5; }
+        .control-arrow:hover { fill-opacity: 0.9; }
     </style>
 </head>
 <body>
 
-    <div id="info">
-        <h1>3D Model Diagnostic Window</h1>
-        <p>Use your mouse to rotate (left-click), pan (right-click), and zoom (scroll). Check the developer console (F12) for material properties.</p>
-    </div>
-    <div id="model-container"></div>
+<div id="pfd-container">
+    <svg width="787" height="695" viewBox="0 0 787 695" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <g id="PFD" clip-path="url(#clip0_1_2890)">
+            <g id="attitude_group">
+                <rect id="Sky" x="-186" y="-222" width="1121" height="532" fill="#0596FF"/>
+                <rect id="Ground" x="-138" y="307" width="1024" height="527" fill="#9A4710"/>
+                </g>
+            <rect id="Rectangle 1" x="-6" y="5" width="191" height="566" fill="#030309"/>
+            <rect id="Rectangle 9" x="609" width="185" height="566" fill="#030309"/>
+            <path id="Rectangle 2" d="M273.905 84.9424L180.983 183.181L-23 -9.76114L69.9218 -108L273.905 84.9424Z" fill="#030309"/>
+            <path id="Rectangle 8" d="M303.215 77.0814L187.591 147.198L42 -92.8829L157.624 -163L303.215 77.0814Z" fill="#030309"/>
+            <path id="Rectangle 7" d="M372.606 54.0171L244.59 97.5721L154.152 -168.242L282.169 -211.796L372.606 54.0171Z" fill="#030309"/>
+            <rect id="Rectangle 10" x="25" y="487.905" width="168.696" height="262.947" transform="rotate(-31.8041 25 487.905)" fill="#030309"/>
+            <rect id="Rectangle 14" width="67.3639" height="53.5561" transform="matrix(-0.972506 0.23288 0.23288 0.972506 482.512 537)" fill="#030309"/>
+            <rect id="Rectangle 19" width="80.8905" height="53.5561" transform="matrix(-0.999899 0.0142423 0.0142423 0.999899 442.882 549.506)" fill="#030309"/>
+            <rect id="Rectangle 18" width="46.2297" height="53.5561" transform="matrix(-0.988103 -0.153795 -0.153795 0.988103 369.916 549.11)" fill="#030309"/>
+            <rect id="Rectangle 17" width="46.2297" height="53.5561" transform="matrix(-0.940186 -0.340662 -0.340662 0.940186 337.709 546.749)" fill="#030309"/>
+            <rect id="Rectangle 16" width="46.2297" height="53.5561" transform="matrix(-0.940186 -0.340662 -0.340662 0.940186 299.709 531.749)" fill="#030309"/>
+            <rect id="Rectangle 15" x="387" y="587.269" width="168.696" height="262.947" transform="rotate(-27.6434 387 587.269)" fill="#030309"/>
+            <rect id="Rectangle 13" x="86" y="584.104" width="168.696" height="262.947" transform="rotate(-46.8648 86 584.104)" fill="#030309"/>
+            <rect id="Rectangle 11" x="527" y="532.777" width="168.696" height="262.947" transform="rotate(-51.9135 527 532.777)" fill="#030309"/>
+            <rect id="Rectangle 12" x="503" y="527.247" width="168.696" height="262.947" transform="rotate(-31.9408 503 527.247)" fill="#030309"/>
+            <rect id="Rectangle 6" x="456.715" y="60.2651" width="131.991" height="278.153" transform="rotate(-177.303 456.715 60.2651)" fill="#030309"/>
+            <rect id="Rectangle 5" x="525.118" y="90.4898" width="131.991" height="274.627" transform="rotate(-158.368 525.118 90.4898)" fill="#030309"/>
+            <rect id="Rectangle 4" x="570.695" y="127.633" width="109.94" height="223.222" transform="rotate(-142.051 570.695 127.633)" fill="#030309"/>
+            <rect id="Rectangle 3" x="613.292" y="189.098" width="99.2768" height="223.222" transform="rotate(-128.125 613.292 189.098)" fill="#030309"/>
+            <path id="Vector 3" d="M609 183V422.5" stroke="#E7E6E8" stroke-width="4"/>
+            <path id="Vector 1" d="M185.5 425.5L185 180" stroke="#DBDBDC" stroke-width="4"/>
+            <path id="Vector 2" d="M185 181.502C185 181.502 269.8 52.0936 397 56.0907C524.2 60.0879 576.603 135.189 609 184" stroke="#DBDBDC" stroke-width="4"/>
+            <path id="Vector 4" d="M608.5 424.5C608.5 424.5 557 548 396 550.5C235 553 185 424.5 185 424.5" stroke="#DBDBDC" stroke-width="4"/>
+            <path id="Polygon 1" d="M396.252 65.2333L377.848 35.8138L414.647 35.8079L396.252 65.2333Z" fill="#E7F013"/>
+            <path id="Polygon 2" d="M407.919 38.9482L396.431 59.4193L384.446 38.7244L407.919 38.9482Z" fill="#030309"/>
+            <path id="Vector 6" d="M307 76L302 64.5L312 60.5L317 71" stroke="#E7E6E8" stroke-width="4"/>
+            <path id="Vector 7" d="M279.5 91L268.5 73.5L259 79L269.5 97.5" stroke="#E7E6E8" stroke-width="4"/>
+            <path id="Vector 8" d="M225 135L206.5 117" stroke="#E7E6E8" stroke-width="4"/>
+            <path id="Vector 9" d="M477.153 71.5794L479.366 59.3018L489.886 61.5697L488.226 73.0218" stroke="#E7E6E8" stroke-width="4"/>
+            <path id="Vector 10" d="M347.928 61.4888L346.352 49.0483L357.072 48.0112L358.929 59.4917" stroke="#E7E6E8" stroke-width="4"/>
+            <path id="Vector 11" d="M435.153 59.5794L437.366 47.3018L447.886 49.5697L446.226 61.0218" stroke="#E7E6E8" stroke-width="4"/>
+            <path id="Vector 12" d="M514.032 86.1754L522.756 72.2658L533.956 78.0405L525.5 93.5" stroke="#E7E6E8" stroke-width="4"/>
+            <path id="Vector 13" d="M569.5 131.5L585.5 116" stroke="#E7E6E8" stroke-width="4"/>
+            <path id="Vector 15" d="M183.5 193.5L173 187" stroke="#029705" stroke-width="4"/>
+            <path id="Vector 16" d="M184 203L173.5 196.5" stroke="#029705" stroke-width="4"/>
+            <path id="Vector 17" d="M610 193.5L619 188" stroke="#029705" stroke-width="3"/>
+            <path id="Vector 18" d="M610 199.5L619 194" stroke="#029705" stroke-width="3"/>
+            <line id="Line 1" x1="184" y1="211" x2="184" y2="184" stroke="#DBDBDC" stroke-width="2"/>
+            <line id="Line 2" x1="610" y1="211" x2="610" y2="184" stroke="#DBDBDC" stroke-width="2"/>
+            
+            <rect id="altitude_bg" x="675" y="73" width="72" height="476" fill="#76767A"/>
+            <svg x="675" y="73" width="72" height="476">
+                <g id="altitude_tape_group"></g>
+            </svg>
+            
+            <g id="altitude_indicator_static">
+                <rect id="altitude_1" x="675" y="280" width="73" height="49" fill="#030309"/>
+                <text id="altitude_readout_hundreds" x="740" y="316" fill="#00FF00" font-size="32" text-anchor="end" font-weight="bold">17</text>
+                <g id="altitude_tens_reel_container" clip-path="url(#tensReelClip)">
+                    <g id="altitude_tens_reel_group"></g>
+                </g>
+                <line id="Line 8" x1="669" y1="307" x2="618" y2="307" stroke="#DDDF07" stroke-width="8"/>
+            </g>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js",
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160/examples/jsm/"
+            <path id="limit" d="M636 336.08L621.413 307.511L650.858 307.651L636 336.08Z" fill="#C477C6"/>
+            <path id="limit2" d="M636 279L650.722 307.5H621.278L636 279Z" fill="#C477C6"/>
+            <path id="limit3" d="M636 285L643.794 303H628.206L636 285Z" fill="#100010"/>
+            <path id="limit4" d="M636.191 329.14L628.276 311.242L643.534 310.999L636.191 329.14Z" fill="#030309"/>
+            <line id="Line 6" x1="746.5" y1="263" x2="746.5" y2="281" stroke="#ECED06" stroke-width="3"/>
+            <line id="Line 4" x1="746.5" y1="329" x2="746.5" y2="347" stroke="#ECED06" stroke-width="3"/>
+            <path id="Ellipse 1" d="M636 481C636 484.866 632.866 488 629 488C625.134 488 622 484.866 622 481C622 477.134 625.134 474 629 474C632.866 474 636 477.134 636 481Z" fill="#D9D9D9"/>
+            <path id="Ellipse 4" d="M636 147C636 150.866 632.866 154 629 154C625.134 154 622 150.866 622 147C622 143.134 625.134 140 629 140C632.866 140 636 143.134 636 147Z" fill="#D9D9D9"/>
+            <g id="Ellipse 3">
+                <path d="M636 229C636 232.866 632.866 236 629 236C625.134 236 622 232.866 622 229C622 225.134 625.134 222 629 222C632.866 222 636 225.134 636 229Z" fill="#D9D9D9"/>
+                <path d="M636 395C636 398.866 632.866 402 629 402C625.134 402 622 398.866 622 395C622 391.134 625.134 388 629 388C632.866 388 636 391.134 636 395Z" fill="#D9D9D9"/>
+            </g>
+
+            <rect id="speed" x="28" y="73" width="97" height="477" fill="#76767A"/>
+            <svg x="28" y="73" width="97" height="477">
+                <g id="speed_tape_group"></g>
+            </svg>
+            <g id="speed_indicator_static">
+                <path id="Polygon 9" d="M128.036 311.591L150.451 301.561L150.513 321.482L128.036 311.591Z" fill="#FDFD03"/>
+                <path id="Vector 20" d="M137 311H96.5" stroke="#FDFD03" stroke-width="4"/>
+                <rect x="50" y="296" width="45" height="30" fill="black" stroke="#999" stroke-width="1"/>
+                <text id="speed_readout" x="72.5" y="318" fill="#00FF00" font-size="20" text-anchor="middle" font-weight="bold">120</text>
+            </g>
+            <path id="Vector 19" d="M19.5 311H31" stroke="#FDFD03" stroke-width="4"/>
+            <path id="Vector 21" d="M29 73H151.5" stroke="#E7E6E8" stroke-width="4"/>
+            <path id="Vector 22" d="M28 549H151.5" stroke="#E7E6E8" stroke-width="4"/>
+            <path id="Vector 23" d="M672.5 73H774" stroke="#E7E6E8" stroke-width="4"/>
+            <path id="Vector 24" d="M672 548.5H773" stroke="#E7E6E8" stroke-width="4"/>
+            <path id="Vector 25" d="M745 549.5L746 347" stroke="#E7E6E8" stroke-width="3"/>
+            <path id="Vector 26" d="M745 73V265" stroke="#E7E6E8" stroke-width="3"/>
+
+            <g id="wings">
+                <rect id="Rectangle 21" x="280" y="315" width="11" height="25" fill="#030309"/>
+                <rect id="Rectangle 23" x="522" y="304" width="71" height="12" fill="#030309"/>
+                <rect id="Rectangle 22" x="512" y="305" width="13" height="35" fill="#030309"/>
+                <rect id="Rectangle 20" x="208" y="304" width="83" height="13" fill="#030309"/>
+                <g id="wing">
+                    <path d="M278.591 316.857H208V304H291.608V340H278.591V316.857Z" stroke="#FEFE03" stroke-width="3"/>
+                    <path d="M511.392 340V304H595V316.857H524.409V340H511.392Z" stroke="#FEFE03" stroke-width="3"/>
+                </g>
+            </g>
+            <g id="middle">
+                <rect id="middle_2" x="393" y="304" width="17" height="17" fill="#0CC704"/>
+                <rect id="Rectangle 24" x="395" y="307" width="13" height="11" fill="#030309"/>
+            </g>
+
+            <rect id="Rectangle 25" y="571" width="787" height="140" fill="#030309"/>
+            <rect id="header" x="243" y="599" width="326" height="66" fill="#76767A"/>
+            
+            <g id="heading_indicator">
+                <g id="heading_tape_container" clip-path="url(#headingClip)">
+                    <g id="heading_tape_group"></g>
+                </g>
+                <g id="heading_static_elements">
+                    <line x1="406" y1="620" x2="406" y2="635" stroke="#FDFD03" stroke-width="3"/>
+                    <rect x="381" y="599" width="50" height="20" fill="black" stroke="#FFFFFF" stroke-width="1"/>
+                    <text id="heading_readout" x="406" y="615" fill="#00FF00" font-size="16" text-anchor="middle" font-weight="bold">000</text>
+                </g>
+            </g>
+            <path id="Vector 27" d="M243 599V667" stroke="#FCFCFF" stroke-width="4"/>
+            <g id="Line 5">
+                <line id="Line 5_2" x1="745" y1="264.5" x2="787" y2="264.5" stroke="#ECED06" stroke-width="3"/>
+            </g>
+            <line id="Line 6_2" x1="671" y1="279.5" x2="748" y2="279.5" stroke="#ECED06" stroke-width="3"/>
+            <line id="Line 7" x1="671" y1="329.5" x2="748" y2="329.5" stroke="#ECED06" stroke-width="3"/>
+            <line id="Line 3" x1="746" y1="345.5" x2="786" y2="345.5" stroke="#ECED06" stroke-width="3"/>
+        </g>
+        <defs>
+            <clipPath id="clip0_1_2890">
+                <rect width="787" height="695" fill="white"/>
+            </clipPath>
+            <clipPath id="tensReelClip">
+                <rect x="732" y="269" width="50" height="75"/>
+            </clipPath>
+            <clipPath id="headingClip">
+                <rect x="243" y="620" width="326" height="45"/>
+            </clipPath>
+        </defs>
+
+        <g id="controls">
+            <path id="btnUp" class="control-arrow" d="M383.5,40 L403.5,40 L393.5,20 Z" />
+            <path id="btnDown" class="control-arrow" d="M383.5,655 L403.5,655 L393.5,675 Z" />
+            <path id="btnLeft" class="control-arrow" d="M40,337.5 L40,357.5 L20,347.5 Z" />
+            <path id="btnRight" class="control-arrow" d="M747,337.5 L747,357.5 L767,347.5 Z" />
+            <path id="btnSpeedUp" class="control-arrow" d="M140,280 L160,280 L150,260 Z" />
+            <path id="btnSpeedDown" class="control-arrow" d="M140,355 L160,355 L150,375 Z" />
+            <path id="btnAltUp" class="control-arrow" d="M640,280 L660,280 L650,260 Z" />
+            <path id="btnAltDown" class="control-arrow" d="M640,355 L660,355 L650,375 Z" />
+            <path id="btnHdgLeft" class="control-arrow" d="M260,675 L260,655 L240,665 Z" />
+            <path id="btnHdgRight" class="control-arrow" d="M552,675 L552,655 L572,665 Z" />
+        </g>
+    </svg>
+</div>
+
+<script>
+    // --- STATE VARIABLES ---
+    let pitch = 0;
+    let roll = 0;
+    let speed = 120;
+    let altitude = 1700;
+    let heading = 0;
+
+    // --- CONSTANTS ---
+    const PITCH_SCALE = 8;
+    const MIN_SPEED = 0;
+    const MAX_SPEED = 999;
+    const MIN_ALTITUDE = -1000;
+    const MAX_ALTITUDE = 50000;
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    
+    // Speed Tape Constants
+    const SPEED_SCALE = 7; 
+    const SPEED_CENTER_Y = 238;
+    const SPEED_REF_VALUE = 120;
+
+    // Altitude Tape Constants
+    const ALTITUDE_SCALE = 0.7;
+    const ALTITUDE_CENTER_Y = 234;
+    const ALTITUDE_REF_VALUE = 0; 
+    
+    // Altitude Tens Reel Constants
+    const REEL_SPACING = 30; // Vertical pixels between each number on the reel
+    
+    // Heading Tape Constants
+    const HEADING_SCALE = 5; // pixels per degree
+    const HEADING_CENTER_X = 406;
+    const HEADING_REF_VALUE = 0; 
+
+    // --- DOM ELEMENT REFERENCES ---
+    const attitudeGroup = document.getElementById('attitude_group');
+    const speedTapeGroup = document.getElementById('speed_tape_group');
+    const speedReadout = document.getElementById('speed_readout');
+    const altitudeTapeGroup = document.getElementById('altitude_tape_group');
+    const altitudeReadoutHundreds = document.getElementById('altitude_readout_hundreds');
+    const pfdContainer = document.getElementById('pfd-container');
+    const tensReelGroup = document.getElementById('altitude_tens_reel_group');
+    const headingTapeGroup = document.getElementById('heading_tape_group');
+    const headingReadout = document.getElementById('heading_readout');
+
+    // --- TAPE GENERATION ---
+    function generateAttitudeIndicators() {
+        const centerX = 401.5; // (393 + 17/2)
+        const centerY = 312.5; // (304 + 17/2)
+
+        // --- Generate Pitch Ladder ---
+        for (let p = -90; p <= 90; p += 2.5) {
+            if (p === 0) continue; 
+            const y = centerY - (p * PITCH_SCALE);
+            const isMajor = (p % 10 === 0);
+            const isMinor = (p % 5 === 0);
+
+            if (isMajor || isMinor) {
+                const lineWidth = isMajor ? 80 : 40;
+                const line = document.createElementNS(SVG_NS, 'line');
+                line.setAttribute('x1', centerX - lineWidth / 2);
+                line.setAttribute('x2', centerX + lineWidth / 2);
+                line.setAttribute('y1', y);
+                line.setAttribute('y2', y);
+                line.setAttribute('stroke', 'white');
+                line.setAttribute('stroke-width', 2);
+                attitudeGroup.appendChild(line);
+
+                if (isMajor) {
+                    // Left Text
+                    const textLeft = document.createElementNS(SVG_NS, 'text');
+                    textLeft.setAttribute('x', centerX - lineWidth / 2 - 10);
+                    textLeft.setAttribute('y', y + 5);
+                    textLeft.setAttribute('fill', 'white');
+                    textLeft.setAttribute('font-size', '18');
+                    textLeft.setAttribute('text-anchor', 'end');
+                    textLeft.textContent = Math.abs(p);
+                    attitudeGroup.appendChild(textLeft);
+                    // Right Text
+                    const textRight = document.createElementNS(SVG_NS, 'text');
+                    textRight.setAttribute('x', centerX + lineWidth / 2 + 10);
+                    textRight.setAttribute('y', y + 5);
+                    textRight.setAttribute('fill', 'white');
+                    textRight.setAttribute('font-size', '18');
+                    textRight.setAttribute('text-anchor', 'start');
+                    textRight.textContent = Math.abs(p);
+                    attitudeGroup.appendChild(textRight);
+                }
             }
         }
-    </script>
+        
+        // --- Dynamic Roll Scale Removed ---
+    }
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
-        // --- Configuration ---
-        const modelPath = 'assets/models/a320/source/A320.glb';
-
-        // --- Basic Scene Setup ---
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x2d3436); // Dark grey background
-
-        const container = document.getElementById('model-container');
-        const camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
-        camera.position.z = 15;
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(container.clientWidth, container.clientHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        container.appendChild(renderer.domElement);
-
-        // --- Controls ---
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-
-        // --- Lighting (similar to your map setup) ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
-        directionalLight.position.set(5, 10, 7.5);
-        scene.add(directionalLight);
-
-        // --- Model Loader ---
-        const loader = new GLTFLoader();
-        console.log(`Attempting to load model from: ${modelPath}`);
-
-        loader.load(
-            modelPath,
-            (gltf) => {
-                const model = gltf.scene;
-                console.log("✅ Model loaded successfully.", gltf);
-
-                // --- DIAGNOSTICS ---
-                // This section inspects every part of your model and logs its material properties
-                // to the console. This is where you'll find clues about transparency issues.
-                console.log("--- Starting Material Property Diagnostics ---");
-                model.traverse((child) => {
-                    if (child.isMesh) {
-                        console.log(`Inspecting Mesh: "${child.name}"`);
-                        const materials = Array.isArray(child.material) ? child.material : [child.material];
-                        
-                        materials.forEach((material, index) => {
-                            console.log(`  - Material #${index}: "${material.name}"`);
-                            console.log(`    - transparent: ${material.transparent}`);
-                            console.log(`    - opacity: ${material.opacity}`);
-                            console.log(`    - alphaTest: ${material.alphaTest}`);
-                            console.log(`    - depthWrite: ${material.depthWrite}`);
-                            console.log(`    - side: ${material.side === THREE.DoubleSide ? 'DoubleSide' : (material.side === THREE.BackSide ? 'BackSide' : 'FrontSide')}`);
-                            
-                            // *** COMMON FIXES ***
-                            // If you see transparent:true but the object should be solid,
-                            // you might need to set it to false in your main script.
-                            // If parts are see-through when they shouldn't be, `depthWrite` is often the culprit.
-                            // It should almost always be `true` for opaque objects.
-                            if (material.transparent && !material.depthWrite) {
-                                console.warn(`    - ⚠️ WARNING: Material is transparent but depthWrite is false. This can cause rendering order issues.`);
-                            }
-                        });
-                    }
-                });
-                console.log("--- Diagnostics Complete ---");
-
-
-                // --- Center and Frame Model ---
-                const box = new THREE.Box3().setFromObject(model);
-                const size = box.getSize(new THREE.Vector3());
-                const center = box.getCenter(new THREE.Vector3());
-
-                model.position.x += (model.position.x - center.x);
-                model.position.y += (model.position.y - center.y);
-                model.position.z += (model.position.z - center.z);
-                
-                const maxDim = Math.max(size.x, size.y, size.z);
-                const fov = camera.fov * (Math.PI / 180);
-                let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-                cameraZ *= 1.5; // Add some padding
-                
-                camera.position.z = cameraZ;
-                controls.target.copy(model.position);
-                controls.update();
-                
-                scene.add(model);
-            },
-            (xhr) => {
-                console.log((xhr.loaded / xhr.total * 100) + '% loaded');
-            },
-            (error) => {
-                console.error("❌ An error happened while loading the 3D model:", error);
-                document.getElementById('info').innerHTML = `<h1>Error Loading Model</h1><p>Could not load <code>${modelPath}</code>. Check the path and make sure you're using a local server. See console for details.</p>`;
+    function generateSpeedTape() {
+        speedTapeGroup.innerHTML = ''; 
+        for (let s = MIN_SPEED; s <= MAX_SPEED; s += 5) {
+            const yPos = SPEED_CENTER_Y - (s - SPEED_REF_VALUE) * SPEED_SCALE;
+            const tick = document.createElementNS(SVG_NS, 'line');
+            tick.setAttribute('y1', yPos);
+            tick.setAttribute('y2', yPos);
+            tick.setAttribute('stroke', 'white');
+            tick.setAttribute('stroke-width', '2');
+            if (s % 10 === 0) {
+                tick.setAttribute('x1', '67');
+                tick.setAttribute('x2', '52');
+                const text = document.createElementNS(SVG_NS, 'text');
+                text.setAttribute('x', '37');
+                text.setAttribute('y', yPos + 5); 
+                text.setAttribute('fill', 'white');
+                text.setAttribute('font-size', '18');
+                text.setAttribute('text-anchor', 'middle');
+                text.textContent = s;
+                speedTapeGroup.appendChild(text);
+            } else {
+                tick.setAttribute('x1', '67');
+                tick.setAttribute('x2', '60');
             }
-        );
-
-        // --- Animation Loop ---
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
+            speedTapeGroup.appendChild(tick);
         }
-        animate();
+    }
 
-        // --- Handle Window Resize ---
-        window.addEventListener('resize', () => {
-            camera.aspect = container.clientWidth / container.clientHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(container.clientWidth, container.clientHeight);
+    function generateAltitudeTape() {
+        altitudeTapeGroup.innerHTML = '';
+        for (let alt = MIN_ALTITUDE; alt <= MAX_ALTITUDE; alt += 20) {
+            const yPos = ALTITUDE_CENTER_Y - (alt - ALTITUDE_REF_VALUE) * ALTITUDE_SCALE;
+            const tick = document.createElementNS(SVG_NS, 'line');
+            tick.setAttribute('y1', yPos);
+            tick.setAttribute('y2', yPos);
+            tick.setAttribute('stroke', 'white');
+            tick.setAttribute('stroke-width', '2');
+            tick.setAttribute('x1', '72'); 
+            if (alt % 100 === 0) {
+                tick.setAttribute('x2', '52'); 
+                const text = document.createElementNS(SVG_NS, 'text');
+                text.setAttribute('x', '25'); 
+                text.setAttribute('y', yPos + 5); 
+                text.setAttribute('fill', 'white');
+                text.setAttribute('font-size', '18');
+                text.setAttribute('text-anchor', 'middle');
+                text.textContent = alt / 100;
+                altitudeTapeGroup.appendChild(text);
+            } else {
+                tick.setAttribute('x2', '62'); 
+            }
+            altitudeTapeGroup.appendChild(tick);
+        }
+    }
+
+    function generateAltitudeTensReel() {
+        tensReelGroup.innerHTML = '';
+        const center_y = 316; 
+
+        for (let i = -5; i < 10; i++) {
+            let value = (i * 20);
+            if (value < 0) {
+                value = 100 + (value % 100);
+            } else {
+                value = value % 100;
+            }
+            const displayValue = String(value).padStart(2, '0');
+            
+            const yPos = center_y + (i * REEL_SPACING);
+
+            const text = document.createElementNS(SVG_NS, 'text');
+            text.setAttribute('x', '745'); 
+            text.setAttribute('y', yPos);
+            text.setAttribute('fill', '#00FF00');
+            text.setAttribute('font-size', '32');
+            text.setAttribute('font-weight', 'bold');
+            text.textContent = displayValue;
+            tensReelGroup.appendChild(text);
+        }
+    }
+
+    function generateHeadingTape() {
+        headingTapeGroup.innerHTML = '';
+        const y_text = 650;
+        const y_tick_top = 620;
+        const y_tick_bottom_major = 635;
+        const y_tick_bottom_minor = 628;
+
+        for (let h = -360; h <= 720; h += 5) {
+            const xPos = HEADING_CENTER_X + (h - HEADING_REF_VALUE) * HEADING_SCALE;
+            const normalizedH = (h + 360) % 360;
+            if (normalizedH % 90 === 0) continue; 
+
+            const tick = document.createElementNS(SVG_NS, 'line');
+            tick.setAttribute('x1', xPos);
+            tick.setAttribute('x2', xPos);
+            tick.setAttribute('stroke', 'white');
+            tick.setAttribute('stroke-width', '1.5');
+            tick.setAttribute('y1', y_tick_top);
+
+            if (h % 10 === 0) {
+                 tick.setAttribute('y2', y_tick_bottom_major);
+            } else {
+                 tick.setAttribute('y2', y_tick_bottom_minor);
+            }
+            headingTapeGroup.appendChild(tick);
+        }
+
+        for (let h = 0; h < 360; h += 10) {
+            for (let offset of [-360, 0, 360]) {
+                const currentH = h + offset;
+                const xPos = HEADING_CENTER_X + (currentH - HEADING_REF_VALUE) * HEADING_SCALE;
+                const text = document.createElementNS(SVG_NS, 'text');
+                text.setAttribute('x', xPos);
+                text.setAttribute('y', y_text);
+                text.setAttribute('fill', 'white');
+                text.setAttribute('font-size', '16');
+                text.setAttribute('text-anchor', 'middle');
+                
+                let displayVal = '';
+                switch (h) {
+                    case 0:   displayVal = 'N'; break;
+                    case 90:  displayVal = 'E'; break;
+                    case 180: displayVal = 'S'; break;
+                    case 270: displayVal = 'W'; break;
+                    default:
+                        if (h % 30 === 0) {
+                             displayVal = h / 10;
+                        }
+                }
+                if (displayVal !== '') {
+                    text.textContent = displayVal;
+                    headingTapeGroup.appendChild(text);
+                }
+            }
+        }
+    }
+
+
+    // --- UPDATE FUNCTIONS ---
+    function updateAttitude() {
+        const centerX = 401.5;
+        const centerY = 312.5;
+        const transformValue = `rotate(${roll}, ${centerX}, ${centerY}) translate(0, ${pitch * PITCH_SCALE})`;
+        attitudeGroup.setAttribute('transform', transformValue);
+    }
+
+    function updateSpeed() {
+        speed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, speed));
+        const yOffset = (speed - SPEED_REF_VALUE) * SPEED_SCALE;
+        speedTapeGroup.setAttribute('transform', `translate(0, ${yOffset})`);
+        speedReadout.textContent = Math.round(speed);
+    }
+    
+    function updateAltitude() {
+        altitude = Math.max(MIN_ALTITUDE, Math.min(MAX_ALTITUDE, altitude));
+        const tapeYOffset = altitude * ALTITUDE_SCALE;
+        altitudeTapeGroup.setAttribute('transform', `translate(0, ${tapeYOffset})`);
+        altitudeReadoutHundreds.textContent = Math.floor(altitude / 100);
+        const roundedAlt = Math.round(altitude);
+        const lastTwoDigits = ((roundedAlt % 100) + 100) % 100;
+        const targetValue = Math.floor(lastTwoDigits / 20) * 20;
+        const yOffset = -(targetValue / 20) * REEL_SPACING;
+        tensReelGroup.setAttribute('transform', `translate(0, ${yOffset})`);
+    }
+
+    function updateHeading() {
+        let normalizedHeading = (heading % 360 + 360) % 360;
+        const xOffset = -(normalizedHeading - HEADING_REF_VALUE) * HEADING_SCALE;
+        headingTapeGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
+        headingReadout.textContent = String(Math.round(normalizedHeading)).padStart(3, '0');
+    }
+    
+    // --- EVENT LISTENERS ---
+    function setupControls() {
+        // Click Controls
+        document.getElementById('btnUp').addEventListener('click', () => { pitch += 5; updateAttitude(); });
+        document.getElementById('btnDown').addEventListener('click', () => { pitch -= 5; updateAttitude(); });
+        document.getElementById('btnLeft').addEventListener('click', () => { roll -= 10; updateAttitude(); });
+        document.getElementById('btnRight').addEventListener('click', () => { roll += 10; updateAttitude(); });
+        document.getElementById('btnSpeedUp').addEventListener('click', () => { speed += 5; updateSpeed(); });
+        document.getElementById('btnSpeedDown').addEventListener('click', () => { speed -= 5; updateSpeed(); });
+        document.getElementById('btnAltUp').addEventListener('click', () => { altitude += 1; updateAltitude(); });
+        document.getElementById('btnAltDown').addEventListener('click', () => { altitude -= 1; updateAltitude(); });
+        document.getElementById('btnHdgLeft').addEventListener('click', () => { heading -= 5; updateHeading(); });
+        document.getElementById('btnHdgRight').addEventListener('click', () => { heading += 5; updateHeading(); });
+
+        // Keyboard Controls
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowUp':   e.preventDefault(); pitch += 2; updateAttitude(); break;
+                case 'ArrowDown': e.preventDefault(); pitch -= 2; updateAttitude(); break;
+                case 'ArrowLeft': e.preventDefault(); roll -= 2; updateAttitude(); break;
+                case 'ArrowRight':e.preventDefault(); roll += 2; updateAttitude(); break;
+                case '+': case '=':
+                case 'PageUp':    e.preventDefault(); speed += 1; updateSpeed(); break;
+                case '-': case '_':
+                case 'PageDown':  e.preventDefault(); speed -= 1; updateSpeed(); break;
+                case 'Home':      e.preventDefault(); altitude += 1; updateAltitude(); break;
+                case 'End':       e.preventDefault(); altitude -= 1; updateAltitude(); break;
+                case 'a':         e.preventDefault(); heading -= 1; updateHeading(); break;
+                case 'd':         e.preventDefault(); heading += 1; updateHeading(); break;
+            }
         });
+    }
 
-    </script>
+    // --- INITIAL RENDER ---
+    function initializePFD() {
+        generateAttitudeIndicators();
+        generateSpeedTape();
+        generateAltitudeTape();
+        generateAltitudeTensReel();
+        generateHeadingTape();
+        
+        updateAttitude();
+        updateSpeed();
+        updateAltitude();
+        updateHeading();
+
+        setupControls();
+    }
+
+    // Run when the page loads
+    initializePFD();
+</script>
+
 </body>
 </html>

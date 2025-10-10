@@ -1,4 +1,4 @@
-// Crew Center – Merged Script with Sector Ops Command Revamp
+// Crew Center – Merged Script with Sector Ops Command Revamp & Upgraded PFD
 document.addEventListener('DOMContentLoaded', async () => {
     // --- Global Configuration ---
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
@@ -116,198 +116,304 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-
     // --- [REHAULED] Helper to inject custom CSS for new features ---
-function injectCustomStyles() {
-  const styleId = 'sector-ops-custom-styles';
-  if (document.getElementById(styleId)) return;
+    function injectCustomStyles() {
+        const styleId = 'sector-ops-custom-styles';
+        if (document.getElementById(styleId)) return;
 
-  const css = `
-    /* --- [FIX] Sector Ops View Layout --- */
-    #view-rosters {
-      display: grid;
-      grid-template-columns: 1fr;
-      grid-template-rows: 1fr;
-      height: 100%;
-      width: 100%;
-      overflow: hidden;
-      position: relative;
+        const css = `
+            /* --- [FIX] Sector Ops View Layout --- */
+            #view-rosters {
+                display: grid;
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr;
+                height: 100%;
+                width: 100%;
+                overflow: hidden;
+                position: relative;
+            }
+            #sector-ops-map-fullscreen {
+                grid-column: 1 / -1;
+                grid-row: 1 / -1;
+                width: 100%;
+                height: 100%;
+            }
+            
+            /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
+            .info-window {
+                position: absolute;
+                top: 20px;
+                right: 20px;
+                width: 420px;
+                max-width: 90vw;
+                max-height: calc(100vh - 40px);
+                background: rgba(18, 20, 38, 0.75);
+                backdrop-filter: blur(20px) saturate(180%);
+                -webkit-backdrop-filter: blur(20px) saturate(180%);
+                border-radius: 16px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+                z-index: 1050;
+                display: none;
+                flex-direction: column;
+                overflow: hidden;
+                color: #e8eaf6;
+                transition: opacity 0.3s ease, transform 0.3s ease;
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            .info-window.visible { 
+                display: flex; 
+                opacity: 1;
+                transform: translateX(0);
+            }
+            .info-window-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 16px 20px;
+                background: rgba(10, 12, 26, 0.6);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                flex-shrink: 0;
+            }
+            .info-window-header h3 {
+                margin: 0; 
+                font-size: 1.3rem; 
+                color: #fff;
+                font-weight: 600;
+                text-shadow: 0 2px 5px rgba(0,0,0,0.4);
+            }
+            .info-window-header h3 small { 
+                font-weight: 300; 
+                color: #c5cae9; 
+                font-size: 0.9rem; 
+                margin-left: 5px;
+            }
+            .info-window-actions button {
+                background: rgba(255,255,255,0.05); 
+                border: 1px solid rgba(255,255,255,0.1);
+                color: #c5cae9; 
+                cursor: pointer;
+                font-size: 1rem; 
+                width: 32px; height: 32px;
+                border-radius: 50%;
+                margin-left: 8px;
+                line-height: 1; 
+                display: grid;
+                place-items: center;
+                transition: all 0.2s ease-in-out;
+            }
+            .info-window-actions button:hover { 
+                background: #00a8ff;
+                color: #fff; 
+                transform: scale(1.1) rotate(90deg);
+                border-color: #00a8ff;
+            }
+            .info-window-content { 
+                overflow-y: auto; 
+                flex-grow: 1; 
+                padding: 0;
+            }
+            /* Custom Scrollbar */
+            .info-window-content::-webkit-scrollbar { width: 8px; }
+            .info-window-content::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+            .info-window-content::-webkit-scrollbar-thumb { background-color: #00a8ff; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
+            .info-window-content::-webkit-scrollbar-thumb:hover { background-color: #33c1ff; }
+
+            /* --- [OVERHAUL] Airport Window: Weather & Tabs --- */
+            .airport-info-weather {
+                padding: 20px;
+                display: grid;
+                grid-template-columns: auto 1fr;
+                gap: 15px 20px;
+                align-items: center;
+                background: linear-gradient(135deg, rgba(0, 168, 255, 0.15), rgba(0, 100, 200, 0.25));
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            .weather-flight-rules { 
+                font-size: 1.8rem; font-weight: 700; 
+                padding: 12px 18px; border-radius: 10px;
+                grid-row: 1 / 3;
+                text-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+            }
+            .flight-rules-vfr { background-color: #28a745; color: white; }
+            .flight-rules-mvfr { background-color: #007bff; color: white; }
+            .flight-rules-ifr { background-color: #dc3545; color: white; }
+            .flight-rules-lifr { background-color: #a33ea3; color: white; }
+            .weather-details-grid { 
+                display: grid; grid-template-columns: 1fr 1fr; 
+                gap: 10px 15px; text-align: left;
+            }
+            .weather-details-grid span { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; }
+            .weather-details-grid .fa-solid { color: #00a8ff; width: 16px; text-align: center; }
+            .metar-code {
+                grid-column: 1 / -1; font-family: 'Courier New', Courier, monospace;
+                background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px;
+                font-size: 0.8rem; color: #e0e0e0; margin-top: 5px;
+            }
+            
+            .info-window-tabs { display: flex; background: rgba(10, 12, 26, 0.4); padding: 5px 15px 0 15px; }
+            .info-tab-btn {
+                padding: 14px 18px; border: none; background: none; color: #c5cae9;
+                cursor: pointer; font-size: 0.9rem; font-weight: 600;
+                border-bottom: 3px solid transparent; transition: all 0.25s;
+                display: flex; align-items: center; gap: 8px;
+            }
+            .info-tab-btn:hover { color: #fff; }
+            .info-tab-btn.active { color: #00a8ff; border-bottom-color: #00a8ff; }
+            .info-tab-content { display: none; animation: fadeIn 0.4s; }
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            .info-tab-content.active { display: block; }
+            .info-tab-content ul { list-style: none; padding: 0; margin: 0; }
+            .info-tab-content li { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
+            .info-tab-content li:last-child { border-bottom: none; }
+            .muted-text { color: #9fa8da; text-align: center; padding: 2rem; }
+
+            /* --- [NEW] UNIFIED FLIGHT DISPLAY FOR AIRCRAFT WINDOW --- */
+            .unified-display-container {
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+                padding: 16px;
+                gap: 12px;
+                font-family: 'Segoe UI', sans-serif;
+            }
+            .unified-display-header {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }
+            .flight-id-block {
+                flex-shrink: 0;
+            }
+            .flight-id-block .flight-number {
+                font-size: 1.5rem; font-weight: 700; color: #fff;
+            }
+            .flight-id-block .pilot-callsign {
+                font-size: 0.9rem; color: #c5cae9;
+            }
+            .flight-progress-block {
+                flex-grow: 1; display: flex; align-items: center; gap: 10px;
+            }
+            .flight-phase-badge {
+                padding: 4px 10px; border-radius: 15px; font-size: 0.8rem; font-weight: 600;
+                background-color: rgba(0, 168, 255, 0.2);
+                border: 1px solid #00a8ff;
+                color: #89f7fe;
+            }
+            .route-progress-bar {
+                display: flex; align-items: center; width: 100%;
+            }
+            .route-progress-bar .icao {
+                font-family: 'Courier New', monospace; font-weight: bold; font-size: 1.1rem;
+            }
+            .progress-bar-container {
+                flex-grow: 1; height: 8px; background: rgba(10, 12, 26, 0.7);
+                border-radius: 4px; margin: 0 10px; overflow: hidden;
+            }
+            .progress-bar-fill {
+                height: 100%; width: 0%;
+                background: linear-gradient(90deg, #00a8ff, #89f7fe);
+                transition: width 0.5s ease-out;
+            }
+            .unified-display-footer {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 10px;
+            }
+            .readout-box {
+                background: rgba(10, 12, 26, 0.6);
+                padding: 12px; border-radius: 8px; text-align: center;
+            }
+            .readout-box .label {
+                font-size: 0.75rem; text-transform: uppercase; color: #c5cae9;
+                margin-bottom: 4px;
+            }
+            .readout-box .value {
+                font-size: 1.5rem; font-weight: 600; color: #fff;
+                font-family: 'Courier New', monospace;
+            }
+            .readout-box .value .unit { font-size: 0.9rem; color: #9fa8da; }
+            .readout-box .value .fa-solid { font-size: 0.9rem; margin-right: 5px; color: #00a8ff; }
+
+            /* --- [UPGRADED & RESIZED] PFD (Primary Flight Display) Styles --- */
+            .unified-display-main {
+                flex-grow: 1;
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 12px;
+                background: rgba(10, 12, 26, 0.5);
+                border-radius: 12px;
+                padding: 12px;
+                min-height: 250px;
+                place-items: center;
+                overflow: hidden;
+            }
+            #pfd-container {
+                width: 100%;
+                max-width: 350px;
+                aspect-ratio: 787 / 695;
+                background-color: #1a1a1a;
+                font-family: monospace, sans-serif;
+                color: white;
+                overflow: hidden;
+                position: relative;
+                border-radius: 8px;
+            }
+            #pfd-container svg {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                top: 0;
+                left: 0;
+            }
+
+            /* --- Toolbar Recall Buttons --- */
+            #airport-recall-btn, #aircraft-recall-btn {
+                display: none; font-size: 1.1rem; position: relative;
+            }
+            #airport-recall-btn.visible, #aircraft-recall-btn.visible {
+                display: inline-block;
+            }
+            #airport-recall-btn.palpitate, #aircraft-recall-btn.palpitate {
+                animation: palpitate 0.5s ease-in-out 2;
+            }
+            @keyframes palpitate {
+                0%, 100% { transform: scale(1); color: #00a8ff; }
+                50% { transform: scale(1.3); color: #fff; }
+            }
+            
+            /* Styles for Active ATC Markers on Sector Ops Map */
+            @keyframes atc-pulse {
+                0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+                70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+                100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+            }
+            @keyframes atc-breathe {
+                0% { transform: scale(0.95); opacity: 0.6; }
+                50% { transform: scale(1.4); opacity: 0.9; }
+                100% { transform: scale(0.95); opacity: 0.6; }
+            }
+            .atc-active-marker {
+                width: 15px; height: 15px; background-color: #dc3545; border-radius: 50%;
+                border: 2px solid #fff; cursor: pointer; animation: atc-pulse 2s infinite;
+                display: grid; place-items: center;
+            }
+            .atc-approach-active::before {
+                content: ''; grid-area: 1 / 1; width: 250%; height: 250%; border-radius: 50%;
+                background-color: rgba(240, 173, 78, 0.8); z-index: -1; 
+                animation: atc-breathe 4s ease-in-out infinite;
+            }
+        `;
+
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.type = 'text/css';
+        style.appendChild(document.createTextNode(css));
+        document.head.appendChild(style);
     }
-    #sector-ops-map-fullscreen {
-      grid-column: 1 / -1;
-      grid-row: 1 / -1;
-      width: 100%;
-      height: 100%;
-    }
-
-    /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
-    .info-window {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      width: 420px;
-      max-width: 90vw;
-      max-height: calc(100vh - 40px);
-      background: rgba(18, 20, 38, 0.75);
-      backdrop-filter: blur(20px) saturate(180%);
-      -webkit-backdrop-filter: blur(20px) saturate(180%);
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow: 0 12px 40px rgba(0,0,0,0.6);
-      z-index: 1050;
-      display: none;
-      flex-direction: column;
-      overflow: hidden;
-      color: #e8eaf6;
-      transition: opacity 0.3s ease, transform 0.3s ease;
-      opacity: 0; transform: translateX(20px);
-    }
-    .info-window.visible { display: flex; opacity: 1; transform: translateX(0); }
-    .info-window-header {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 16px 20px; background: rgba(10, 12, 26, 0.6);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1); flex-shrink: 0;
-    }
-    .info-window-header h3 { margin: 0; font-size: 1.3rem; color: #fff; font-weight: 600; text-shadow: 0 2px 5px rgba(0,0,0,0.4); }
-    .info-window-header h3 small { font-weight: 300; color: #c5cae9; font-size: 0.9rem; margin-left: 5px; }
-    .info-window-actions button {
-      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-      color: #c5cae9; cursor: pointer; font-size: 1rem; width: 32px; height: 32px;
-      border-radius: 50%; margin-left: 8px; line-height: 1; display: grid; place-items: center;
-      transition: all 0.2s ease-in-out;
-    }
-    .info-window-actions button:hover { background: #00a8ff; color: #fff; transform: scale(1.1) rotate(90deg); border-color: #00a8ff; }
-    .info-window-content { overflow-y: auto; flex-grow: 1; padding: 0; }
-    .info-window-content::-webkit-scrollbar { width: 8px; }
-    .info-window-content::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
-    .info-window-content::-webkit-scrollbar-thumb { background-color: #00a8ff; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
-    .info-window-content::-webkit-scrollbar-thumb:hover { background-color: #33c1ff; }
-
-    /* --- Airport Weather Header --- */
-    .airport-info-weather {
-      padding: 20px; display: grid; grid-template-columns: auto 1fr; gap: 15px 20px; align-items: center;
-      background: linear-gradient(135deg, rgba(0,168,255,0.15), rgba(0,100,200,0.25));
-      border-bottom: 1px solid rgba(255,255,255,0.1);
-    }
-    .weather-flight-rules { font-size: 1.8rem; font-weight: 700; padding: 12px 18px; border-radius: 10px; grid-row: 1 / 3; text-shadow: 1px 1px 3px rgba(0,0,0,0.3); }
-    .flight-rules-vfr { background:#28a745; color:#fff; }
-    .flight-rules-mvfr { background:#007bff; color:#fff; }
-    .flight-rules-ifr { background:#dc3545; color:#fff; }
-    .flight-rules-lifr { background:#a33ea3; color:#fff; }
-    .weather-details-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 15px; text-align:left; }
-    .weather-details-grid span { display:flex; align-items:center; gap:8px; font-size:.95rem; }
-    .weather-details-grid .fa-solid { color:#00a8ff; width:16px; text-align:center; }
-    .metar-code { grid-column:1 / -1; font-family:'Courier New', Courier, monospace; background:rgba(0,0,0,0.2); padding:8px; border-radius:4px; font-size:.8rem; color:#e0e0e0; margin-top:5px; }
-
-    /* --- Tabs --- */
-    .info-window-tabs { display:flex; background: rgba(10,12,26,0.4); padding: 5px 15px 0 15px; }
-    .info-tab-btn {
-      padding: 14px 18px; border: none; background: none; color: #c5cae9; cursor: pointer;
-      font-size: .9rem; font-weight: 600; border-bottom: 3px solid transparent; transition: .25s;
-      display: flex; align-items: center; gap: 8px;
-    }
-    .info-tab-btn:hover { color:#fff; }
-    .info-tab-btn.active { color:#00a8ff; border-bottom-color:#00a8ff; }
-    .info-tab-content { display:none; animation: fadeIn .4s; }
-    @keyframes fadeIn { from{opacity:0} to{opacity:1} }
-    .info-tab-content.active { display:block; }
-    .info-tab-content ul { list-style:none; padding:0; margin:0; }
-    .info-tab-content li { padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.08); }
-    .info-tab-content li:last-child { border-bottom:none; }
-    .muted-text { color:#9fa8da; text-align:center; padding:2rem; }
-
-    /* --- Unified Flight Display container (holds PFD) --- */
-    .unified-display-container { display:flex; flex-direction:column; height:100%; padding:16px; gap:12px; font-family:'Segoe UI', sans-serif; }
-    .unified-display-header { display:flex; align-items:center; gap:12px; padding-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.1); }
-    .flight-id-block .flight-number { font-size:1.5rem; font-weight:700; color:#fff; }
-    .flight-id-block .pilot-callsign { font-size:.9rem; color:#c5cae9; }
-    .flight-progress-block { flex:1; display:flex; align-items:center; gap:10px; }
-    .flight-phase-badge { padding:4px 10px; border-radius:15px; font-size:.8rem; font-weight:600; background:rgba(0,168,255,0.2); border:1px solid #00a8ff; color:#89f7fe; }
-    .route-progress-bar { display:flex; align-items:center; width:100%; }
-    .route-progress-bar .icao { font-family:'Courier New', monospace; font-weight:bold; font-size:1.1rem; }
-    .progress-bar-container { flex:1; height:8px; background:rgba(10,12,26,0.7); border-radius:4px; margin:0 10px; overflow:hidden; }
-    .progress-bar-fill { height:100%; width:0%; background:linear-gradient(90deg,#00a8ff,#89f7fe); transition:width .5s ease-out; }
-    .unified-display-main { flex:1; display:grid; grid-template-columns:1fr; gap:12px; background:rgba(10,12,26,0.5); border-radius:12px; padding:12px; min-height:250px; }
-    .unified-display-footer { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
-    .readout-box { background:rgba(10,12,26,0.6); padding:12px; border-radius:8px; text-align:center; }
-    .readout-box .label { font-size:.68rem; text-transform:uppercase; color:#c5cae9; margin-bottom:4px; }
-    .readout-box .value { font-size:1.1rem; font-weight:600; color:#fff; font-family:'Courier New', monospace; }
-    .readout-box .value .unit { font-size:.85rem; color:#9fa8da; }
-    .readout-box .value .fa-solid { font-size:.9rem; margin-right:5px; color:#00a8ff; }
-
-    /* --- [REALISTIC + COMPACT] PFD Styles --- */
-    .pfd-container{
-      background:#000;border-radius:8px;display:flex;align-items:center;justify-content:center;
-      gap:6px;padding:2px;height:180px;color:#fff;font-family:"SF Mono","Consolas","Courier New",monospace
-    }
-
-    /* Airspeed / Altitude tapes */
-    .pfd-tape{position:relative;width:50px;height:100%;background:#141414;border-radius:3px;overflow:hidden}
-    .tape-strip{position:absolute;left:0;width:100%;transition:transform .15s linear;will-change:transform}
-    .tape-marker-window{position:absolute;left:0;top:50%;transform:translateY(-50%);height:20px;width:100%;
-      background:rgba(0,0,0,.55);border-top:1px solid #000;border-bottom:1px solid #000}
-    #speed-tape .tape-readout{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-      font-size:.95rem;color:#fff}
-    #alt-tape .tape-readout{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-      font-size:.95rem;color:#00e6ff} /* cyan */
-    #speed-tape .tape-pointer{position:absolute;top:50%;left:-1px;transform:translateY(-50%);
-      border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:6px solid #f1c40f}
-    #alt-tape .tape-pointer{position:absolute;top:50%;right:-1px;transform:translateY(-50%);
-      border-top:6px solid transparent;border-bottom:6px solid transparent;border-right:6px solid #f1c40f}
-    .tape-line{position:absolute;height:1px;background:#fff;width:22%}
-    .tape-line.major{width:35%}
-    #speed-tape .tape-line{left:0} #alt-tape .tape-line{right:0}
-    .tape-line-label{position:absolute;font-size:.6rem}
-    #speed-tape .tape-line-label{left:28px;transform:translateY(-50%)}
-    #alt-tape .tape-line-label{right:28px;transform:translateY(-50%)}
-
-    /* Attitude Indicator */
-    .attitude-indicator{
-      position:relative;width:180px;height:180px;border-radius:50%;overflow:hidden;
-      border:2px solid #8a8a8a;background:#101010;flex:0 0 180px;margin:0 3px;
-    }
-    .horizon-sphere{position:absolute;inset:0;transition:transform .15s linear;will-change:transform}
-    .sky{position:absolute;top:0;height:50%;width:100%;background:#0091ea}
-    .ground{position:absolute;bottom:0;height:50%;width:100%;background:#7a5a4f}
-
-    .pitch-ladder{position:absolute;inset:0}
-    .pitch-line{position:absolute;left:50%;transform:translateX(-50%);height:1px;background:#fff}
-    .pitch-line[data-deg="10"],.pitch-line[data-deg="-10"]{width:70px}
-    .pitch-line[data-deg="20"],.pitch-line[data-deg="-20"]{width:50px}
-    .pitch-label{position:absolute;top:-9px;font-size:.6rem}
-    .pitch-label-left{left:-22px}.pitch-label-right{right:-22px}
-
-    .roll-scale-container{position:absolute;inset:0;transition:transform .15s linear}
-    .roll-pointer{position:absolute;top:5px;left:50%;transform:translateX(-50%);width:0;height:0;
-      border-left:8px solid transparent;border-right:8px solid transparent;border-top:8px solid #f1c40f}
-    .roll-mark{position:absolute;top:22px;left:50%;width:2px;height:8px;background:#fff;transform-origin:0 88px}
-    .roll-mark.thirty{height:12px}
-    .roll-mark.fortyfive{width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:10px solid #fff;background:transparent;transform:translate(-50%,-50%)}
-
-    /* Center airplane / velocity cue */
-    .static-plane-symbol{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:78px;height:24px}
-    .static-plane-symbol svg{width:100%;height:100%;stroke:#f1c40f;stroke-width:3;fill:none}
-
-    /* --- Toolbar Recall Buttons --- */
-    #airport-recall-btn, #aircraft-recall-btn { display: none; font-size: 1.1rem; position: relative; }
-    #airport-recall-btn.visible, #aircraft-recall-btn.visible { display: inline-block; }
-    #airport-recall-btn.palpitate, #aircraft-recall-btn.palpitate { animation: palpitate 0.5s ease-in-out 2; }
-    @keyframes palpitate { 0%,100%{ transform:scale(1); color:#00a8ff } 50%{ transform:scale(1.3); color:#fff } }
-
-    /* --- Active ATC markers --- */
-    @keyframes atc-pulse { 0%{ box-shadow:0 0 0 0 rgba(220,53,69,.7) } 70%{ box-shadow:0 0 0 10px rgba(220,53,69,0) } 100%{ box-shadow:0 0 0 0 rgba(220,53,69,0) } }
-    @keyframes atc-breathe { 0%{ transform:scale(.95); opacity:.6 } 50%{ transform:scale(1.4); opacity:.9 } 100%{ transform:scale(.95); opacity:.6 } }
-    .atc-active-marker { width:15px; height:15px; background:#dc3545; border-radius:50%; border:2px solid #fff; cursor:pointer; animation: atc-pulse 2s infinite; display:grid; place-items:center; }
-    .atc-approach-active::before { content:''; grid-area:1 / 1; width:250%; height:250%; border-radius:50%; background:rgba(240,173,78,.8); z-index:-1; animation: atc-breathe 4s ease-in-out infinite; }
-  `;
-
-  const style = document.createElement('style');
-  style.id = styleId;
-  style.type = 'text/css';
-  style.appendChild(document.createTextNode(css));
-  document.head.appendChild(style);
-}
-
 
     // --- NEW: Fetch Airport Coordinate Data ---
     async function fetchAirportsData() {
@@ -680,47 +786,224 @@ function injectCustomStyles() {
     }
 
     /**
-     * --- [NEW] Updates the dynamic PFD elements based on flight data.
+     * --- [NEW] Initializes the static SVG PFD by generating its dynamic elements like tapes and ladders.
      */
-    function updatePfdDisplay(flightData){
-  const pfd = document.getElementById('pfd-container');
-  if(!pfd) return;
+    function initializeStaticPfdDisplay() {
+        // --- CONSTANTS ---
+        const PITCH_SCALE = 8;
+        const MIN_SPEED = 0;
+        const MAX_SPEED = 999;
+        const MIN_ALTITUDE = -1000;
+        const MAX_ALTITUDE = 50000;
+        const SVG_NS = "http://www.w3.org/2000/svg";
+        const SPEED_SCALE = 7; 
+        const SPEED_CENTER_Y = 238;
+        const SPEED_REF_VALUE = 120; // Static reference value
+        const ALTITUDE_SCALE = 0.7;
+        const ALTITUDE_CENTER_Y = 234;
+        const ALTITUDE_REF_VALUE = 0; // Static reference value
+        const REEL_SPACING = 30;
+        const HEADING_SCALE = 5;
+        const HEADING_CENTER_X = 406;
+        const HEADING_REF_VALUE = 0; // Static reference value
 
-  // elements
-  const horizonSphere   = pfd.querySelector('.horizon-sphere');
-  const rollScale       = pfd.querySelector('.roll-scale-container');
-  const speedStrip      = pfd.querySelector('#speed-tape .tape-strip');
-  const altStrip        = pfd.querySelector('#alt-tape .tape-strip');
-  const speedReadout    = pfd.querySelector('#speed-tape .tape-readout');
-  const altReadout      = pfd.querySelector('#alt-tape .tape-readout');
+        // --- DOM ELEMENT REFERENCES ---
+        const attitudeGroup = document.getElementById('attitude_group');
+        const speedTapeGroup = document.getElementById('speed_tape_group');
+        const altitudeTapeGroup = document.getElementById('altitude_tape_group');
+        const tensReelGroup = document.getElementById('altitude_tens_reel_group');
+        const headingTapeGroup = document.getElementById('heading_tape_group');
 
-  // data
-  const speed = Math.max(0, Number(flightData.speed)||0);
-  const altitude = Math.max(0, Number(flightData.altitude)||0);
-  const vs = Number(flightData.verticalSpeed)||0;
-  const roll = Number(flightData.roll)||0;    // (0 if you don’t have roll yet)
-  
-  /* Scale tuned for 180px PFD */
-  const PX_PER_KT  = 2.2;      // major every 20 kts, readable window
-  const PX_PER_FT  = 0.08;     // major every 500 ft on the tape
-  const PITCH_PX   = 4.5;      // px per pitch degree inside the sphere
+        // Ensure elements exist before proceeding
+        if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !tensReelGroup || !headingTapeGroup) {
+            console.error("PFD SVG elements not found in the DOM. Cannot initialize display.");
+            return;
+        }
 
-  // map VS to pitch deg (≈ 3° per 1000 fpm, clamped)
-  const pitchDeg = Math.max(-20, Math.min(20, vs / 300));
+        // --- GENERATION FUNCTIONS ---
+        function generateAttitudeIndicators() {
+            const centerX = 401.5;
+            const centerY = 312.5;
+            for (let p = -90; p <= 90; p += 2.5) {
+                if (p === 0) continue; 
+                const y = centerY - (p * PITCH_SCALE);
+                const isMajor = (p % 10 === 0);
+                const isMinor = (p % 5 === 0);
+                if (isMajor || isMinor) {
+                    const lineWidth = isMajor ? 80 : 40;
+                    const line = document.createElementNS(SVG_NS, 'line');
+                    line.setAttribute('x1', centerX - lineWidth / 2);
+                    line.setAttribute('x2', centerX + lineWidth / 2);
+                    line.setAttribute('y1', y);
+                    line.setAttribute('y2', y);
+                    line.setAttribute('stroke', 'white');
+                    line.setAttribute('stroke-width', 2);
+                    attitudeGroup.appendChild(line);
+                    if (isMajor) {
+                        const textLeft = document.createElementNS(SVG_NS, 'text');
+                        textLeft.setAttribute('x', centerX - lineWidth / 2 - 10);
+                        textLeft.setAttribute('y', y + 5);
+                        textLeft.setAttribute('fill', 'white');
+                        textLeft.setAttribute('font-size', '18');
+                        textLeft.setAttribute('text-anchor', 'end');
+                        textLeft.textContent = Math.abs(p);
+                        attitudeGroup.appendChild(textLeft);
+                        const textRight = document.createElementNS(SVG_NS, 'text');
+                        textRight.setAttribute('x', centerX + lineWidth / 2 + 10);
+                        textRight.setAttribute('y', y + 5);
+                        textRight.setAttribute('fill', 'white');
+                        textRight.setAttribute('font-size', '18');
+                        textRight.setAttribute('text-anchor', 'start');
+                        textRight.textContent = Math.abs(p);
+                        attitudeGroup.appendChild(textRight);
+                    }
+                }
+            }
+        }
 
-  // move/rotate horizon & roll scale
-  if(horizonSphere) horizonSphere.style.transform = `translateY(${ -pitchDeg * PITCH_PX }px) rotate(${roll}deg)`;
-  if(rollScale)     rollScale.style.transform     = `rotate(${roll}deg)`;
+        function generateSpeedTape() {
+            speedTapeGroup.innerHTML = ''; 
+            for (let s = MIN_SPEED; s <= MAX_SPEED; s += 5) {
+                const yPos = SPEED_CENTER_Y - (s - SPEED_REF_VALUE) * SPEED_SCALE;
+                const tick = document.createElementNS(SVG_NS, 'line');
+                tick.setAttribute('y1', yPos);
+                tick.setAttribute('y2', yPos);
+                tick.setAttribute('stroke', 'white');
+                tick.setAttribute('stroke-width', '2');
+                if (s % 10 === 0) {
+                    tick.setAttribute('x1', '67');
+                    tick.setAttribute('x2', '52');
+                    const text = document.createElementNS(SVG_NS, 'text');
+                    text.setAttribute('x', '37');
+                    text.setAttribute('y', yPos + 5); 
+                    text.setAttribute('fill', 'white');
+                    text.setAttribute('font-size', '18');
+                    text.setAttribute('text-anchor', 'middle');
+                    text.textContent = s;
+                    speedTapeGroup.appendChild(text);
+                } else {
+                    tick.setAttribute('x1', '67');
+                    tick.setAttribute('x2', '60');
+                }
+                speedTapeGroup.appendChild(tick);
+            }
+        }
 
-  // move tapes (center current value at window)
-  if(speedStrip) speedStrip.style.transform = `translateY(calc(50% - ${speed * PX_PER_KT}px))`;
-  if(altStrip)   altStrip.style.transform   = `translateY(calc(50% - ${altitude * PX_PER_FT}px))`;
+        function generateAltitudeTape() {
+            altitudeTapeGroup.innerHTML = '';
+            for (let alt = MIN_ALTITUDE; alt <= MAX_ALTITUDE; alt += 20) {
+                const yPos = ALTITUDE_CENTER_Y - (alt - ALTITUDE_REF_VALUE) * ALTITUDE_SCALE;
+                const tick = document.createElementNS(SVG_NS, 'line');
+                tick.setAttribute('y1', yPos);
+                tick.setAttribute('y2', yPos);
+                tick.setAttribute('stroke', 'white');
+                tick.setAttribute('stroke-width', '2');
+                tick.setAttribute('x1', '72'); 
+                if (alt % 100 === 0) {
+                    tick.setAttribute('x2', '52'); 
+                    const text = document.createElementNS(SVG_NS, 'text');
+                    text.setAttribute('x', '25'); 
+                    text.setAttribute('y', yPos + 5); 
+                    text.setAttribute('fill', 'white');
+                    text.setAttribute('font-size', '18');
+                    text.setAttribute('text-anchor', 'middle');
+                    text.textContent = alt / 100;
+                    altitudeTapeGroup.appendChild(text);
+                } else {
+                    tick.setAttribute('x2', '62'); 
+                }
+                altitudeTapeGroup.appendChild(tick);
+            }
+        }
 
-  // digital windows (realistic rounding)
-  if(speedReadout) speedReadout.textContent = Math.round(speed);        // white (via CSS)
-  if(altReadout)   altReadout.textContent   = Math.round(altitude/10)*10; // cyan (via CSS)
-}
+        function generateAltitudeTensReel() {
+            tensReelGroup.innerHTML = '';
+            const center_y = 316; 
+            for (let i = -5; i < 10; i++) {
+                let value = (i * 20);
+                value = (value < 0) ? 100 + (value % 100) : value % 100;
+                const displayValue = String(value).padStart(2, '0');
+                const yPos = center_y + (i * REEL_SPACING);
+                const text = document.createElementNS(SVG_NS, 'text');
+                text.setAttribute('x', '745'); 
+                text.setAttribute('y', yPos);
+                text.setAttribute('fill', '#00FF00');
+                text.setAttribute('font-size', '32');
+                text.setAttribute('font-weight', 'bold');
+                text.textContent = displayValue;
+                tensReelGroup.appendChild(text);
+            }
+        }
 
+        function generateHeadingTape() {
+            headingTapeGroup.innerHTML = '';
+            const y_text = 650;
+            const y_tick_top = 620;
+            const y_tick_bottom_major = 635;
+            const y_tick_bottom_minor = 628;
+            for (let h = -360; h <= 720; h += 5) {
+                const xPos = HEADING_CENTER_X + (h - HEADING_REF_VALUE) * HEADING_SCALE;
+                const normalizedH = (h + 360) % 360;
+                if (normalizedH % 90 === 0) continue; 
+                const tick = document.createElementNS(SVG_NS, 'line');
+                tick.setAttribute('x1', xPos);
+                tick.setAttribute('x2', xPos);
+                tick.setAttribute('stroke', 'white');
+                tick.setAttribute('stroke-width', '1.5');
+                tick.setAttribute('y1', y_tick_top);
+                tick.setAttribute('y2', (h % 10 === 0) ? y_tick_bottom_major : y_tick_bottom_minor);
+                headingTapeGroup.appendChild(tick);
+            }
+            for (let h = 0; h < 360; h += 10) {
+                for (let offset of [-360, 0, 360]) {
+                    const currentH = h + offset;
+                    const xPos = HEADING_CENTER_X + (currentH - HEADING_REF_VALUE) * HEADING_SCALE;
+                    const text = document.createElementNS(SVG_NS, 'text');
+                    text.setAttribute('x', xPos);
+                    text.setAttribute('y', y_text);
+                    text.setAttribute('fill', 'white');
+                    text.setAttribute('font-size', '16');
+                    text.setAttribute('text-anchor', 'middle');
+                    let displayVal = '';
+                    switch (h) {
+                        case 0:   displayVal = 'N'; break;
+                        case 90:  displayVal = 'E'; break;
+                        case 180: displayVal = 'S'; break;
+                        case 270: displayVal = 'W'; break;
+                        default:  if (h % 30 === 0) { displayVal = h / 10; }
+                    }
+                    if (displayVal !== '') {
+                        text.textContent = displayVal;
+                        headingTapeGroup.appendChild(text);
+                    }
+                }
+            }
+        }
+        
+        // --- INITIAL RENDER ---
+        generateAttitudeIndicators();
+        generateSpeedTape();
+        generateAltitudeTape();
+        generateAltitudeTensReel();
+        generateHeadingTape();
+
+        // Set static positions for tapes (you can change these values)
+        const staticSpeed = 150;
+        const staticAltitude = 3000;
+        const staticHeading = 360;
+        
+        document.getElementById('speed_readout').textContent = staticSpeed;
+        const speedYOffset = (staticSpeed - SPEED_REF_VALUE) * SPEED_SCALE;
+        speedTapeGroup.setAttribute('transform', `translate(0, ${speedYOffset})`);
+
+        document.getElementById('altitude_readout_hundreds').textContent = Math.floor(staticAltitude / 100);
+        const tapeYOffset = staticAltitude * ALTITUDE_SCALE;
+        altitudeTapeGroup.setAttribute('transform', `translate(0, ${tapeYOffset})`);
+
+        document.getElementById('heading_readout').textContent = String(staticHeading % 360).padStart(3, '0');
+        const xOffset = -(staticHeading - HEADING_REF_VALUE) * HEADING_SCALE;
+        headingTapeGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
+    }
 
     /**
      * --- [REVAMPED] Creates the rich HTML content for the airport information window.
@@ -1516,9 +1799,6 @@ function injectCustomStyles() {
     /**
      * --- [COMPLETELY REWRITTEN] Generates the "Unified Flight Display" with a dynamic PFD.
      */
-    /**
-     * --- [COMPLETELY REWRITTEN] Generates the "Unified Flight Display" with a dynamic PFD.
-     */
     function populateAircraftInfoWindow(baseProps, plan) {
         const contentEl = document.getElementById('aircraft-window-content');
 
@@ -1586,38 +1866,133 @@ function injectCustomStyles() {
                 </div>
 
                 <div class="unified-display-main">
-                    <div id="pfd-container" class="pfd-container">
-                        <div id="speed-tape" class="pfd-tape">
-                            <div class="tape-strip"></div>
-                            <div class="tape-marker-window"></div>
-                            <div class="tape-pointer"></div>
-                            <div class="tape-readout">0</div>
-                        </div>
-
-                        <div class="attitude-indicator">
-                            <div class="horizon-sphere">
-                                <div class="sky"></div>
-                                <div class="ground"></div>
-                                <div class="pitch-ladder"></div>
-                            </div>
-                            <div class="roll-scale-container">
-                                <div class="roll-pointer"></div>
-                                <div class="slip-skid-indicator"></div>
-                                <div class="roll-scale-marks"></div>
-                            </div>
-                            <div class="static-plane-symbol">
-                                <svg viewBox="0 0 120 40">
-                                    <path d="M 0 20 L 45 20 L 45 15 L 55 15 L 55 25 L 45 25 L 45 20 M 120 20 L 75 20 L 75 15 L 65 15 L 65 25 L 75 25 L 75 20" />
+                    <div id="pfd-container">
+                        <svg width="787" height="695" viewBox="0 0 787 695" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <g id="PFD" clip-path="url(#clip0_1_2890)">
+                                <g id="attitude_group">
+                                    <rect id="Sky" x="-186" y="-222" width="1121" height="532" fill="#0596FF"/>
+                                    <rect id="Ground" x="-138" y="307" width="1024" height="527" fill="#9A4710"/>
+                                    </g>
+                                <rect id="Rectangle 1" x="-6" y="5" width="191" height="566" fill="#030309"/>
+                                <rect id="Rectangle 9" x="609" width="185" height="566" fill="#030309"/>
+                                <path id="Rectangle 2" d="M273.905 84.9424L180.983 183.181L-23 -9.76114L69.9218 -108L273.905 84.9424Z" fill="#030309"/>
+                                <path id="Rectangle 8" d="M303.215 77.0814L187.591 147.198L42 -92.8829L157.624 -163L303.215 77.0814Z" fill="#030309"/>
+                                <path id="Rectangle 7" d="M372.606 54.0171L244.59 97.5721L154.152 -168.242L282.169 -211.796L372.606 54.0171Z" fill="#030309"/>
+                                <rect id="Rectangle 10" x="25" y="487.905" width="168.696" height="262.947" transform="rotate(-31.8041 25 487.905)" fill="#030309"/>
+                                <rect id="Rectangle 14" width="67.3639" height="53.5561" transform="matrix(-0.972506 0.23288 0.23288 0.972506 482.512 537)" fill="#030309"/>
+                                <rect id="Rectangle 19" width="80.8905" height="53.5561" transform="matrix(-0.999899 0.0142423 0.0142423 0.999899 442.882 549.506)" fill="#030309"/>
+                                <rect id="Rectangle 18" width="46.2297" height="53.5561" transform="matrix(-0.988103 -0.153795 -0.153795 0.988103 369.916 549.11)" fill="#030309"/>
+                                <rect id="Rectangle 17" width="46.2297" height="53.5561" transform="matrix(-0.940186 -0.340662 -0.340662 0.940186 337.709 546.749)" fill="#030309"/>
+                                <rect id="Rectangle 16" width="46.2297" height="53.5561" transform="matrix(-0.940186 -0.340662 -0.340662 0.940186 299.709 531.749)" fill="#030309"/>
+                                <rect id="Rectangle 15" x="387" y="587.269" width="168.696" height="262.947" transform="rotate(-27.6434 387 587.269)" fill="#030309"/>
+                                <rect id="Rectangle 13" x="86" y="584.104" width="168.696" height="262.947" transform="rotate(-46.8648 86 584.104)" fill="#030309"/>
+                                <rect id="Rectangle 11" x="527" y="532.777" width="168.696" height="262.947" transform="rotate(-51.9135 527 532.777)" fill="#030309"/>
+                                <rect id="Rectangle 12" x="503" y="527.247" width="168.696" height="262.947" transform="rotate(-31.9408 503 527.247)" fill="#030309"/>
+                                <rect id="Rectangle 6" x="456.715" y="60.2651" width="131.991" height="278.153" transform="rotate(-177.303 456.715 60.2651)" fill="#030309"/>
+                                <rect id="Rectangle 5" x="525.118" y="90.4898" width="131.991" height="274.627" transform="rotate(-158.368 525.118 90.4898)" fill="#030309"/>
+                                <rect id="Rectangle 4" x="570.695" y="127.633" width="109.94" height="223.222" transform="rotate(-142.051 570.695 127.633)" fill="#030309"/>
+                                <rect id="Rectangle 3" x="613.292" y="189.098" width="99.2768" height="223.222" transform="rotate(-128.125 613.292 189.098)" fill="#030309"/>
+                                <path id="Vector 3" d="M609 183V422.5" stroke="#E7E6E8" stroke-width="4"/>
+                                <path id="Vector 1" d="M185.5 425.5L185 180" stroke="#DBDBDC" stroke-width="4"/>
+                                <path id="Vector 2" d="M185 181.502C185 181.502 269.8 52.0936 397 56.0907C524.2 60.0879 576.603 135.189 609 184" stroke="#DBDBDC" stroke-width="4"/>
+                                <path id="Vector 4" d="M608.5 424.5C608.5 424.5 557 548 396 550.5C235 553 185 424.5 185 424.5" stroke="#DBDBDC" stroke-width="4"/>
+                                <path id="Polygon 1" d="M396.252 65.2333L377.848 35.8138L414.647 35.8079L396.252 65.2333Z" fill="#E7F013"/>
+                                <path id="Polygon 2" d="M407.919 38.9482L396.431 59.4193L384.446 38.7244L407.919 38.9482Z" fill="#030309"/>
+                                <path id="Vector 6" d="M307 76L302 64.5L312 60.5L317 71" stroke="#E7E6E8" stroke-width="4"/>
+                                <path id="Vector 7" d="M279.5 91L268.5 73.5L259 79L269.5 97.5" stroke="#E7E6E8" stroke-width="4"/>
+                                <path id="Vector 8" d="M225 135L206.5 117" stroke="#E7E6E8" stroke-width="4"/>
+                                <path id="Vector 9" d="M477.153 71.5794L479.366 59.3018L489.886 61.5697L488.226 73.0218" stroke="#E7E6E8" stroke-width="4"/>
+                                <path id="Vector 10" d="M347.928 61.4888L346.352 49.0483L357.072 48.0112L358.929 59.4917" stroke="#E7E6E8" stroke-width="4"/>
+                                <path id="Vector 11" d="M435.153 59.5794L437.366 47.3018L447.886 49.5697L446.226 61.0218" stroke="#E7E6E8" stroke-width="4"/>
+                                <path id="Vector 12" d="M514.032 86.1754L522.756 72.2658L533.956 78.0405L525.5 93.5" stroke="#E7E6E8" stroke-width="4"/>
+                                <path id="Vector 13" d="M569.5 131.5L585.5 116" stroke="#E7E6E8" stroke-width="4"/>
+                                <path id="Vector 15" d="M183.5 193.5L173 187" stroke="#029705" stroke-width="4"/>
+                                <path id="Vector 16" d="M184 203L173.5 196.5" stroke="#029705" stroke-width="4"/>
+                                <path id="Vector 17" d="M610 193.5L619 188" stroke="#029705" stroke-width="3"/>
+                                <path id="Vector 18" d="M610 199.5L619 194" stroke="#029705" stroke-width="3"/>
+                                <line id="Line 1" x1="184" y1="211" x2="184" y2="184" stroke="#DBDBDC" stroke-width="2"/>
+                                <line id="Line 2" x1="610" y1="211" x2="610" y2="184" stroke="#DBDBDC" stroke-width="2"/>
+                                <rect id="altitude_bg" x="675" y="73" width="72" height="476" fill="#76767A"/>
+                                <svg x="675" y="73" width="72" height="476">
+                                    <g id="altitude_tape_group"></g>
                                 </svg>
-                            </div>
-                        </div>
-                        
-                        <div id="alt-tape" class="pfd-tape">
-                            <div class="tape-strip"></div>
-                            <div class="tape-marker-window"></div>
-                            <div class="tape-pointer"></div>
-                            <div class="tape-readout">0</div>
-                        </div>
+                                <g id="altitude_indicator_static">
+                                    <rect id="altitude_1" x="675" y="280" width="73" height="49" fill="#030309"/>
+                                    <text id="altitude_readout_hundreds" x="740" y="316" fill="#00FF00" font-size="32" text-anchor="end" font-weight="bold">0</text>
+                                    <g id="altitude_tens_reel_container" clip-path="url(#tensReelClip)">
+                                        <g id="altitude_tens_reel_group"></g>
+                                    </g>
+                                    <line id="Line 8" x1="669" y1="307" x2="618" y2="307" stroke="#DDDF07" stroke-width="8"/>
+                                </g>
+                                <path id="limit" d="M636 336.08L621.413 307.511L650.858 307.651L636 336.08Z" fill="#C477C6"/>
+                                <path id="limit2" d="M636 279L650.722 307.5H621.278L636 279Z" fill="#C477C6"/>
+                                <path id="limit3" d="M636 285L643.794 303H628.206L636 285Z" fill="#100010"/>
+                                <path id="limit4" d="M636.191 329.14L628.276 311.242L643.534 310.999L636.191 329.14Z" fill="#030309"/>
+                                <line id="Line 6" x1="746.5" y1="263" x2="746.5" y2="281" stroke="#ECED06" stroke-width="3"/>
+                                <line id="Line 4" x1="746.5" y1="329" x2="746.5" y2="347" stroke="#ECED06" stroke-width="3"/>
+                                <path id="Ellipse 1" d="M636 481C636 484.866 632.866 488 629 488C625.134 488 622 484.866 622 481C622 477.134 625.134 474 629 474C632.866 474 636 477.134 636 481Z" fill="#D9D9D9"/>
+                                <path id="Ellipse 4" d="M636 147C636 150.866 632.866 154 629 154C625.134 154 622 150.866 622 147C622 143.134 625.134 140 629 140C632.866 140 636 143.134 636 147Z" fill="#D9D9D9"/>
+                                <g id="Ellipse 3">
+                                    <path d="M636 229C636 232.866 632.866 236 629 236C625.134 236 622 232.866 622 229C622 225.134 625.134 222 629 222C632.866 222 636 225.134 636 229Z" fill="#D9D9D9"/>
+                                    <path d="M636 395C636 398.866 632.866 402 629 402C625.134 402 622 398.866 622 395C622 391.134 625.134 388 629 388C632.866 388 636 391.134 636 395Z" fill="#D9D9D9"/>
+                                </g>
+                                <rect id="speed" x="28" y="73" width="97" height="477" fill="#76767A"/>
+                                <svg x="28" y="73" width="97" height="477">
+                                    <g id="speed_tape_group"></g>
+                                </svg>
+                                <g id="speed_indicator_static">
+                                    <path id="Polygon 9" d="M128.036 311.591L150.451 301.561L150.513 321.482L128.036 311.591Z" fill="#FDFD03"/>
+                                    <path id="Vector 20" d="M137 311H96.5" stroke="#FDFD03" stroke-width="4"/>
+                                    <rect x="50" y="296" width="45" height="30" fill="black" stroke="#999" stroke-width="1"/>
+                                    <text id="speed_readout" x="72.5" y="318" fill="#00FF00" font-size="20" text-anchor="middle" font-weight="bold">0</text>
+                                </g>
+                                <path id="Vector 19" d="M19.5 311H31" stroke="#FDFD03" stroke-width="4"/>
+                                <path id="Vector 21" d="M29 73H151.5" stroke="#E7E6E8" stroke-width="4"/>
+                                <path id="Vector 22" d="M28 549H151.5" stroke="#E7E6E8" stroke-width="4"/>
+                                <path id="Vector 23" d="M672.5 73H774" stroke="#E7E6E8" stroke-width="4"/>
+                                <path id="Vector 24" d="M672 548.5H773" stroke="#E7E6E8" stroke-width="4"/>
+                                <path id="Vector 25" d="M745 549.5L746 347" stroke="#E7E6E8" stroke-width="3"/>
+                                <path id="Vector 26" d="M745 73V265" stroke="#E7E6E8" stroke-width="3"/>
+                                <g id="wings">
+                                    <rect id="Rectangle 21" x="280" y="315" width="11" height="25" fill="#030309"/>
+                                    <rect id="Rectangle 23" x="522" y="304" width="71" height="12" fill="#030309"/>
+                                    <rect id="Rectangle 22" x="512" y="305" width="13" height="35" fill="#030309"/>
+                                    <rect id="Rectangle 20" x="208" y="304" width="83" height="13" fill="#030309"/>
+                                    <g id="wing">
+                                        <path d="M278.591 316.857H208V304H291.608V340H278.591V316.857Z" stroke="#FEFE03" stroke-width="3"/>
+                                        <path d="M511.392 340V304H595V316.857H524.409V340H511.392Z" stroke="#FEFE03" stroke-width="3"/>
+                                    </g>
+                                </g>
+                                <g id="middle">
+                                    <rect id="middle_2" x="393" y="304" width="17" height="17" fill="#0CC704"/>
+                                    <rect id="Rectangle 24" x="395" y="307" width="13" height="11" fill="#030309"/>
+                                </g>
+                                <rect id="Rectangle 25" y="571" width="787" height="140" fill="#030309"/>
+                                <rect id="header" x="243" y="599" width="326" height="66" fill="#76767A"/>
+                                <g id="heading_indicator">
+                                    <g id="heading_tape_container" clip-path="url(#headingClip)">
+                                        <g id="heading_tape_group"></g>
+                                    </g>
+                                    <g id="heading_static_elements">
+                                        <line x1="406" y1="620" x2="406" y2="635" stroke="#FDFD03" stroke-width="3"/>
+                                        <rect x="381" y="599" width="50" height="20" fill="black" stroke="#FFFFFF" stroke-width="1"/>
+                                        <text id="heading_readout" x="406" y="615" fill="#00FF00" font-size="16" text-anchor="middle" font-weight="bold">000</text>
+                                    </g>
+                                </g>
+                                <path id="Vector 27" d="M243 599V667" stroke="#FCFCFF" stroke-width="4"/>
+                                <g id="Line 5">
+                                    <line id="Line 5_2" x1="745" y1="264.5" x2="787" y2="264.5" stroke="#ECED06" stroke-width="3"/>
+                                </g>
+                                <line id="Line 6_2" x1="671" y1="279.5" x2="748" y2="279.5" stroke="#ECED06" stroke-width="3"/>
+                                <line id="Line 7" x1="671" y1="329.5" x2="748" y2="329.5" stroke="#ECED06" stroke-width="3"/>
+                                <line id="Line 3" x1="746" y1="345.5" x2="786" y2="345.5" stroke="#ECED06" stroke-width="3"/>
+                            </g>
+                            <defs>
+                                <clipPath id="clip0_1_2890"><rect width="787" height="695" fill="white"/></clipPath>
+                                <clipPath id="tensReelClip"><rect x="732" y="269" width="50" height="75"/></clipPath>
+                                <clipPath id="headingClip"><rect x="243" y="620" width="326" height="45"/></clipPath>
+                            </defs>
+                        </svg>
                     </div>
                 </div>
 
@@ -1630,61 +2005,8 @@ function injectCustomStyles() {
             </div>
         `;
         
-        // --- Generate PFD Markings ---
-        const speedStrip = contentEl.querySelector('#speed-tape .tape-strip');
-        let speedHtml = '';
-        for (let i = 0; i <= 800; i += 10) {
-            const isMajor = i % 20 === 0;
-            if (isMajor) {
-                speedHtml += `<div class="tape-line major" style="bottom: ${i * 5}px;"></div><div class="tape-line-label" style="top: calc(100% - ${i * 5}px);">${i}</div>`;
-            } else {
-                speedHtml += `<div class="tape-line" style="bottom: ${i * 5}px;"></div>`;
-            }
-        }
-        speedStrip.innerHTML = speedHtml;
-
-        const altStrip = contentEl.querySelector('#alt-tape .tape-strip');
-        let altHtml = '';
-        for (let i = -10; i <= 600; i++) { // i represents hundreds of feet
-            const isMajor = i % 5 === 0;
-            const altitude = i * 100;
-            if (isMajor) {
-                altHtml += `<div class="tape-line major" style="bottom: ${altitude * 0.25}px;"></div><div class="tape-line-label" style="top: calc(100% - ${altitude * 0.25}px);">${altitude}</div>`;
-            } else {
-                altHtml += `<div class="tape-line" style="bottom: ${altitude * 0.25}px;"></div>`;
-            }
-        }
-        altStrip.innerHTML = altHtml;
-        
-        const pitchLadder = contentEl.querySelector('.pitch-ladder');
-        let pitchHtml = '';
-        [-20, -15, -10, -5, 5, 10, 15, 20].forEach(deg => {
-            let line = `<div class="pitch-line" data-deg="${deg}" style="top: calc(50% - ${deg * 10}px);">`;
-            if (Math.abs(deg) === 10 || Math.abs(deg) === 20) {
-                line += `<span class="pitch-label pitch-label-left">${Math.abs(deg)}</span><span class="pitch-label pitch-label-right">${Math.abs(deg)}</span>`;
-            }
-            line += `</div>`;
-            pitchHtml += line;
-        });
-        pitchLadder.innerHTML = pitchHtml;
-
-        const rollMarks = contentEl.querySelector('.roll-scale-marks');
-        let rollHtml = '';
-        [-60, -45, -30, -20, -10, 10, 20, 30, 45, 60].forEach(deg => {
-            let markClass = 'roll-mark';
-            if (Math.abs(deg) === 30) markClass += ' thirty';
-            if (Math.abs(deg) === 45) markClass += ' fortyfive';
-            rollHtml += `<div class="${markClass}" style="transform: rotate(${deg}deg);"></div>`;
-        });
-        rollMarks.innerHTML = rollHtml;
-
-        // --- Call the update function to set initial state ---
-        updatePfdDisplay({
-            altitude: baseProps.altitude,
-            speed: baseProps.speed,
-            verticalSpeed: baseProps.verticalSpeed,
-            heading: baseProps.heading,
-        });
+        // --- Call the function to set initial static state ---
+        initializeStaticPfdDisplay();
     }
 
 
