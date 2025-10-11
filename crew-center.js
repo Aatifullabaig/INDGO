@@ -1843,14 +1843,7 @@ function updatePfdDisplay(pfdData) {
             if (!document.getElementById('aircraft-info-window')) {
                  const windowHtml = `
                     <div id="aircraft-info-window" class="info-window">
-                        <div class="info-window-header">
-                            <h3 id="aircraft-window-title"></h3>
-                            <div class="info-window-actions">
-                                <button id="aircraft-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
-                                <button id="aircraft-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                        </div>
-                        <div id="aircraft-window-content" class="info-window-content"></div>
+                        <div id="aircraft-window-content-wrapper"></div>
                     </div>
                 `;
                 viewContainer.insertAdjacentHTML('beforeend', windowHtml);
@@ -2088,13 +2081,9 @@ function updatePfdDisplay(pfdData) {
         aircraftInfoWindow.classList.add('visible');
         aircraftInfoWindowRecallBtn.classList.remove('visible');
     
-        // --- START: FIX ---
         // The redesigned "unified display" is self-contained and replaces the entire window content.
-        // We will target the main window element directly, removing the old, redundant header 
-        // and preventing layout conflicts.
         const windowEl = document.getElementById('aircraft-info-window');
         windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
-        // --- END: FIX ---
     
         try {
             // 1. Fetch plan and route data in parallel
@@ -2180,10 +2169,7 @@ function updatePfdDisplay(pfdData) {
      * --- [REDESIGNED] Generates the "Unified Flight Display" with a new creative header and PFD.
      */
     function populateAircraftInfoWindow(baseProps, plan) {
-        // --- START: FIX ---
-        // Target the main window element, as the new UI is a complete replacement for the window's content.
         const windowEl = document.getElementById('aircraft-info-window');
-        // --- END: FIX ---
     
         // --- Data Extraction ---
         const allWaypoints = [];
@@ -2201,7 +2187,6 @@ function updatePfdDisplay(pfdData) {
         const arrivalIcao = hasPlan ? allWaypoints[allWaypoints.length - 1]?.name : 'N/A';
     
         // --- HTML Structure for the new layout ---
-        // This HTML is now injected directly into the main window element.
         windowEl.innerHTML = `
             <div class="unified-display-container">
                 <div class="unified-display-header">
@@ -2219,8 +2204,8 @@ function updatePfdDisplay(pfdData) {
                     <div class="header-actions">
                         <i class="fa-solid fa-plane-arrival"></i>
                         <span class="icao" id="header-arr-icao">${arrivalIcao}</span>
-                        <button id="aircraft-window-hide-btn-new" class="aircraft-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
-                        <button id="aircraft-window-close-btn-new" class="aircraft-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                        <button class="aircraft-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
+                        <button class="aircraft-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                     <div class="flight-phase-indicator" id="flight-phase-indicator">
                         </div>
