@@ -952,79 +952,87 @@ document.addEventListener('DOMContentLoaded', async () => {
         generateHeadingTape();
     }
     
- /**
- * --- [UPGRADED] Updates the PFD with live data, now including simulated roll.
- * --- [UPGRADED] Updates the PFD with live data, includes stable roll without sign snaps.
- * @param {object} pfdData - The position object from the live flight data.
- */
 /**
  * Stable PFD update with robust turn-rate & hysteresis so banks don't "drift level" mid-turn.
- * - Uses sliding window linear regression (~0.8s) to estimate turn rate (deg/s).
- * - Latches "turning" with hysteresis (onThresh > offThresh) to avoid dropouts.
- * - Pre-negates roll once for SVG (prevents "--10" string issue).
+ * - Regression over ~2.4s, but falls back to dH/dt if the buffer is thin.
+ * - Accepts common aliases for heading/groundspeed so we don't accidentally gate turn-rate.
+ * - Soft decay toward level when unlatching instead of hard zeroing.
  */
 function updatePfdDisplay(pfdData) {
   if (!pfdData) return;
-  const { gs_kt = 0, alt_ft = 0, track_deg = 0, vs_fpm = 0 } = pfdData;
 
-  const attitudeGroup      = document.getElementById('attitude_group');
-  const speedTapeGroup     = document.getElementById('speed_tape_group');
-  const altitudeTapeGroup  = document.getElementById('altitude_tape_group');
-  const tensReelGroup      = document.getElementById('altitude_tens_reel_group');
-  const headingTapeGroup   = document.getElementById('heading_tape_group');
-  const speedReadout       = document.getElementById('speed_readout');
-  const altReadoutHund     = document.getElementById('altitude_readout_hundreds');
-  const headingReadout     = document.getElementById('heading_readout');
+  // ---- tolerate common key names ----
+  const gs_kt =
+    pfdData.gs_kt ??
+    pfdData.groundspeed_kts ??
+    pfdData.groundspeed ??
+    pfdData.gs ??
+    (pfdData.speed && (pfdData.speed.kt || pfdData.speed.kts)) ??
+    0;
+
+  const track_deg =
+    pfdData.track_deg ??
+    pfdData.heading_deg ??
+    pfdData.track ??
+    pfdData.hdg ??
+    0;
+
+  const alt_ft = pfdData.alt_ft ?? pfdData.altitude_ft ?? pfdData.altitude ?? 0;
+  const vs_fpm = pfdData.vs_fpm ?? pfdData.vertical_speed_fpm ?? pfdData.vs ?? 0;
+
+  const attitudeGroup     = document.getElementById('attitude_group');
+  const speedTapeGroup    = document.getElementById('speed_tape_group');
+  const altitudeTapeGroup = document.getElementById('altitude_tape_group');
+  const tensReelGroup     = document.getElementById('altitude_tens_reel_group');
+  const headingTapeGroup  = document.getElementById('heading_tape_group');
+  const speedReadout      = document.getElementById('speed_readout');
+  const altReadoutHund    = document.getElementById('altitude_readout_hundreds');
+  const headingReadout    = document.getElementById('heading_readout');
   if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !headingTapeGroup || !tensReelGroup) return;
 
-  // --- constants (tune if you want) ---
-  const WINDOW_SEC        = 0.8;   // regression window length
-  const LATCH_ON_TURN     = 0.35;  // deg/s needed to latch "turning"
-  const LATCH_OFF_TURN    = 0.18;  // deg/s to unlatch (smaller than ON for hysteresis)
-  const LATCH_HOLD_MS     = 350;   // once latched, keep at least this long even if rate dips
-  const MAX_BANK_DEG      = 35;    // clamp bank
-  const MAX_ROLL_RATE     = 45;    // deg/s slew limit for displayed roll
-  const MIN_GS_FOR_TURN   = 5;     // ignore turn rate near zero groundspeed
+  // ---- tunables ----
+  const WINDOW_SEC        = 2.4;  // longer window to survive ~1–2 Hz updates
+  const LATCH_ON_TURN     = 0.20; // deg/s to latch "turning"
+  const LATCH_OFF_TURN    = 0.10; // deg/s to unlatch
+  const LATCH_HOLD_MS     = 400;  // hold a bit to avoid chatter
+  const MAX_BANK_DEG      = 35;
+  const MAX_ROLL_RATE     = 60;   // display slew limit (deg/s)
+  const MIN_GS_FOR_TURN   = 1;    // basically always compute turn-rate
   const PITCH_LIMIT       = 25;
+  const DECAY_TO_LEVEL_DPS= 15;   // when unlatched, decay roll toward 0 at this rate
 
-  const now = performance.now(); // high-res time
+  const now = performance.now();
 
-  // --- init persistent state ---
+  // ---- persistent state ----
   if (!window.lastPfdState || typeof window.lastPfdState !== 'object') {
     window.lastPfdState = {
-      // continuous heading (no wrap), last sample time
       unwrapped: track_deg,
       lastTime: now,
-      // regression buffers
-      buf: [],            // [{t, hdg}] with t in seconds relative to 'now'
-      // roll display + latch
+      buf: [],                 // [{t, hdg}]
       rollDisp: 0,
       turning: false,
-      lastTurnLatchTs: 0
+      lastTurnLatchTs: 0,
+      prevUnwrapped: track_deg // for fallback dH/dt
     };
   }
   const S = window.lastPfdState;
 
-  // --- unwrap heading (keep continuous) ---
-  // compare to S.unwrapped%360 to get a wrapped delta then add
+  // ---- unwrap heading ----
   let delta = track_deg - (S.unwrapped % 360);
   if (delta > 180)  delta -= 360;
   if (delta < -180) delta += 360;
   const unwrapped = S.unwrapped + delta;
 
-  // --- feed sliding window (relative timestamps, recent first after we recompute) ---
-  // keep samples for ~WINDOW_SEC
+  // ---- sliding window ----
   const tNow = now / 1000;
-  // push current sample
   S.buf.push({ t: tNow, hdg: unwrapped });
-  // drop old samples
   const cutoff = tNow - WINDOW_SEC;
   while (S.buf.length && S.buf[0].t < cutoff) S.buf.shift();
 
-  // --- linear regression to estimate turn-rate (deg/s) ---
+  // ---- turn-rate estimate (deg/s) ----
   let turnRate = 0;
-  if (S.buf.length >= 2 && gs_kt > MIN_GS_FOR_TURN) {
-    // convert times to relative (improves numeric stability)
+  if (S.buf.length >= 3 && gs_kt > MIN_GS_FOR_TURN) {
+    // linear regression slope
     const t0 = S.buf[0].t;
     let sumT = 0, sumH = 0, sumTT = 0, sumTH = 0, n = S.buf.length;
     for (let i = 0; i < n; i++) {
@@ -1035,14 +1043,17 @@ function updatePfdDisplay(pfdData) {
       sumTT += ti * ti;
       sumTH += ti * hi;
     }
-    const denom = (n * sumTT - sumT * sumT);
+    const denom = n * sumTT - sumT * sumT;
     if (denom !== 0) {
-      const slope = (n * sumTH - sumT * sumH) / denom; // deg per second
-      turnRate = slope;
+      turnRate = (n * sumTH - sumT * sumH) / denom; // deg/s
     }
+  } else {
+    // fallback: dH/dt between current and previous sample
+    const dtS = Math.max(0.02, (now - S.lastTime) / 1000);
+    turnRate = (unwrapped - S.prevUnwrapped) / dtS;
   }
 
-  // --- hysteresis latch for "turning" ---
+  // ---- hysteresis latch ----
   const rateAbs = Math.abs(turnRate);
   const wasTurning = S.turning;
   const timeSinceLatch = now - S.lastTurnLatchTs;
@@ -1051,73 +1062,82 @@ function updatePfdDisplay(pfdData) {
     S.turning = true;
     S.lastTurnLatchTs = now;
   } else if (wasTurning) {
-    // stay latched for a minimum time, and until rate falls below OFF threshold
     if (rateAbs < LATCH_OFF_TURN && timeSinceLatch > LATCH_HOLD_MS) {
       S.turning = false;
-    } else {
-      // refresh latch timer if still above OFF threshold
-      if (rateAbs >= LATCH_OFF_TURN) S.lastTurnLatchTs = now;
+    } else if (rateAbs >= LATCH_OFF_TURN) {
+      S.lastTurnLatchTs = now;
     }
   }
 
-  // --- target bank from coordinated-turn approximation ---
-  // bank ≈ atan( (ω * V) / g ), ω in rad/s, V in m/s
+  // ---- target bank from coordinated-turn approx ----
   const V = Math.max(0, gs_kt) * 0.514444;
   const g = 9.81;
-  const omega = (turnRate * Math.PI) / 180; // rad/s, signed
+  const omega = (turnRate * Math.PI) / 180; // rad/s
   const bankAbs = Math.atan(Math.abs(omega) * V / g) * 180 / Math.PI;
   let targetRoll = (turnRate >= 0 ? 1 : -1) * bankAbs;
-  // when NOT turning (unlatched), decay target to zero; otherwise, DO NOT decay
-  if (!S.turning) targetRoll *= 0.0; // explicit zero when not turning
-  // clamp
   targetRoll = Math.max(-MAX_BANK_DEG, Math.min(MAX_BANK_DEG, targetRoll));
 
-  // --- slew-limit displayed roll to avoid jumps, but don't "fight" the latch ---
-  const dt = Math.max(0.01, (now - S.lastTime) / 1000);
-  const maxStep = dt * MAX_ROLL_RATE;
-  const diff = targetRoll - S.rollDisp;
-  if (Math.abs(diff) > maxStep) {
-    S.rollDisp += Math.sign(diff) * maxStep;
-  } else {
-    S.rollDisp = targetRoll;
+  // If not latched "turning", gently decay roll toward level instead of snapping to 0.
+  if (!S.turning) {
+    const dt = Math.max(0.01, (now - S.lastTime) / 1000);
+    const decayStep = DECAY_TO_LEVEL_DPS * dt;
+    if (Math.abs(S.rollDisp) <= decayStep) {
+      targetRoll = 0;
+    } else {
+      targetRoll = S.rollDisp - Math.sign(S.rollDisp) * decayStep;
+    }
   }
 
-  // --- update state ---
+  // ---- slew-limit the displayed roll ----
+  {
+    const dt = Math.max(0.01, (now - S.lastTime) / 1000);
+    const maxStep = dt * MAX_ROLL_RATE;
+    const diff = targetRoll - S.rollDisp;
+    if (Math.abs(diff) > maxStep) {
+      S.rollDisp += Math.sign(diff) * maxStep;
+    } else {
+      S.rollDisp = targetRoll;
+    }
+  }
+
+  // ---- update state ----
   S.unwrapped = unwrapped;
+  S.prevUnwrapped = unwrapped;
   S.lastTime = now;
 
-  // --- pitch from VS (unchanged) ---
+  // ---- pitch from VS ----
   const pitch_deg = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, (vs_fpm / 1000) * 4));
 
-  // --- apply transform (pre-negate once for SVG rotation sense) ---
-  const rollForSvg = -S.rollDisp;
+  // ---- apply attitude transform ----
+  const rollForSvg = -S.rollDisp; // SVG rotation direction
   attitudeGroup.setAttribute(
     'transform',
     `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(${rollForSvg}, 401.5, 312.5)`
   );
 
-  // --- speed tape ---
+  // ---- speed tape ----
   speedReadout.textContent = Math.round(gs_kt);
   const speedYOffset = (gs_kt - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE;
   speedTapeGroup.setAttribute('transform', `translate(0, ${speedYOffset})`);
 
-  // --- altitude tape ---
+  // ---- altitude tape ----
   const altitude = Math.max(0, alt_ft);
   altReadoutHund.textContent = Math.floor(altitude / 100);
   const tapeYOffset = altitude * PFD_ALTITUDE_SCALE;
   altitudeTapeGroup.setAttribute('transform', `translate(0, ${tapeYOffset})`);
 
-  // --- tens reel ---
+  // ---- tens reel ----
   const tensValue = altitude % 100;
   const reelYOffset = -(tensValue / 20) * PFD_REEL_SPACING;
   tensReelGroup.setAttribute('transform', `translate(0, ${reelYOffset})`);
 
-  // --- heading readout & tape ---
+  // ---- heading readout & tape ----
   const hdg = ((Math.round(track_deg) % 360) + 360) % 360;
   headingReadout.textContent = String(hdg).padStart(3, '0');
   const xOffset = -(track_deg - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
   headingTapeGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
 }
+
 
 
 
