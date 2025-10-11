@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const css = `
             /* --- [FIX] Sector Ops View Layout --- */
-            #view-rosters {
+            #view-rosters.active {
                 display: grid;
                 grid-template-columns: 1fr;
                 grid-template-rows: 1fr;
