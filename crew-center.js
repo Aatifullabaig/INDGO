@@ -952,102 +952,104 @@ document.addEventListener('DOMContentLoaded', async () => {
         generateHeadingTape();
     }
     
-    /**
-     * --- [UPGRADED] Updates the PFD with live data, now including simulated roll.
-     * @param {object} pfdData - The position object from the live flight data.
-     */
-    function updatePfdDisplay(pfdData) {
-        if (!pfdData) return;
+ /**
+ * --- [UPGRADED] Updates the PFD with live data, now including simulated roll.
+ * Drop-in FIX: avoids "--10" in SVG rotate() that broke left-bank indication.
+ * @param {object} pfdData - The position object from the live flight data.
+ */
+function updatePfdDisplay(pfdData) {
+  if (!pfdData) return;
 
-        const { gs_kt = 0, alt_ft = 0, track_deg = 0, vs_fpm = 0 } = pfdData;
+  const { gs_kt = 0, alt_ft = 0, track_deg = 0, vs_fpm = 0 } = pfdData;
 
-        const attitudeGroup = document.getElementById('attitude_group');
-        const speedTapeGroup = document.getElementById('speed_tape_group');
-        const altitudeTapeGroup = document.getElementById('altitude_tape_group');
-        const tensReelGroup = document.getElementById('altitude_tens_reel_group');
-        const headingTapeGroup = document.getElementById('heading_tape_group');
-        const speedReadout = document.getElementById('speed_readout');
-        const altReadoutHund = document.getElementById('altitude_readout_hundreds');
-        const headingReadout = document.getElementById('heading_readout');
+  const attitudeGroup      = document.getElementById('attitude_group');
+  const speedTapeGroup     = document.getElementById('speed_tape_group');
+  const altitudeTapeGroup  = document.getElementById('altitude_tape_group');
+  const tensReelGroup      = document.getElementById('altitude_tens_reel_group');
+  const headingTapeGroup   = document.getElementById('heading_tape_group');
+  const speedReadout       = document.getElementById('speed_readout');
+  const altReadoutHund     = document.getElementById('altitude_readout_hundreds');
+  const headingReadout     = document.getElementById('heading_readout');
 
-        if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !headingTapeGroup || !tensReelGroup) {
-            return; // Exit if PFD elements aren't in the DOM yet
-        }
-        
-        // --- [FIX] REVISED Bank Angle (Roll) Calculation to prevent flickering ---
-        const currentTime = Date.now();
-        let roll_deg = lastPfdState.roll_deg; // Start with the last known roll angle
+  if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !headingTapeGroup || !tensReelGroup) {
+    return; // Exit if PFD elements aren't in the DOM yet
+  }
 
-        if (lastPfdState.timestamp > 0 && gs_kt > 30) {
-            const timeDelta_sec = (currentTime - lastPfdState.timestamp) / 1000;
-            if (timeDelta_sec > 0) {
-                // Handle heading wrap-around (e.g., 359° to 1°)
-                let track_diff = track_deg - lastPfdState.track_deg;
-                if (track_diff > 180) track_diff -= 360;
-                if (track_diff < -180) track_diff += 360;
+  // --- [FIX] REVISED Bank Angle (Roll) Calculation to prevent flickering ---
+  const currentTime = Date.now();
+  let roll_deg = lastPfdState.roll_deg; // Start with the last known roll angle
 
-                // Only calculate a new roll angle if the plane is actively turning
-                if (Math.abs(track_diff) > 0.1) { // A small threshold to prevent noise from minor heading changes
-                    // **START OF FIX:** Explicity calculate magnitude and then apply sign
-                    
-                    // 1. Calculate the magnitude (absolute value) of the turn rate in degrees per second.
-                    const turn_rate_magnitude = Math.abs(track_diff) / timeDelta_sec;
+  if (lastPfdState.timestamp > 0 && gs_kt > 30) {
+    const timeDelta_sec = (currentTime - lastPfdState.timestamp) / 1000;
+    if (timeDelta_sec > 0) {
+      // Handle heading wrap-around (e.g., 359° to 1°)
+      let track_diff = track_deg - lastPfdState.track_deg;
+      if (track_diff > 180) track_diff -= 360;
+      if (track_diff < -180) track_diff += 360;
 
-                    // 2. Use the physics formula to find the corresponding bank angle. This will always be a positive value.
-                    const velocity_mps = gs_kt * 0.514444; // Convert knots to meters/second
-                    const g = 9.81; // Gravity
-                    const bank_angle_rad = Math.atan((turn_rate_magnitude * Math.PI / 180) * velocity_mps / g);
-                    let unsigned_roll_deg = bank_angle_rad * (180 / Math.PI);
+      // Only calculate a new roll angle if the plane is actively turning
+      if (Math.abs(track_diff) > 0.1) { // small threshold to prevent noise
+        // 1) Magnitude of turn rate (deg/s)
+        const turn_rate_magnitude = Math.abs(track_diff) / timeDelta_sec;
 
-                    // 3. Apply the correct sign based on the original direction of turn (track_diff) and clamp the result.
-                    //    - A negative track_diff (left turn) results in a negative roll_deg.
-                    //    - A positive track_diff (right turn) results in a positive roll_deg.
-                    roll_deg = (track_diff >= 0) ? unsigned_roll_deg : -unsigned_roll_deg;
-                    roll_deg = Math.max(-35, Math.min(35, roll_deg)); // Clamp between -35° and +35°
-                    // **END OF FIX**
-                } else {
-                    // If there's no turn detected, gently decay the roll back to level.
-                    roll_deg *= 0.9;
-                }
-            }
-        }
-        
-        // Update the state for the next calculation
-        lastPfdState = { track_deg: track_deg, timestamp: currentTime, roll_deg: roll_deg };
-        // --- END: Bank Angle Calculation FIX ---
+        // 2) Convert to bank angle via coordinated turn approximation
+        const velocity_mps  = gs_kt * 0.514444; // knots -> m/s
+        const g             = 9.81;
+        const bank_angle_rad = Math.atan((turn_rate_magnitude * Math.PI / 180) * velocity_mps / g);
+        let unsigned_roll_deg = bank_angle_rad * (180 / Math.PI);
 
-        // 1. Attitude Indicator (Pitch from VS, Roll from calculation)
-        const pitch_deg = Math.max(-25, Math.min(25, (vs_fpm / 1000) * 4));
-        
-        // The SVG transform correctly uses a negative roll_deg to produce a clockwise rotation for left turns.
-        attitudeGroup.setAttribute('transform', `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(-${roll_deg}, 401.5, 312.5)`);
-
-        // 2. Speed Tape
-        speedReadout.textContent = Math.round(gs_kt);
-        const speedYOffset = (gs_kt - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE;
-        speedTapeGroup.setAttribute('transform', `translate(0, ${speedYOffset})`);
-
-        // 3. Altitude Tape
-        const altitude = Math.max(0, alt_ft);
-        altReadoutHund.textContent = Math.floor(altitude / 100);
-        const tapeYOffset = altitude * PFD_ALTITUDE_SCALE;
-        altitudeTapeGroup.setAttribute('transform', `translate(0, ${tapeYOffset})`);
-
-        // 4. Altitude Tens Reel
-        const tensValue = altitude % 100;
-        const reelYOffset = -(tensValue / 20) * PFD_REEL_SPACING;
-        tensReelGroup.setAttribute('transform', `translate(0, ${reelYOffset})`);
-
-        // 5. Heading Tape
-        headingReadout.textContent = String(Math.round(track_deg) % 360).padStart(3, '0');
-        const xOffset = -(track_deg - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
-        headingTapeGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
+        // 3) Apply sign (left negative, right positive) and clamp
+        roll_deg = (track_diff >= 0) ? unsigned_roll_deg : -unsigned_roll_deg;
+        roll_deg = Math.max(-35, Math.min(35, roll_deg));
+      } else {
+        // Gentle decay back to level when no turn is detected
+        roll_deg *= 0.9;
+      }
     }
+  }
 
-    /**
-     * --- [REVAMPED] Creates the rich HTML content for the airport information window.
-     * This now includes a live weather widget and a tabbed interface.
-     */
+  // Update the state for the next calculation
+  lastPfdState = { track_deg: track_deg, timestamp: currentTime, roll_deg: roll_deg };
+  // --- END: Bank Angle Calculation FIX ---
+
+  // 1) Attitude Indicator (Pitch from VS, Roll from calculation)
+  const pitch_deg = Math.max(-25, Math.min(25, (vs_fpm / 1000) * 4));
+
+  // --- THE IMPORTANT FIX ---
+  // Build the rotation value separately so negative rolls don't create a string like "--10"
+  const rollForSvg = -roll_deg; // one negation only
+  attitudeGroup.setAttribute(
+    'transform',
+    `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(${rollForSvg}, 401.5, 312.5)`
+  );
+
+  // 2) Speed Tape
+  speedReadout.textContent = Math.round(gs_kt);
+  const speedYOffset = (gs_kt - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE;
+  speedTapeGroup.setAttribute('transform', `translate(0, ${speedYOffset})`);
+
+  // 3) Altitude Tape
+  const altitude = Math.max(0, alt_ft);
+  altReadoutHund.textContent = Math.floor(altitude / 100);
+  const tapeYOffset = altitude * PFD_ALTITUDE_SCALE;
+  altitudeTapeGroup.setAttribute('transform', `translate(0, ${tapeYOffset})`);
+
+  // 4) Altitude Tens Reel
+  const tensValue = altitude % 100;
+  const reelYOffset = -(tensValue / 20) * PFD_REEL_SPACING;
+  tensReelGroup.setAttribute('transform', `translate(0, ${reelYOffset})`);
+
+  // 5) Heading Tape + Readout (normalize to 0–359)
+  const hdg = ((Math.round(track_deg) % 360) + 360) % 360;
+  headingReadout.textContent = String(hdg).padStart(3, '0');
+  const xOffset = -(track_deg - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
+  headingTapeGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
+}
+
+/**
+ * --- [REVAMPED] Creates the rich HTML content for the airport information window.
+ * This now includes a live weather widget and a tabbed interface.
+ */
     async function createAirportInfoWindowHTML(icao) {
         const atcForAirport = activeAtcFacilities.filter(f => f.airportName === icao);
         const notamsForAirport = activeNotams.filter(n => n.airportIcao === icao);
