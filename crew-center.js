@@ -279,9 +279,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 flex-direction: column;
                 height: 100%;
                 gap: 16px;
-                padding: 12px; /* Reduced padding to give header more space */
+                padding: 12px;
                 font-family: 'Segoe UI', sans-serif;
-                background: rgba(10, 12, 26, 0.5); /* Add a base background to the whole container */
+                background: rgba(10, 12, 26, 0.5);
             }
 
             /* [NEW] Creative Header Design */
@@ -364,7 +364,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 background: rgba(10, 12, 26, 0.7);
                 border-radius: 3px;
                 overflow: hidden;
-                margin-top: 4px; /* Space it from the flight details */
+                margin-top: 4px;
             }
             .progress-bar-fill {
                 height: 100%;
@@ -404,7 +404,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             .phase-enroute { background: rgba(100, 110, 130, 0.7); box-shadow: 0 0 12px rgba(100, 110, 130, 0.8); }
 
 
-            /* Main content layout (no major changes needed here) */
+            /* Main content layout */
             .unified-display-main {
                 flex-grow: 1;
                 display: grid;
@@ -969,7 +969,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
         function generateAltitudeTape() {
-            // ✅ FIX: Changed MIN_ALTITUDE from -1000 to 0 to prevent negative numbers on the tape.
             const MIN_ALTITUDE = 0, MAX_ALTITUDE = 50000;
             for (let alt = MIN_ALTITUDE; alt <= MAX_ALTITUDE; alt += 20) {
                 const yPos = PFD_ALTITUDE_CENTER_Y - (alt - PFD_ALTITUDE_REF_VALUE) * PFD_ALTITUDE_SCALE;
@@ -1251,7 +1250,6 @@ function updatePfdDisplay(pfdData) {
   const PFD_PITCH_SCALE       = window.PFD_PITCH_SCALE ?? 2.0;
   const PFD_SPEED_REF_VALUE   = window.PFD_SPEED_REF_VALUE ?? 0;
   const PFD_SPEED_SCALE       = window.PFD_SPEED_SCALE ?? -0.6;
-  // ✅ FIX: Changed fallback value from -0.09 to 0.7 to ensure correct (positive) tape translation.
   const PFD_ALTITUDE_SCALE    = window.PFD_ALTITUDE_SCALE ?? 0.7;
   const PFD_REEL_SPACING      = window.PFD_REEL_SPACING ?? 40;
   const PFD_HEADING_REF_VALUE = window.PFD_HEADING_REF_VALUE ?? 0;
@@ -1843,8 +1841,7 @@ function updatePfdDisplay(pfdData) {
             if (!document.getElementById('aircraft-info-window')) {
                  const windowHtml = `
                     <div id="aircraft-info-window" class="info-window">
-                        <div id="aircraft-window-content-wrapper"></div>
-                    </div>
+                        </div>
                 `;
                 viewContainer.insertAdjacentHTML('beforeend', windowHtml);
             }
@@ -2065,10 +2062,8 @@ function updatePfdDisplay(pfdData) {
     async function handleAircraftClick(flightProps, sessionId) {
         if (!flightProps || !flightProps.flightId) return;
     
-        // [FIX] Reset the PFD state immediately to prevent showing old data.
         resetPfdState();
     
-        // Clear any previously selected flight's path and stop its update interval.
         if (currentFlightInWindow && currentFlightInWindow !== flightProps.flightId) {
             clearLiveFlightPath(currentFlightInWindow);
         }
@@ -2081,12 +2076,10 @@ function updatePfdDisplay(pfdData) {
         aircraftInfoWindow.classList.add('visible');
         aircraftInfoWindowRecallBtn.classList.remove('visible');
     
-        // The redesigned "unified display" is self-contained and replaces the entire window content.
         const windowEl = document.getElementById('aircraft-info-window');
         windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
     
         try {
-            // 1. Fetch plan and route data in parallel
             const [planRes, routeRes] = await Promise.all([
                 fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/plan`),
                 fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/route`)
@@ -2096,15 +2089,12 @@ function updatePfdDisplay(pfdData) {
             const plan = (planData && planData.ok) ? planData.plan : null;
             const routeData = routeRes.ok ? await routeRes.json() : null;
             
-            // First, populate the info window UI with all available data.
             populateAircraftInfoWindow(flightProps, plan);
     
-            // --- Map Plotting Logic ---
             const currentPosition = [flightProps.position.lon, flightProps.position.lat];
             const flownLayerId = `flown-path-${flightProps.flightId}`;
-            let allCoordsForBounds = [currentPosition]; // Start bounds with the plane's position
+            let allCoordsForBounds = [currentPosition];
     
-            // 2. Process and plot the Flown Path (The Past)
             const historicalRoute = (routeData && routeData.ok && Array.isArray(routeData.route)) 
                 ? routeData.route.map(p => [p.longitude, p.latitude]) 
                 : [];
@@ -2132,7 +2122,6 @@ function updatePfdDisplay(pfdData) {
                 sectorOpsMap.fitBounds(bounds, { padding: 80, maxZoom: 10, duration: 1000 });
             }
             
-            // 3. Start live PFD updates
             activePfdUpdateInterval = setInterval(async () => {
                 try {
                     const freshDataRes = await fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}`);
@@ -2143,9 +2132,8 @@ function updatePfdDisplay(pfdData) {
     
                     if (updatedFlight && updatedFlight.position) {
                         updatePfdDisplay(updatedFlight.position);
-                        updateAircraftInfoWindow(updatedFlight, plan); // Update other details like footer
+                        updateAircraftInfoWindow(updatedFlight, plan);
                     } else {
-                        // Flight is gone, stop polling
                         clearInterval(activePfdUpdateInterval);
                         activePfdUpdateInterval = null;
                     }
@@ -2158,12 +2146,9 @@ function updatePfdDisplay(pfdData) {
     
         } catch (error) {
             console.error("Error fetching or plotting aircraft details:", error);
-            // Use the main window element for the error message
             windowEl.innerHTML = `<p class="error-text" style="padding: 2rem;">Could not retrieve complete flight details. The aircraft may have landed or disconnected.</p>`;
         }
     }
-
-
 
     /**
      * --- [REDESIGNED] Generates the "Unified Flight Display" with a new creative header and PFD.
@@ -2171,7 +2156,6 @@ function updatePfdDisplay(pfdData) {
     function populateAircraftInfoWindow(baseProps, plan) {
         const windowEl = document.getElementById('aircraft-info-window');
     
-        // --- Data Extraction ---
         const allWaypoints = [];
         if (plan && plan.flightPlanItems) {
             const extractWps = (items) => {
@@ -2186,7 +2170,6 @@ function updatePfdDisplay(pfdData) {
         const departureIcao = hasPlan ? allWaypoints[0]?.name : 'N/A';
         const arrivalIcao = hasPlan ? allWaypoints[allWaypoints.length - 1]?.name : 'N/A';
     
-        // --- HTML Structure for the new layout ---
         windowEl.innerHTML = `
             <div class="unified-display-container">
                 <div class="unified-display-header">
@@ -2207,8 +2190,7 @@ function updatePfdDisplay(pfdData) {
                         <button class="aircraft-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
                         <button class="aircraft-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
                     </div>
-                    <div class="flight-phase-indicator" id="flight-phase-indicator">
-                        </div>
+                    <div class="flight-phase-indicator" id="flight-phase-indicator"></div>
                 </div>
     
                 <div class="unified-display-main">
@@ -2218,7 +2200,7 @@ function updatePfdDisplay(pfdData) {
                                 <g id="attitude_group">
                                     <rect id="Sky" x="-186" y="-222" width="1121" height="532" fill="#0596FF"/>
                                     <rect id="Ground" x="-138" y="307" width="1024" height="527" fill="#9A4710"/>
-                                    </g>
+                                </g>
                                 <rect id="Rectangle 1" x="-6" y="5" width="191" height="566" fill="#030309"/>
                                 <rect id="Rectangle 9" x="609" width="185" height="566" fill="#030309"/>
                                 <path id="Rectangle 2" d="M273.905 84.9424L180.983 183.181L-23 -9.76114L69.9218 -108L273.905 84.9424Z" fill="#030309"/>
@@ -2341,18 +2323,15 @@ function updatePfdDisplay(pfdData) {
             </div>
         `;
         
-        // Initialize the PFD and populate it with the first set of data.
         createPfdDisplay();
         updatePfdDisplay(baseProps.position);
         updateAircraftInfoWindow(baseProps, plan);
     }
-
     
     /**
      * --- [MODIFIED] Updates the non-PFD parts of the Aircraft Info Window, including the new header and phase indicator.
      */
     function updateAircraftInfoWindow(baseProps, plan) {
-        // --- Data Extraction & Calculation (same as before) ---
         const allWaypoints = [];
         if (plan && plan.flightPlanItems) {
             const extractWps = (items) => {
@@ -2388,7 +2367,6 @@ function updatePfdDisplay(pfdData) {
             }
         }
         
-        // --- [MODIFIED] Flight Phase Logic ---
         let flightPhase = 'ENROUTE';
         let phaseClass = 'phase-enroute';
         let phaseIcon = 'fa-route';
@@ -2413,7 +2391,6 @@ function updatePfdDisplay(pfdData) {
             phaseIcon = 'fa-plane-arrival';
         }
     
-        // --- [MODIFIED] DOM Updates ---
         const progressBarFill = document.getElementById('header-progress-bar');
         const phaseIndicator = document.getElementById('flight-phase-indicator');
         const footerGS = document.getElementById('footer-gs');
