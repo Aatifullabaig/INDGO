@@ -274,8 +274,18 @@ body::before {
 }
 
 /* --- Main Content (Shared) --- */
-.content-view { display: none; }
-.content-view.active { display: block; }
+.content-view {
+    display: none;
+    /* ✅ ADDED: Ensure inactive views are in a lower stacking layer */
+    position: relative;
+    z-index: 1;
+}
+
+.content-view.active {
+    display: block;
+    /* ✅ ADDED: Promote the active view to the top stacking layer */
+    z-index: 10;
+}
 .content-card {
     background: var(--primary-glass);
     border: 1px solid var(--border-color);
@@ -1220,11 +1230,12 @@ input, textarea, select {
 
 /* This makes the main view container a positioning context for its children */
 #view-rosters.active {
-    display: flex;      /* Use flexbox for layout */
-    position: relative; /* Establish a positioning context for children */
-    height: 100%;       /* Ensure it fills the parent's height */
+    display: flex;
+    position: relative;
+    height: 100%;
     overflow: hidden;
     padding: 0 !important;
+    /* The z-index from .content-view.active will apply here */
 }
 
 /* Make the map grow to fill the available space in the flex container */

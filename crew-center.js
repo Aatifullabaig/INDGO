@@ -885,7 +885,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
         function generateAltitudeTape() {
-            const MIN_ALTITUDE = -1000, MAX_ALTITUDE = 50000;
+            // ✅ FIX: Changed MIN_ALTITUDE from -1000 to 0 to prevent negative numbers on the tape.
+            const MIN_ALTITUDE = 0, MAX_ALTITUDE = 50000;
             for (let alt = MIN_ALTITUDE; alt <= MAX_ALTITUDE; alt += 20) {
                 const yPos = PFD_ALTITUDE_CENTER_Y - (alt - PFD_ALTITUDE_REF_VALUE) * PFD_ALTITUDE_SCALE;
                 const tick = document.createElementNS(SVG_NS, 'line');
@@ -1166,7 +1167,8 @@ function updatePfdDisplay(pfdData) {
   const PFD_PITCH_SCALE       = window.PFD_PITCH_SCALE ?? 2.0;
   const PFD_SPEED_REF_VALUE   = window.PFD_SPEED_REF_VALUE ?? 0;
   const PFD_SPEED_SCALE       = window.PFD_SPEED_SCALE ?? -0.6;
-  const PFD_ALTITUDE_SCALE    = window.PFD_ALTITUDE_SCALE ?? -0.09;
+  // ✅ FIX: Changed fallback value from -0.09 to 0.7 to ensure correct (positive) tape translation.
+  const PFD_ALTITUDE_SCALE    = window.PFD_ALTITUDE_SCALE ?? 0.7;
   const PFD_REEL_SPACING      = window.PFD_REEL_SPACING ?? 40;
   const PFD_HEADING_REF_VALUE = window.PFD_HEADING_REF_VALUE ?? 0;
   const PFD_HEADING_SCALE     = window.PFD_HEADING_SCALE ?? 4;
