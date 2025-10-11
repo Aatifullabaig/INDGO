@@ -119,6 +119,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    
     // --- [REHAULED] Helper to inject custom CSS for new features ---
     function injectCustomStyles() {
         const styleId = 'sector-ops-custom-styles';
@@ -278,7 +279,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 flex-direction: column;
                 height: 100%;
                 padding: 16px;
-                gap: 12px;
+                gap: 16px;
                 font-family: 'Segoe UI', sans-serif;
             }
             .unified-display-header {
@@ -287,6 +288,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 gap: 12px;
                 padding-bottom: 12px;
                 border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                flex-shrink: 0; /* Prevent header from shrinking */
             }
             .flight-id-block {
                 flex-shrink: 0;
@@ -296,15 +298,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             .flight-id-block .pilot-callsign {
                 font-size: 0.9rem; color: #c5cae9;
+                /* Prevents long names from breaking layout */
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 120px;
             }
             .flight-progress-block {
                 flex-grow: 1; display: flex; align-items: center; gap: 10px;
+                min-width: 0; /* Important fix for flexbox overflow */
             }
             .flight-phase-badge {
                 padding: 4px 10px; border-radius: 15px; font-size: 0.8rem; font-weight: 600;
                 background-color: rgba(0, 168, 255, 0.2);
                 border: 1px solid #00a8ff;
                 color: #89f7fe;
+                white-space: nowrap;
             }
             .route-progress-bar {
                 display: flex; align-items: center; width: 100%;
@@ -321,41 +330,51 @@ document.addEventListener('DOMContentLoaded', async () => {
                 background: linear-gradient(90deg, #00a8ff, #89f7fe);
                 transition: width 0.5s ease-out;
             }
-            .unified-display-footer {
-                display: grid;
-                grid-template-columns: repeat(4, 1fr);
-                gap: 10px;
-            }
-            .readout-box {
-                background: rgba(10, 12, 26, 0.6);
-                padding: 12px; border-radius: 8px; text-align: center;
-            }
-            .readout-box .label {
-                font-size: 0.75rem; text-transform: uppercase; color: #c5cae9;
-                margin-bottom: 4px;
-            }
-            .readout-box .value {
-                font-size: 1.5rem; font-weight: 600; color: #fff;
-                font-family: 'Courier New', monospace;
-            }
-            .readout-box .value .unit { font-size: 0.9rem; color: #9fa8da; }
-            .readout-box .value .fa-solid { font-size: 0.9rem; margin-right: 5px; color: #00a8ff; }
-
-            /* --- [UPGRADED & RESIZED] PFD (Primary Flight Display) Styles --- */
+            /* New main content layout */
             .unified-display-main {
                 flex-grow: 1;
                 display: grid;
-                grid-template-columns: 1fr;
+                grid-template-columns: 1fr 140px; /* PFD on left, data sidebar on right */
+                gap: 16px;
+                min-height: 0; /* Fix for grid height in flex container */
+                overflow: hidden; /* Prevents children from overflowing */
+            }
+            /* New data sidebar */
+            .pfd-side-panel {
+                display: flex;
+                flex-direction: column;
                 gap: 12px;
+                justify-content: space-around;
+            }
+            .readout-box {
+                background: rgba(10, 12, 26, 0.6);
+                padding: 10px; border-radius: 8px; text-align: center;
+            }
+            .readout-box .label {
+                font-size: 0.7rem; text-transform: uppercase; color: #c5cae9;
+                margin-bottom: 4px;
+            }
+            .readout-box .value {
+                font-size: 1.3rem; font-weight: 600; color: #fff;
+                font-family: 'Courier New', monospace;
+                line-height: 1.1;
+            }
+            .readout-box .value .unit { font-size: 0.8rem; color: #9fa8da; margin-left: 2px;}
+            .readout-box .value .fa-solid { font-size: 0.8rem; margin-right: 4px; color: #00a8ff; }
+
+
+            /* --- [UPGRADED & RESIZED] PFD (Primary Flight Display) Styles --- */
+            #pfd-container {
+                display: grid; /* Use grid to center the SVG */
+                place-items: center;
                 background: rgba(10, 12, 26, 0.5);
                 border-radius: 12px;
-                padding: 12px;
-                min-height: 250px;
-                place-items: center;
                 overflow: hidden;
+                min-width: 0; /* Prevents flex/grid blowout */
             }
-            #pfd-container {
+            #pfd-container svg {
                 width: 100%;
+                height: auto; /* Maintain aspect ratio */
                 max-width: 350px;
                 aspect-ratio: 787 / 695;
                 background-color: #1a1a1a;
@@ -364,13 +383,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 overflow: hidden;
                 position: relative;
                 border-radius: 8px;
-            }
-            #pfd-container svg {
-                position: absolute;
-                width: 100%;
-                height: 100%;
-                top: 0;
-                left: 0;
             }
 
             /* --- [NEW] PFD Animation --- */
@@ -2084,6 +2096,7 @@ function updatePfdDisplay(pfdData) {
         }
     }
 
+
     /**
      * --- [REMODEL] Generates the "Unified Flight Display" with a dynamic PFD, matching the new design.
      */
@@ -2252,13 +2265,13 @@ function updatePfdDisplay(pfdData) {
                             </defs>
                         </svg>
                     </div>
-                </div>
 
-                <div class="unified-display-footer">
-                     <div class="readout-box"><div class="label">Ground Speed</div><div class="value" id="footer-gs">---<span class="unit"> kts</span></div></div>
-                     <div class="readout-box"><div class="label">Vertical Speed</div><div class="value" id="footer-vs">---<span class="unit"> fpm</span></div></div>
-                     <div class="readout-box"><div class="label">Dist. to Dest.</div><div class="value" id="footer-dist">---<span class="unit"> NM</span></div></div>
-                     <div class="readout-box"><div class="label">ETE</div><div class="value" id="footer-ete">--:--</div></div>
+                    <div class="pfd-side-panel">
+                         <div class="readout-box"><div class="label">Ground Speed</div><div class="value" id="footer-gs">---<span class="unit">kts</span></div></div>
+                         <div class="readout-box"><div class="label">Vertical Speed</div><div class="value" id="footer-vs">---<span class="unit">fpm</span></div></div>
+                         <div class="readout-box"><div class="label">Dist. to Dest.</div><div class="value" id="footer-dist">---<span class="unit">NM</span></div></div>
+                         <div class="readout-box"><div class="label">ETE</div><div class="value" id="footer-ete">--:--</div></div>
+                    </div>
                 </div>
             </div>
         `;
@@ -2329,9 +2342,9 @@ function updatePfdDisplay(pfdData) {
         if(progressBarFill) progressBarFill.style.width = `${progress.toFixed(1)}%`;
         if(phaseBadge) phaseBadge.textContent = flightPhase;
 
-        if(footerGS) footerGS.innerHTML = `${Math.round(baseProps.position.gs_kt)}<span class="unit"> kts</span>`;
-        if(footerVS) footerVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit"> fpm</span>`;
-        if(footerDist) footerDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit"> NM</span>`;
+        if(footerGS) footerGS.innerHTML = `${Math.round(baseProps.position.gs_kt)}<span class="unit">kts</span>`;
+        if(footerVS) footerVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
+        if(footerDist) footerDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
         if(footerETE) footerETE.textContent = ete;
     }
 
