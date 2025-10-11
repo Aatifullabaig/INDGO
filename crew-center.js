@@ -953,102 +953,92 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     /**
- /**
- * --- [FINAL] Updates the PFD with live data, using time-corrected smoothing for stability.
- * @param {object} pfdData - The position object from the live flight data.
- */
-function updatePfdDisplay(pfdData) {
-    if (!pfdData) return;
-
-    const { gs_kt = 0, alt_ft = 0, track_deg = 0, vs_fpm = 0 } = pfdData;
-
-    const attitudeGroup = document.getElementById('attitude_group');
-    const speedTapeGroup = document.getElementById('speed_tape_group');
-    const altitudeTapeGroup = document.getElementById('altitude_tape_group');
-    const tensReelGroup = document.getElementById('altitude_tens_reel_group');
-    const headingTapeGroup = document.getElementById('heading_tape_group');
-    const speedReadout = document.getElementById('speed_readout');
-    const altReadoutHund = document.getElementById('altitude_readout_hundreds');
-    const headingReadout = document.getElementById('heading_readout');
-
-    if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !headingTapeGroup || !tensReelGroup) {
-        return; // Exit if PFD elements aren't in the DOM yet
-    }
-    
-    // --- [UPGRADED] Bank Angle (Roll) Calculation with Time-Corrected Smoothing ---
-    const currentTime = Date.now();
-    let roll_deg = lastPfdState.roll_deg; 
-
-    if (lastPfdState.timestamp > 0 && gs_kt > 30) {
-        const timeDelta_sec = (currentTime - lastPfdState.timestamp) / 1000;
-        if (timeDelta_sec > 0) {
-            let track_diff = track_deg - lastPfdState.track_deg;
-            if (track_diff > 180) track_diff -= 360;
-            if (track_diff < -180) track_diff += 360;
-
-            // 1. Calculate the ideal target roll angle based on turn rate.
-            const turn_rate_deg_sec = track_diff / timeDelta_sec;
-            const velocity_mps = gs_kt * 0.514444;
-            const g = 9.81;
-            const bank_angle_rad = Math.atan((turn_rate_deg_sec * Math.PI / 180) * velocity_mps / g);
-            let target_roll_deg = bank_angle_rad * (180 / Math.PI);
-            target_roll_deg = Math.max(-35, Math.min(35, target_roll_deg));
-
-            // 2. [NEW] Use a time-corrected smoothing factor.
-            // This makes the animation stable regardless of the API update interval, filtering out jitter.
-            // The 'rate_constant' can be tuned (higher = more responsive, lower = smoother).
-            const rate_constant = 1.5;
-            const smoothing = 1 - Math.exp(-rate_constant * timeDelta_sec);
-            roll_deg += (target_roll_deg - roll_deg) * smoothing;
-        }
-    }
-    
-    // 3. Update the state for the next frame.
-    lastPfdState = { track_deg: track_deg, timestamp: currentTime, roll_deg: roll_deg };
-    // --- END: Bank Angle Upgrade ---
-
-    // 1. Attitude Indicator (Pitch from VS, Roll from calculation)
-    const pitch_deg = Math.max(-25, Math.min(25, (vs_fpm / 1000) * 4));
-    attitudeGroup.setAttribute('transform', `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(-${roll_deg}, 401.5, 312.5)`);
-
-    // 2. Speed Tape
-    speedReadout.textContent = Math.round(gs_kt);
-    const speedYOffset = (gs_kt - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE;
-    speedTapeGroup.setAttribute('transform', `translate(0, ${speedYOffset})`);
-
-    // 3. Altitude Tape
-    const altitude = Math.max(0, alt_ft);
-    altReadoutHund.textContent = Math.floor(altitude / 100);
-    const tapeYOffset = altitude * PFD_ALTITUDE_SCALE;
-    altitudeTapeGroup.setAttribute('transform', `translate(0, ${tapeYOffset})`);
-
-    // 4. Altitude Tens Reel
-    const tensValue = altitude % 100;
-    const reelYOffset = -(tensValue / 20) * PFD_REEL_SPACING;
-    tensReelGroup.setAttribute('transform', `translate(0, ${reelYOffset})`);
-
-    // 5. Heading Tape
-    headingReadout.textContent = String(Math.round(track_deg) % 360).padStart(3, '0');
-    const xOffset = -(track_deg - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
-    headingTapeGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
-}
-
-    /**
-     * --- [NEW] Resets the PFD state variables and visual attitude.
-     * This is called when closing/hiding the aircraft info window.
+     * --- [UPGRADED] Updates the PFD with live data, now including simulated roll.
+     * @param {object} pfdData - The position object from the live flight data.
      */
-    function resetPfdState() {
-        // Reset the state variable used for calculating bank angle
-        lastPfdState = { track_deg: 0, timestamp: 0, roll_deg: 0 };
+    function updatePfdDisplay(pfdData) {
+        if (!pfdData) return;
 
-        // Visually reset the attitude indicator in the SVG to a neutral position
+        const { gs_kt = 0, alt_ft = 0, track_deg = 0, vs_fpm = 0 } = pfdData;
+
         const attitudeGroup = document.getElementById('attitude_group');
-        if (attitudeGroup) {
-            // Set transform to a neutral state (0 pitch, 0 roll)
-            attitudeGroup.setAttribute('transform', 'translate(0, 0) rotate(0, 401.5, 312.5)');
-        }
-    }
+        const speedTapeGroup = document.getElementById('speed_tape_group');
+        const altitudeTapeGroup = document.getElementById('altitude_tape_group');
+        const tensReelGroup = document.getElementById('altitude_tens_reel_group');
+        const headingTapeGroup = document.getElementById('heading_tape_group');
+        const speedReadout = document.getElementById('speed_readout');
+        const altReadoutHund = document.getElementById('altitude_readout_hundreds');
+        const headingReadout = document.getElementById('heading_readout');
 
+        if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !headingTapeGroup || !tensReelGroup) {
+            return; // Exit if PFD elements aren't in the DOM yet
+        }
+        
+        // --- [FIX] REVISED Bank Angle (Roll) Calculation to prevent flickering ---
+        const currentTime = Date.now();
+        let roll_deg = lastPfdState.roll_deg; // Start with the last known roll angle
+
+        if (lastPfdState.timestamp > 0 && gs_kt > 30) {
+            const timeDelta_sec = (currentTime - lastPfdState.timestamp) / 1000;
+            if (timeDelta_sec > 0) {
+                // Handle heading wrap-around (e.g., 359° to 1°)
+                let track_diff = track_deg - lastPfdState.track_deg;
+                if (track_diff > 180) track_diff -= 360;
+                if (track_diff < -180) track_diff += 360;
+
+                // Only calculate a new roll angle if the plane is actively turning
+                if (Math.abs(track_diff) > 0.1) { // A small threshold to prevent noise from minor heading changes
+                    const turn_rate_deg_sec = track_diff / timeDelta_sec;
+
+                    // Physics formula to estimate bank angle from turn rate and speed
+                    const velocity_mps = gs_kt * 0.514444; // Convert knots to meters/second
+                    const g = 9.81; // Gravity
+                    const bank_angle_rad = Math.atan((turn_rate_deg_sec * Math.PI / 180) * velocity_mps / g);
+                    
+                    // Convert to degrees and clamp to a reasonable value for an airliner
+                    roll_deg = bank_angle_rad * (180 / Math.PI);
+                    roll_deg = Math.max(-35, Math.min(35, roll_deg)); // Clamp between -35° and +35°
+                } else {
+                    // If there's no turn detected, gently decay the roll back to level.
+                    // This creates a smooth leveling of the wings instead of a snap.
+                    roll_deg *= 0.9;
+                }
+            }
+        }
+        
+        // Update the state for the next calculation
+        lastPfdState = { track_deg: track_deg, timestamp: currentTime, roll_deg: roll_deg };
+        // --- END: Bank Angle Calculation FIX ---
+
+        // 1. Attitude Indicator (Pitch from VS, Roll from calculation)
+        const pitch_deg = Math.max(-25, Math.min(25, (vs_fpm / 1000) * 4));
+        
+        // --- FIX: This transform correctly moves the horizon (attitude_group) for pitch and roll ---
+        // --- while leaving the aircraft symbol (middle dot, wings) static, which is the correct behavior. ---
+        // The translate moves the group vertically for pitch, then the rotate pivots the result for roll.
+        attitudeGroup.setAttribute('transform', `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(-${roll_deg}, 401.5, 312.5)`);
+
+        // 2. Speed Tape
+        speedReadout.textContent = Math.round(gs_kt);
+        const speedYOffset = (gs_kt - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE;
+        speedTapeGroup.setAttribute('transform', `translate(0, ${speedYOffset})`);
+
+        // 3. Altitude Tape
+        const altitude = Math.max(0, alt_ft);
+        altReadoutHund.textContent = Math.floor(altitude / 100);
+        const tapeYOffset = altitude * PFD_ALTITUDE_SCALE;
+        altitudeTapeGroup.setAttribute('transform', `translate(0, ${tapeYOffset})`);
+
+        // 4. Altitude Tens Reel
+        const tensValue = altitude % 100;
+        const reelYOffset = -(tensValue / 20) * PFD_REEL_SPACING;
+        tensReelGroup.setAttribute('transform', `translate(0, ${reelYOffset})`);
+
+        // 5. Heading Tape
+        headingReadout.textContent = String(Math.round(track_deg) % 360).padStart(3, '0');
+        const xOffset = -(track_deg - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
+        headingTapeGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
+    }
 
     /**
      * --- [REVAMPED] Creates the rich HTML content for the airport information window.
@@ -1495,7 +1485,6 @@ function updatePfdDisplay(pfdData) {
                 clearInterval(activePfdUpdateInterval);
                 activePfdUpdateInterval = null;
             }
-            resetPfdState(); // ** NEW: Reset PFD state and visuals **
             currentFlightInWindow = null;
         };
 
@@ -1505,7 +1494,6 @@ function updatePfdDisplay(pfdData) {
                 clearInterval(activePfdUpdateInterval);
                 activePfdUpdateInterval = null;
             }
-            resetPfdState(); // ** NEW: Reset PFD state and visuals **
             if (currentFlightInWindow) {
                 aircraftInfoWindowRecallBtn.classList.add('visible', 'palpitate');
                 setTimeout(() => aircraftInfoWindowRecallBtn.classList.remove('palpitate'), 1000);
@@ -1811,9 +1799,6 @@ function updatePfdDisplay(pfdData) {
             clearInterval(activePfdUpdateInterval);
             activePfdUpdateInterval = null;
         }
-        
-        // ** FIX ** Reset PFD state before displaying the new one
-        resetPfdState();
 
         currentFlightInWindow = flightProps.flightId;
         aircraftInfoWindow.classList.add('visible');
@@ -2639,12 +2624,11 @@ function updatePfdDisplay(pfdData) {
             if (airportRecall) airportRecall.classList.remove('visible');
             if (aircraftRecall) aircraftRecall.classList.remove('visible');
 
-            // NEW: Stop the PFD update interval and reset its state when leaving the view
+            // NEW: Stop the PFD update interval when leaving the view
             if (activePfdUpdateInterval) {
                 clearInterval(activePfdUpdateInterval);
                 activePfdUpdateInterval = null;
             }
-            resetPfdState(); // ** NEW: Reset PFD state and visuals **
         }
         // --- FIX: END ---
 
