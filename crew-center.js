@@ -272,7 +272,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             .info-tab-content li:last-child { border-bottom: none; }
             .muted-text { color: #9fa8da; text-align: center; padding: 2rem; }
 
-            /* --- [NEW] UNIFIED FLIGHT DISPLAY FOR AIRCRAFT WINDOW --- */
+            /* --- [REMODEL] UNIFIED FLIGHT DISPLAY FOR AIRCRAFT WINDOW --- */
             .unified-display-container {
                 display: flex;
                 flex-direction: column;
@@ -1982,14 +1982,14 @@ function updatePfdDisplay(pfdData) {
         return waypoints;
     }
 
-    // --- [COMPLETELY REWRITTEN & FIXED] Handles aircraft clicks, data fetching, map plotting, and window population.
+    // --- [REMODEL] Handles aircraft clicks, data fetching, map plotting, and window population.
     async function handleAircraftClick(flightProps, sessionId) {
         if (!flightProps || !flightProps.flightId) return;
 
-        // --- FIX APPLIED: Reset the PFD state immediately ---
+        // [FIX] Reset the PFD state immediately to prevent showing old data.
         resetPfdState();
 
-        // Clear any previously selected flight's path and stop its update interval
+        // Clear any previously selected flight's path and stop its update interval.
         if (currentFlightInWindow && currentFlightInWindow !== flightProps.flightId) {
             clearLiveFlightPath(currentFlightInWindow);
         }
@@ -2002,8 +2002,8 @@ function updatePfdDisplay(pfdData) {
         aircraftInfoWindow.classList.add('visible');
         aircraftInfoWindowRecallBtn.classList.remove('visible');
 
-        const usernameDisplay = flightProps.username || 'N/A';
-        document.getElementById('aircraft-window-title').innerHTML = `${flightProps.callsign} <small>(${usernameDisplay})</small>`;
+        // [FIX] Set a generic window title to remove redundancy. The specific flight info is inside.
+        document.getElementById('aircraft-window-title').innerHTML = `Flight Data`;
         const contentEl = document.getElementById('aircraft-window-content');
         contentEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
 
@@ -2018,7 +2018,7 @@ function updatePfdDisplay(pfdData) {
             const plan = (planData && planData.ok) ? planData.plan : null;
             const routeData = routeRes.ok ? await routeRes.json() : null;
             
-            // First, populate the info window UI with all available data
+            // First, populate the info window UI with all available data.
             populateAircraftInfoWindow(flightProps, plan);
 
             // --- Map Plotting Logic ---
@@ -2085,7 +2085,7 @@ function updatePfdDisplay(pfdData) {
     }
 
     /**
-     * --- [COMPLETELY REWRITTEN] Generates the "Unified Flight Display" with a dynamic PFD.
+     * --- [REMODEL] Generates the "Unified Flight Display" with a dynamic PFD, matching the new design.
      */
     function populateAircraftInfoWindow(baseProps, plan) {
         const contentEl = document.getElementById('aircraft-window-content');
@@ -2105,7 +2105,7 @@ function updatePfdDisplay(pfdData) {
         const departureIcao = hasPlan ? allWaypoints[0]?.name : 'N/A';
         const arrivalIcao = hasPlan ? allWaypoints[allWaypoints.length - 1]?.name : 'N/A';
 
-        // --- HTML Structure for PFD ---
+        // --- HTML Structure for the new layout ---
         contentEl.innerHTML = `
             <div class="unified-display-container">
                 <div class="unified-display-header">
@@ -2119,8 +2119,8 @@ function updatePfdDisplay(pfdData) {
                             <div class="progress-bar-container"><div class="progress-bar-fill"></div></div>
                             <span class="icao">${arrivalIcao}</span>
                         </div>
+                        <div class="flight-phase-badge">ENROUTE</div>
                     </div>
-                    <div class="flight-phase-badge">ENROUTE</div>
                 </div>
 
                 <div class="unified-display-main">
@@ -2263,6 +2263,7 @@ function updatePfdDisplay(pfdData) {
             </div>
         `;
         
+        // Initialize the PFD and populate it with the first set of data.
         createPfdDisplay();
         updatePfdDisplay(baseProps.position);
         updateAircraftInfoWindow(baseProps, plan);
