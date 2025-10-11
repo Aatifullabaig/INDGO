@@ -988,19 +988,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // Only calculate a new roll angle if the plane is actively turning
                 if (Math.abs(track_diff) > 0.1) { // A small threshold to prevent noise from minor heading changes
-                    const turn_rate_deg_sec = track_diff / timeDelta_sec;
+                    // **START OF FIX:** Explicity calculate magnitude and then apply sign
+                    
+                    // 1. Calculate the magnitude (absolute value) of the turn rate in degrees per second.
+                    const turn_rate_magnitude = Math.abs(track_diff) / timeDelta_sec;
 
-                    // Physics formula to estimate bank angle from turn rate and speed
+                    // 2. Use the physics formula to find the corresponding bank angle. This will always be a positive value.
                     const velocity_mps = gs_kt * 0.514444; // Convert knots to meters/second
                     const g = 9.81; // Gravity
-                    const bank_angle_rad = Math.atan((turn_rate_deg_sec * Math.PI / 180) * velocity_mps / g);
-                    
-                    // Convert to degrees and clamp to a reasonable value for an airliner
-                    roll_deg = bank_angle_rad * (180 / Math.PI);
+                    const bank_angle_rad = Math.atan((turn_rate_magnitude * Math.PI / 180) * velocity_mps / g);
+                    let unsigned_roll_deg = bank_angle_rad * (180 / Math.PI);
+
+                    // 3. Apply the correct sign based on the original direction of turn (track_diff) and clamp the result.
+                    //    - A negative track_diff (left turn) results in a negative roll_deg.
+                    //    - A positive track_diff (right turn) results in a positive roll_deg.
+                    roll_deg = (track_diff >= 0) ? unsigned_roll_deg : -unsigned_roll_deg;
                     roll_deg = Math.max(-35, Math.min(35, roll_deg)); // Clamp between -35° and +35°
+                    // **END OF FIX**
                 } else {
                     // If there's no turn detected, gently decay the roll back to level.
-                    // This creates a smooth leveling of the wings instead of a snap.
                     roll_deg *= 0.9;
                 }
             }
@@ -1013,9 +1019,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 1. Attitude Indicator (Pitch from VS, Roll from calculation)
         const pitch_deg = Math.max(-25, Math.min(25, (vs_fpm / 1000) * 4));
         
-        // --- FIX: This transform correctly moves the horizon (attitude_group) for pitch and roll ---
-        // --- while leaving the aircraft symbol (middle dot, wings) static, which is the correct behavior. ---
-        // The translate moves the group vertically for pitch, then the rotate pivots the result for roll.
+        // The SVG transform correctly uses a negative roll_deg to produce a clockwise rotation for left turns.
         attitudeGroup.setAttribute('transform', `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(-${roll_deg}, 401.5, 312.5)`);
 
         // 2. Speed Tape
