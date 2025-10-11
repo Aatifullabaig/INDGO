@@ -953,7 +953,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     /**
- * --- [UPGRADED] Updates the PFD with live data, now with smoothed roll/bank angle.
+ * --- [CORRECTED] Updates the PFD with live data, now with smoothed roll/bank angle.
  * @param {object} pfdData - The position object from the live flight data.
  */
 function updatePfdDisplay(pfdData) {
@@ -974,9 +974,10 @@ function updatePfdDisplay(pfdData) {
         return; // Exit if PFD elements aren't in the DOM yet
     }
     
-    // --- [REWRITTEN] Bank Angle (Roll) Calculation with Smoothing ---
+    // --- [CORRECTED] Bank Angle (Roll) Calculation with Smoothing ---
     const currentTime = Date.now();
-    let new_roll_deg = lastPfdState.roll_deg; // Start with the last known roll angle
+    // Start with the roll angle from the last frame. This is our current on-screen value.
+    let roll_deg = lastPfdState.roll_deg; 
 
     if (lastPfdState.timestamp > 0 && gs_kt > 30) {
         const timeDelta_sec = (currentTime - lastPfdState.timestamp) / 1000;
@@ -986,34 +987,27 @@ function updatePfdDisplay(pfdData) {
             if (track_diff > 180) track_diff -= 360;
             if (track_diff < -180) track_diff += 360;
 
-            // 1. Always calculate the TARGET roll angle based on the turn rate.
-            //    We removed the `if (Math.abs(track_diff) > 0.1)` check entirely.
+            // 1. Calculate the ideal target roll angle based on turn rate.
             const turn_rate_deg_sec = track_diff / timeDelta_sec;
-
-            // Physics formula to estimate the ideal bank angle for the turn
-            const velocity_mps = gs_kt * 0.514444; // Convert knots to meters/second
-            const g = 9.81; // Gravity
+            const velocity_mps = gs_kt * 0.514444;
+            const g = 9.81;
             const bank_angle_rad = Math.atan((turn_rate_deg_sec * Math.PI / 180) * velocity_mps / g);
-            
-            // Convert to degrees and clamp to a reasonable value for an airliner
             let target_roll_deg = bank_angle_rad * (180 / Math.PI);
-            target_roll_deg = Math.max(-35, Math.min(35, target_roll_deg)); // Clamp between -35° and +35°
+            target_roll_deg = Math.max(-35, Math.min(35, target_roll_deg));
 
-            // 2. Smoothly interpolate (lerp) from the current roll to the target roll.
-            //    This creates a fluid, realistic animation instead of a snap.
-            //    A higher factor means a faster (more responsive) change.
+            // 2. Smoothly move the current roll angle towards the target.
             const SMOOTHING_FACTOR = 0.25; 
-            new_roll_deg = lastPfdState.roll_deg + (target_roll_deg - lastPfdState.roll_deg) * SMOOTHING_FACTOR;
+            roll_deg += (target_roll_deg - roll_deg) * SMOOTHING_FACTOR;
         }
     }
     
-    // 3. Update the state for the next calculation with the NEW smoothed roll angle.
-    lastPfdState = { track_deg: track_deg, timestamp: currentTime, roll_deg: new_roll_deg };
-    // --- END: Bank Angle Calculation Rewrite ---
+    // 3. Update the state for the next frame with the newly calculated values.
+    lastPfdState = { track_deg: track_deg, timestamp: currentTime, roll_deg: roll_deg };
+    // --- END: Bank Angle Correction ---
 
     // 1. Attitude Indicator (Pitch from VS, Roll from calculation)
     const pitch_deg = Math.max(-25, Math.min(25, (vs_fpm / 1000) * 4));
-    attitudeGroup.setAttribute('transform', `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(-${new_roll_deg}, 401.5, 312.5)`);
+    attitudeGroup.setAttribute('transform', `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(-${roll_deg}, 401.5, 312.5)`);
 
     // 2. Speed Tape
     speedReadout.textContent = Math.round(gs_kt);
