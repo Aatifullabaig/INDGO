@@ -191,7 +191,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 font-weight: 300; 
                 color: #c5cae9; 
                 font-size: 0.9rem; 
-                margin-left: 5px;
+                margin-left: 5px; 
             }
             .info-window-actions button {
                 background: rgba(255,255,255,0.05); 
@@ -273,73 +273,146 @@ document.addEventListener('DOMContentLoaded', async () => {
             .info-tab-content li:last-child { border-bottom: none; }
             .muted-text { color: #9fa8da; text-align: center; padding: 2rem; }
 
-            /* --- [REMODEL] UNIFIED FLIGHT DISPLAY FOR AIRCRAFT WINDOW --- */
+            /* --- [REDESIGNED] UNIFIED FLIGHT DISPLAY FOR AIRCRAFT WINDOW --- */
             .unified-display-container {
                 display: flex;
                 flex-direction: column;
                 height: 100%;
-                padding: 16px;
                 gap: 16px;
+                padding: 12px; /* Reduced padding to give header more space */
                 font-family: 'Segoe UI', sans-serif;
+                background: rgba(10, 12, 26, 0.5); /* Add a base background to the whole container */
             }
+
+            /* [NEW] Creative Header Design */
             .unified-display-header {
+                display: grid;
+                grid-template-columns: 1fr auto 1fr;
+                align-items: center;
+                background: linear-gradient(135deg, rgba(30, 35, 70, 0.8), rgba(15, 20, 45, 0.9));
+                border-radius: 12px;
+                padding: 10px 16px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                color: #e8eaf6;
+                flex-shrink: 0;
+                position: relative;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            }
+
+            .flight-route-info, .header-actions {
                 display: flex;
                 align-items: center;
                 gap: 12px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-                flex-shrink: 0; /* Prevent header from shrinking */
             }
-            .flight-id-block {
-                flex-shrink: 0;
+            .header-actions {
+                justify-content: flex-end;
             }
-            .flight-id-block .flight-number {
-                font-size: 1.5rem; font-weight: 700; color: #fff;
+            .flight-route-info .icao {
+                font-size: 1.8rem;
+                font-weight: 700;
+                font-family: 'Courier New', monospace;
+                color: #fff;
+                text-shadow: 0 0 5px rgba(0, 168, 255, 0.7);
             }
-            .flight-id-block .pilot-callsign {
-                font-size: 0.9rem; color: #c5cae9;
-                /* Prevents long names from breaking layout */
-                white-space: nowrap;
+            .flight-route-info .fa-plane-departure,
+            .flight-route-info .fa-plane-arrival {
+                font-size: 1.2rem;
+                color: #00a8ff;
+            }
+            .flight-main-details {
+                text-align: center;
+                line-height: 1.2;
+            }
+            .flight-main-details h3 {
+                margin: 0;
+                font-size: 1.6rem;
+                font-weight: 700;
+                color: #fff;
+                letter-spacing: 1px;
+            }
+            .flight-main-details p {
+                margin: 0;
+                font-size: 0.85rem;
+                color: #c5cae9;
+                opacity: 0.8;
+            }
+
+            /* [NEW] Redesigned Hide/Close Buttons */
+            .header-actions button {
+                background: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                color: #e8eaf6;
+                width: 32px;
+                height: 32px;
+                border-radius: 50%;
+                cursor: pointer;
+                display: grid;
+                place-items: center;
+                transition: all 0.2s ease-in-out;
+            }
+            .header-actions button:hover {
+                background: #00a8ff;
+                color: #fff;
+                transform: scale(1.1);
+                border-color: transparent;
+            }
+
+            /* [NEW] Progress Bar Repositioned Below Header */
+            .route-progress-bar-container {
+                width: 100%;
+                height: 6px;
+                background: rgba(10, 12, 26, 0.7);
+                border-radius: 3px;
                 overflow: hidden;
-                text-overflow: ellipsis;
-                max-width: 120px;
-            }
-            .flight-progress-block {
-                flex-grow: 1; display: flex; align-items: center; gap: 10px;
-                min-width: 0; /* Important fix for flexbox overflow */
-            }
-            .flight-phase-badge {
-                padding: 4px 10px; border-radius: 15px; font-size: 0.8rem; font-weight: 600;
-                background-color: rgba(0, 168, 255, 0.2);
-                border: 1px solid #00a8ff;
-                color: #89f7fe;
-                white-space: nowrap;
-            }
-            .route-progress-bar {
-                display: flex; align-items: center; width: 100%;
-            }
-            .route-progress-bar .icao {
-                font-family: 'Courier New', monospace; font-weight: bold; font-size: 1.1rem;
-            }
-            .progress-bar-container {
-                flex-grow: 1; height: 8px; background: rgba(10, 12, 26, 0.7);
-                border-radius: 4px; margin: 0 10px; overflow: hidden;
+                margin-top: 4px; /* Space it from the flight details */
             }
             .progress-bar-fill {
-                height: 100%; width: 0%;
+                height: 100%;
+                width: 0%;
                 background: linear-gradient(90deg, #00a8ff, #89f7fe);
                 transition: width 0.5s ease-out;
+                border-radius: 3px;
             }
-            /* New main content layout */
+
+
+            /* [NEW] Upgraded Flight Phase Indicator */
+            .flight-phase-indicator {
+                position: absolute;
+                top: 100%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                padding: 6px 16px;
+                border-radius: 20px;
+                font-size: 0.8rem;
+                font-weight: 700;
+                color: #fff;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(5px);
+                transition: all 0.4s ease-out;
+            }
+            .flight-phase-indicator .fa-solid {
+                font-size: 0.9rem;
+            }
+            /* Phase-specific colors */
+            .phase-climb { background: rgba(34, 139, 34, 0.7); box-shadow: 0 0 12px rgba(34, 139, 34, 0.8); }
+            .phase-cruise { background: rgba(0, 119, 255, 0.7); box-shadow: 0 0 12px rgba(0, 119, 255, 0.8); }
+            .phase-descent { background: rgba(255, 140, 0, 0.7); box-shadow: 0 0 12px rgba(255, 140, 0, 0.8); }
+            .phase-approach { background: rgba(138, 43, 226, 0.7); box-shadow: 0 0 12px rgba(138, 43, 226, 0.8); }
+            .phase-enroute { background: rgba(100, 110, 130, 0.7); box-shadow: 0 0 12px rgba(100, 110, 130, 0.8); }
+
+
+            /* Main content layout (no major changes needed here) */
             .unified-display-main {
                 flex-grow: 1;
                 display: grid;
-                grid-template-columns: 1fr 140px; /* PFD on left, data sidebar on right */
+                grid-template-columns: 1fr 140px;
                 gap: 16px;
-                min-height: 0; /* Fix for grid height in flex container */
-                overflow: hidden; /* Prevents children from overflowing */
+                min-height: 0;
+                overflow: hidden;
             }
-            /* New data sidebar */
             .pfd-side-panel {
                 display: flex;
                 flex-direction: column;
@@ -365,16 +438,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             /* --- [UPGRADED & RESIZED] PFD (Primary Flight Display) Styles --- */
             #pfd-container {
-                display: grid; /* Use grid to center the SVG */
+                display: grid;
                 place-items: center;
                 background: rgba(10, 12, 26, 0.5);
                 border-radius: 12px;
                 overflow: hidden;
-                min-width: 0; /* Prevents flex/grid blowout */
+                min-width: 0;
             }
             #pfd-container svg {
                 width: 100%;
-                height: auto; /* Maintain aspect ratio */
+                height: auto;
                 max-width: 350px;
                 aspect-ratio: 787 / 695;
                 background-color: #1a1a1a;
@@ -384,11 +457,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 position: relative;
                 border-radius: 8px;
             }
-
-            /* --- [NEW] PFD Animation --- */
             #pfd-container svg #attitude_group {
                 transition: transform 0.5s ease-out;
             }
+
 
             /* --- Toolbar Recall Buttons --- */
             #airport-recall-btn, #aircraft-recall-btn {
@@ -1678,40 +1750,42 @@ function updatePfdDisplay(pfdData) {
         airportInfoWindow.dataset.eventsAttached = 'true';
     }
     
-    // NEW: Function to set up event listeners for the Aircraft Info Window
+    // --- [MODIFIED] Event listener setup using Event Delegation ---
     function setupAircraftWindowEvents() {
+        // This listener is now attached to the main window element.
+        // It will catch clicks from buttons inside, even if they are added later.
         if (!aircraftInfoWindow || aircraftInfoWindow.dataset.eventsAttached === 'true') return;
-        const closeBtn = document.getElementById('aircraft-window-close-btn');
-        const hideBtn = document.getElementById('aircraft-window-hide-btn');
-
-        const closeAndCleanup = () => {
-            aircraftInfoWindow.classList.remove('visible');
-            aircraftInfoWindowRecallBtn.classList.remove('visible');
-            clearLiveFlightPath(currentFlightInWindow); // Clear the flight trail when closing
-            if (activePfdUpdateInterval) {
-                clearInterval(activePfdUpdateInterval);
-                activePfdUpdateInterval = null;
+    
+        aircraftInfoWindow.addEventListener('click', (e) => {
+            const closeBtn = e.target.closest('.aircraft-window-close-btn');
+            const hideBtn = e.target.closest('.aircraft-window-hide-btn');
+    
+            if (closeBtn) {
+                aircraftInfoWindow.classList.remove('visible');
+                aircraftInfoWindowRecallBtn.classList.remove('visible');
+                clearLiveFlightPath(currentFlightInWindow);
+                if (activePfdUpdateInterval) {
+                    clearInterval(activePfdUpdateInterval);
+                    activePfdUpdateInterval = null;
+                }
+                currentFlightInWindow = null;
             }
-            currentFlightInWindow = null;
-        };
-
-        const hideAndCleanup = () => {
-            aircraftInfoWindow.classList.remove('visible');
-            if (activePfdUpdateInterval) {
-                clearInterval(activePfdUpdateInterval);
-                activePfdUpdateInterval = null;
+    
+            if (hideBtn) {
+                aircraftInfoWindow.classList.remove('visible');
+                if (activePfdUpdateInterval) {
+                    clearInterval(activePfdUpdateInterval);
+                    activePfdUpdateInterval = null;
+                }
+                if (currentFlightInWindow) {
+                    aircraftInfoWindowRecallBtn.classList.add('visible', 'palpitate');
+                    setTimeout(() => aircraftInfoWindowRecallBtn.classList.remove('palpitate'), 1000);
+                }
             }
-            if (currentFlightInWindow) {
-                aircraftInfoWindowRecallBtn.classList.add('visible', 'palpitate');
-                setTimeout(() => aircraftInfoWindowRecallBtn.classList.remove('palpitate'), 1000);
-            }
-        };
-
-        closeBtn.addEventListener('click', closeAndCleanup);
-        hideBtn.addEventListener('click', hideAndCleanup);
-        
+        });
+    
+        // The recall button logic remains largely the same.
         aircraftInfoWindowRecallBtn.addEventListener('click', () => {
-            // Re-clicking the recall button should re-trigger the data fetch and interval
             if (currentFlightInWindow) {
                 const layer = sectorOpsMap.getLayer('sector-ops-live-flights-layer');
                 if (layer) {
@@ -1721,10 +1795,8 @@ function updatePfdDisplay(pfdData) {
                     if (feature) {
                         const props = feature.properties;
                         const flightProps = { ...props, position: JSON.parse(props.position) };
-                        const expertSessionId = sectorOpsLiveFlightsInterval ? 'expert' : null; // A bit of a guess, need the session ID
                         
-                        // To get the session ID reliably, we need to find it again
-                         fetch('https://acars-backend-uxln.onrender.com/if-sessions').then(res => res.json()).then(data => {
+                        fetch('https://acars-backend-uxln.onrender.com/if-sessions').then(res => res.json()).then(data => {
                             const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
                             if(expertSession) {
                                 handleAircraftClick(flightProps, expertSession.id);
@@ -1994,13 +2066,15 @@ function updatePfdDisplay(pfdData) {
         return waypoints;
     }
 
-    // --- [REMODEL] Handles aircraft clicks, data fetching, map plotting, and window population.
+    /**
+     * --- [REMODEL] Handles aircraft clicks, data fetching, map plotting, and window population.
+     */
     async function handleAircraftClick(flightProps, sessionId) {
         if (!flightProps || !flightProps.flightId) return;
-
+    
         // [FIX] Reset the PFD state immediately to prevent showing old data.
         resetPfdState();
-
+    
         // Clear any previously selected flight's path and stop its update interval.
         if (currentFlightInWindow && currentFlightInWindow !== flightProps.flightId) {
             clearLiveFlightPath(currentFlightInWindow);
@@ -2009,16 +2083,17 @@ function updatePfdDisplay(pfdData) {
             clearInterval(activePfdUpdateInterval);
             activePfdUpdateInterval = null;
         }
-
+    
         currentFlightInWindow = flightProps.flightId;
         aircraftInfoWindow.classList.add('visible');
         aircraftInfoWindowRecallBtn.classList.remove('visible');
-
-        // [FIX] Set a generic window title to remove redundancy. The specific flight info is inside.
-        document.getElementById('aircraft-window-title').innerHTML = `Flight Data`;
+    
+        // The main window title is now handled inside the new header.
+        // We clear the old one to ensure it doesn't appear.
+        document.getElementById('aircraft-window-title').innerHTML = ``;
         const contentEl = document.getElementById('aircraft-window-content');
         contentEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
-
+    
         try {
             // 1. Fetch plan and route data in parallel
             const [planRes, routeRes] = await Promise.all([
@@ -2032,12 +2107,12 @@ function updatePfdDisplay(pfdData) {
             
             // First, populate the info window UI with all available data.
             populateAircraftInfoWindow(flightProps, plan);
-
+    
             // --- Map Plotting Logic ---
             const currentPosition = [flightProps.position.lon, flightProps.position.lat];
             const flownLayerId = `flown-path-${flightProps.flightId}`;
             let allCoordsForBounds = [currentPosition]; // Start bounds with the plane's position
-
+    
             // 2. Process and plot the Flown Path (The Past)
             const historicalRoute = (routeData && routeData.ok && Array.isArray(routeData.route)) 
                 ? routeData.route.map(p => [p.longitude, p.latitude]) 
@@ -2046,7 +2121,7 @@ function updatePfdDisplay(pfdData) {
             if (historicalRoute.length > 0) {
                 const completeFlownPath = [...historicalRoute, currentPosition];
                 allCoordsForBounds.push(...historicalRoute);
-
+    
                 sectorOpsMap.addSource(flownLayerId, {
                     type: 'geojson',
                     data: { type: 'Feature', geometry: { type: 'LineString', coordinates: completeFlownPath } }
@@ -2060,7 +2135,7 @@ function updatePfdDisplay(pfdData) {
             }
             
             sectorOpsLiveFlightPathLayers[flightProps.flightId] = { flown: flownLayerId };
-
+    
             if (allCoordsForBounds.length > 1) {
                 const bounds = allCoordsForBounds.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(allCoordsForBounds[0], allCoordsForBounds[0]));
                 sectorOpsMap.fitBounds(bounds, { padding: 80, maxZoom: 10, duration: 1000 });
@@ -2074,7 +2149,7 @@ function updatePfdDisplay(pfdData) {
                     
                     const allFlights = await freshDataRes.json();
                     const updatedFlight = allFlights.flights.find(f => f.flightId === flightProps.flightId);
-
+    
                     if (updatedFlight && updatedFlight.position) {
                         updatePfdDisplay(updatedFlight.position);
                         updateAircraftInfoWindow(updatedFlight, plan); // Update other details like footer
@@ -2088,8 +2163,8 @@ function updatePfdDisplay(pfdData) {
                     clearInterval(activePfdUpdateInterval);
                     activePfdUpdateInterval = null;
                 }
-            }, 3000); // Poll for new data every 3 seconds
-
+            }, 3000);
+    
         } catch (error) {
             console.error("Error fetching or plotting aircraft details:", error);
             contentEl.innerHTML = `<p class="error-text">Could not retrieve complete flight details. The aircraft may have landed or disconnected.</p>`;
@@ -2098,12 +2173,12 @@ function updatePfdDisplay(pfdData) {
 
 
     /**
-     * --- [REMODEL] Generates the "Unified Flight Display" with a dynamic PFD, matching the new design.
+     * --- [REDESIGNED] Generates the "Unified Flight Display" with a new creative header and PFD.
      */
     function populateAircraftInfoWindow(baseProps, plan) {
         const contentEl = document.getElementById('aircraft-window-content');
-
-        // --- Data Extraction & Calculation ---
+    
+        // --- Data Extraction ---
         const allWaypoints = [];
         if (plan && plan.flightPlanItems) {
             const extractWps = (items) => {
@@ -2117,25 +2192,32 @@ function updatePfdDisplay(pfdData) {
         const hasPlan = allWaypoints.length >= 2;
         const departureIcao = hasPlan ? allWaypoints[0]?.name : 'N/A';
         const arrivalIcao = hasPlan ? allWaypoints[allWaypoints.length - 1]?.name : 'N/A';
-
+    
         // --- HTML Structure for the new layout ---
         contentEl.innerHTML = `
             <div class="unified-display-container">
                 <div class="unified-display-header">
-                    <div class="flight-id-block">
-                        <div class="flight-number">${baseProps.callsign}</div>
-                        <div class="pilot-callsign">${baseProps.username || 'N/A'}</div>
+                    <div class="flight-route-info">
+                        <span class="icao" id="header-dep-icao">${departureIcao}</span>
+                        <i class="fa-solid fa-plane-departure"></i>
                     </div>
-                    <div class="flight-progress-block">
-                        <div class="route-progress-bar">
-                            <span class="icao">${departureIcao}</span>
-                            <div class="progress-bar-container"><div class="progress-bar-fill"></div></div>
-                            <span class="icao">${arrivalIcao}</span>
+                    <div class="flight-main-details">
+                        <h3 id="header-flight-num">${baseProps.callsign}</h3>
+                        <p id="header-pilot-name">${baseProps.username || 'N/A'}</p>
+                        <div class="route-progress-bar-container">
+                            <div class="progress-bar-fill" id="header-progress-bar"></div>
                         </div>
-                        <div class="flight-phase-badge">ENROUTE</div>
                     </div>
+                    <div class="header-actions">
+                        <i class="fa-solid fa-plane-arrival"></i>
+                        <span class="icao" id="header-arr-icao">${arrivalIcao}</span>
+                        <button id="aircraft-window-hide-btn-new" class="aircraft-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
+                        <button id="aircraft-window-close-btn-new" class="aircraft-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="flight-phase-indicator" id="flight-phase-indicator">
+                        </div>
                 </div>
-
+    
                 <div class="unified-display-main">
                     <div id="pfd-container">
                         <svg width="787" height="695" viewBox="0 0 787 695" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -2184,15 +2266,11 @@ function updatePfdDisplay(pfdData) {
                                 <line id="Line 1" x1="184" y1="211" x2="184" y2="184" stroke="#DBDBDC" stroke-width="2"/>
                                 <line id="Line 2" x1="610" y1="211" x2="610" y2="184" stroke="#DBDBDC" stroke-width="2"/>
                                 <rect id="altitude_bg" x="675" y="73" width="72" height="476" fill="#76767A"/>
-                                <svg x="675" y="73" width="72" height="476">
-                                    <g id="altitude_tape_group"></g>
-                                </svg>
+                                <svg x="675" y="73" width="72" height="476"><g id="altitude_tape_group"></g></svg>
                                 <g id="altitude_indicator_static">
                                     <rect id="altitude_1" x="675" y="280" width="73" height="49" fill="#030309"/>
                                     <text id="altitude_readout_hundreds" x="740" y="316" fill="#00FF00" font-size="32" text-anchor="end" font-weight="bold">0</text>
-                                    <g id="altitude_tens_reel_container" clip-path="url(#tensReelClip)">
-                                        <g id="altitude_tens_reel_group"></g>
-                                    </g>
+                                    <g id="altitude_tens_reel_container" clip-path="url(#tensReelClip)"><g id="altitude_tens_reel_group"></g></g>
                                     <line id="Line 8" x1="669" y1="307" x2="618" y2="307" stroke="#DDDF07" stroke-width="8"/>
                                 </g>
                                 <path id="limit" d="M636 336.08L621.413 307.511L650.858 307.651L636 336.08Z" fill="#C477C6"/>
@@ -2208,9 +2286,7 @@ function updatePfdDisplay(pfdData) {
                                     <path d="M636 395C636 398.866 632.866 402 629 402C625.134 402 622 398.866 622 395C622 391.134 625.134 388 629 388C632.866 388 636 391.134 636 395Z" fill="#D9D9D9"/>
                                 </g>
                                 <rect id="speed" x="28" y="73" width="97" height="477" fill="#76767A"/>
-                                <svg x="28" y="73" width="97" height="477">
-                                    <g id="speed_tape_group"></g>
-                                </svg>
+                                <svg x="28" y="73" width="97" height="477"><g id="speed_tape_group"></g></svg>
                                 <g id="speed_indicator_static">
                                     <path id="Polygon 9" d="M128.036 311.591L150.451 301.561L150.513 321.482L128.036 311.591Z" fill="#FDFD03"/>
                                     <path id="Vector 20" d="M137 311H96.5" stroke="#FDFD03" stroke-width="4"/>
@@ -2241,9 +2317,7 @@ function updatePfdDisplay(pfdData) {
                                 <rect id="Rectangle 25" y="571" width="787" height="140" fill="#030309"/>
                                 <rect id="header" x="243" y="599" width="326" height="66" fill="#76767A"/>
                                 <g id="heading_indicator">
-                                    <g id="heading_tape_container" clip-path="url(#headingClip)">
-                                        <g id="heading_tape_group"></g>
-                                    </g>
+                                    <g id="heading_tape_container" clip-path="url(#headingClip)"><g id="heading_tape_group"></g></g>
                                     <g id="heading_static_elements">
                                         <line x1="406" y1="620" x2="406" y2="635" stroke="#FDFD03" stroke-width="3"/>
                                         <rect x="381" y="599" width="50" height="20" fill="black" stroke="#FFFFFF" stroke-width="1"/>
@@ -2251,9 +2325,7 @@ function updatePfdDisplay(pfdData) {
                                     </g>
                                 </g>
                                 <path id="Vector 27" d="M243 599V667" stroke="#FCFCFF" stroke-width="4"/>
-                                <g id="Line 5">
-                                    <line id="Line 5_2" x1="745" y1="264.5" x2="787" y2="264.5" stroke="#ECED06" stroke-width="3"/>
-                                </g>
+                                <g id="Line 5"><line id="Line 5_2" x1="745" y1="264.5" x2="787" y2="264.5" stroke="#ECED06" stroke-width="3"/></g>
                                 <line id="Line 6_2" x1="671" y1="279.5" x2="748" y2="279.5" stroke="#ECED06" stroke-width="3"/>
                                 <line id="Line 7" x1="671" y1="329.5" x2="748" y2="329.5" stroke="#ECED06" stroke-width="3"/>
                                 <line id="Line 3" x1="746" y1="345.5" x2="786" y2="345.5" stroke="#ECED06" stroke-width="3"/>
@@ -2265,7 +2337,7 @@ function updatePfdDisplay(pfdData) {
                             </defs>
                         </svg>
                     </div>
-
+    
                     <div class="pfd-side-panel">
                          <div class="readout-box"><div class="label">Ground Speed</div><div class="value" id="footer-gs">---<span class="unit">kts</span></div></div>
                          <div class="readout-box"><div class="label">Vertical Speed</div><div class="value" id="footer-vs">---<span class="unit">fpm</span></div></div>
@@ -2283,10 +2355,10 @@ function updatePfdDisplay(pfdData) {
     }
     
     /**
-     * --- [NEW] Updates the non-PFD parts of the Aircraft Info Window
+     * --- [MODIFIED] Updates the non-PFD parts of the Aircraft Info Window, including the new header and phase indicator.
      */
     function updateAircraftInfoWindow(baseProps, plan) {
-        // --- Data Extraction & Calculation ---
+        // --- Data Extraction & Calculation (same as before) ---
         const allWaypoints = [];
         if (plan && plan.flightPlanItems) {
             const extractWps = (items) => {
@@ -2306,13 +2378,13 @@ function updatePfdDisplay(pfdData) {
                 totalDistanceKm += getDistanceKm(allWaypoints[i].location.latitude, allWaypoints[i].location.longitude, allWaypoints[i + 1].location.latitude, allWaypoints[i + 1].location.longitude);
             }
             const totalDistanceNM = totalDistanceKm / 1.852;
-
+    
             if (totalDistanceNM > 0) {
                 const destWp = allWaypoints[allWaypoints.length - 1];
                 const remainingDistanceKm = getDistanceKm(baseProps.position.lat, baseProps.position.lon, destWp.location.latitude, destWp.location.longitude);
                 distanceToDestNM = remainingDistanceKm / 1.852;
                 progress = Math.max(0, Math.min(100, (1 - (distanceToDestNM / totalDistanceNM)) * 100));
-
+    
                 if (baseProps.position.gs_kt > 50) {
                     const timeHours = distanceToDestNM / baseProps.position.gs_kt;
                     const hours = Math.floor(timeHours);
@@ -2322,26 +2394,46 @@ function updatePfdDisplay(pfdData) {
             }
         }
         
+        // --- [MODIFIED] Flight Phase Logic ---
         let flightPhase = 'ENROUTE';
+        let phaseClass = 'phase-enroute';
+        let phaseIcon = 'fa-route';
         const vs = baseProps.position.vs_fpm || 0;
         const altitude = baseProps.position.alt_ft || 0;
         
-        if (vs > 500) flightPhase = 'CLIMB';
-        else if (vs < -500) flightPhase = 'DESCENT';
-        else if (altitude > 28000 && Math.abs(vs) <= 500) flightPhase = 'CRUISE';
-        else if (altitude < 12000 && distanceToDestNM < 40 && vs < -300) flightPhase = 'APPROACH';
-
-        // --- DOM Updates ---
-        const progressBarFill = document.querySelector('.progress-bar-fill');
-        const phaseBadge = document.querySelector('.flight-phase-badge');
+        if (vs > 500) {
+            flightPhase = 'CLIMB';
+            phaseClass = 'phase-climb';
+            phaseIcon = 'fa-arrow-trend-up';
+        } else if (vs < -500) {
+            flightPhase = 'DESCENT';
+            phaseClass = 'phase-descent';
+            phaseIcon = 'fa-arrow-trend-down';
+        } else if (altitude > 28000 && Math.abs(vs) <= 500) {
+            flightPhase = 'CRUISE';
+            phaseClass = 'phase-cruise';
+            phaseIcon = 'fa-minus';
+        } else if (altitude < 12000 && distanceToDestNM < 40 && vs < -300) {
+            flightPhase = 'APPROACH';
+            phaseClass = 'phase-approach';
+            phaseIcon = 'fa-plane-arrival';
+        }
+    
+        // --- [MODIFIED] DOM Updates ---
+        const progressBarFill = document.getElementById('header-progress-bar');
+        const phaseIndicator = document.getElementById('flight-phase-indicator');
         const footerGS = document.getElementById('footer-gs');
         const footerVS = document.getElementById('footer-vs');
         const footerDist = document.getElementById('footer-dist');
         const footerETE = document.getElementById('footer-ete');
-
+    
         if(progressBarFill) progressBarFill.style.width = `${progress.toFixed(1)}%`;
-        if(phaseBadge) phaseBadge.textContent = flightPhase;
-
+        
+        if (phaseIndicator) {
+            phaseIndicator.className = `flight-phase-indicator ${phaseClass}`;
+            phaseIndicator.innerHTML = `<i class="fa-solid ${phaseIcon}"></i> ${flightPhase}`;
+        }
+    
         if(footerGS) footerGS.innerHTML = `${Math.round(baseProps.position.gs_kt)}<span class="unit">kts</span>`;
         if(footerVS) footerVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
         if(footerDist) footerDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
