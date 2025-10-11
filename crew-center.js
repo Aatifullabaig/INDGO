@@ -953,10 +953,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
 /**
- * PFD update with sample-and-hold:
- * - Detects fresh API packets vs. render ticks.
- * - Holds last turn-rate & keeps "turning" latched for DATA_HOLD_MS after the last fresh sample.
- * - Only decays toward level when data is truly stale (after STALE_MS).
+ * Stable PFD update:
+ * - Sample-and-hold last turn-rate between API packets (no snap-back).
+ * - Linear regression w/ fallback dH/dt, heading unwrap, and EMA smoothing.
+ * - Sign stickiness (won’t flip L/R for brief jitters).
+ * - Hysteresis + stale logic so roll only decays when data is truly old.
  */
 function updatePfdDisplay(pfdData) {
   if (!pfdData) return;
@@ -980,6 +981,7 @@ function updatePfdDisplay(pfdData) {
   const alt_ft = pfdData.alt_ft ?? pfdData.altitude_ft ?? pfdData.altitude ?? 0;
   const vs_fpm = pfdData.vs_fpm ?? pfdData.vertical_speed_fpm ?? pfdData.vs ?? 0;
 
+  // ---- DOM ----
   const attitudeGroup     = document.getElementById('attitude_group');
   const speedTapeGroup    = document.getElementById('speed_tape_group');
   const altitudeTapeGroup = document.getElementById('altitude_tape_group');
@@ -991,19 +993,25 @@ function updatePfdDisplay(pfdData) {
   if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !headingTapeGroup || !tensReelGroup) return;
 
   // ---- tunables ----
-  const WINDOW_SEC         = 2.4;  // regression window
-  const LATCH_ON_TURN      = 0.20; // deg/s to latch "turning"
-  const LATCH_OFF_TURN     = 0.10; // deg/s to unlatch
-  const LATCH_HOLD_MS      = 400;  // chatter guard (still used)
-  const MAX_BANK_DEG       = 35;
-  const MAX_ROLL_RATE      = 60;   // display slew (deg/s)
-  const MIN_GS_FOR_TURN    = 1;
-  const PITCH_LIMIT        = 25;
-  const DECAY_TO_LEVEL_DPS = 12;   // decay speed when we finally decide to relax
-  const HDG_EPS            = 0.2;  // ~0.2° change considered "fresh"
-  const GS_EPS             = 0.5;  // ~0.5 kt change considered "fresh"
-  const DATA_HOLD_MS       = 1200; // hold last turn-rate this long after last fresh packet
-  const STALE_MS           = 4000; // after this, consider data stale and allow decay/unlatch
+  const WINDOW_SEC          = 2.4;   // regression window
+  const LATCH_ON_TURN       = 0.20;  // deg/s to latch "turning"
+  const LATCH_OFF_TURN      = 0.10;  // deg/s to unlatch
+  const LATCH_HOLD_MS       = 400;   // chatter guard
+  const MAX_BANK_DEG        = 35;
+  const MAX_ROLL_RATE       = 60;    // display slew (deg/s)
+  const MIN_GS_FOR_TURN     = 1;
+  const PITCH_LIMIT         = 25;
+
+  const DATA_HOLD_MS        = 1400;  // hold last turn-rate after last fresh packet
+  const STALE_MS            = 4000;  // after this, allow full decay/unlatch
+  const HDG_EPS             = 0.4;   // unwrapped degrees to consider heading "changed"
+  const GS_EPS              = 0.5;   // kt change to consider GS "changed"
+  const DECAY_TO_LEVEL_DPS  = 12;    // decay when not turning
+  const MICRO_DECAY_FACTOR  = 0.25;  // softer decay before STALE_MS
+
+  const EMA_ALPHA           = 0.35;  // EMA smoothing on turn-rate (0..1)
+  const SIGN_MIN_DEG        = 3.0;   // min magnitude to accept L/R sign flip
+  const SIGN_HOLD_MS        = 250;   // new sign must persist this long
 
   const now = performance.now();
 
@@ -1012,16 +1020,22 @@ function updatePfdDisplay(pfdData) {
     window.lastPfdState = {
       unwrapped: track_deg,
       lastTime: now,
-      buf: [],                  // [{t, hdg}] of FRESH samples only
+      buf: [],                  // [{t, hdg}] for fresh samples only
       rollDisp: 0,
       turning: false,
       lastTurnLatchTs: 0,
-      // NEW: data freshness & hold
-      lastDataTs: 0,            // last time we saw a "fresh" packet
-      lastTurnRate: 0,          // last computed turn-rate from fresh data
+
+      // freshness / hold
+      lastDataTs: 0,
+      lastTurnRate: 0,
       lastRawTrack: track_deg,
       lastRawGs: gs_kt,
-      prevUnwrapped: track_deg
+      prevUnwrapped: track_deg,
+
+      // smoothing & sign guard
+      turnRateEma: 0,
+      rollSign: 0,
+      lastSignChangeTs: 0
     };
   }
   const S = window.lastPfdState;
@@ -1032,9 +1046,10 @@ function updatePfdDisplay(pfdData) {
   if (delta < -180) delta += 360;
   const unwrapped = S.unwrapped + delta;
 
-  // ---- detect "fresh" API packet vs. render tick ----
+  // ---- detect "fresh" API packet vs. render tick (use unwrapped delta) ----
+  const unwrappedDelta = Math.abs(unwrapped - S.unwrapped);
   const isFresh =
-    Math.abs(track_deg - S.lastRawTrack) > HDG_EPS ||
+    unwrappedDelta > HDG_EPS ||
     Math.abs(gs_kt - S.lastRawGs) > GS_EPS;
 
   // ---- manage regression buffer (only for fresh samples) ----
@@ -1043,8 +1058,6 @@ function updatePfdDisplay(pfdData) {
     S.lastDataTs = now;
     S.lastRawTrack = track_deg;
     S.lastRawGs = gs_kt;
-
-    // keep only recent window
     const cutoff = tNow - WINDOW_SEC;
     S.buf.push({ t: tNow, hdg: unwrapped });
     while (S.buf.length && S.buf[0].t < cutoff) S.buf.shift();
@@ -1069,7 +1082,6 @@ function updatePfdDisplay(pfdData) {
       if (denom !== 0) {
         turnRate = (n * sumTH - sumT * sumH) / denom; // deg/s
       } else {
-        // fallback to dH/dt for this tick
         const dtS = Math.max(0.02, (now - S.lastTime) / 1000);
         turnRate = (unwrapped - S.prevUnwrapped) / dtS;
       }
@@ -1077,15 +1089,16 @@ function updatePfdDisplay(pfdData) {
       const dtS = Math.max(0.02, (now - S.lastTime) / 1000);
       turnRate = (unwrapped - S.prevUnwrapped) / dtS;
     }
-    S.lastTurnRate = turnRate; // update the held value
+    S.lastTurnRate = turnRate;
   }
 
-  // ---- freshness-aware hysteresis ----
-  const sinceFresh = now - S.lastDataTs;
-  const rateAbs    = Math.abs(turnRate);
-  const wasTurning = S.turning;
+  // ---- EMA smoothing on turn-rate ----
+  S.turnRateEma = EMA_ALPHA * turnRate + (1 - EMA_ALPHA) * S.turnRateEma;
 
-  // Treat as "turning" during the hold window if last known rate was non-trivial
+  // ---- hysteresis + data-hold for "turning" ----
+  const sinceFresh = now - S.lastDataTs;
+  const rateAbs    = Math.abs(S.turnRateEma);
+  const wasTurning = S.turning;
   const forceTurningByHold = sinceFresh <= DATA_HOLD_MS && Math.abs(S.lastTurnRate) >= LATCH_OFF_TURN;
 
   if (!wasTurning) {
@@ -1103,25 +1116,34 @@ function updatePfdDisplay(pfdData) {
     }
   }
 
-  // ---- bank target from coordinated turn ----
-  const V = Math.max(0, gs_kt) * 0.514444;
-  const g = 9.81;
-  const omega = (turnRate * Math.PI) / 180;
-  const bankAbs = Math.atan(Math.abs(omega) * V / g) * 180 / Math.PI;
-  let targetRoll = (turnRate >= 0 ? 1 : -1) * bankAbs;
-  targetRoll = Math.max(-MAX_BANK_DEG, Math.min(MAX_BANK_DEG, targetRoll));
+  // ---- coordinated-turn bank target from smoothed rate ----
+  const Vms   = Math.max(0, gs_kt) * 0.514444;
+  const omega = (S.turnRateEma * Math.PI) / 180; // rad/s
+  const bankAbs = Math.atan(Math.abs(omega) * Vms / 9.81) * 180 / Math.PI;
+  let targetRoll = (S.turnRateEma >= 0 ? 1 : -1) * Math.min(bankAbs, MAX_BANK_DEG);
 
-  // During the hold window, don't decay; after stale, decay smoothly
+  // ---- sign stickiness (prevents brief L/R flips) ----
+  const desiredSign = Math.sign(targetRoll);
+  if (desiredSign !== 0 && desiredSign !== S.rollSign) {
+    const bigEnough = Math.abs(targetRoll) >= SIGN_MIN_DEG;
+    const persisted = (now - S.lastSignChangeTs) >= SIGN_HOLD_MS;
+    if (bigEnough && persisted) {
+      S.rollSign = desiredSign;
+      S.lastSignChangeTs = now;
+    } else {
+      targetRoll = Math.abs(targetRoll) * (S.rollSign || desiredSign);
+    }
+  } else if (S.rollSign === 0 && desiredSign !== 0) {
+    S.rollSign = desiredSign;
+    S.lastSignChangeTs = now;
+  }
+
+  // ---- when not turning: decay toward level (hold pose before STALE_MS) ----
   if (!S.turning) {
     const dt = Math.max(0.01, (now - S.lastTime) / 1000);
-    const decayStep = DECAY_TO_LEVEL_DPS * dt;
-    if (sinceFresh <= STALE_MS) {
-      // gentle micro-decay only (keeps near last pose)
-      targetRoll = Math.abs(S.rollDisp) <= decayStep ? 0 : S.rollDisp - Math.sign(S.rollDisp) * (decayStep * 0.25);
-    } else {
-      // fully decay to wings-level
-      targetRoll = Math.abs(S.rollDisp) <= decayStep ? 0 : S.rollDisp - Math.sign(S.rollDisp) * decayStep;
-    }
+    const base = DECAY_TO_LEVEL_DPS * dt;
+    const decayStep = sinceFresh <= STALE_MS ? base * MICRO_DECAY_FACTOR : base;
+    targetRoll = (Math.abs(S.rollDisp) <= decayStep) ? 0 : S.rollDisp - Math.sign(S.rollDisp) * decayStep;
   }
 
   // ---- slew-limit the displayed roll ----
@@ -1132,23 +1154,16 @@ function updatePfdDisplay(pfdData) {
     S.rollDisp += Math.abs(diff) > maxStep ? Math.sign(diff) * maxStep : diff;
   }
 
-  // ---- update state ----
+  // ---- update state timestamps/unwraps ----
   S.unwrapped = unwrapped;
   S.prevUnwrapped = unwrapped;
   S.lastTime = now;
 
   // ---- pitch from VS ----
-  const PFD_PITCH_SCALE = window.PFD_PITCH_SCALE ?? 2.0;
   const pitch_deg = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, (vs_fpm / 1000) * 4));
 
-  // ---- apply attitude transform ----
-  const rollForSvg = -S.rollDisp; // SVG rotation direction
-  attitudeGroup.setAttribute(
-    'transform',
-    `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(${rollForSvg}, 401.5, 312.5)`
-  );
-
-  // ---- tapes/readouts (unchanged) ----
+  // ---- global scales (with sane fallbacks) ----
+  const PFD_PITCH_SCALE       = window.PFD_PITCH_SCALE ?? 2.0;
   const PFD_SPEED_REF_VALUE   = window.PFD_SPEED_REF_VALUE ?? 0;
   const PFD_SPEED_SCALE       = window.PFD_SPEED_SCALE ?? -0.6;
   const PFD_ALTITUDE_SCALE    = window.PFD_ALTITUDE_SCALE ?? -0.09;
@@ -1156,6 +1171,14 @@ function updatePfdDisplay(pfdData) {
   const PFD_HEADING_REF_VALUE = window.PFD_HEADING_REF_VALUE ?? 0;
   const PFD_HEADING_SCALE     = window.PFD_HEADING_SCALE ?? 4;
 
+  // ---- apply attitude transform (pitch translate, roll rotate) ----
+  const rollForSvg = -S.rollDisp; // SVG rotation sense
+  attitudeGroup.setAttribute(
+    'transform',
+    `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(${rollForSvg}, 401.5, 312.5)`
+  );
+
+  // ---- tapes/readouts ----
   speedReadout.textContent = Math.round(gs_kt);
   const speedYOffset = (gs_kt - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE;
   speedTapeGroup.setAttribute('transform', `translate(0, ${speedYOffset})`);
@@ -1174,6 +1197,7 @@ function updatePfdDisplay(pfdData) {
   const xOffset = -(track_deg - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
   headingTapeGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
 }
+
 
 
 
