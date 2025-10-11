@@ -954,7 +954,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
  /**
  * --- [UPGRADED] Updates the PFD with live data, now including simulated roll.
- * Drop-in FIX: avoids "--10" in SVG rotate() that broke left-bank indication.
+ * --- [UPGRADED] Updates the PFD with live data, includes stable roll without sign snaps.
  * @param {object} pfdData - The position object from the live flight data.
  */
 function updatePfdDisplay(pfdData) {
@@ -972,79 +972,116 @@ function updatePfdDisplay(pfdData) {
   const headingReadout     = document.getElementById('heading_readout');
 
   if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !headingTapeGroup || !tensReelGroup) {
-    return; // Exit if PFD elements aren't in the DOM yet
+    return; // DOM not ready
   }
 
-  // --- [FIX] REVISED Bank Angle (Roll) Calculation to prevent flickering ---
+  // --- INIT STATE (safe if already defined) ---
+  if (typeof window.lastPfdState !== 'object' || window.lastPfdState == null) {
+    window.lastPfdState = {
+      track_deg: track_deg,
+      timestamp: 0,
+      roll_deg: 0,
+      unwrapped: track_deg,   // continuous heading (no 0/360 jump)
+      turnRateSm: 0           // smoothed turn rate (deg/s)
+    };
+  }
+
   const currentTime = Date.now();
-  let roll_deg = lastPfdState.roll_deg; // Start with the last known roll angle
+  const prev = window.lastPfdState;
+  let roll_disp = prev.roll_deg; // what we actually show, after slew-rate limiting
 
-  if (lastPfdState.timestamp > 0 && gs_kt > 30) {
-    const timeDelta_sec = (currentTime - lastPfdState.timestamp) / 1000;
-    if (timeDelta_sec > 0) {
-      // Handle heading wrap-around (e.g., 359° to 1°)
-      let track_diff = track_deg - lastPfdState.track_deg;
-      if (track_diff > 180) track_diff -= 360;
-      if (track_diff < -180) track_diff += 360;
+  // --- Compute time delta ---
+  let dt = 0;
+  if (prev.timestamp > 0) dt = Math.max(0.01, (currentTime - prev.timestamp) / 1000); // guard tiny/zero dt
 
-      // Only calculate a new roll angle if the plane is actively turning
-      if (Math.abs(track_diff) > 0.1) { // small threshold to prevent noise
-        // 1) Magnitude of turn rate (deg/s)
-        const turn_rate_magnitude = Math.abs(track_diff) / timeDelta_sec;
+  // --- 1) Unwrap heading (prevents 359→0 sign flip noise) ---
+  // Carry a continuous heading that can grow past 360 or below 0.
+  let delta = track_deg - (prev.unwrapped % 360);
+  if (delta > 180)  delta -= 360;
+  if (delta < -180) delta += 360;
+  const unwrapped = prev.unwrapped + delta;
 
-        // 2) Convert to bank angle via coordinated turn approximation
-        const velocity_mps  = gs_kt * 0.514444; // knots -> m/s
-        const g             = 9.81;
-        const bank_angle_rad = Math.atan((turn_rate_magnitude * Math.PI / 180) * velocity_mps / g);
-        let unsigned_roll_deg = bank_angle_rad * (180 / Math.PI);
-
-        // 3) Apply sign (left negative, right positive) and clamp
-        roll_deg = (track_diff >= 0) ? unsigned_roll_deg : -unsigned_roll_deg;
-        roll_deg = Math.max(-35, Math.min(35, roll_deg));
-      } else {
-        // Gentle decay back to level when no turn is detected
-        roll_deg *= 0.9;
-      }
-    }
+  // --- 2) Turn-rate (deg/s), smoothed with EWMA to remove jitter ---
+  let turnRate = 0; // deg/s
+  if (dt > 0 && gs_kt > 5) {
+    const rawTurnRate = (unwrapped - prev.unwrapped) / dt; // deg/s (signed)
+    const ALPHA = 0.25; // smoothing factor (0=no change, 1=no smoothing)
+    turnRate = (1 - ALPHA) * prev.turnRateSm + ALPHA * rawTurnRate;
+  } else {
+    turnRate = prev.turnRateSm * 0.9; // decay toward zero on ground/paused updates
   }
 
-  // Update the state for the next calculation
-  lastPfdState = { track_deg: track_deg, timestamp: currentTime, roll_deg: roll_deg };
-  // --- END: Bank Angle Calculation FIX ---
+  // Deadband to kill micro-oscillations that cause sign flutters
+  const TURN_RATE_DEADBAND = 0.2; // deg/s
+  if (Math.abs(turnRate) < TURN_RATE_DEADBAND) turnRate = 0;
 
-  // 1) Attitude Indicator (Pitch from VS, Roll from calculation)
+  // --- 3) Map turn-rate → target bank angle (coordinated turn approx) ---
+  // bank ≈ atan( (ω * V) / g ), ω in rad/s, V in m/s
+  const V_mps = Math.max(0, gs_kt) * 0.514444;
+  const g = 9.81;
+  const omega_rad = (turnRate * Math.PI) / 180;
+  const bank_rad = Math.atan((V_mps * Math.abs(omega_rad)) / g);
+  let target_roll = (bank_rad * 180) / Math.PI;
+  // Apply sign (right positive, left negative)
+  if (turnRate < 0) target_roll = -target_roll;
+
+  // Clamp target roll
+  const MAX_BANK = 35;
+  target_roll = Math.max(-MAX_BANK, Math.min(MAX_BANK, target_roll));
+
+  // --- 4) Slew-rate limit the visible roll to avoid instant direction flips ---
+  // Prevents a single noisy sample from flipping sign immediately.
+  const MAX_ROLL_RATE = 45; // deg/s max change the display is allowed to move
+  const maxStep = (dt || 0.016) * MAX_ROLL_RATE; // allow a reasonable change per frame
+  const diff = target_roll - roll_disp;
+  if (Math.abs(diff) > maxStep) {
+    roll_disp += Math.sign(diff) * maxStep;
+  } else {
+    roll_disp = target_roll;
+  }
+
+  // Update state for next tick
+  window.lastPfdState = {
+    track_deg: track_deg,
+    timestamp: currentTime,
+    roll_deg: roll_disp,
+    unwrapped: unwrapped,
+    turnRateSm: turnRate
+  };
+
+  // --- Pitch from VS (unchanged) ---
   const pitch_deg = Math.max(-25, Math.min(25, (vs_fpm / 1000) * 4));
 
-  // --- THE IMPORTANT FIX ---
-  // Build the rotation value separately so negative rolls don't create a string like "--10"
-  const rollForSvg = -roll_deg; // one negation only
+  // --- Apply transform (avoid "--10" issue by pre-negating once) ---
+  const rollForSvg = -roll_disp;
   attitudeGroup.setAttribute(
     'transform',
     `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(${rollForSvg}, 401.5, 312.5)`
   );
 
-  // 2) Speed Tape
+  // --- Speed tape ---
   speedReadout.textContent = Math.round(gs_kt);
   const speedYOffset = (gs_kt - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE;
   speedTapeGroup.setAttribute('transform', `translate(0, ${speedYOffset})`);
 
-  // 3) Altitude Tape
+  // --- Altitude tape ---
   const altitude = Math.max(0, alt_ft);
   altReadoutHund.textContent = Math.floor(altitude / 100);
   const tapeYOffset = altitude * PFD_ALTITUDE_SCALE;
   altitudeTapeGroup.setAttribute('transform', `translate(0, ${tapeYOffset})`);
 
-  // 4) Altitude Tens Reel
+  // --- Altitude tens reel ---
   const tensValue = altitude % 100;
   const reelYOffset = -(tensValue / 20) * PFD_REEL_SPACING;
   tensReelGroup.setAttribute('transform', `translate(0, ${reelYOffset})`);
 
-  // 5) Heading Tape + Readout (normalize to 0–359)
+  // --- Heading readout & tape ---
   const hdg = ((Math.round(track_deg) % 360) + 360) % 360;
   headingReadout.textContent = String(hdg).padStart(3, '0');
   const xOffset = -(track_deg - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
   headingTapeGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
 }
+
 
 /**
  * --- [REVAMPED] Creates the rich HTML content for the airport information window.
