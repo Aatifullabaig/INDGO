@@ -953,7 +953,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     /**
- * --- [CORRECTED] Updates the PFD with live data, now with smoothed roll/bank angle.
+ /**
+ * --- [FINAL] Updates the PFD with live data, using time-corrected smoothing for stability.
  * @param {object} pfdData - The position object from the live flight data.
  */
 function updatePfdDisplay(pfdData) {
@@ -974,15 +975,13 @@ function updatePfdDisplay(pfdData) {
         return; // Exit if PFD elements aren't in the DOM yet
     }
     
-    // --- [CORRECTED] Bank Angle (Roll) Calculation with Smoothing ---
+    // --- [UPGRADED] Bank Angle (Roll) Calculation with Time-Corrected Smoothing ---
     const currentTime = Date.now();
-    // Start with the roll angle from the last frame. This is our current on-screen value.
     let roll_deg = lastPfdState.roll_deg; 
 
     if (lastPfdState.timestamp > 0 && gs_kt > 30) {
         const timeDelta_sec = (currentTime - lastPfdState.timestamp) / 1000;
         if (timeDelta_sec > 0) {
-            // Handle heading wrap-around (e.g., 359° to 1°)
             let track_diff = track_deg - lastPfdState.track_deg;
             if (track_diff > 180) track_diff -= 360;
             if (track_diff < -180) track_diff += 360;
@@ -995,15 +994,18 @@ function updatePfdDisplay(pfdData) {
             let target_roll_deg = bank_angle_rad * (180 / Math.PI);
             target_roll_deg = Math.max(-35, Math.min(35, target_roll_deg));
 
-            // 2. Smoothly move the current roll angle towards the target.
-            const SMOOTHING_FACTOR = 0.25; 
-            roll_deg += (target_roll_deg - roll_deg) * SMOOTHING_FACTOR;
+            // 2. [NEW] Use a time-corrected smoothing factor.
+            // This makes the animation stable regardless of the API update interval, filtering out jitter.
+            // The 'rate_constant' can be tuned (higher = more responsive, lower = smoother).
+            const rate_constant = 1.5;
+            const smoothing = 1 - Math.exp(-rate_constant * timeDelta_sec);
+            roll_deg += (target_roll_deg - roll_deg) * smoothing;
         }
     }
     
-    // 3. Update the state for the next frame with the newly calculated values.
+    // 3. Update the state for the next frame.
     lastPfdState = { track_deg: track_deg, timestamp: currentTime, roll_deg: roll_deg };
-    // --- END: Bank Angle Correction ---
+    // --- END: Bank Angle Upgrade ---
 
     // 1. Attitude Indicator (Pitch from VS, Roll from calculation)
     const pitch_deg = Math.max(-25, Math.min(25, (vs_fpm / 1000) * 4));
