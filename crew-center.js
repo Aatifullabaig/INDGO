@@ -957,9 +957,14 @@ document.addEventListener('DOMContentLoaded', async () => {
  * --- [UPGRADED] Updates the PFD with live data, includes stable roll without sign snaps.
  * @param {object} pfdData - The position object from the live flight data.
  */
+/**
+ * Stable PFD update with robust turn-rate & hysteresis so banks don't "drift level" mid-turn.
+ * - Uses sliding window linear regression (~0.8s) to estimate turn rate (deg/s).
+ * - Latches "turning" with hysteresis (onThresh > offThresh) to avoid dropouts.
+ * - Pre-negates roll once for SVG (prevents "--10" string issue).
+ */
 function updatePfdDisplay(pfdData) {
   if (!pfdData) return;
-
   const { gs_kt = 0, alt_ft = 0, track_deg = 0, vs_fpm = 0 } = pfdData;
 
   const attitudeGroup      = document.getElementById('attitude_group');
@@ -970,117 +975,150 @@ function updatePfdDisplay(pfdData) {
   const speedReadout       = document.getElementById('speed_readout');
   const altReadoutHund     = document.getElementById('altitude_readout_hundreds');
   const headingReadout     = document.getElementById('heading_readout');
+  if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !headingTapeGroup || !tensReelGroup) return;
 
-  if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !headingTapeGroup || !tensReelGroup) {
-    return; // DOM not ready
-  }
+  // --- constants (tune if you want) ---
+  const WINDOW_SEC        = 0.8;   // regression window length
+  const LATCH_ON_TURN     = 0.35;  // deg/s needed to latch "turning"
+  const LATCH_OFF_TURN    = 0.18;  // deg/s to unlatch (smaller than ON for hysteresis)
+  const LATCH_HOLD_MS     = 350;   // once latched, keep at least this long even if rate dips
+  const MAX_BANK_DEG      = 35;    // clamp bank
+  const MAX_ROLL_RATE     = 45;    // deg/s slew limit for displayed roll
+  const MIN_GS_FOR_TURN   = 5;     // ignore turn rate near zero groundspeed
+  const PITCH_LIMIT       = 25;
 
-  // --- INIT STATE (safe if already defined) ---
-  if (typeof window.lastPfdState !== 'object' || window.lastPfdState == null) {
+  const now = performance.now(); // high-res time
+
+  // --- init persistent state ---
+  if (!window.lastPfdState || typeof window.lastPfdState !== 'object') {
     window.lastPfdState = {
-      track_deg: track_deg,
-      timestamp: 0,
-      roll_deg: 0,
-      unwrapped: track_deg,   // continuous heading (no 0/360 jump)
-      turnRateSm: 0           // smoothed turn rate (deg/s)
+      // continuous heading (no wrap), last sample time
+      unwrapped: track_deg,
+      lastTime: now,
+      // regression buffers
+      buf: [],            // [{t, hdg}] with t in seconds relative to 'now'
+      // roll display + latch
+      rollDisp: 0,
+      turning: false,
+      lastTurnLatchTs: 0
     };
   }
+  const S = window.lastPfdState;
 
-  const currentTime = Date.now();
-  const prev = window.lastPfdState;
-  let roll_disp = prev.roll_deg; // what we actually show, after slew-rate limiting
-
-  // --- Compute time delta ---
-  let dt = 0;
-  if (prev.timestamp > 0) dt = Math.max(0.01, (currentTime - prev.timestamp) / 1000); // guard tiny/zero dt
-
-  // --- 1) Unwrap heading (prevents 359→0 sign flip noise) ---
-  // Carry a continuous heading that can grow past 360 or below 0.
-  let delta = track_deg - (prev.unwrapped % 360);
+  // --- unwrap heading (keep continuous) ---
+  // compare to S.unwrapped%360 to get a wrapped delta then add
+  let delta = track_deg - (S.unwrapped % 360);
   if (delta > 180)  delta -= 360;
   if (delta < -180) delta += 360;
-  const unwrapped = prev.unwrapped + delta;
+  const unwrapped = S.unwrapped + delta;
 
-  // --- 2) Turn-rate (deg/s), smoothed with EWMA to remove jitter ---
-  let turnRate = 0; // deg/s
-  if (dt > 0 && gs_kt > 5) {
-    const rawTurnRate = (unwrapped - prev.unwrapped) / dt; // deg/s (signed)
-    const ALPHA = 0.25; // smoothing factor (0=no change, 1=no smoothing)
-    turnRate = (1 - ALPHA) * prev.turnRateSm + ALPHA * rawTurnRate;
-  } else {
-    turnRate = prev.turnRateSm * 0.9; // decay toward zero on ground/paused updates
+  // --- feed sliding window (relative timestamps, recent first after we recompute) ---
+  // keep samples for ~WINDOW_SEC
+  const tNow = now / 1000;
+  // push current sample
+  S.buf.push({ t: tNow, hdg: unwrapped });
+  // drop old samples
+  const cutoff = tNow - WINDOW_SEC;
+  while (S.buf.length && S.buf[0].t < cutoff) S.buf.shift();
+
+  // --- linear regression to estimate turn-rate (deg/s) ---
+  let turnRate = 0;
+  if (S.buf.length >= 2 && gs_kt > MIN_GS_FOR_TURN) {
+    // convert times to relative (improves numeric stability)
+    const t0 = S.buf[0].t;
+    let sumT = 0, sumH = 0, sumTT = 0, sumTH = 0, n = S.buf.length;
+    for (let i = 0; i < n; i++) {
+      const ti = S.buf[i].t - t0;
+      const hi = S.buf[i].hdg;
+      sumT  += ti;
+      sumH  += hi;
+      sumTT += ti * ti;
+      sumTH += ti * hi;
+    }
+    const denom = (n * sumTT - sumT * sumT);
+    if (denom !== 0) {
+      const slope = (n * sumTH - sumT * sumH) / denom; // deg per second
+      turnRate = slope;
+    }
   }
 
-  // Deadband to kill micro-oscillations that cause sign flutters
-  const TURN_RATE_DEADBAND = 0.2; // deg/s
-  if (Math.abs(turnRate) < TURN_RATE_DEADBAND) turnRate = 0;
+  // --- hysteresis latch for "turning" ---
+  const rateAbs = Math.abs(turnRate);
+  const wasTurning = S.turning;
+  const timeSinceLatch = now - S.lastTurnLatchTs;
 
-  // --- 3) Map turn-rate → target bank angle (coordinated turn approx) ---
+  if (!wasTurning && rateAbs >= LATCH_ON_TURN) {
+    S.turning = true;
+    S.lastTurnLatchTs = now;
+  } else if (wasTurning) {
+    // stay latched for a minimum time, and until rate falls below OFF threshold
+    if (rateAbs < LATCH_OFF_TURN && timeSinceLatch > LATCH_HOLD_MS) {
+      S.turning = false;
+    } else {
+      // refresh latch timer if still above OFF threshold
+      if (rateAbs >= LATCH_OFF_TURN) S.lastTurnLatchTs = now;
+    }
+  }
+
+  // --- target bank from coordinated-turn approximation ---
   // bank ≈ atan( (ω * V) / g ), ω in rad/s, V in m/s
-  const V_mps = Math.max(0, gs_kt) * 0.514444;
+  const V = Math.max(0, gs_kt) * 0.514444;
   const g = 9.81;
-  const omega_rad = (turnRate * Math.PI) / 180;
-  const bank_rad = Math.atan((V_mps * Math.abs(omega_rad)) / g);
-  let target_roll = (bank_rad * 180) / Math.PI;
-  // Apply sign (right positive, left negative)
-  if (turnRate < 0) target_roll = -target_roll;
+  const omega = (turnRate * Math.PI) / 180; // rad/s, signed
+  const bankAbs = Math.atan(Math.abs(omega) * V / g) * 180 / Math.PI;
+  let targetRoll = (turnRate >= 0 ? 1 : -1) * bankAbs;
+  // when NOT turning (unlatched), decay target to zero; otherwise, DO NOT decay
+  if (!S.turning) targetRoll *= 0.0; // explicit zero when not turning
+  // clamp
+  targetRoll = Math.max(-MAX_BANK_DEG, Math.min(MAX_BANK_DEG, targetRoll));
 
-  // Clamp target roll
-  const MAX_BANK = 35;
-  target_roll = Math.max(-MAX_BANK, Math.min(MAX_BANK, target_roll));
-
-  // --- 4) Slew-rate limit the visible roll to avoid instant direction flips ---
-  // Prevents a single noisy sample from flipping sign immediately.
-  const MAX_ROLL_RATE = 45; // deg/s max change the display is allowed to move
-  const maxStep = (dt || 0.016) * MAX_ROLL_RATE; // allow a reasonable change per frame
-  const diff = target_roll - roll_disp;
+  // --- slew-limit displayed roll to avoid jumps, but don't "fight" the latch ---
+  const dt = Math.max(0.01, (now - S.lastTime) / 1000);
+  const maxStep = dt * MAX_ROLL_RATE;
+  const diff = targetRoll - S.rollDisp;
   if (Math.abs(diff) > maxStep) {
-    roll_disp += Math.sign(diff) * maxStep;
+    S.rollDisp += Math.sign(diff) * maxStep;
   } else {
-    roll_disp = target_roll;
+    S.rollDisp = targetRoll;
   }
 
-  // Update state for next tick
-  window.lastPfdState = {
-    track_deg: track_deg,
-    timestamp: currentTime,
-    roll_deg: roll_disp,
-    unwrapped: unwrapped,
-    turnRateSm: turnRate
-  };
+  // --- update state ---
+  S.unwrapped = unwrapped;
+  S.lastTime = now;
 
-  // --- Pitch from VS (unchanged) ---
-  const pitch_deg = Math.max(-25, Math.min(25, (vs_fpm / 1000) * 4));
+  // --- pitch from VS (unchanged) ---
+  const pitch_deg = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, (vs_fpm / 1000) * 4));
 
-  // --- Apply transform (avoid "--10" issue by pre-negating once) ---
-  const rollForSvg = -roll_disp;
+  // --- apply transform (pre-negate once for SVG rotation sense) ---
+  const rollForSvg = -S.rollDisp;
   attitudeGroup.setAttribute(
     'transform',
     `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(${rollForSvg}, 401.5, 312.5)`
   );
 
-  // --- Speed tape ---
+  // --- speed tape ---
   speedReadout.textContent = Math.round(gs_kt);
   const speedYOffset = (gs_kt - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE;
   speedTapeGroup.setAttribute('transform', `translate(0, ${speedYOffset})`);
 
-  // --- Altitude tape ---
+  // --- altitude tape ---
   const altitude = Math.max(0, alt_ft);
   altReadoutHund.textContent = Math.floor(altitude / 100);
   const tapeYOffset = altitude * PFD_ALTITUDE_SCALE;
   altitudeTapeGroup.setAttribute('transform', `translate(0, ${tapeYOffset})`);
 
-  // --- Altitude tens reel ---
+  // --- tens reel ---
   const tensValue = altitude % 100;
   const reelYOffset = -(tensValue / 20) * PFD_REEL_SPACING;
   tensReelGroup.setAttribute('transform', `translate(0, ${reelYOffset})`);
 
-  // --- Heading readout & tape ---
+  // --- heading readout & tape ---
   const hdg = ((Math.round(track_deg) % 360) + 360) % 360;
   headingReadout.textContent = String(hdg).padStart(3, '0');
   const xOffset = -(track_deg - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
   headingTapeGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
 }
+
 
 
 /**
