@@ -952,56 +952,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         generateHeadingTape();
     }
     
-// --- PFD per-aircraft state cache + reset helpers ---
-window.pfdStateByKey ||= Object.create(null);
-
-function resetPfdForAircraft(aircraftKey, seed = {}) {
-  // seed: {track_deg, gs_kt, alt_ft, vs_fpm}
-  const now = performance.now();
-  const track = seed.track_deg ?? 0;
-  window.pfdStateByKey[aircraftKey] = {
-    key: aircraftKey,
-    // time & unwrap
-    unwrapped: track,
-    prevUnwrapped: track,
-    lastTime: now,
-    // regression buffer (will be warm-started in update)
-    buf: [],
-    // display & control
-    rollDisp: 0,
-    turning: false,
-    lastTurnLatchTs: 0,
-    // data freshness
-    lastDataTs: 0,
-    lastTurnRate: 0,
-    lastRawTrack: track,
-    lastRawGs: seed.gs_kt ?? 0,
-    // smoothing/sign guards
-    turnRateEma: 0,
-    rollSign: 0,
-    lastSignChangeTs: 0,
-    // NEW: after reset, first packet should not slew from old plane
-    justReset: true,
-    // NEW: freeze/N frames no-decay so pose holds while buffers warm
-    warmUntil: now + 600 // ms
-  };
-}
-
 /**
- * Call this every render tick or when new data arrives.
- * Pass { aircraftKey } so state is isolated per aircraft.
+ * Stable PFD update:
+ * - Sample-and-hold last turn-rate between API packets (no snap-back).
+ * - Linear regression w/ fallback dH/dt, heading unwrap, and EMA smoothing.
+ * - Sign stickiness (won’t flip L/R for brief jitters).
+ * - Hysteresis + stale logic so roll only decays when data is truly old.
  */
-function updatePfdDisplay(pfdData, opts = {}) {
+function updatePfdDisplay(pfdData) {
   if (!pfdData) return;
-  const aircraftKey = opts.aircraftKey ?? 'default';
-  // Ensure state exists (first use or after a switch)
-  if (!window.pfdStateByKey[aircraftKey]) {
-    resetPfdForAircraft(aircraftKey, {
-      track_deg: pfdData.track_deg ?? pfdData.heading_deg ?? pfdData.track ?? pfdData.hdg ?? 0,
-      gs_kt:     pfdData.gs_kt ?? pfdData.groundspeed_kts ?? pfdData.groundspeed ?? pfdData.gs ?? 0
-    });
-  }
-  const S = window.pfdStateByKey[aircraftKey];
 
   // ---- tolerate common key names ----
   const gs_kt =
@@ -1033,28 +992,53 @@ function updatePfdDisplay(pfdData, opts = {}) {
   const headingReadout    = document.getElementById('heading_readout');
   if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !headingTapeGroup || !tensReelGroup) return;
 
-  // ---- tunables (same as before) ----
-  const WINDOW_SEC          = 2.4;
-  const LATCH_ON_TURN       = 0.20;
-  const LATCH_OFF_TURN      = 0.10;
-  const LATCH_HOLD_MS       = 400;
+  // ---- tunables ----
+  const WINDOW_SEC          = 2.4;   // regression window
+  const LATCH_ON_TURN       = 0.20;  // deg/s to latch "turning"
+  const LATCH_OFF_TURN      = 0.10;  // deg/s to unlatch
+  const LATCH_HOLD_MS       = 400;   // chatter guard
   const MAX_BANK_DEG        = 35;
-  const MAX_ROLL_RATE       = 60;
+  const MAX_ROLL_RATE       = 60;    // display slew (deg/s)
   const MIN_GS_FOR_TURN     = 1;
   const PITCH_LIMIT         = 25;
 
-  const DATA_HOLD_MS        = 1400;
-  const STALE_MS            = 4000;
-  const HDG_EPS             = 0.4;
-  const GS_EPS              = 0.5;
-  const DECAY_TO_LEVEL_DPS  = 12;
-  const MICRO_DECAY_FACTOR  = 0.25;
+  const DATA_HOLD_MS        = 1400;  // hold last turn-rate after last fresh packet
+  const STALE_MS            = 4000;  // after this, allow full decay/unlatch
+  const HDG_EPS             = 0.4;   // unwrapped degrees to consider heading "changed"
+  const GS_EPS              = 0.5;   // kt change to consider GS "changed"
+  const DECAY_TO_LEVEL_DPS  = 12;    // decay when not turning
+  const MICRO_DECAY_FACTOR  = 0.25;  // softer decay before STALE_MS
 
-  const EMA_ALPHA           = 0.35;
-  const SIGN_MIN_DEG        = 3.0;
-  const SIGN_HOLD_MS        = 250;
+  const EMA_ALPHA           = 0.35;  // EMA smoothing on turn-rate (0..1)
+  const SIGN_MIN_DEG        = 3.0;   // min magnitude to accept L/R sign flip
+  const SIGN_HOLD_MS        = 250;   // new sign must persist this long
 
   const now = performance.now();
+
+  // ---- persistent state ----
+  if (!window.lastPfdState || typeof window.lastPfdState !== 'object') {
+    window.lastPfdState = {
+      unwrapped: track_deg,
+      lastTime: now,
+      buf: [],                  // [{t, hdg}] for fresh samples only
+      rollDisp: 0,
+      turning: false,
+      lastTurnLatchTs: 0,
+
+      // freshness / hold
+      lastDataTs: 0,
+      lastTurnRate: 0,
+      lastRawTrack: track_deg,
+      lastRawGs: gs_kt,
+      prevUnwrapped: track_deg,
+
+      // smoothing & sign guard
+      turnRateEma: 0,
+      rollSign: 0,
+      lastSignChangeTs: 0
+    };
+  }
+  const S = window.lastPfdState;
 
   // ---- unwrap heading ----
   let delta = track_deg - (S.unwrapped % 360);
@@ -1062,25 +1046,13 @@ function updatePfdDisplay(pfdData, opts = {}) {
   if (delta < -180) delta += 360;
   const unwrapped = S.unwrapped + delta;
 
-  // ---- detect fresh sample (unwrapped) ----
+  // ---- detect "fresh" API packet vs. render tick (use unwrapped delta) ----
   const unwrappedDelta = Math.abs(unwrapped - S.unwrapped);
-  const isFresh = unwrappedDelta > HDG_EPS || Math.abs(gs_kt - S.lastRawGs) > GS_EPS;
+  const isFresh =
+    unwrappedDelta > HDG_EPS ||
+    Math.abs(gs_kt - S.lastRawGs) > GS_EPS;
 
-  // ---- warm-start the regression buffer after a reset ----
-  if (S.justReset && isFresh) {
-    // Seed ~0.5s of history at the same heading so regression doesn’t wobble
-    const tNow = now / 1000;
-    const start = tNow - 0.5;
-    S.buf = [];
-    for (let i = 0; i <= 5; i++) {
-      S.buf.push({ t: start + (i * 0.1), hdg: unwrapped });
-    }
-    S.lastDataTs = now;
-    S.lastRawTrack = track_deg;
-    S.lastRawGs = gs_kt;
-  }
-
-  // ---- manage regression buffer (only fresh) ----
+  // ---- manage regression buffer (only for fresh samples) ----
   const tNow = now / 1000;
   if (isFresh) {
     S.lastDataTs = now;
@@ -1091,21 +1063,25 @@ function updatePfdDisplay(pfdData, opts = {}) {
     while (S.buf.length && S.buf[0].t < cutoff) S.buf.shift();
   }
 
-  // ---- compute/hold turn-rate ----
+  // ---- turn-rate estimate (deg/s): fresh -> compute; else -> hold previous ----
   let turnRate = S.lastTurnRate;
   if (isFresh) {
     if (S.buf.length >= 3 && gs_kt > MIN_GS_FOR_TURN) {
+      // linear regression slope
       const t0 = S.buf[0].t;
       let sumT = 0, sumH = 0, sumTT = 0, sumTH = 0, n = S.buf.length;
       for (let i = 0; i < n; i++) {
         const ti = S.buf[i].t - t0;
         const hi = S.buf[i].hdg;
-        sumT  += ti; sumH += hi; sumTT += ti*ti; sumTH += ti*hi;
+        sumT  += ti;
+        sumH  += hi;
+        sumTT += ti * ti;
+        sumTH += ti * hi;
       }
       const denom = n * sumTT - sumT * sumT;
-      turnRate = denom !== 0 ? (n * sumTH - sumT * sumH) / denom : 0;
-      // fallback if denom 0 (rare with warm-start)
-      if (!isFinite(turnRate) || denom === 0) {
+      if (denom !== 0) {
+        turnRate = (n * sumTH - sumT * sumH) / denom; // deg/s
+      } else {
         const dtS = Math.max(0.02, (now - S.lastTime) / 1000);
         turnRate = (unwrapped - S.prevUnwrapped) / dtS;
       }
@@ -1116,10 +1092,10 @@ function updatePfdDisplay(pfdData, opts = {}) {
     S.lastTurnRate = turnRate;
   }
 
-  // ---- EMA smoothing ----
+  // ---- EMA smoothing on turn-rate ----
   S.turnRateEma = EMA_ALPHA * turnRate + (1 - EMA_ALPHA) * S.turnRateEma;
 
-  // ---- hysteresis + data-hold ----
+  // ---- hysteresis + data-hold for "turning" ----
   const sinceFresh = now - S.lastDataTs;
   const rateAbs    = Math.abs(S.turnRateEma);
   const wasTurning = S.turning;
@@ -1142,11 +1118,11 @@ function updatePfdDisplay(pfdData, opts = {}) {
 
   // ---- coordinated-turn bank target from smoothed rate ----
   const Vms   = Math.max(0, gs_kt) * 0.514444;
-  const omega = (S.turnRateEma * Math.PI) / 180;
+  const omega = (S.turnRateEma * Math.PI) / 180; // rad/s
   const bankAbs = Math.atan(Math.abs(omega) * Vms / 9.81) * 180 / Math.PI;
   let targetRoll = (S.turnRateEma >= 0 ? 1 : -1) * Math.min(bankAbs, MAX_BANK_DEG);
 
-  // ---- sign stickiness ----
+  // ---- sign stickiness (prevents brief L/R flips) ----
   const desiredSign = Math.sign(targetRoll);
   if (desiredSign !== 0 && desiredSign !== S.rollSign) {
     const bigEnough = Math.abs(targetRoll) >= SIGN_MIN_DEG;
@@ -1162,29 +1138,23 @@ function updatePfdDisplay(pfdData, opts = {}) {
     S.lastSignChangeTs = now;
   }
 
-  // ---- when not turning: controlled decay (but hold during warm-up) ----
-  if (!S.turning && now > S.warmUntil) {
+  // ---- when not turning: decay toward level (hold pose before STALE_MS) ----
+  if (!S.turning) {
     const dt = Math.max(0.01, (now - S.lastTime) / 1000);
     const base = DECAY_TO_LEVEL_DPS * dt;
     const decayStep = sinceFresh <= STALE_MS ? base * MICRO_DECAY_FACTOR : base;
     targetRoll = (Math.abs(S.rollDisp) <= decayStep) ? 0 : S.rollDisp - Math.sign(S.rollDisp) * decayStep;
   }
 
-  // ---- slew-limit the displayed roll; skip slew on the first frame after reset ----
+  // ---- slew-limit the displayed roll ----
   {
     const dt = Math.max(0.01, (now - S.lastTime) / 1000);
-    if (S.justReset) {
-      // Hard set immediately so we DON'T animate from the previous aircraft's pose
-      S.rollDisp = targetRoll;
-      S.justReset = false;
-    } else {
-      const maxStep = dt * MAX_ROLL_RATE;
-      const diff = targetRoll - S.rollDisp;
-      S.rollDisp += Math.abs(diff) > maxStep ? Math.sign(diff) * maxStep : diff;
-    }
+    const maxStep = dt * MAX_ROLL_RATE;
+    const diff = targetRoll - S.rollDisp;
+    S.rollDisp += Math.abs(diff) > maxStep ? Math.sign(diff) * maxStep : diff;
   }
 
-  // ---- update state ----
+  // ---- update state timestamps/unwraps ----
   S.unwrapped = unwrapped;
   S.prevUnwrapped = unwrapped;
   S.lastTime = now;
@@ -1192,7 +1162,7 @@ function updatePfdDisplay(pfdData, opts = {}) {
   // ---- pitch from VS ----
   const pitch_deg = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, (vs_fpm / 1000) * 4));
 
-  // ---- global scales (fallbacks) ----
+  // ---- global scales (with sane fallbacks) ----
   const PFD_PITCH_SCALE       = window.PFD_PITCH_SCALE ?? 2.0;
   const PFD_SPEED_REF_VALUE   = window.PFD_SPEED_REF_VALUE ?? 0;
   const PFD_SPEED_SCALE       = window.PFD_SPEED_SCALE ?? -0.6;
@@ -1201,8 +1171,8 @@ function updatePfdDisplay(pfdData, opts = {}) {
   const PFD_HEADING_REF_VALUE = window.PFD_HEADING_REF_VALUE ?? 0;
   const PFD_HEADING_SCALE     = window.PFD_HEADING_SCALE ?? 4;
 
-  // ---- apply transforms ----
-  const rollForSvg = -S.rollDisp;
+  // ---- apply attitude transform (pitch translate, roll rotate) ----
+  const rollForSvg = -S.rollDisp; // SVG rotation sense
   attitudeGroup.setAttribute(
     'transform',
     `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(${rollForSvg}, 401.5, 312.5)`
@@ -1228,6 +1198,39 @@ function updatePfdDisplay(pfdData, opts = {}) {
   headingTapeGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
 }
 
+    /**
+     * --- [NEW] Resets the PFD state and visuals to neutral. ---
+     * Call this when selecting a new aircraft to prevent displaying stale data.
+     */
+    function resetPfdState() {
+        // 1. Invalidate the persistent state object.
+        //    This forces updatePfdDisplay to re-initialize it on its next run.
+        window.lastPfdState = null;
+
+        // 2. Immediately set the core SVG elements to a neutral, "level flight" state.
+        const attitudeGroup = document.getElementById('attitude_group');
+        const speedReadout = document.getElementById('speed_readout');
+        const altReadoutHund = document.getElementById('altitude_readout_hundreds');
+        const headingReadout = document.getElementById('heading_readout');
+        const speedTapeGroup = document.getElementById('speed_tape_group');
+        const altitudeTapeGroup = document.getElementById('altitude_tape_group');
+        const headingTapeGroup = document.getElementById('heading_tape_group');
+
+        if (attitudeGroup) {
+            // Set to zero pitch translation and zero roll rotation.
+            attitudeGroup.setAttribute('transform', 'translate(0, 0) rotate(0, 401.5, 312.5)');
+        }
+        
+        // 3. Clear readouts to avoid showing the last aircraft's data.
+        if (speedReadout) speedReadout.textContent = '---';
+        if (altReadoutHund) altReadoutHund.textContent = '---';
+        if (headingReadout) headingReadout.textContent = '---';
+
+        // 4. Reset tape positions to zero.
+        if (speedTapeGroup) speedTapeGroup.setAttribute('transform', 'translate(0, 0)');
+        if (altitudeTapeGroup) altitudeTapeGroup.setAttribute('transform', 'translate(0, 0)');
+        if (headingTapeGroup) headingTapeGroup.setAttribute('transform', 'translate(0, 0)');
+    }
 
 
 /**
@@ -1980,6 +1983,9 @@ function updatePfdDisplay(pfdData, opts = {}) {
     // --- [COMPLETELY REWRITTEN & FIXED] Handles aircraft clicks, data fetching, map plotting, and window population.
     async function handleAircraftClick(flightProps, sessionId) {
         if (!flightProps || !flightProps.flightId) return;
+
+        // --- FIX APPLIED: Reset the PFD state immediately ---
+        resetPfdState();
 
         // Clear any previously selected flight's path and stop its update interval
         if (currentFlightInWindow && currentFlightInWindow !== flightProps.flightId) {
