@@ -1874,7 +1874,7 @@ function updatePfdDisplay(pfdData) {
             sectorOpsMap.on('load', () => {
                 // Load the icon for live aircraft markers. Assumes an icon exists at this path.
                 sectorOpsMap.loadImage(
-                    '/images/whiteplane.png',
+                    '/Images/whiteplane.png',
                     (error, image) => {
                         if (error) {
                             console.warn('Could not load plane icon for map.');
@@ -2918,7 +2918,7 @@ function updatePfdDisplay(pfdData) {
 
             pilotNameElem.textContent = pilot.name || 'N/A';
             pilotCallsignElem.textContent = pilot.callsign || 'N/A';
-            profilePictureElem.src = pilot.imageUrl || 'images/default-avatar.png';
+            profilePictureElem.src = pilot.imageUrl || 'Images/default-avatar.png';
 
             const badge = notificationsBell.querySelector('.notification-badge');
             if (pilot.unreadNotifications && pilot.unreadNotifications.length > 0) {
@@ -3548,7 +3548,7 @@ function updatePfdDisplay(pfdData) {
                                     <img src="${aircraftImageUrl}" 
                                          alt="${legOperator} ${legAircraftIcao}" 
                                          class="leg-aircraft-image"
-                                         onerror="this.onerror=null; this.src='images/default-aircraft.png'; this.alt='Image not available';">
+                                         onerror="this.onerror=null; this.src='Images/default-aircraft.png'; this.alt='Image not available';">
                                 </div>`;
 
                             return `
