@@ -278,16 +278,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 display: flex;
                 flex-direction: column;
                 height: 100%;
-                gap: 16px;
-                padding: 12px; /* Reduced padding to give header more space */
+                gap: 0; /* MODIFIED */
+                padding: 12px;
                 font-family: 'Segoe UI', sans-serif;
-                background: rgba(10, 12, 26, 0.5); /* Add a base background to the whole container */
+                background: rgba(10, 12, 26, 0.5);
             }
 
-            /* [NEW] Creative Header Design */
+            /* [MODIFIED] Streamlined Header Design */
             .unified-display-header {
-                display: grid;
-                grid-template-columns: 1fr auto 1fr;
+                display: flex;
+                justify-content: space-between;
                 align-items: center;
                 background: linear-gradient(135deg, rgba(30, 35, 70, 0.8), rgba(15, 20, 45, 0.9));
                 border-radius: 12px;
@@ -295,32 +295,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                 border: 1px solid rgba(255, 255, 255, 0.1);
                 color: #e8eaf6;
                 flex-shrink: 0;
-                position: relative;
                 box-shadow: 0 4px 15px rgba(0,0,0,0.3);
             }
-
-            .flight-route-info, .header-actions {
+            
+            .header-actions {
                 display: flex;
                 align-items: center;
                 gap: 12px;
             }
-            .header-actions {
-                justify-content: flex-end;
-            }
-            .flight-route-info .icao {
-                font-size: 1.8rem;
-                font-weight: 700;
-                font-family: 'Courier New', monospace;
-                color: #fff;
-                text-shadow: 0 0 5px rgba(0, 168, 255, 0.7);
-            }
-            .flight-route-info .fa-plane-departure,
-            .flight-route-info .fa-plane-arrival {
-                font-size: 1.2rem;
-                color: #00a8ff;
-            }
+            
             .flight-main-details {
-                text-align: center;
                 line-height: 1.2;
             }
             .flight-main-details h3 {
@@ -336,6 +320,44 @@ document.addEventListener('DOMContentLoaded', async () => {
                 color: #c5cae9;
                 opacity: 0.8;
             }
+
+            /* [NEW] Styles for the moved route details panel */
+            .flight-details-panel {
+                padding: 16px 16px 4px;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            .flight-route-display {
+                display: grid;
+                grid-template-columns: auto 1fr auto;
+                align-items: center;
+                gap: 12px;
+                color: #e8eaf6;
+            }
+            .route-point {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .route-point.arrival {
+                flex-direction: row-reverse;
+            }
+            .route-point .icao {
+                font-size: 1.6rem;
+                font-weight: 700;
+                font-family: 'Courier New', monospace;
+                color: #fff;
+            }
+            .route-point .fa-solid {
+                font-size: 1.1rem;
+                color: #00a8ff;
+            }
+            .route-progress-container {
+                display: flex;
+                flex-direction: column;
+            }
+
 
             /* [NEW] Redesigned Hide/Close Buttons */
             .header-actions button {
@@ -357,14 +379,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 border-color: transparent;
             }
 
-            /* [NEW] Progress Bar Repositioned Below Header */
+            /* [MODIFIED] Progress Bar */
             .route-progress-bar-container {
                 width: 100%;
                 height: 6px;
                 background: rgba(10, 12, 26, 0.7);
                 border-radius: 3px;
                 overflow: hidden;
-                margin-top: 4px; /* Space it from the flight details */
             }
             .progress-bar-fill {
                 height: 100%;
@@ -375,12 +396,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
 
-            /* [NEW] Upgraded Flight Phase Indicator */
+            /* [MODIFIED] Upgraded Flight Phase Indicator */
             .flight-phase-indicator {
-                position: absolute;
-                top: 100%;
-                left: 50%;
-                transform: translate(-50%, -50%);
+                position: relative;
+                top: auto;
+                left: auto;
+                transform: none;
+                margin: 0 auto 8px auto;
+                width: fit-content;
                 padding: 6px 16px;
                 border-radius: 20px;
                 font-size: 0.8rem;
@@ -2205,25 +2228,33 @@ function updatePfdDisplay(pfdData) {
         windowEl.innerHTML = `
             <div class="unified-display-container">
                 <div class="unified-display-header">
-                    <div class="flight-route-info">
-                        <span class="icao" id="header-dep-icao">${departureIcao}</span>
-                        <i class="fa-solid fa-plane-departure"></i>
-                    </div>
                     <div class="flight-main-details">
                         <h3 id="header-flight-num">${baseProps.callsign}</h3>
                         <p id="header-pilot-name">${baseProps.username || 'N/A'}</p>
-                        <div class="route-progress-bar-container">
-                            <div class="progress-bar-fill" id="header-progress-bar"></div>
-                        </div>
                     </div>
                     <div class="header-actions">
-                        <i class="fa-solid fa-plane-arrival"></i>
-                        <span class="icao" id="header-arr-icao">${arrivalIcao}</span>
                         <button id="aircraft-window-hide-btn-new" class="aircraft-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
                         <button id="aircraft-window-close-btn-new" class="aircraft-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
                     </div>
-                    <div class="flight-phase-indicator" id="flight-phase-indicator">
+                </div>
+
+                <div class="flight-details-panel">
+                    <div class="flight-route-display">
+                        <div class="route-point departure">
+                            <span class="icao">${departureIcao}</span>
+                            <i class="fa-solid fa-plane-departure"></i>
                         </div>
+                        <div class="route-progress-container">
+                             <div class="flight-phase-indicator" id="flight-phase-indicator"></div>
+                             <div class="route-progress-bar-container">
+                                <div class="progress-bar-fill" id="header-progress-bar"></div>
+                            </div>
+                        </div>
+                        <div class="route-point arrival">
+                             <i class="fa-solid fa-plane-arrival"></i>
+                            <span class="icao">${arrivalIcao}</span>
+                        </div>
+                    </div>
                 </div>
     
                 <div class="unified-display-main">
