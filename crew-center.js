@@ -2429,9 +2429,9 @@ function updatePfdDisplay(pfdData) {
 
     
 /**
- * --- [MAJOR REVISION V3] Updates the non-PFD parts of the Aircraft Info Window.
- * This version uses a priority-based state machine to fix issues with ground operations
- * and accurately detect airborne phases like Taking Off, Landing, and Approach.
+ * --- [MAJOR REVISION V4 - CORRECTED] Updates the non-PFD parts of the Aircraft Info Window.
+ * This version uses a priority-based state machine with robust fallbacks to fix issues
+ * with ground operations and accurately detect all airborne phases.
  */
 function updateAircraftInfoWindow(baseProps, plan) {
     // Calculation logic for progress, ETE, etc. remains the same
@@ -2480,13 +2480,14 @@ function updateAircraftInfoWindow(baseProps, plan) {
     const THRESHOLD = {
         ON_GROUND_AGL: 75,
         PARKED_MAX_GS: 2,
-        TAXI_MAX_GS: 45, // Increased slightly for more tolerance
+        TAXI_MAX_GS: 45,
         TAKEOFF_MIN_VS: 300,
         TAKEOFF_CEILING_AGL: 1500,
         CLIMB_MIN_VS: 500,
         DESCENT_MIN_VS: -500,
         TERMINAL_AREA_DIST_NM: 40,
-        LANDING_CEILING_AGL: 500, // Increased to capture final approach better
+        APPROACH_PROGRESS_MIN: 5, // FIX: Require 5% of flight complete to be considered "approach"
+        LANDING_CEILING_AGL: 500,
         CRUISE_MIN_ALT_MSL: 18000,
         CRUISE_VS_TOLERANCE: 500
     };
@@ -2502,8 +2503,14 @@ function updateAircraftInfoWindow(baseProps, plan) {
     const relevantElevationFt = (totalDistanceNM > 0 && distanceToDestNM < totalDistanceNM / 2) ? destElevationFt : originElevationFt;
     const altitudeAGL = (relevantElevationFt !== null) ? altitude - relevantElevationFt : null;
 
-    const isOnGround = altitudeAGL !== null && altitudeAGL < THRESHOLD.ON_GROUND_AGL;
-    const isInTerminalArea = hasPlan && distanceToDestNM < THRESHOLD.TERMINAL_AREA_DIST_NM;
+    // FIX: A more robust ground check with a fallback for when elevation data is missing.
+    const aglCheck = altitudeAGL !== null && altitudeAGL < THRESHOLD.ON_GROUND_AGL;
+    const fallbackGroundCheck = altitudeAGL === null && gs < THRESHOLD.TAXI_MAX_GS && Math.abs(vs) < 150;
+    const isOnGround = aglCheck || fallbackGroundCheck;
+    
+    // FIX: Make the terminal area check smarter to avoid false positives at the origin.
+    const isInTerminalArea = hasPlan && distanceToDestNM < THRESHOLD.TERMINAL_AREA_DIST_NM && progress > THRESHOLD.APPROACH_PROGRESS_MIN;
+
 
     // --- Priority-Based State Machine Logic ---
     // The order of these checks is critical for accuracy.
