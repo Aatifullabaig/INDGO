@@ -2429,7 +2429,8 @@ function updatePfdDisplay(pfdData) {
 
     
     /**
-     * --- [MODIFIED] Updates the non-PFD parts of the Aircraft Info Window, including the image.
+     * --- [MODIFIED & REFACTORED] Updates the non-PFD parts of the Aircraft Info Window.
+     * This now includes a more robust AGL-based flight phase detection for Approach.
      */
     function updateAircraftInfoWindow(baseProps, plan) {
         const allWaypoints = [];
@@ -2467,12 +2468,28 @@ function updatePfdDisplay(pfdData) {
             }
         }
         
+        // --- [REFACTORED] Flight Phase Logic ---
         let flightPhase = 'ENROUTE';
         let phaseClass = 'phase-enroute';
         let phaseIcon = 'fa-route';
+        
         const vs = baseProps.position.vs_fpm || 0;
         const altitude = baseProps.position.alt_ft || 0;
         
+        // Get destination airport elevation for AGL calculation.
+        const destElevationFt = (plan && plan.destination && typeof plan.destination.elevation_ft !== 'undefined')
+            ? parseFloat(plan.destination.elevation_ft)
+            : null;
+
+        const altitudeAGL = (destElevationFt !== null) ? altitude - destElevationFt : null;
+
+        // Define conditions for the approach phase.
+        const isNearDestination = distanceToDestNM < 30; // Within 30 NM is a good approach gate.
+        const isNotClimbing = vs <= 200; // Allow for slight positive VS, but not a clear climb.
+        const isLowAltitudeAGL = (altitudeAGL !== null && altitudeAGL < 4000);
+        const isLowAltitudeMSLFallback = (altitudeAGL === null && altitude < 5000); // Fallback if no elevation data.
+
+        // Main logic chain with correct prioritization.
         if (vs > 500) {
             flightPhase = 'CLIMB';
             phaseClass = 'phase-climb';
@@ -2481,15 +2498,16 @@ function updatePfdDisplay(pfdData) {
             flightPhase = 'DESCENT';
             phaseClass = 'phase-descent';
             phaseIcon = 'fa-arrow-trend-down';
+        } else if (hasPlan && isNearDestination && isNotClimbing && (isLowAltitudeAGL || isLowAltitudeMSLFallback)) {
+            flightPhase = 'APPROACH';
+            phaseClass = 'phase-approach';
+            phaseIcon = 'fa-plane-arrival';
         } else if (altitude > 28000 && Math.abs(vs) <= 500) {
             flightPhase = 'CRUISE';
             phaseClass = 'phase-cruise';
             phaseIcon = 'fa-minus';
-        } else if (altitude < 12000 && distanceToDestNM < 40 && vs < -300) {
-            flightPhase = 'APPROACH';
-            phaseClass = 'phase-approach';
-            phaseIcon = 'fa-plane-arrival';
         }
+        // If none of the above, it defaults to ENROUTE.
     
         const progressBarFill = document.getElementById('header-progress-bar');
         const phaseIndicator = document.getElementById('flight-phase-indicator');
