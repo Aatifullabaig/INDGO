@@ -2183,7 +2183,7 @@ function updatePfdDisplay(pfdData) {
                         type: 'line',
                         source: flownLayerId,
                         paint: { 'line-color': '#00b894', 'line-width': 4, 'line-opacity': 0.9 }
-                    });
+                    }, 'sector-ops-live-flights-layer');
                 }
             }
             
@@ -2998,6 +2998,9 @@ function updateAircraftInfoWindow(baseProps, plan) {
     /**
      * Fetches all live data (flights, ATC, NOTAMs) and plots them on the Sector Ops map.
      */
+    /**
+     * Fetches all live data (flights, ATC, NOTAMs) and plots them on the Sector Ops map.
+     */
     async function updateSectorOpsLiveFlights() {
         if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -3028,7 +3031,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
             const notamsData = await notamsRes.json();
             activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
 
-            renderAirportMarkers(); // This now handles plotting all airport dots correctly
+            renderAirportMarkers(); 
 
             // 4. Process flight data
             const flightsData = await flightsRes.json();
@@ -3037,75 +3040,80 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 return;
             }
 
-            const flightFeatures = flightsData.flights.map(flight => {
-                if (!flight.position || flight.position.lat == null || flight.position.lon == null) {
-                    return null;
-                }
-                return {
-                    type: 'Feature',
-                    geometry: {
-                        type: 'Point',
-                        coordinates: [flight.position.lon, flight.position.lat]
-                    },
-                    properties: {
-                        flightId: flight.flightId,
-                        callsign: flight.callsign,
-                        username: flight.username,
-                        altitude: flight.position.alt_ft,
-                        speed: flight.position.gs_kt,
-                        heading: flight.position.track_deg || 0,
-                        verticalSpeed: flight.position.vs_fpm || 0,
-                        position: JSON.stringify(flight.position), // Stringify to pass the whole object
-                        aircraft: flight.aircraft // [NEW] Pass aircraft info through
-                    }
-                };
-            }).filter(Boolean);
+            // --- START OF FIX: Prevent flickering by merging data ---
+            const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+            let finalFeatures = [];
 
-            const geojsonData = {
-                type: 'FeatureCollection',
-                features: flightFeatures
-            };
+            if (source && source._data && currentFlightInWindow) {
+                // If a flight is selected, find its current feature on the map
+                const selectedFeature = source._data.features.find(f => f.properties.flightId === currentFlightInWindow);
+                
+                // Process all other flights from the new API call
+                const otherFlights = flightsData.flights.filter(f => f.flightId !== currentFlightInWindow);
+                finalFeatures = otherFlights.map(flight => {
+                    // (This mapping logic is the same as before)
+                    if (!flight.position || flight.position.lat == null || flight.position.lon == null) return null;
+                    return {
+                        type: 'Feature',
+                        geometry: { type: 'Point', coordinates: [flight.position.lon, flight.position.lat] },
+                        properties: {
+                            flightId: flight.flightId, callsign: flight.callsign, username: flight.username,
+                            altitude: flight.position.alt_ft, speed: flight.position.gs_kt, heading: flight.position.track_deg || 0,
+                            verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft)
+                        }
+                    };
+                }).filter(Boolean);
+
+                // Add the selected flight's feature (from its last high-frequency update) back into the array
+                if (selectedFeature) {
+                    finalFeatures.push(selectedFeature);
+                }
+            } else {
+                // If no flight is selected, just process all flights normally
+                finalFeatures = flightsData.flights.map(flight => {
+                    if (!flight.position || flight.position.lat == null || flight.position.lon == null) return null;
+                    return {
+                        type: 'Feature',
+                        geometry: { type: 'Point', coordinates: [flight.position.lon, flight.position.lat] },
+                        properties: {
+                            flightId: flight.flightId, callsign: flight.callsign, username: flight.username,
+                            altitude: flight.position.alt_ft, speed: flight.position.gs_kt, heading: flight.position.track_deg || 0,
+                            verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft)
+                        }
+                    };
+                }).filter(Boolean);
+            }
+            // --- END OF FIX ---
+
+            const geojsonData = { type: 'FeatureCollection', features: finalFeatures };
 
             // 5. Update the flight map source and layer
-            const sourceId = 'sector-ops-live-flights-source';
-            const layerId = 'sector-ops-live-flights-layer';
-            const source = sectorOpsMap.getSource(sourceId);
-
             if (source) {
                 source.setData(geojsonData);
             } else {
-                sectorOpsMap.addSource(sourceId, {
+                sectorOpsMap.addSource('sector-ops-live-flights-source', {
                     type: 'geojson',
                     data: geojsonData
                 });
 
                 sectorOpsMap.addLayer({
-                    id: layerId,
+                    id: 'sector-ops-live-flights-layer',
                     type: 'symbol',
-                    source: sourceId,
+                    source: 'sector-ops-live-flights-source',
                     layout: {
-                        'icon-image': 'plane-icon',
-                        'icon-size': 0.07,
-                        'icon-rotate': ['get', 'heading'],
-                        'icon-rotation-alignment': 'map',
-                        'icon-allow-overlap': true,
-                        'icon-ignore-placement': true
+                        'icon-image': 'plane-icon', 'icon-size': 0.07, 'icon-rotate': ['get', 'heading'],
+                        'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true
                     }
                 });
 
-                // REWRITTEN CLICK HANDLER to open the info window
-                sectorOpsMap.on('click', layerId, (e) => {
+                sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
                     const props = e.features[0].properties;
-                    const flightProps = {
-                        ...props,
-                        position: JSON.parse(props.position), // De-stringify the position object
-                        aircraft: JSON.parse(props.aircraft) // De-stringify the aircraft object
-                    };
+                    const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
                     handleAircraftClick(flightProps, expertSession.id);
                 });
 
-                sectorOpsMap.on('mouseenter', layerId, () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
-                sectorOpsMap.on('mouseleave', layerId, () => { sectorOpsMap.getCanvas().style.cursor = ''; });
+                sectorOpsMap.on('mouseenter', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
+                sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
             }
 
         } catch (error) {
