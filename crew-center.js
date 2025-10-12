@@ -2987,8 +2987,15 @@ function updateAircraftInfoWindow(baseProps, plan) {
     const altitude = baseProps.position.alt_ft || 0;
     const gs = baseProps.position.gs_kt || 0;
     
-    const departureIcao = plan?.origin?.icao_code;
-    const arrivalIcao = plan?.destination?.icao_code;
+    let departureIcao = null;
+    let arrivalIcao = null;
+
+    if (plan && Array.isArray(plan.flightPlanItems) && plan.flightPlanItems.length >= 2) {
+        // The first item is the departure airport
+        departureIcao = plan.flightPlanItems[0]?.identifier?.trim().toUpperCase();
+        // The last item is the arrival airport
+        arrivalIcao = plan.flightPlanItems[plan.flightPlanItems.length - 1]?.identifier?.trim().toUpperCase();
+    }
     const aircraftPos = { lat: baseProps.position.lat, lon: baseProps.position.lon, track_deg: baseProps.position.track_deg };
 
     // Find the nearest runway at the most relevant airport
