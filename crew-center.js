@@ -2379,6 +2379,7 @@ function updatePfdDisplay(pfdData) {
         return waypoints;
     }
 
+// [!code --]
 /**
  * --- [REMODEL V5.1 - CORRECTED PATHING] Handles aircraft clicks, data fetching, map plotting, and window population.
  */
@@ -2513,6 +2514,145 @@ async function handleAircraftClick(flightProps, sessionId) {
                 activePfdUpdateInterval = null;
             }
         }, 3000);
+
+    } catch (error) {
+        console.error("Error fetching or plotting aircraft details:", error);
+        windowEl.innerHTML = `<p class="error-text" style="padding: 2rem;">Could not retrieve complete flight details. The aircraft may have landed or disconnected.</p>`;
+    }
+}
+// [!code ++]
+/**
+ * --- [REMODEL V5.2 - SERVER-AUTHORITATIVE PATHING] Handles aircraft clicks, data fetching, map plotting, and window population.
+ * The update interval now re-fetches the entire flight path history to ensure it's always complete and accurate.
+ */
+async function handleAircraftClick(flightProps, sessionId) {
+    if (!flightProps || !flightProps.flightId) return;
+
+    // --- (Initial setup logic remains the same) ---
+    if (currentFlightInWindow === flightProps.flightId && aircraftInfoWindow.classList.contains('visible')) {
+        return;
+    }
+    resetPfdState();
+    if (currentFlightInWindow && currentFlightInWindow !== flightProps.flightId) {
+        clearLiveFlightPath(currentFlightInWindow);
+    }
+    if (activePfdUpdateInterval) {
+        clearInterval(activePfdUpdateInterval);
+        activePfdUpdateInterval = null;
+    }
+    currentFlightInWindow = flightProps.flightId;
+    aircraftInfoWindow.classList.add('visible');
+    aircraftInfoWindowRecallBtn.classList.remove('visible');
+    const windowEl = document.getElementById('aircraft-info-window');
+    windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
+
+    try {
+        // --- (Initial data fetch for plan and route remains the same) ---
+        const [planRes, routeRes] = await Promise.all([
+            fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/plan`),
+            fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/route`)
+        ]);
+        
+        const planData = planRes.ok ? await planRes.json() : null;
+        const plan = (planData && planData.ok) ? planData.plan : null;
+        const routeData = routeRes.ok ? await routeRes.json() : null;
+        
+        cachedFlightDataForStatsView = { flightProps, plan };
+        populateAircraftInfoWindow(flightProps, plan);
+
+        const currentPosition = [flightProps.position.lon, flightProps.position.lat];
+        const flownLayerId = `flown-path-${flightProps.flightId}`;
+        
+        const historicalRoute = (routeData && routeData.ok && Array.isArray(routeData.route)) 
+            ? routeData.route.map(p => [p.lon, p.lat])
+            : [];
+        
+        let rawPathCoordinates = [...historicalRoute, currentPosition].filter(p => p[0] != null && p[1] != null);
+        
+        let initialPathData = { type: 'Feature', geometry: { type: 'LineString', coordinates: rawPathCoordinates } };
+        if (rawPathCoordinates.length > 2) {
+            const line = turf.lineString(rawPathCoordinates);
+            initialPathData = turf.bezierSpline(line, { resolution: 10000, sharpness: 0.85 });
+        }
+
+        if (!sectorOpsMap.getSource(flownLayerId)) {
+            sectorOpsMap.addSource(flownLayerId, { type: 'geojson', data: initialPathData });
+            sectorOpsMap.addLayer({
+                id: flownLayerId, type: 'line', source: flownLayerId,
+                paint: { 'line-color': '#00b894', 'line-width': 4, 'line-opacity': 0.9 }
+            }, 'sector-ops-live-flights-layer');
+        } else {
+             const pathSource = sectorOpsMap.getSource(flownLayerId);
+             if (pathSource) pathSource.setData(initialPathData);
+        }
+
+        sectorOpsLiveFlightPathLayers[flightProps.flightId] = { flown: flownLayerId };
+
+        if (rawPathCoordinates.length > 1) {
+            const bounds = rawPathCoordinates.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(rawPathCoordinates[0], rawPathCoordinates[0]));
+            sectorOpsMap.fitBounds(bounds, { padding: 80, maxZoom: 10, duration: 1000 });
+        }
+        
+        // --- START OF THE FIX: REVISED UPDATE INTERVAL ---
+        activePfdUpdateInterval = setInterval(async () => {
+            try {
+                // 1. Fetch both the latest position AND the latest full route history in parallel
+                const [freshPosRes, freshRouteRes] = await Promise.all([
+                    fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}`),
+                    fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/route`)
+                ]);
+
+                if (!freshPosRes.ok) throw new Error("Flight position update failed.");
+                
+                const allFlights = await freshPosRes.json();
+                const updatedFlight = allFlights.flights.find(f => f.flightId === flightProps.flightId);
+                const updatedRouteData = freshRouteRes.ok ? await freshRouteRes.json() : null;
+
+                if (updatedFlight && updatedFlight.position) {
+                    // Update PFD, Info Window, and icon position as before
+                    updatePfdDisplay(updatedFlight.position);
+                    updateAircraftInfoWindow(updatedFlight, plan);
+                    
+                    const iconSource = sectorOpsMap.getSource('sector-ops-live-flights-source');
+                    if (iconSource && iconSource._data) {
+                        const currentData = iconSource._data;
+                        const featureToUpdate = currentData.features.find(f => f.properties.flightId === flightProps.flightId);
+                        if (featureToUpdate) {
+                            featureToUpdate.geometry.coordinates = [updatedFlight.position.lon, updatedFlight.position.lat];
+                            featureToUpdate.properties.heading = updatedFlight.position.track_deg || 0;
+                            iconSource.setData(currentData);
+                        }
+                    }
+                    
+                    // 2. Rebuild the entire flight path using the new authoritative data
+                    const pathSource = sectorOpsMap.getSource(flownLayerId);
+                    if (pathSource) {
+                        const newHistoricalRoute = (updatedRouteData && updatedRouteData.ok && Array.isArray(updatedRouteData.route))
+                            ? updatedRouteData.route.map(p => [p.lon, p.lat])
+                            : [];
+                        
+                        const latestPosition = [updatedFlight.position.lon, updatedFlight.position.lat];
+                        
+                        // The raw path is now the complete history + the very latest position
+                        const newRawPath = [...newHistoricalRoute, latestPosition];
+
+                        let smoothedPathData = { type: 'Feature', geometry: { type: 'LineString', coordinates: newRawPath } };
+                        if (newRawPath.length > 2) {
+                            const line = turf.lineString(newRawPath);
+                            smoothedPathData = turf.bezierSpline(line, { resolution: 10000, sharpness: 0.85 });
+                        }
+                        pathSource.setData(smoothedPathData); // Update the map source with the new, complete path
+                    }
+                } else {
+                    clearInterval(activePfdUpdateInterval);
+                    activePfdUpdateInterval = null;
+                }
+            } catch (error) {
+                console.error("Stopping PFD update due to error:", error);
+                clearInterval(activePfdUpdateInterval);
+                activePfdUpdateInterval = null;
+            }
+        }, 5000); // Increased interval slightly to accommodate two API calls
 
     } catch (error) {
         console.error("Error fetching or plotting aircraft details:", error);
