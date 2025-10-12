@@ -1,8 +1,9 @@
-// Crew Center – Merged Script with Sector Ops Command Revamp & Upgraded PFD
+// Crew Center – Merged Script with Pilot Stats Card & Upgraded PFD
 document.addEventListener('DOMContentLoaded', async () => {
     // --- Global Configuration ---
     const API_BASE_URL = 'https://indgo-backend.onrender.com';
     const LIVE_FLIGHTS_API_URL = 'https://acars-backend-uxln.onrender.com/flights';
+    const ACARS_USER_API_URL = 'https://acars-backend-uxln.onrender.com/users'; // NEW: For user stats
     const TARGET_SERVER_NAME = 'Expert Server';
     const AIRCRAFT_SELECTION_LIST = [
         // Airbus
@@ -102,6 +103,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let activePfdUpdateInterval = null; // Interval for updating the PFD display
     // --- FIX: Added roll_deg to state to prevent flickering ---
     let lastPfdState = { track_deg: 0, timestamp: 0, roll_deg: 0 };
+    // --- NEW: To cache flight data when switching to stats view ---
+    let cachedFlightDataForStatsView = { flightProps: null, plan: null };
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -300,7 +303,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             .header-actions { display: flex; align-items: center; gap: 12px; }
             .flight-main-details { line-height: 1.2; }
             .flight-main-details h3 { margin: 0; font-size: 1.6rem; font-weight: 700; color: #fff; letter-spacing: 1px; }
-            .flight-main-details p { margin: 0; font-size: 0.85rem; color: #c5cae9; opacity: 0.8; }
+
+            /* --- [NEW] Clickable Pilot Name Button --- */
+            .pilot-name-button {
+                background: none;
+                border: none;
+                padding: 2px 6px;
+                margin: 0;
+                font-size: 0.85rem;
+                color: #c5cae9;
+                opacity: 0.8;
+                cursor: pointer;
+                border-radius: 4px;
+                transition: all 0.2s ease-in-out;
+            }
+            .pilot-name-button:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+                color: #fff;
+                opacity: 1;
+            }
+            .pilot-name-button .fa-solid { margin-left: 6px; }
 
             /* --- [NEW] Wrapper for Image and Overlay Route --- */
             .image-and-route-wrapper {
@@ -505,6 +527,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             .aircraft-type-mcdonnell-douglas { border-left: 4px solid #ff8c00; }
             .aircraft-type-de-havilland { border-left: 4px solid #6f42c1; }
             .aircraft-type-unknown { border-left: 4px solid #6c757d; }
+            
+            /* --- [NEW] Pilot Stats View --- */
+            .pilot-stats-view { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+            .stats-header { text-align: center; margin-bottom: 8px; }
+            .stats-header h4 { margin: 0; font-size: 1.3rem; color: #fff; }
+            .stats-header p { margin: 0; font-size: 0.9rem; color: #c5cae9; }
+            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; }
+            .grade-table-container { background: rgba(10, 12, 26, 0.6); border-radius: 8px; padding: 12px; }
+            .grade-table-container h5 { margin: 0 0 10px 0; text-align: center; }
+            .grade-item { font-size: 0.85rem; padding: 8px; border-radius: 4px; transition: background-color 0.2s; }
+            .grade-item.current-grade { background-color: rgba(0, 168, 255, 0.2); border-left: 3px solid #00a8ff; }
+            .grade-item strong { color: #fff; }
+            .grade-requirement { display: flex; align-items: center; gap: 6px; margin-left: 10px; font-size: 0.8rem; color: #c5cae9;}
+            .grade-requirement .fa-check { color: #28a745; }
+            .grade-requirement .fa-times { color: #dc3545; }
+            .back-to-pfd-btn { 
+                background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+                color: #e8eaf6; padding: 8px 12px; width: 100%;
+                border-radius: 6px; cursor: pointer; text-align: center;
+                transition: all 0.2s;
+            }
+            .back-to-pfd-btn:hover { background: #00a8ff; color: #fff; }
 
 
             /* --- Toolbar Recall Buttons --- */
@@ -1814,34 +1858,51 @@ function updatePfdDisplay(pfdData) {
     
     // --- [MODIFIED] Event listener setup using Event Delegation ---
     function setupAircraftWindowEvents() {
-        // This listener is now attached to the main window element.
-        // It will catch clicks from buttons inside, even if they are added later.
         if (!aircraftInfoWindow || aircraftInfoWindow.dataset.eventsAttached === 'true') return;
     
-        aircraftInfoWindow.addEventListener('click', (e) => {
+        aircraftInfoWindow.addEventListener('click', async (e) => {
             const closeBtn = e.target.closest('.aircraft-window-close-btn');
             const hideBtn = e.target.closest('.aircraft-window-hide-btn');
-    
+            const statsBtn = e.target.closest('.pilot-name-button');
+            const backToPfdBtn = e.target.closest('.back-to-pfd-btn');
+
             if (closeBtn) {
                 aircraftInfoWindow.classList.remove('visible');
                 aircraftInfoWindowRecallBtn.classList.remove('visible');
                 clearLiveFlightPath(currentFlightInWindow);
-                if (activePfdUpdateInterval) {
-                    clearInterval(activePfdUpdateInterval);
-                    activePfdUpdateInterval = null;
-                }
+                if (activePfdUpdateInterval) clearInterval(activePfdUpdateInterval);
+                activePfdUpdateInterval = null;
                 currentFlightInWindow = null;
+                cachedFlightDataForStatsView = { flightProps: null, plan: null };
             }
     
             if (hideBtn) {
                 aircraftInfoWindow.classList.remove('visible');
-                if (activePfdUpdateInterval) {
-                    clearInterval(activePfdUpdateInterval);
-                    activePfdUpdateInterval = null;
-                }
+                if (activePfdUpdateInterval) clearInterval(activePfdUpdateInterval);
+                activePfdUpdateInterval = null;
                 if (currentFlightInWindow) {
                     aircraftInfoWindowRecallBtn.classList.add('visible', 'palpitate');
                     setTimeout(() => aircraftInfoWindowRecallBtn.classList.remove('palpitate'), 1000);
+                }
+            }
+
+            if (statsBtn) {
+                const userId = statsBtn.dataset.userId;
+                const username = statsBtn.dataset.username;
+                if (userId) {
+                    await displayPilotStats(userId, username);
+                }
+            }
+
+            if (backToPfdBtn) {
+                const { flightProps, plan } = cachedFlightDataForStatsView;
+                if (flightProps) {
+                    // Repopulate the PFD view and restart the update loop
+                     const sessionsRes = await fetch('https://acars-backend-uxln.onrender.com/if-sessions');
+                     const expertSession = (await sessionsRes.json()).sessions.find(s => s.name.toLowerCase().includes('expert'));
+                     if (expertSession) {
+                        handleAircraftClick(flightProps, expertSession.id);
+                     }
                 }
             }
         });
@@ -2159,6 +2220,8 @@ function updatePfdDisplay(pfdData) {
             const plan = (planData && planData.ok) ? planData.plan : null;
             const routeData = routeRes.ok ? await routeRes.json() : null;
             
+            // NEW: Cache data for stats view
+            cachedFlightDataForStatsView = { flightProps, plan };
             populateAircraftInfoWindow(flightProps, plan);
 
             const currentPosition = [flightProps.position.lon, flightProps.position.lat];
@@ -2275,7 +2338,10 @@ function updatePfdDisplay(pfdData) {
                 <div class="unified-display-header">
                     <div class="flight-main-details">
                         <h3 id="header-flight-num">${baseProps.callsign}</h3>
-                        <p id="header-pilot-name">${baseProps.username || 'N/A'}</p>
+                        <button class="pilot-name-button" data-user-id="${baseProps.userId}" data-username="${baseProps.username || 'N/A'}">
+                            ${baseProps.username || 'N/A'}
+                            <i class="fa-solid fa-chart-simple"></i>
+                        </button>
                     </div>
                     <div class="header-actions">
                         <button id="aircraft-window-hide-btn-new" class="aircraft-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
@@ -2459,6 +2525,97 @@ function updatePfdDisplay(pfdData) {
             const manufacturerClass = getAircraftManufacturerClass(aircraftName);
             // Add the new class without removing the base 'readout-box' class
             aircraftTypeReadout.classList.add(manufacturerClass);
+        }
+    }
+
+    // --- [NEW] Renders the creative Pilot Stats view inside the info window ---
+    function renderPilotStatsHTML(stats, username) {
+        if (!stats) return '<p class="error-text">Could not load pilot statistics.</p>';
+
+        const grade = stats.gradeDetails?.grades?.[stats.gradeDetails.gradeIndex];
+        const atcRankId = stats.atcRank;
+        const atcRankMap = { 0: 'Observer', 1: 'Trainee', 2: 'Apprentice', 3: 'Specialist', 4: 'Officer', 5: 'Supervisor', 6: 'Recruiter', 7: 'Manager' };
+        const atcRankName = atcRankId !== null ? atcRankMap[atcRankId] : 'N/A';
+        const totalViolations = (stats.violationCountByLevel?.level1 || 0) + (stats.violationCountByLevel?.level2 || 0) + (stats.violationCountByLevel?.level3 || 0);
+
+        const checkRequirement = (userValue, reqValue, isMax = false) => {
+            if (reqValue === null || reqValue === undefined) return ''; // No requirement to check
+            const met = isMax ? userValue <= reqValue : userValue >= reqValue;
+            return `<i class="fa-solid ${met ? 'fa-check' : 'fa-times'}"></i>`;
+        };
+
+        const gradeTableHtml = stats.gradeDetails?.grades?.map((g, index) => `
+            <div class="grade-item ${index === stats.gradeDetails.gradeIndex ? 'current-grade' : ''}">
+                <strong>Grade ${g.grade}</strong>
+                <div class="grade-requirement">
+                    ${checkRequirement(stats.totalXP, g.minXp)}
+                    <span>${g.minXp.toLocaleString()} XP</span>
+                </div>
+                 <div class="grade-requirement">
+                    ${checkRequirement(stats.total12MonthsViolations, g.maxViolations12Months, true)}
+                    <span>≤ ${g.maxViolations12Months} violations (12 mo)</span>
+                </div>
+            </div>
+        `).join('') || '<p class="muted-text">Grade data not available.</p>';
+        
+        return `
+            <div class="pilot-stats-view">
+                <div class="stats-header">
+                    <h4>Pilot Report</h4>
+                    <p>${username}</p>
+                </div>
+                <div class="stats-grid">
+                    <div class="readout-box">
+                        <div class="label">XP</div>
+                        <div class="value">${(stats.totalXP || 0).toLocaleString()}</div>
+                    </div>
+                    <div class="readout-box">
+                        <div class="label">ATC Rank</div>
+                        <div class="value" style="font-size: 1rem;">${atcRankName}</div>
+                    </div>
+                    <div class="readout-box">
+                        <div class="label">Violations</div>
+                        <div class="value">${totalViolations}</div>
+                    </div>
+                </div>
+                <div class="grade-table-container">
+                    <h5>Grade Progress</h5>
+                    ${gradeTableHtml}
+                </div>
+                <button class="back-to-pfd-btn"><i class="fa-solid fa-arrow-left"></i> Back to Flight Display</button>
+            </div>
+        `;
+    }
+
+    // --- [NEW] Fetches and displays the pilot stats ---
+    async function displayPilotStats(userId, username) {
+        if (!userId) return;
+        const windowEl = document.getElementById('aircraft-info-window');
+        
+        // Stop the PFD updates while viewing stats
+        if (activePfdUpdateInterval) {
+            clearInterval(activePfdUpdateInterval);
+            activePfdUpdateInterval = null;
+        }
+
+        windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading pilot report for ${username}...</p>`;
+
+        try {
+            const res = await fetch(`${ACARS_USER_API_URL}/${userId}/grade`);
+            if (!res.ok) throw new Error('Could not fetch pilot data.');
+            
+            const data = await res.json();
+            if (data.ok && data.gradeInfo) {
+                windowEl.innerHTML = renderPilotStatsHTML(data.gradeInfo, username);
+            } else {
+                throw new Error('Pilot data not found or invalid.');
+            }
+        } catch (error) {
+            console.error('Error fetching pilot stats:', error);
+            windowEl.innerHTML = `<div class="pilot-stats-view">
+                <p class="error-text">${error.message}</p>
+                <button class="back-to-pfd-btn"><i class="fa-solid fa-arrow-left"></i> Back to Flight Display</button>
+            </div>`;
         }
     }
 
@@ -3064,7 +3221,8 @@ function updateAircraftInfoWindow(baseProps, plan) {
                         properties: {
                             flightId: flight.flightId, callsign: flight.callsign, username: flight.username,
                             altitude: flight.position.alt_ft, speed: flight.position.gs_kt, heading: flight.position.track_deg || 0,
-                            verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft)
+                            verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft),
+                            userId: flight.userId // IMPORTANT: Pass userId for the stats feature
                         }
                     };
                 }).filter(Boolean);
@@ -3083,7 +3241,8 @@ function updateAircraftInfoWindow(baseProps, plan) {
                         properties: {
                             flightId: flight.flightId, callsign: flight.callsign, username: flight.username,
                             altitude: flight.position.alt_ft, speed: flight.position.gs_kt, heading: flight.position.track_deg || 0,
-                            verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft)
+                            verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft),
+                             userId: flight.userId // IMPORTANT: Pass userId for the stats feature
                         }
                     };
                 }).filter(Boolean);
