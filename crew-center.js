@@ -2445,26 +2445,40 @@ function updatePfdDisplay(pfdData) {
         if(footerDist) footerDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
         if(footerETE) footerETE.textContent = ete;
 
+
+
         // --- DYNAMIC IMAGE LOGIC ---
         const aircraftImageElement = document.getElementById('dynamic-aircraft-image');
         if (aircraftImageElement) {
-            // As requested, using the dummy image for all aircraft for now.
-            // When ready, you can swap this logic to be dynamic.
-            aircraftImageElement.src = 'cool.png'; 
+            // Helper function to create a URL-friendly string from the aircraft/livery name
+            const sanitizeFilename = (name) => {
+                if (!name || typeof name !== 'string') return 'unknown';
+                return name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '_');
+            };
 
-            // **Example for future dynamic use:**
-            // const aircraftIcao = plan?.aircraft?.icaocode || 'default';
-            // const imagePath = `/CommunityPlanes/${aircraftIcao}.png`;
-            // if (aircraftImageElement.src !== imagePath) { // Only change if different
-            //     aircraftImageElement.src = imagePath;
-            // }
+            // Get the names from the API data, with fallbacks
+            const aircraftName = baseProps.aircraft?.aircraftName || 'Generic Aircraft';
+            const liveryName = baseProps.aircraft?.liveryName || 'Default Livery';
 
+            // Sanitize the names for the path
+            const sanitizedAircraft = sanitizeFilename(aircraftName);
+            const sanitizedLivery = sanitizeFilename(liveryName);
+
+            // Construct the final image path based on the aircraft and livery
+            const imagePath = `/CommunityPlanes/${sanitizedAircraft}/${sanitizedLivery}.png`;
+            
+            // Only update the src if it's different, to prevent flickering
+            if (aircraftImageElement.src !== imagePath) {
+                 aircraftImageElement.src = imagePath;
+            }
+
+            // This is a crucial fallback. If the specific livery image isn't found,
+            // it will show a default placeholder image.
             aircraftImageElement.onerror = function() { 
-                this.onerror=null;
-                this.src='/CommunityPlanes/default.png'; // Path to a default placeholder image
+                this.onerror = null; // Prevents an infinite loop if the default is also missing
+                this.src = '/CommunityPlanes/default.png';
             };
         }
-    }
 
 
     /**
