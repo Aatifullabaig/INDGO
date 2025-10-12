@@ -2913,13 +2913,7 @@ function renderPilotStatsHTML(stats, username) {
         }
     }
 
-    
-
- * --- [MAJOR REVISION V4 - CORRECTED] Updates the non-PFD parts of the Aircraft Info Window.
- * This version uses a priority-based state machine with robust fallbacks to fix issues
- * with ground operations and accurately detect all airborne phases.
- */
-/**
+ /**
  * --- [MAJOR REVISION V5 - RUNWAY AWARE] Updates the non-PFD parts of the Aircraft Info Window.
  * This version uses runway proximity and heading alignment for highly accurate
  * detection of takeoffs, landings, and approaches.
