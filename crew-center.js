@@ -2428,13 +2428,13 @@ function updatePfdDisplay(pfdData) {
     }
 
     
-    /**
- * --- [MAJOR REVISION] Updates the non-PFD parts of the Aircraft Info Window.
- * This version introduces a more detailed flight phase state machine, adding Taxiing,
- * Taking Off, and Landing phases, and cleanly separating ground/air operations.
- * The logic is prioritized to check for the most specific conditions first.
+/**
+ * --- [MAJOR REVISION V3] Updates the non-PFD parts of the Aircraft Info Window.
+ * This version uses a priority-based state machine to fix issues with ground operations
+ * and accurately detect airborne phases like Taking Off, Landing, and Approach.
  */
 function updateAircraftInfoWindow(baseProps, plan) {
+    // Calculation logic for progress, ETE, etc. remains the same
     const allWaypoints = [];
     if (plan && plan.flightPlanItems) {
         const extractWps = (items) => {
@@ -2471,25 +2471,24 @@ function updateAircraftInfoWindow(baseProps, plan) {
         }
     }
 
-    // --- [REFINED] Flight Phase State Machine ---
+    // --- [RE-ARCHITECTED] Flight Phase State Machine ---
     let flightPhase = 'ENROUTE';
-    let phaseClass = 'phase-enroute'; // Default neutral style
+    let phaseClass = 'phase-enroute';
     let phaseIcon = 'fa-route';
 
-    // --- Configuration Thresholds (Easy to tweak) ---
+    // --- Configuration Thresholds ---
     const THRESHOLD = {
-        ON_GROUND_AGL: 75,      // (ft) AGL to be considered on the ground
-        PARKED_MAX_GS: 2,       // (kts) Max speed to be considered parked
-        TAXI_MAX_GS: 40,      // (kts) Max speed for taxiing
-        TAKEOFF_MIN_VS: 300,    // (fpm) Min vertical speed for takeoff phase
-        TAKEOFF_CEILING_AGL: 1500, // (ft) AGL below which takeoff phase is active
-        CLIMB_MIN_VS: 500,      // (fpm) Min vertical speed for climb phase
-        DESCENT_MIN_VS: -500,   // (fpm) Min vertical speed for descent phase
-        APPROACH_DIST_NM: 40,   // (NM) Distance from destination to start considering approach
-        APPROACH_CEILING_AGL: 3500, // (ft) AGL below which approach phase is active
-        LANDING_CEILING_AGL: 250,  // (ft) AGL for final landing/flare phase
-        CRUISE_MIN_ALT_MSL: 18000, // (ft) Min altitude for cruise phase
-        CRUISE_VS_TOLERANCE: 500  // (fpm) Vertical speed tolerance for level flight
+        ON_GROUND_AGL: 75,
+        PARKED_MAX_GS: 2,
+        TAXI_MAX_GS: 45, // Increased slightly for more tolerance
+        TAKEOFF_MIN_VS: 300,
+        TAKEOFF_CEILING_AGL: 1500,
+        CLIMB_MIN_VS: 500,
+        DESCENT_MIN_VS: -500,
+        TERMINAL_AREA_DIST_NM: 40,
+        LANDING_CEILING_AGL: 500, // Increased to capture final approach better
+        CRUISE_MIN_ALT_MSL: 18000,
+        CRUISE_VS_TOLERANCE: 500
     };
 
     // --- Live Flight Data ---
@@ -2500,77 +2499,67 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // --- Contextual Calculations ---
     const originElevationFt = (plan?.origin?.elevation_ft) ? parseFloat(plan.origin.elevation_ft) : null;
     const destElevationFt = (plan?.destination?.elevation_ft) ? parseFloat(plan.destination.elevation_ft) : null;
-    
-    // Use destination elevation in the second half of the flight, otherwise use origin.
     const relevantElevationFt = (totalDistanceNM > 0 && distanceToDestNM < totalDistanceNM / 2) ? destElevationFt : originElevationFt;
     const altitudeAGL = (relevantElevationFt !== null) ? altitude - relevantElevationFt : null;
 
     const isOnGround = altitudeAGL !== null && altitudeAGL < THRESHOLD.ON_GROUND_AGL;
-    const isNearDestination = distanceToDestNM < THRESHOLD.APPROACH_DIST_NM;
+    const isInTerminalArea = hasPlan && distanceToDestNM < THRESHOLD.TERMINAL_AREA_DIST_NM;
 
-    // --- State Machine Logic ---
+    // --- Priority-Based State Machine Logic ---
+    // The order of these checks is critical for accuracy.
     if (isOnGround) {
-        // --- Ground Operations ---
+        // PRIORITY 1: Ground Operations. This is the most definitive state.
         if (gs <= THRESHOLD.PARKED_MAX_GS) {
             flightPhase = 'PARKED';
             phaseIcon = 'fa-parking';
+            phaseClass = 'phase-enroute'; // Neutral color
         } else if (gs <= THRESHOLD.TAXI_MAX_GS) {
             flightPhase = 'TAXIING';
             phaseIcon = 'fa-road';
+            phaseClass = 'phase-enroute'; // Neutral color
         } else {
-            // High speed on ground implies takeoff roll or landing rollout.
-            // We default to 'Taking Off' as landing rollout is brief and transitions to Taxi.
-            flightPhase = 'TAKING OFF';
-            phaseClass = 'phase-climb';
-            phaseIcon = 'fa-plane-departure';
+            // High speed on the ground can be takeoff roll or landing rollout.
+            flightPhase = 'HIGH SPEED ON GROUND';
+            phaseIcon = 'fa-fighter-jet';
+             phaseClass = 'phase-enroute'; // Neutral color
         }
+    } else if (vs > THRESHOLD.TAKEOFF_MIN_VS && altitudeAGL !== null && altitudeAGL < THRESHOLD.TAKEOFF_CEILING_AGL) {
+        // PRIORITY 2: The universal "Taking Off" phase right after leaving the ground.
+        flightPhase = 'TAKING OFF';
+        phaseClass = 'phase-climb';
+        phaseIcon = 'fa-plane-departure';
+    } else if (isInTerminalArea && vs < 100 && altitudeAGL !== null && altitudeAGL < THRESHOLD.LANDING_CEILING_AGL) {
+        // PRIORITY 3: The universal "Landing" phase in the final moments.
+        flightPhase = 'LANDING';
+        phaseClass = 'phase-approach';
+        phaseIcon = 'fa-plane-arrival';
+    } else if (isInTerminalArea) {
+        // PRIORITY 4: If near the destination and not doing anything else, must be on approach.
+        flightPhase = 'APPROACH';
+        phaseClass = 'phase-approach';
+        phaseIcon = 'fa-plane-arrival';
     } else {
-        // --- Airborne Operations (priority-ordered) ---
-        // 1. Most specific: Initial takeoff climb.
-        if (vs > THRESHOLD.TAKEOFF_MIN_VS && altitudeAGL !== null && altitudeAGL < THRESHOLD.TAKEOFF_CEILING_AGL) {
-            flightPhase = 'TAKING OFF';
-            phaseClass = 'phase-climb';
-            phaseIcon = 'fa-plane-departure';
-        }
-        // 2. Most specific: Final moments of landing.
-        else if (hasPlan && isNearDestination && vs < 0 && altitudeAGL !== null && altitudeAGL < THRESHOLD.LANDING_CEILING_AGL) {
-            flightPhase = 'LANDING';
-            phaseClass = 'phase-approach';
-            phaseIcon = 'fa-plane-arrival';
-        }
-        // 3. General approach.
-        else if (hasPlan && isNearDestination && vs <= 200 && altitudeAGL !== null && altitudeAGL < THRESHOLD.APPROACH_CEILING_AGL) {
-            flightPhase = 'APPROACH';
-            phaseClass = 'phase-approach';
-            phaseIcon = 'fa-plane-arrival';
-        }
-        // 4. General climb.
-        else if (vs > THRESHOLD.CLIMB_MIN_VS) {
+        // PRIORITY 5: Standard enroute phases, only considered if none of the above are true.
+        if (vs > THRESHOLD.CLIMB_MIN_VS) {
             flightPhase = 'CLIMB';
             phaseClass = 'phase-climb';
             phaseIcon = 'fa-arrow-trend-up';
-        }
-        // 5. General descent.
-        else if (vs < THRESHOLD.DESCENT_MIN_VS) {
+        } else if (vs < THRESHOLD.DESCENT_MIN_VS) {
             flightPhase = 'DESCENT';
             phaseClass = 'phase-descent';
             phaseIcon = 'fa-arrow-trend-down';
-        }
-        // 6. Cruise conditions.
-        else if (altitude > THRESHOLD.CRUISE_MIN_ALT_MSL && Math.abs(vs) < THRESHOLD.CRUISE_VS_TOLERANCE) {
+        } else if (altitude > THRESHOLD.CRUISE_MIN_ALT_MSL && Math.abs(vs) < THRESHOLD.CRUISE_VS_TOLERANCE) {
             flightPhase = 'CRUISE';
             phaseClass = 'phase-cruise';
             phaseIcon = 'fa-minus';
-        }
-        // 7. Fallback for any other airborne state.
-        else {
+        } else {
             flightPhase = 'ENROUTE';
             phaseClass = 'phase-enroute';
             phaseIcon = 'fa-route';
         }
     }
 
-    // --- Update DOM Elements (No changes needed below this line) ---
+    // --- Update DOM Elements (No changes from here down) ---
     const progressBarFill = document.getElementById('header-progress-bar');
     const phaseIndicator = document.getElementById('flight-phase-indicator');
     const footerGS = document.getElementById('footer-gs');
