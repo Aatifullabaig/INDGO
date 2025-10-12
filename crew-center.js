@@ -2529,72 +2529,157 @@ function updatePfdDisplay(pfdData) {
     }
 
     // --- [NEW - CORRECTED] Renders the creative Pilot Stats view inside the info window ---
+/**
+ * --- [OVERHAULED] Renders a data-rich, modern Pilot Report view.
+ * Focuses on current and next grade progression, and detailed stats.
+ */
 function renderPilotStatsHTML(stats, username) {
     if (!stats) return '<p class="error-text">Could not load pilot statistics.</p>';
 
-    // --- Helper function to find a requirement value from the rules array ---
-    const getRuleValue = (rules, ruleName, property = 'referenceValue') => {
+    // --- Data Extraction & Helpers ---
+    const getRuleValue = (rules, ruleName) => {
         if (!Array.isArray(rules)) return null;
         const rule = rules.find(r => r.definition?.name === ruleName);
-        return rule ? rule[property] : null;
+        return rule ? rule.referenceValue : null;
     };
+
+    const formatViolationDate = (dateString) => {
+        if (!dateString) return 'N/A';
+        return new Date(dateString).toLocaleDateString('en-US', {
+            year: 'numeric', month: 'short', day: 'numeric'
+        });
+    };
+
+    const currentGradeIndex = stats.gradeDetails?.gradeIndex;
+    const currentGrade = stats.gradeDetails?.grades?.[currentGradeIndex];
+    const nextGrade = stats.gradeDetails?.grades?.[currentGradeIndex + 1];
 
     const atcRankId = stats.atcRank;
     const atcRankMap = { 0: 'Observer', 1: 'Trainee', 2: 'Apprentice', 3: 'Specialist', 4: 'Officer', 5: 'Supervisor', 6: 'Recruiter', 7: 'Manager' };
-    const atcRankName = atcRankId !== null ? atcRankMap[atcRankId] : 'N/A';
-    const totalViolations = (stats.violationCountByLevel?.level1 || 0) + (stats.violationCountByLevel?.level2 || 0) + (stats.violationCountByLevel?.level3 || 0);
-
-    const checkRequirement = (userValue, reqValue, isMax = false) => {
-        if (reqValue === null || reqValue === undefined) return ''; // No requirement to check
-        const met = isMax ? userValue <= reqValue : userValue >= reqValue;
-        return `<i class="fa-solid ${met ? 'fa-check' : 'fa-times'}"></i>`;
+    const atcRankName = atcRankId in atcRankMap ? atcRankMap[atcRankId] : 'N/A';
+    
+    // --- Key Performance Indicators (KPIs) ---
+    const kpis = {
+        grade: currentGrade?.name.replace('Grade ', '') || 'N/A',
+        xp: (stats.totalXP || 0).toLocaleString(),
+        atcRank: atcRankName,
+        totalViolations: (stats.violationCountByLevel?.level1 || 0) +
+                         (stats.violationCountByLevel?.level2 || 0) +
+                         (stats.violationCountByLevel?.level3 || 0)
+    };
+    
+    // --- Detailed Stats ---
+    const details = {
+        lvl1Vios: stats.violationCountByLevel?.level1 || 0,
+        lvl2Vios: stats.violationCountByLevel?.level2 || 0,
+        lvl3Vios: stats.violationCountByLevel?.level3 || 0,
+        lastViolation: formatViolationDate(stats.lastLevel1ViolationDate),
+        flightTime90d: getRuleValue(currentGrade?.rules, 'Flight Time (90 days)'),
+        landings90d: getRuleValue(currentGrade?.rules, 'Landings (90 days)')
     };
 
-    const gradeTableHtml = stats.gradeDetails?.grades?.map((g, index) => {
-        // --- THE FIX in action: Use the helper to get the correct values ---
-        const minXp = getRuleValue(g.rules, 'XP');
-        // Note: The API uses "All Level 2/3 Violations (1 year)" for the grade requirement.
-        const maxViolations = getRuleValue(g.rules, 'All Level 2/3 Violations (1 year)');
+    // --- Progression Card Generator ---
+    const createProgressCard = (title, gradeData, isNextGrade = false) => {
+        if (!gradeData) {
+            // This handles the max grade scenario
+            return `
+            <div class="progress-card complete">
+                <h4><i class="fa-solid fa-crown"></i> Max Grade Achieved</h4>
+                <p>Congratulations, you have reached the highest available grade!</p>
+            </div>`;
+        }
+        
+        const reqXp = getRuleValue(gradeData.rules, 'XP');
+        const reqVios = getRuleValue(gradeData.rules, 'All Level 2/3 Violations (1 year)');
+
+        const xpProgress = reqXp > 0 ? Math.min(100, (stats.totalXP / reqXp) * 100) : 100;
+        const viosMet = stats.total12MonthsViolations <= reqVios;
 
         return `
-        <div class="grade-item ${index === stats.gradeDetails.gradeIndex ? 'current-grade' : ''}">
-            <strong>Grade ${g.name.replace('Grade ', '')}</strong>
-            <div class="grade-requirement">
-                ${checkRequirement(stats.totalXP, minXp)}
-                <span>${minXp !== null ? minXp.toLocaleString() : 'N/A'} XP</span>
-            </div>
-             <div class="grade-requirement">
-                ${checkRequirement(stats.total12MonthsViolations, maxViolations, true)}
-                <span>≤ ${maxViolations !== null ? maxViolations : 'N/A'} violations (1 yr)</span>
-            </div>
-        </div>
-        `;
-    }).join('') || '<p class="muted-text">Grade data not available.</p>';
+            <div class="progress-card">
+                <h4>${title}</h4>
+                <div class="progress-item">
+                    <div class="progress-label">
+                        <span><i class="fa-solid fa-star"></i> XP</span>
+                        <span>${stats.totalXP.toLocaleString()} / ${reqXp.toLocaleString()}</span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fg" style="width: ${xpProgress.toFixed(1)}%;"></div>
+                    </div>
+                </div>
+                <div class="progress-item">
+                    <div class="progress-label">
+                        <span><i class="fa-solid fa-shield-halved"></i> 1-Year Violations</span>
+                        <span class="${viosMet ? 'req-met' : 'req-not-met'}">
+                            ${stats.total12MonthsViolations} / ${reqVios} max
+                            <i class="fa-solid ${viosMet ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+                        </span>
+                    </div>
+                </div>
+            </div>`;
+    };
     
+    // --- Final HTML Assembly ---
     return `
-        <div class="pilot-stats-view">
+        <div class="stats-rehaul-container">
             <div class="stats-header">
                 <h4>Pilot Report</h4>
                 <p>${username}</p>
             </div>
-            <div class="stats-grid">
-                <div class="readout-box">
-                    <div class="label">XP</div>
-                    <div class="value">${(stats.totalXP || 0).toLocaleString()}</div>
+
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-label"><i class="fa-solid fa-user-shield"></i> Grade</div>
+                    <div class="kpi-value">${kpis.grade}</div>
                 </div>
-                <div class="readout-box">
-                    <div class="label">ATC Rank</div>
-                    <div class="value" style="font-size: 1rem;">${atcRankName}</div>
+                <div class="kpi-card">
+                    <div class="kpi-label"><i class="fa-solid fa-star"></i> Total XP</div>
+                    <div class="kpi-value">${kpis.xp}</div>
                 </div>
-                <div class="readout-box">
-                    <div class="label">Violations</div>
-                    <div class="value">${totalViolations}</div>
+                <div class="kpi-card">
+                    <div class="kpi-label"><i class="fa-solid fa-headset"></i> ATC Rank</div>
+                    <div class="kpi-value">${kpis.atcRank}</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label"><i class="fa-solid fa-triangle-exclamation"></i> Total Violations</div>
+                    <div class="kpi-value">${kpis.totalViolations}</div>
                 </div>
             </div>
-            <div class="grade-table-container">
-                <h5>Grade Progress</h5>
-                ${gradeTableHtml}
+
+            <h5 class="section-title">Grade Progression</h5>
+            <div class="progression-container">
+                ${createProgressCard(`Current: Grade ${kpis.grade}`, currentGrade)}
+                ${createProgressCard(`Next: Grade ${nextGrade?.name.replace('Grade ', '') || ''}`, nextGrade, true)}
             </div>
+
+            <h5 class="section-title">Detailed Statistics</h5>
+            <div class="details-grid">
+                 <div class="detail-item">
+                    <span class="detail-label">Level 1 Violations</span>
+                    <span class="detail-value">${details.lvl1Vios}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Level 2 Violations</span>
+                    <span class="detail-value">${details.lvl2Vios}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Level 3 Violations</span>
+                    <span class="detail-value">${details.lvl3Vios}</span>
+                </div>
+                 <div class="detail-item">
+                    <span class="detail-label">Last Violation Date</span>
+                    <span class="detail-value">${details.lastViolation}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Flight Time (90 days)</span>
+                    <span class="detail-value">${details.flightTime90d ? details.flightTime90d.toFixed(1) + ' hrs' : 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Landings (90 days)</span>
+                    <span class="detail-value">${details.landings90d || 'N/A'}</span>
+                </div>
+            </div>
+            
             <button class="back-to-pfd-btn"><i class="fa-solid fa-arrow-left"></i> Back to Flight Display</button>
         </div>
     `;
