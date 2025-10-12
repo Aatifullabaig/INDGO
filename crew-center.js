@@ -278,13 +278,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 display: flex;
                 flex-direction: column;
                 height: 100%;
-                gap: 0; /* MODIFIED */
-                padding: 12px;
+                gap: 0;
                 font-family: 'Segoe UI', sans-serif;
                 background: rgba(10, 12, 26, 0.5);
             }
-
-            /* [MODIFIED] Streamlined Header Design */
+            
             .unified-display-header {
                 display: flex;
                 justify-content: space-between;
@@ -292,42 +290,56 @@ document.addEventListener('DOMContentLoaded', async () => {
                 background: linear-gradient(135deg, rgba(30, 35, 70, 0.8), rgba(15, 20, 45, 0.9));
                 border-radius: 12px;
                 padding: 10px 16px;
+                margin: 12px;
                 border: 1px solid rgba(255, 255, 255, 0.1);
                 color: #e8eaf6;
                 flex-shrink: 0;
                 box-shadow: 0 4px 15px rgba(0,0,0,0.3);
             }
             
-            .header-actions {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-            }
-            
-            .flight-main-details {
-                line-height: 1.2;
-            }
-            .flight-main-details h3 {
-                margin: 0;
-                font-size: 1.6rem;
-                font-weight: 700;
-                color: #fff;
-                letter-spacing: 1px;
-            }
-            .flight-main-details p {
-                margin: 0;
-                font-size: 0.85rem;
-                color: #c5cae9;
-                opacity: 0.8;
+            .header-actions { display: flex; align-items: center; gap: 12px; }
+            .flight-main-details { line-height: 1.2; }
+            .flight-main-details h3 { margin: 0; font-size: 1.6rem; font-weight: 700; color: #fff; letter-spacing: 1px; }
+            .flight-main-details p { margin: 0; font-size: 0.85rem; color: #c5cae9; opacity: 0.8; }
+
+            /* --- [NEW] Wrapper for Image and Overlay Route --- */
+            .image-and-route-wrapper {
+                position: relative;
+                background: rgba(10, 12, 26, 0.5);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                overflow: hidden;
             }
 
-            /* [NEW] Styles for the moved route details panel */
+            /* --- [NEW] Aircraft Image Display --- */
+            .aircraft-image-container {
+                width: 100%;
+                height: 180px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .aircraft-image-container img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                background-color: rgba(0,0,0,0.2);
+            }
+
+            /* --- [MODIFIED] Flight Details Panel (now overlaid) --- */
             .flight-details-panel {
-                padding: 16px 16px 4px;
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                padding: 8px 12px;
+                background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.0));
+                z-index: 10;
+                box-sizing: border-box;
                 display: flex;
                 flex-direction: column;
                 gap: 8px;
             }
+
             .flight-route-display {
                 display: grid;
                 grid-template-columns: auto 1fr auto;
@@ -335,28 +347,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 gap: 12px;
                 color: #e8eaf6;
             }
-            .route-point {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
-            .route-point.arrival {
-                flex-direction: row-reverse;
-            }
-            .route-point .icao {
-                font-size: 1.6rem;
-                font-weight: 700;
-                font-family: 'Courier New', monospace;
-                color: #fff;
-            }
-            .route-point .fa-solid {
-                font-size: 1.1rem;
-                color: #00a8ff;
-            }
-            .route-progress-container {
-                display: flex;
-                flex-direction: column;
-            }
+            .route-point { display: flex; align-items: center; gap: 8px; }
+            .route-point.arrival { flex-direction: row-reverse; }
+            .route-point .icao { font-size: 1.6rem; font-weight: 700; font-family: 'Courier New', monospace; color: #fff; }
+            .route-point .fa-solid { font-size: 1.1rem; color: #00a8ff; }
+            .route-progress-container { display: flex; flex-direction: column; }
 
 
             /* [NEW] Redesigned Hide/Close Buttons */
@@ -426,8 +421,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             .phase-approach { background: rgba(138, 43, 226, 0.7); box-shadow: 0 0 12px rgba(138, 43, 226, 0.8); }
             .phase-enroute { background: rgba(100, 110, 130, 0.7); box-shadow: 0 0 12px rgba(100, 110, 130, 0.8); }
 
-
-            /* Main content layout (no major changes needed here) */
             .unified-display-main {
                 flex-grow: 1;
                 display: grid;
@@ -435,6 +428,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 gap: 16px;
                 min-height: 0;
                 overflow: hidden;
+                padding: 12px;
             }
             .pfd-side-panel {
                 display: flex;
@@ -1866,14 +1860,7 @@ function updatePfdDisplay(pfdData) {
             if (!document.getElementById('aircraft-info-window')) {
                  const windowHtml = `
                     <div id="aircraft-info-window" class="info-window">
-                        <div class="info-window-header">
-                            <h3 id="aircraft-window-title"></h3>
-                            <div class="info-window-actions">
-                                <button id="aircraft-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
-                                <button id="aircraft-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                        </div>
-                        <div id="aircraft-window-content" class="info-window-content"></div>
+                        
                     </div>
                 `;
                 viewContainer.insertAdjacentHTML('beforeend', windowHtml);
@@ -2095,10 +2082,8 @@ function updatePfdDisplay(pfdData) {
     async function handleAircraftClick(flightProps, sessionId) {
         if (!flightProps || !flightProps.flightId) return;
     
-        // [FIX] Reset the PFD state immediately to prevent showing old data.
         resetPfdState();
     
-        // Clear any previously selected flight's path and stop its update interval.
         if (currentFlightInWindow && currentFlightInWindow !== flightProps.flightId) {
             clearLiveFlightPath(currentFlightInWindow);
         }
@@ -2111,16 +2096,10 @@ function updatePfdDisplay(pfdData) {
         aircraftInfoWindow.classList.add('visible');
         aircraftInfoWindowRecallBtn.classList.remove('visible');
     
-        // --- START: FIX ---
-        // The redesigned "unified display" is self-contained and replaces the entire window content.
-        // We will target the main window element directly, removing the old, redundant header 
-        // and preventing layout conflicts.
         const windowEl = document.getElementById('aircraft-info-window');
         windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
-        // --- END: FIX ---
     
         try {
-            // 1. Fetch plan and route data in parallel
             const [planRes, routeRes] = await Promise.all([
                 fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/plan`),
                 fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/route`)
@@ -2130,15 +2109,12 @@ function updatePfdDisplay(pfdData) {
             const plan = (planData && planData.ok) ? planData.plan : null;
             const routeData = routeRes.ok ? await routeRes.json() : null;
             
-            // First, populate the info window UI with all available data.
             populateAircraftInfoWindow(flightProps, plan);
     
-            // --- Map Plotting Logic ---
             const currentPosition = [flightProps.position.lon, flightProps.position.lat];
             const flownLayerId = `flown-path-${flightProps.flightId}`;
-            let allCoordsForBounds = [currentPosition]; // Start bounds with the plane's position
+            let allCoordsForBounds = [currentPosition];
     
-            // 2. Process and plot the Flown Path (The Past)
             const historicalRoute = (routeData && routeData.ok && Array.isArray(routeData.route)) 
                 ? routeData.route.map(p => [p.longitude, p.latitude]) 
                 : [];
@@ -2166,7 +2142,6 @@ function updatePfdDisplay(pfdData) {
                 sectorOpsMap.fitBounds(bounds, { padding: 80, maxZoom: 10, duration: 1000 });
             }
             
-            // 3. Start live PFD updates
             activePfdUpdateInterval = setInterval(async () => {
                 try {
                     const freshDataRes = await fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}`);
@@ -2177,9 +2152,8 @@ function updatePfdDisplay(pfdData) {
     
                     if (updatedFlight && updatedFlight.position) {
                         updatePfdDisplay(updatedFlight.position);
-                        updateAircraftInfoWindow(updatedFlight, plan); // Update other details like footer
+                        updateAircraftInfoWindow(updatedFlight, plan);
                     } else {
-                        // Flight is gone, stop polling
                         clearInterval(activePfdUpdateInterval);
                         activePfdUpdateInterval = null;
                     }
@@ -2192,23 +2166,16 @@ function updatePfdDisplay(pfdData) {
     
         } catch (error) {
             console.error("Error fetching or plotting aircraft details:", error);
-            // Use the main window element for the error message
             windowEl.innerHTML = `<p class="error-text" style="padding: 2rem;">Could not retrieve complete flight details. The aircraft may have landed or disconnected.</p>`;
         }
     }
 
-
-
     /**
-     * --- [REDESIGNED] Generates the "Unified Flight Display" with a new creative header and PFD.
+     * --- [REDESIGNED] Generates the "Unified Flight Display" with image overlay.
      */
     function populateAircraftInfoWindow(baseProps, plan) {
-        // --- START: FIX ---
-        // Target the main window element, as the new UI is a complete replacement for the window's content.
         const windowEl = document.getElementById('aircraft-info-window');
-        // --- END: FIX ---
     
-        // --- Data Extraction ---
         const allWaypoints = [];
         if (plan && plan.flightPlanItems) {
             const extractWps = (items) => {
@@ -2223,8 +2190,6 @@ function updatePfdDisplay(pfdData) {
         const departureIcao = hasPlan ? allWaypoints[0]?.name : 'N/A';
         const arrivalIcao = hasPlan ? allWaypoints[allWaypoints.length - 1]?.name : 'N/A';
     
-        // --- HTML Structure for the new layout ---
-        // This HTML is now injected directly into the main window element.
         windowEl.innerHTML = `
             <div class="unified-display-container">
                 <div class="unified-display-header">
@@ -2238,21 +2203,26 @@ function updatePfdDisplay(pfdData) {
                     </div>
                 </div>
 
-                <div class="flight-details-panel">
-                    <div class="flight-route-display">
-                        <div class="route-point departure">
-                            <span class="icao">${departureIcao}</span>
-                            <i class="fa-solid fa-plane-departure"></i>
-                        </div>
-                        <div class="route-progress-container">
-                             <div class="flight-phase-indicator" id="flight-phase-indicator"></div>
-                             <div class="route-progress-bar-container">
-                                <div class="progress-bar-fill" id="header-progress-bar"></div>
+                <div class="image-and-route-wrapper">
+                    <div class="aircraft-image-container">
+                        <img id="dynamic-aircraft-image" src="" alt="Aircraft Image">
+                    </div>
+                    <div class="flight-details-panel">
+                        <div class="flight-route-display">
+                            <div class="route-point departure">
+                                <span class="icao">${departureIcao}</span>
+                                <i class="fa-solid fa-plane-departure"></i>
                             </div>
-                        </div>
-                        <div class="route-point arrival">
-                             <i class="fa-solid fa-plane-arrival"></i>
-                            <span class="icao">${arrivalIcao}</span>
+                            <div class="route-progress-container">
+                                 <div class="flight-phase-indicator" id="flight-phase-indicator"></div>
+                                 <div class="route-progress-bar-container">
+                                    <div class="progress-bar-fill" id="header-progress-bar"></div>
+                                </div>
+                            </div>
+                            <div class="route-point arrival">
+                                 <i class="fa-solid fa-plane-arrival"></i>
+                                <span class="icao">${arrivalIcao}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2387,7 +2357,6 @@ function updatePfdDisplay(pfdData) {
             </div>
         `;
         
-        // Initialize the PFD and populate it with the first set of data.
         createPfdDisplay();
         updatePfdDisplay(baseProps.position);
         updateAircraftInfoWindow(baseProps, plan);
@@ -2395,10 +2364,9 @@ function updatePfdDisplay(pfdData) {
 
     
     /**
-     * --- [MODIFIED] Updates the non-PFD parts of the Aircraft Info Window, including the new header and phase indicator.
+     * --- [MODIFIED] Updates the non-PFD parts of the Aircraft Info Window, including the image.
      */
     function updateAircraftInfoWindow(baseProps, plan) {
-        // --- Data Extraction & Calculation (same as before) ---
         const allWaypoints = [];
         if (plan && plan.flightPlanItems) {
             const extractWps = (items) => {
@@ -2434,7 +2402,6 @@ function updatePfdDisplay(pfdData) {
             }
         }
         
-        // --- [MODIFIED] Flight Phase Logic ---
         let flightPhase = 'ENROUTE';
         let phaseClass = 'phase-enroute';
         let phaseIcon = 'fa-route';
@@ -2459,7 +2426,6 @@ function updatePfdDisplay(pfdData) {
             phaseIcon = 'fa-plane-arrival';
         }
     
-        // --- [MODIFIED] DOM Updates ---
         const progressBarFill = document.getElementById('header-progress-bar');
         const phaseIndicator = document.getElementById('flight-phase-indicator');
         const footerGS = document.getElementById('footer-gs');
@@ -2478,6 +2444,26 @@ function updatePfdDisplay(pfdData) {
         if(footerVS) footerVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
         if(footerDist) footerDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
         if(footerETE) footerETE.textContent = ete;
+
+        // --- DYNAMIC IMAGE LOGIC ---
+        const aircraftImageElement = document.getElementById('dynamic-aircraft-image');
+        if (aircraftImageElement) {
+            // As requested, using the dummy image for all aircraft for now.
+            // When ready, you can swap this logic to be dynamic.
+            aircraftImageElement.src = 'cool.png'; 
+
+            // **Example for future dynamic use:**
+            // const aircraftIcao = plan?.aircraft?.icaocode || 'default';
+            // const imagePath = `/CommunityPlanes/${aircraftIcao}.png`;
+            // if (aircraftImageElement.src !== imagePath) { // Only change if different
+            //     aircraftImageElement.src = imagePath;
+            // }
+
+            aircraftImageElement.onerror = function() { 
+                this.onerror=null;
+                this.src='/CommunityPlanes/default.png'; // Path to a default placeholder image
+            };
+        }
     }
 
 
