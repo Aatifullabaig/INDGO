@@ -2528,64 +2528,77 @@ function updatePfdDisplay(pfdData) {
         }
     }
 
-    // --- [NEW] Renders the creative Pilot Stats view inside the info window ---
-    function renderPilotStatsHTML(stats, username) {
-        if (!stats) return '<p class="error-text">Could not load pilot statistics.</p>';
+    // --- [NEW - CORRECTED] Renders the creative Pilot Stats view inside the info window ---
+function renderPilotStatsHTML(stats, username) {
+    if (!stats) return '<p class="error-text">Could not load pilot statistics.</p>';
 
-        const grade = stats.gradeDetails?.grades?.[stats.gradeDetails.gradeIndex];
-        const atcRankId = stats.atcRank;
-        const atcRankMap = { 0: 'Observer', 1: 'Trainee', 2: 'Apprentice', 3: 'Specialist', 4: 'Officer', 5: 'Supervisor', 6: 'Recruiter', 7: 'Manager' };
-        const atcRankName = atcRankId !== null ? atcRankMap[atcRankId] : 'N/A';
-        const totalViolations = (stats.violationCountByLevel?.level1 || 0) + (stats.violationCountByLevel?.level2 || 0) + (stats.violationCountByLevel?.level3 || 0);
+    // --- Helper function to find a requirement value from the rules array ---
+    const getRuleValue = (rules, ruleName, property = 'referenceValue') => {
+        if (!Array.isArray(rules)) return null;
+        const rule = rules.find(r => r.definition?.name === ruleName);
+        return rule ? rule[property] : null;
+    };
 
-        const checkRequirement = (userValue, reqValue, isMax = false) => {
-            if (reqValue === null || reqValue === undefined) return ''; // No requirement to check
-            const met = isMax ? userValue <= reqValue : userValue >= reqValue;
-            return `<i class="fa-solid ${met ? 'fa-check' : 'fa-times'}"></i>`;
-        };
+    const atcRankId = stats.atcRank;
+    const atcRankMap = { 0: 'Observer', 1: 'Trainee', 2: 'Apprentice', 3: 'Specialist', 4: 'Officer', 5: 'Supervisor', 6: 'Recruiter', 7: 'Manager' };
+    const atcRankName = atcRankId !== null ? atcRankMap[atcRankId] : 'N/A';
+    const totalViolations = (stats.violationCountByLevel?.level1 || 0) + (stats.violationCountByLevel?.level2 || 0) + (stats.violationCountByLevel?.level3 || 0);
 
-        const gradeTableHtml = stats.gradeDetails?.grades?.map((g, index) => `
-            <div class="grade-item ${index === stats.gradeDetails.gradeIndex ? 'current-grade' : ''}">
-                <strong>Grade ${g.grade}</strong>
-                <div class="grade-requirement">
-                    ${checkRequirement(stats.totalXP, g.minXp)}
-                    <span>${g.minXp.toLocaleString()} XP</span>
-                </div>
-                 <div class="grade-requirement">
-                    ${checkRequirement(stats.total12MonthsViolations, g.maxViolations12Months, true)}
-                    <span>≤ ${g.maxViolations12Months} violations (12 mo)</span>
-                </div>
-            </div>
-        `).join('') || '<p class="muted-text">Grade data not available.</p>';
-        
+    const checkRequirement = (userValue, reqValue, isMax = false) => {
+        if (reqValue === null || reqValue === undefined) return ''; // No requirement to check
+        const met = isMax ? userValue <= reqValue : userValue >= reqValue;
+        return `<i class="fa-solid ${met ? 'fa-check' : 'fa-times'}"></i>`;
+    };
+
+    const gradeTableHtml = stats.gradeDetails?.grades?.map((g, index) => {
+        // --- THE FIX in action: Use the helper to get the correct values ---
+        const minXp = getRuleValue(g.rules, 'XP');
+        // Note: The API uses "All Level 2/3 Violations (1 year)" for the grade requirement.
+        const maxViolations = getRuleValue(g.rules, 'All Level 2/3 Violations (1 year)');
+
         return `
-            <div class="pilot-stats-view">
-                <div class="stats-header">
-                    <h4>Pilot Report</h4>
-                    <p>${username}</p>
-                </div>
-                <div class="stats-grid">
-                    <div class="readout-box">
-                        <div class="label">XP</div>
-                        <div class="value">${(stats.totalXP || 0).toLocaleString()}</div>
-                    </div>
-                    <div class="readout-box">
-                        <div class="label">ATC Rank</div>
-                        <div class="value" style="font-size: 1rem;">${atcRankName}</div>
-                    </div>
-                    <div class="readout-box">
-                        <div class="label">Violations</div>
-                        <div class="value">${totalViolations}</div>
-                    </div>
-                </div>
-                <div class="grade-table-container">
-                    <h5>Grade Progress</h5>
-                    ${gradeTableHtml}
-                </div>
-                <button class="back-to-pfd-btn"><i class="fa-solid fa-arrow-left"></i> Back to Flight Display</button>
+        <div class="grade-item ${index === stats.gradeDetails.gradeIndex ? 'current-grade' : ''}">
+            <strong>Grade ${g.name.replace('Grade ', '')}</strong>
+            <div class="grade-requirement">
+                ${checkRequirement(stats.totalXP, minXp)}
+                <span>${minXp !== null ? minXp.toLocaleString() : 'N/A'} XP</span>
             </div>
+             <div class="grade-requirement">
+                ${checkRequirement(stats.total12MonthsViolations, maxViolations, true)}
+                <span>≤ ${maxViolations !== null ? maxViolations : 'N/A'} violations (1 yr)</span>
+            </div>
+        </div>
         `;
-    }
+    }).join('') || '<p class="muted-text">Grade data not available.</p>';
+    
+    return `
+        <div class="pilot-stats-view">
+            <div class="stats-header">
+                <h4>Pilot Report</h4>
+                <p>${username}</p>
+            </div>
+            <div class="stats-grid">
+                <div class="readout-box">
+                    <div class="label">XP</div>
+                    <div class="value">${(stats.totalXP || 0).toLocaleString()}</div>
+                </div>
+                <div class="readout-box">
+                    <div class="label">ATC Rank</div>
+                    <div class="value" style="font-size: 1rem;">${atcRankName}</div>
+                </div>
+                <div class="readout-box">
+                    <div class="label">Violations</div>
+                    <div class="value">${totalViolations}</div>
+                </div>
+            </div>
+            <div class="grade-table-container">
+                <h5>Grade Progress</h5>
+                ${gradeTableHtml}
+            </div>
+            <button class="back-to-pfd-btn"><i class="fa-solid fa-arrow-left"></i> Back to Flight Display</button>
+        </div>
+    `;
+}
 
     // --- [NEW] Fetches and displays the pilot stats ---
     async function displayPilotStats(userId, username) {
