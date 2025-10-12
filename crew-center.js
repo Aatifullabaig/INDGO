@@ -131,20 +131,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         const css = `
             /* --- [FIX] Sector Ops View Layout --- */
             #view-rosters.active {
-                display: grid;
-                grid-template-columns: 1fr;
-                grid-template-rows: 1fr;
-                height: 100%;
-                width: 100%;
-                overflow: hidden;
-                position: relative;
-            }
-            #sector-ops-map-fullscreen {
-                grid-column: 1 / -1;
-                grid-row: 1 / -1;
-                width: 100%;
-                height: 100%;
-            }
+    display: grid;
+    grid-template-columns: 1fr; /* Defines one column that takes all available width */
+    grid-template-rows: 1fr;    /* Defines one row that takes all available height */
+    position: relative;
+    height: 100%;
+    overflow: hidden;
+    padding: 0 !important;
+}
+
+/* This places the map into that grid cell, making it fill the entire view */
+#sector-ops-map-fullscreen {
+    grid-column: 1 / -1; /* Span from the first column line to the last */
+    grid-row: 1 / -1;    /* Span from the first row line to the last */
+    width: 100%;
+    height: 100%;
+}
             
             /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
             .info-window {
