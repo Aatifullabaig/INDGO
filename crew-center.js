@@ -2445,10 +2445,14 @@ function updatePfdDisplay(pfdData) {
                         paint: { 'line-color': '#00b894', 'line-width': 4, 'line-opacity': 0.9 }
                     }, 'sector-ops-live-flights-layer');
                 }
+
+                // --- FIX: Store the layer ID and the coordinates array for future updates ---
+                sectorOpsLiveFlightPathLayers[flightProps.flightId] = {
+                    flown: flownLayerId,
+                    coordinates: completeFlownPath
+                };
             }
             
-            sectorOpsLiveFlightPathLayers[flightProps.flightId] = { flown: flownLayerId };
-
             if (allCoordsForBounds.length > 1) {
                 const bounds = allCoordsForBounds.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(allCoordsForBounds[0], allCoordsForBounds[0]));
                 sectorOpsMap.fitBounds(bounds, { padding: 80, maxZoom: 10, duration: 1000 });
@@ -2479,19 +2483,24 @@ function updatePfdDisplay(pfdData) {
                             }
                         }
                         
-                        // --- NEW LOGIC to update the flown path ---
-                        const pathSource = sectorOpsMap.getSource(flownLayerId);
-                        if (pathSource && pathSource._data) {
-                            const pathData = pathSource._data;
+                        // --- FIX: Logic to update the flown path using the stored array ---
+                        const flightPathState = sectorOpsLiveFlightPathLayers[flightProps.flightId];
+                        const pathSource = flightPathState ? sectorOpsMap.getSource(flightPathState.flown) : null;
+                        
+                        if (flightPathState && pathSource) {
                             const newPosition = [updatedFlight.position.lon, updatedFlight.position.lat];
-
-                            // Add the new point to the end of the line's coordinates array
-                            pathData.geometry.coordinates.push(newPosition);
-
-                            // Update the source to redraw the longer line
-                            pathSource.setData(pathData);
+                            flightPathState.coordinates.push(newPosition); // Add to our stored array
+                            
+                            // Update map source with the complete, consistent array
+                            pathSource.setData({
+                                type: 'Feature',
+                                geometry: {
+                                    type: 'LineString',
+                                    coordinates: flightPathState.coordinates
+                                }
+                            });
                         }
-                        // --- END OF NEW LOGIC ---
+                        // --- END OF FIX ---
 
                     } else {
                         clearInterval(activePfdUpdateInterval);
@@ -3515,9 +3524,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
     /**
      * Fetches all live data (flights, ATC, NOTAMs) and plots them on the Sector Ops map.
      */
-    /**
-     * Fetches all live data (flights, ATC, NOTAMs) and plots them on the Sector Ops map.
-     */
     async function updateSectorOpsLiveFlights() {
         if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -3557,7 +3563,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 return;
             }
 
-            // --- START OF FIX: Prevent flickering by merging data ---
+            // --- FIX: Prevent flickering by merging data ---
             const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
             let finalFeatures = [];
 
@@ -3568,7 +3574,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 // Process all other flights from the new API call
                 const otherFlights = flightsData.flights.filter(f => f.flightId !== currentFlightInWindow);
                 finalFeatures = otherFlights.map(flight => {
-                    // (This mapping logic is the same as before)
                     if (!flight.position || flight.position.lat == null || flight.position.lon == null) return null;
                     return {
                         type: 'Feature',
@@ -3577,7 +3582,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
                             flightId: flight.flightId, callsign: flight.callsign, username: flight.username,
                             altitude: flight.position.alt_ft, speed: flight.position.gs_kt, heading: flight.position.track_deg || 0,
                             verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft),
-                            userId: flight.userId // IMPORTANT: Pass userId for the stats feature
+                            userId: flight.userId
                         }
                     };
                 }).filter(Boolean);
@@ -3597,7 +3602,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
                             flightId: flight.flightId, callsign: flight.callsign, username: flight.username,
                             altitude: flight.position.alt_ft, speed: flight.position.gs_kt, heading: flight.position.track_deg || 0,
                             verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft),
-                             userId: flight.userId // IMPORTANT: Pass userId for the stats feature
+                             userId: flight.userId
                         }
                     };
                 }).filter(Boolean);
