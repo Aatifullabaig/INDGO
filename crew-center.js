@@ -2625,7 +2625,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
     if (aircraftImageElement) {
         const sanitizeFilename = (name) => {
             if (!name || typeof name !== 'string') return 'unknown';
-            return name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '_');
+            return name.trim().toLowerCase().replace(/[^a-z0--9-]/g, '_');
         };
 
         const aircraftName = baseProps.aircraft?.aircraftName || 'Generic Aircraft';
@@ -2636,13 +2636,18 @@ function updateAircraftInfoWindow(baseProps, plan) {
 
         const imagePath = `/CommunityPlanes/${sanitizedAircraft}/${sanitizedLivery}.png`;
 
-        if (aircraftImageElement.src !== imagePath) {
+        // THE FIX: Compare the new path against a stored data attribute, not the resolved .src URL
+        if (aircraftImageElement.dataset.currentPath !== imagePath) {
             aircraftImageElement.src = imagePath;
+            // Store the new path in our data attribute so the check works next time
+            aircraftImageElement.dataset.currentPath = imagePath; 
         }
 
+        // We only need to set the error handler once, but setting it again is harmless.
         aircraftImageElement.onerror = function () {
             this.onerror = null;
             this.src = '/CommunityPlanes/default.png';
+            this.dataset.currentPath = '/CommunityPlanes/default.png'; // Also update path on error
         };
     }
 }
