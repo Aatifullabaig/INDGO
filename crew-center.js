@@ -309,25 +309,35 @@ document.addEventListener('DOMContentLoaded', async () => {
             .flight-main-details { line-height: 1.2; }
             .flight-main-details h3 { margin: 0; font-size: 1.6rem; font-weight: 700; color: #fff; letter-spacing: 1px; }
 
-            /* --- [NEW] Clickable Pilot Name Button --- */
-            .pilot-name-button {
-                background: none;
-                border: none;
-                padding: 2px 6px;
-                margin: 0;
-                font-size: 0.85rem;
-                color: #c5cae9;
-                opacity: 0.8;
-                cursor: pointer;
-                border-radius: 4px;
-                transition: all 0.2s ease-in-out;
-            }
-            .pilot-name-button:hover {
-                background-color: rgba(255, 255, 255, 0.1);
-                color: #fff;
-                opacity: 1;
-            }
-            .pilot-name-button .fa-solid { margin-left: 6px; }
+            /* --- [NEW & IMPROVED] Clickable Pilot Name Button --- */
+.pilot-name-button {
+    display: inline-flex; /* Use flexbox for easy alignment */
+    align-items: center;
+    gap: 8px; /* Space between name and icon */
+    background-color: rgba(255, 255, 255, 0.05); /* Subtle background to stand out */
+    border: 1px solid rgba(255, 255, 255, 0.1); /* Faint border */
+    padding: 4px 10px; /* Give it some comfortable spacing */
+    margin: 0;
+    font-size: 0.9rem; /* Slightly larger for clarity */
+    font-weight: 500;
+    color: #c5cae9;
+    cursor: pointer;
+    border-radius: 20px; /* This creates the "pill" shape */
+    transition: all 0.2s ease-in-out;
+    line-height: 1;
+}
+.pilot-name-button:hover,
+.pilot-name-button:focus {
+    background-color: #00a8ff; /* Use your brand's accent color on hover */
+    color: #fff; /* White text for contrast */
+    border-color: #00a8ff;
+    transform: translateY(-2px) scale(1.03); /* Add a little "pop" effect */
+    box-shadow: 0 4px 15px rgba(0, 168, 255, 0.3);
+}
+.pilot-name-button .fa-solid {
+    margin: 0; /* Remove the old margin */
+    font-size: 0.8rem;
+}
 
             /* --- [NEW] Wrapper for Image and Overlay Route --- */
             .image-and-route-wrapper {
