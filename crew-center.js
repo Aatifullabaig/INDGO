@@ -2913,13 +2913,13 @@ function renderPilotStatsHTML(stats, username) {
         }
     }
 
- /**
- * --- [MAJOR REVISION V4 - CORRECTED] Updates the non-PFD parts of the Aircraft Info Window.
- * This version uses a priority-based state machine with robust fallbacks to fix issues
- * with ground operations and accurately detect all airborne phases.
+/**
+ * --- [MAJOR REVISION V4.1 - RUNWAY AWARE] Updates the non-PFD parts of the Aircraft Info Window.
+ * This version uses runway proximity and alignment data for highly accurate phase detection,
+ * identifying states like Takeoff Roll, Liftoff, and Final Approach.
  */
 function updateAircraftInfoWindow(baseProps, plan) {
-    // Calculation logic for progress, ETE, etc. remains the same
+    // Calculation logic for progress, ETE, etc.
     const allWaypoints = [];
     if (plan && plan.flightPlanItems) {
         const extractWps = (items) => {
@@ -2956,11 +2956,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
         }
     }
 
-    // --- [RE-ARCHITECTED] Flight Phase State Machine ---
-    let flightPhase = 'ENROUTE';
-    let phaseClass = 'phase-enroute';
-    let phaseIcon = 'fa-route';
-
     // --- Configuration Thresholds ---
     const THRESHOLD = {
         ON_GROUND_AGL: 75,
@@ -2971,11 +2966,20 @@ function updateAircraftInfoWindow(baseProps, plan) {
         CLIMB_MIN_VS: 500,
         DESCENT_MIN_VS: -500,
         TERMINAL_AREA_DIST_NM: 40,
-        APPROACH_PROGRESS_MIN: 5, // FIX: Require 5% of flight complete to be considered "approach"
+        APPROACH_PROGRESS_MIN: 5,
         LANDING_CEILING_AGL: 500,
         CRUISE_MIN_ALT_MSL: 18000,
-        CRUISE_VS_TOLERANCE: 500
+        CRUISE_VS_TOLERANCE: 500,
+        // +++ NEW THRESHOLDS FOR RUNWAY LOGIC +++
+        RUNWAY_PROXIMITY_NM: 1.5,      // Max distance from a runway end to be considered "near"
+        RUNWAY_HEADING_TOLERANCE: 25, // Max heading difference (in degrees) for alignment
+        LANDING_FLARE_MAX_GS: 220     // Max ground speed to be considered in landing phase
     };
+
+    // --- [RE-ARCHITECTED V2] Flight Phase State Machine with Runway Logic ---
+    let flightPhase = 'ENROUTE';
+    let phaseClass = 'phase-enroute';
+    let phaseIcon = 'fa-route';
 
     // --- Live Flight Data ---
     const vs = baseProps.position.vs_fpm || 0;
@@ -2987,51 +2991,72 @@ function updateAircraftInfoWindow(baseProps, plan) {
     const destElevationFt = (plan?.destination?.elevation_ft) ? parseFloat(plan.destination.elevation_ft) : null;
     const relevantElevationFt = (totalDistanceNM > 0 && distanceToDestNM < totalDistanceNM / 2) ? destElevationFt : originElevationFt;
     const altitudeAGL = (relevantElevationFt !== null) ? altitude - relevantElevationFt : null;
-
-    // FIX: A more robust ground check with a fallback for when elevation data is missing.
+    
     const aglCheck = altitudeAGL !== null && altitudeAGL < THRESHOLD.ON_GROUND_AGL;
     const fallbackGroundCheck = altitudeAGL === null && gs < THRESHOLD.TAXI_MAX_GS && Math.abs(vs) < 150;
     const isOnGround = aglCheck || fallbackGroundCheck;
     
-    // FIX: Make the terminal area check smarter to avoid false positives at the origin.
-    const isInTerminalArea = hasPlan && distanceToDestNM < THRESHOLD.TERMINAL_AREA_DIST_NM && progress > THRESHOLD.APPROACH_PROGRESS_MIN;
+    // --- [NEW] Runway Proximity Detection ---
+    const departureIcao = plan?.origin?.icao_code;
+    const arrivalIcao = plan?.destination?.icao_code;
+    const aircraftPos = { lat: baseProps.position.lat, lon: baseProps.position.lon, track_deg: baseProps.position.track_deg };
+    let nearestRunwayInfo = null;
 
+    // Prioritize checking the arrival airport if we are in the terminal area
+    if (hasPlan && distanceToDestNM < THRESHOLD.TERMINAL_AREA_DIST_NM && arrivalIcao) {
+        nearestRunwayInfo = getNearestRunway(aircraftPos, arrivalIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
+    }
+    // If not near a runway at the arrival airport (or not in the area), check the departure airport
+    if (!nearestRunwayInfo && departureIcao) {
+        nearestRunwayInfo = getNearestRunway(aircraftPos, departureIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
+    }
 
     // --- Priority-Based State Machine Logic ---
-    // The order of these checks is critical for accuracy.
     if (isOnGround) {
-        // PRIORITY 1: Ground Operations. This is the most definitive state.
-        if (gs <= THRESHOLD.PARKED_MAX_GS) {
+        // PRIORITY 1: Ground Operations
+        if (nearestRunwayInfo && gs > THRESHOLD.TAXI_MAX_GS) {
+            // High speed on a runway can only be takeoff roll or landing rollout.
+            if (progress < 10) { // If less than 10% of the flight is done, it must be takeoff.
+                flightPhase = 'TAKEOFF ROLL';
+                phaseClass = 'phase-climb';
+                phaseIcon = 'fa-plane-departure';
+            } else { // Otherwise, it's landing.
+                flightPhase = 'LANDING ROLLOUT';
+                phaseClass = 'phase-approach';
+                phaseIcon = 'fa-plane-arrival';
+            }
+        } else if (gs <= THRESHOLD.PARKED_MAX_GS) {
             flightPhase = 'PARKED';
             phaseIcon = 'fa-parking';
             phaseClass = 'phase-enroute'; // Neutral color
-        } else if (gs <= THRESHOLD.TAXI_MAX_GS) {
+        } else {
             flightPhase = 'TAXIING';
             phaseIcon = 'fa-road';
             phaseClass = 'phase-enroute'; // Neutral color
-        } else {
-            // High speed on the ground can be takeoff roll or landing rollout.
-            flightPhase = 'HIGH SPEED ON GROUND';
-            phaseIcon = 'fa-fighter-jet';
-             phaseClass = 'phase-enroute'; // Neutral color
         }
-    } else if (vs > THRESHOLD.TAKEOFF_MIN_VS && altitudeAGL !== null && altitudeAGL < THRESHOLD.TAKEOFF_CEILING_AGL) {
-        // PRIORITY 2: The universal "Taking Off" phase right after leaving the ground.
-        flightPhase = 'TAKING OFF';
-        phaseClass = 'phase-climb';
-        phaseIcon = 'fa-plane-departure';
-    } else if (isInTerminalArea && vs < 100 && altitudeAGL !== null && altitudeAGL < THRESHOLD.LANDING_CEILING_AGL) {
-        // PRIORITY 3: The universal "Landing" phase in the final moments.
-        flightPhase = 'LANDING';
-        phaseClass = 'phase-approach';
-        phaseIcon = 'fa-plane-arrival';
-    } else if (isInTerminalArea) {
-        // PRIORITY 4: If near the destination and not doing anything else, must be on approach.
+    } else if (nearestRunwayInfo && nearestRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE) {
+        // PRIORITY 2: Airborne, near a runway, AND aligned with it.
+        if (vs > THRESHOLD.TAKEOFF_MIN_VS && altitudeAGL < THRESHOLD.TAKEOFF_CEILING_AGL) {
+            flightPhase = 'LIFTOFF';
+            phaseClass = 'phase-climb';
+            phaseIcon = 'fa-plane-up';
+        } else if (vs < -100 && gs < THRESHOLD.LANDING_FLARE_MAX_GS) {
+            flightPhase = 'FINAL APPROACH';
+            phaseClass = 'phase-approach';
+            phaseIcon = 'fa-plane-arrival';
+        } else {
+             // Default for aligned but in a weird state (e.g., go-around)
+            flightPhase = 'ON RWY HEADING';
+            phaseClass = 'phase-enroute';
+            phaseIcon = 'fa-compass';
+        }
+    } else if (hasPlan && distanceToDestNM < THRESHOLD.TERMINAL_AREA_DIST_NM && progress > THRESHOLD.APPROACH_PROGRESS_MIN) {
+        // PRIORITY 3: In terminal area but not aligned with a runway yet.
         flightPhase = 'APPROACH';
         phaseClass = 'phase-approach';
         phaseIcon = 'fa-plane-arrival';
     } else {
-        // PRIORITY 5: Standard enroute phases, only considered if none of the above are true.
+        // PRIORITY 4: Standard enroute phases, only if none of the above are true.
         if (vs > THRESHOLD.CLIMB_MIN_VS) {
             flightPhase = 'CLIMB';
             phaseClass = 'phase-climb';
@@ -3051,7 +3076,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
         }
     }
 
-    // --- Update DOM Elements (No changes from here down) ---
+    // --- Update DOM Elements ---
     const progressBarFill = document.getElementById('header-progress-bar');
     const phaseIndicator = document.getElementById('flight-phase-indicator');
     const footerGS = document.getElementById('footer-gs');
@@ -3086,18 +3111,15 @@ function updateAircraftInfoWindow(baseProps, plan) {
 
         const imagePath = `/CommunityPlanes/${sanitizedAircraft}/${sanitizedLivery}.png`;
 
-        // THE FIX: Compare the new path against a stored data attribute, not the resolved .src URL
         if (aircraftImageElement.dataset.currentPath !== imagePath) {
             aircraftImageElement.src = imagePath;
-            // Store the new path in our data attribute so the check works next time
             aircraftImageElement.dataset.currentPath = imagePath; 
         }
 
-        // We only need to set the error handler once, but setting it again is harmless.
         aircraftImageElement.onerror = function () {
             this.onerror = null;
             this.src = '/CommunityPlanes/default.png';
-            this.dataset.currentPath = '/CommunityPlanes/default.png'; // Also update path on error
+            this.dataset.currentPath = '/CommunityPlanes/default.png';
         };
     }
 }
