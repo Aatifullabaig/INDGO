@@ -79,7 +79,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let crewRestInterval = null;
     let airportsData = {};
     let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
-    let airportsData = {};
     let runwaysData = {}; // NEW: To store runway data indexed by airport ICAO
 
     // --- Map-related State ---
