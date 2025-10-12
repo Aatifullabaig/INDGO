@@ -2122,13 +2122,18 @@ function updatePfdDisplay(pfdData) {
     }
 
     /**
-     * --- [REMODEL] Handles aircraft clicks, data fetching, map plotting, and window population.
+     * --- [REMODEL V4 - FULL SYNC] Handles aircraft clicks, data fetching, map plotting, and window population.
      */
     async function handleAircraftClick(flightProps, sessionId) {
         if (!flightProps || !flightProps.flightId) return;
-    
+
+        // FIX: Prevent re-fetch if the user clicks the same aircraft while its window is already open.
+        if (currentFlightInWindow === flightProps.flightId && aircraftInfoWindow.classList.contains('visible')) {
+            return;
+        }
+
         resetPfdState();
-    
+
         if (currentFlightInWindow && currentFlightInWindow !== flightProps.flightId) {
             clearLiveFlightPath(currentFlightInWindow);
         }
@@ -2136,14 +2141,14 @@ function updatePfdDisplay(pfdData) {
             clearInterval(activePfdUpdateInterval);
             activePfdUpdateInterval = null;
         }
-    
+
         currentFlightInWindow = flightProps.flightId;
         aircraftInfoWindow.classList.add('visible');
         aircraftInfoWindowRecallBtn.classList.remove('visible');
-    
+
         const windowEl = document.getElementById('aircraft-info-window');
         windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
-    
+
         try {
             const [planRes, routeRes] = await Promise.all([
                 fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/plan`),
@@ -2155,11 +2160,11 @@ function updatePfdDisplay(pfdData) {
             const routeData = routeRes.ok ? await routeRes.json() : null;
             
             populateAircraftInfoWindow(flightProps, plan);
-    
+
             const currentPosition = [flightProps.position.lon, flightProps.position.lat];
             const flownLayerId = `flown-path-${flightProps.flightId}`;
             let allCoordsForBounds = [currentPosition];
-    
+
             const historicalRoute = (routeData && routeData.ok && Array.isArray(routeData.route)) 
                 ? routeData.route.map(p => [p.longitude, p.latitude]) 
                 : [];
@@ -2167,21 +2172,23 @@ function updatePfdDisplay(pfdData) {
             if (historicalRoute.length > 0) {
                 const completeFlownPath = [...historicalRoute, currentPosition];
                 allCoordsForBounds.push(...historicalRoute);
-    
-                sectorOpsMap.addSource(flownLayerId, {
-                    type: 'geojson',
-                    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: completeFlownPath } }
-                });
-                sectorOpsMap.addLayer({
-                    id: flownLayerId,
-                    type: 'line',
-                    source: flownLayerId,
-                    paint: { 'line-color': '#00b894', 'line-width': 4, 'line-opacity': 0.9 }
-                });
+
+                if (!sectorOpsMap.getSource(flownLayerId)) {
+                    sectorOpsMap.addSource(flownLayerId, {
+                        type: 'geojson',
+                        data: { type: 'Feature', geometry: { type: 'LineString', coordinates: completeFlownPath } }
+                    });
+                    sectorOpsMap.addLayer({
+                        id: flownLayerId,
+                        type: 'line',
+                        source: flownLayerId,
+                        paint: { 'line-color': '#00b894', 'line-width': 4, 'line-opacity': 0.9 }
+                    });
+                }
             }
             
             sectorOpsLiveFlightPathLayers[flightProps.flightId] = { flown: flownLayerId };
-    
+
             if (allCoordsForBounds.length > 1) {
                 const bounds = allCoordsForBounds.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(allCoordsForBounds[0], allCoordsForBounds[0]));
                 sectorOpsMap.fitBounds(bounds, { padding: 80, maxZoom: 10, duration: 1000 });
@@ -2194,10 +2201,38 @@ function updatePfdDisplay(pfdData) {
                     
                     const allFlights = await freshDataRes.json();
                     const updatedFlight = allFlights.flights.find(f => f.flightId === flightProps.flightId);
-    
+
                     if (updatedFlight && updatedFlight.position) {
+                        // --- Logic to update the info window (Unchanged) ---
                         updatePfdDisplay(updatedFlight.position);
                         updateAircraftInfoWindow(updatedFlight, plan);
+                        
+                        // --- Logic to update the aircraft's icon on the map (Unchanged) ---
+                        const iconSource = sectorOpsMap.getSource('sector-ops-live-flights-source');
+                        if (iconSource && iconSource._data) {
+                            const currentData = iconSource._data;
+                            const featureToUpdate = currentData.features.find(f => f.properties.flightId === flightProps.flightId);
+                            if (featureToUpdate) {
+                                featureToUpdate.geometry.coordinates = [updatedFlight.position.lon, updatedFlight.position.lat];
+                                featureToUpdate.properties.heading = updatedFlight.position.track_deg || 0;
+                                iconSource.setData(currentData);
+                            }
+                        }
+                        
+                        // --- NEW LOGIC to update the flown path ---
+                        const pathSource = sectorOpsMap.getSource(flownLayerId);
+                        if (pathSource && pathSource._data) {
+                            const pathData = pathSource._data;
+                            const newPosition = [updatedFlight.position.lon, updatedFlight.position.lat];
+
+                            // Add the new point to the end of the line's coordinates array
+                            pathData.geometry.coordinates.push(newPosition);
+
+                            // Update the source to redraw the longer line
+                            pathSource.setData(pathData);
+                        }
+                        // --- END OF NEW LOGIC ---
+
                     } else {
                         clearInterval(activePfdUpdateInterval);
                         activePfdUpdateInterval = null;
@@ -2208,7 +2243,7 @@ function updatePfdDisplay(pfdData) {
                     activePfdUpdateInterval = null;
                 }
             }, 3000);
-    
+
         } catch (error) {
             console.error("Error fetching or plotting aircraft details:", error);
             windowEl.innerHTML = `<p class="error-text" style="padding: 2rem;">Could not retrieve complete flight details. The aircraft may have landed or disconnected.</p>`;
