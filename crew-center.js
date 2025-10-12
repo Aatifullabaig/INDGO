@@ -2429,140 +2429,192 @@ function updatePfdDisplay(pfdData) {
 
     
     /**
-     * --- [MODIFIED & REFACTORED] Updates the non-PFD parts of the Aircraft Info Window.
-     * This now includes a more robust AGL-based flight phase detection for Approach.
-     */
-    function updateAircraftInfoWindow(baseProps, plan) {
-        const allWaypoints = [];
-        if (plan && plan.flightPlanItems) {
-            const extractWps = (items) => {
-                for (const item of items) {
-                    if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) { allWaypoints.push(item); }
-                    if (Array.isArray(item.children)) { extractWps(item.children); }
-                }
-            };
-            extractWps(plan.flightPlanItems);
-        }
-        const hasPlan = allWaypoints.length >= 2;
-        let progress = 0, ete = '--:--', distanceToDestNM = 0;
-        
-        if (hasPlan) {
-            let totalDistanceKm = 0;
-            for (let i = 0; i < allWaypoints.length - 1; i++) {
-                totalDistanceKm += getDistanceKm(allWaypoints[i].location.latitude, allWaypoints[i].location.longitude, allWaypoints[i + 1].location.latitude, allWaypoints[i + 1].location.longitude);
+ * --- [MAJOR REVISION] Updates the non-PFD parts of the Aircraft Info Window.
+ * This version introduces a more detailed flight phase state machine, adding Taxiing,
+ * Taking Off, and Landing phases, and cleanly separating ground/air operations.
+ * The logic is prioritized to check for the most specific conditions first.
+ */
+function updateAircraftInfoWindow(baseProps, plan) {
+    const allWaypoints = [];
+    if (plan && plan.flightPlanItems) {
+        const extractWps = (items) => {
+            for (const item of items) {
+                if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) { allWaypoints.push(item); }
+                if (Array.isArray(item.children)) { extractWps(item.children); }
             }
-            const totalDistanceNM = totalDistanceKm / 1.852;
-    
-            if (totalDistanceNM > 0) {
-                const destWp = allWaypoints[allWaypoints.length - 1];
-                const remainingDistanceKm = getDistanceKm(baseProps.position.lat, baseProps.position.lon, destWp.location.latitude, destWp.location.longitude);
-                distanceToDestNM = remainingDistanceKm / 1.852;
-                progress = Math.max(0, Math.min(100, (1 - (distanceToDestNM / totalDistanceNM)) * 100));
-    
-                if (baseProps.position.gs_kt > 50) {
-                    const timeHours = distanceToDestNM / baseProps.position.gs_kt;
-                    const hours = Math.floor(timeHours);
-                    const minutes = Math.round((timeHours - hours) * 60);
-                    ete = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-                }
+        };
+        extractWps(plan.flightPlanItems);
+    }
+    const hasPlan = allWaypoints.length >= 2;
+    let progress = 0, ete = '--:--', distanceToDestNM = 0;
+    let totalDistanceNM = 0;
+
+    if (hasPlan) {
+        let totalDistanceKm = 0;
+        for (let i = 0; i < allWaypoints.length - 1; i++) {
+            totalDistanceKm += getDistanceKm(allWaypoints[i].location.latitude, allWaypoints[i].location.longitude, allWaypoints[i + 1].location.latitude, allWaypoints[i + 1].location.longitude);
+        }
+        totalDistanceNM = totalDistanceKm / 1.852;
+
+        if (totalDistanceNM > 0) {
+            const destWp = allWaypoints[allWaypoints.length - 1];
+            const remainingDistanceKm = getDistanceKm(baseProps.position.lat, baseProps.position.lon, destWp.location.latitude, destWp.location.longitude);
+            distanceToDestNM = remainingDistanceKm / 1.852;
+            progress = Math.max(0, Math.min(100, (1 - (distanceToDestNM / totalDistanceNM)) * 100));
+
+            if (baseProps.position.gs_kt > 50) {
+                const timeHours = distanceToDestNM / baseProps.position.gs_kt;
+                const hours = Math.floor(timeHours);
+                const minutes = Math.round((timeHours - hours) * 60);
+                ete = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
             }
         }
-        
-        // --- [REFACTORED] Flight Phase Logic ---
-        let flightPhase = 'ENROUTE';
-        let phaseClass = 'phase-enroute';
-        let phaseIcon = 'fa-route';
-        
-        const vs = baseProps.position.vs_fpm || 0;
-        const altitude = baseProps.position.alt_ft || 0;
-        
-        // Get destination airport elevation for AGL calculation.
-        const destElevationFt = (plan && plan.destination && typeof plan.destination.elevation_ft !== 'undefined')
-            ? parseFloat(plan.destination.elevation_ft)
-            : null;
+    }
 
-        const altitudeAGL = (destElevationFt !== null) ? altitude - destElevationFt : null;
+    // --- [REFINED] Flight Phase State Machine ---
+    let flightPhase = 'ENROUTE';
+    let phaseClass = 'phase-enroute'; // Default neutral style
+    let phaseIcon = 'fa-route';
 
-        // Define conditions for the approach phase.
-        const isNearDestination = distanceToDestNM < 30; // Within 30 NM is a good approach gate.
-        const isNotClimbing = vs <= 200; // Allow for slight positive VS, but not a clear climb.
-        const isLowAltitudeAGL = (altitudeAGL !== null && altitudeAGL < 4000);
-        const isLowAltitudeMSLFallback = (altitudeAGL === null && altitude < 5000); // Fallback if no elevation data.
+    // --- Configuration Thresholds (Easy to tweak) ---
+    const THRESHOLD = {
+        ON_GROUND_AGL: 75,      // (ft) AGL to be considered on the ground
+        PARKED_MAX_GS: 2,       // (kts) Max speed to be considered parked
+        TAXI_MAX_GS: 40,      // (kts) Max speed for taxiing
+        TAKEOFF_MIN_VS: 300,    // (fpm) Min vertical speed for takeoff phase
+        TAKEOFF_CEILING_AGL: 1500, // (ft) AGL below which takeoff phase is active
+        CLIMB_MIN_VS: 500,      // (fpm) Min vertical speed for climb phase
+        DESCENT_MIN_VS: -500,   // (fpm) Min vertical speed for descent phase
+        APPROACH_DIST_NM: 40,   // (NM) Distance from destination to start considering approach
+        APPROACH_CEILING_AGL: 3500, // (ft) AGL below which approach phase is active
+        LANDING_CEILING_AGL: 250,  // (ft) AGL for final landing/flare phase
+        CRUISE_MIN_ALT_MSL: 18000, // (ft) Min altitude for cruise phase
+        CRUISE_VS_TOLERANCE: 500  // (fpm) Vertical speed tolerance for level flight
+    };
 
-        // Main logic chain with correct prioritization.
-        if (vs > 500) {
-            flightPhase = 'CLIMB';
+    // --- Live Flight Data ---
+    const vs = baseProps.position.vs_fpm || 0;
+    const altitude = baseProps.position.alt_ft || 0;
+    const gs = baseProps.position.gs_kt || 0;
+
+    // --- Contextual Calculations ---
+    const originElevationFt = (plan?.origin?.elevation_ft) ? parseFloat(plan.origin.elevation_ft) : null;
+    const destElevationFt = (plan?.destination?.elevation_ft) ? parseFloat(plan.destination.elevation_ft) : null;
+    
+    // Use destination elevation in the second half of the flight, otherwise use origin.
+    const relevantElevationFt = (totalDistanceNM > 0 && distanceToDestNM < totalDistanceNM / 2) ? destElevationFt : originElevationFt;
+    const altitudeAGL = (relevantElevationFt !== null) ? altitude - relevantElevationFt : null;
+
+    const isOnGround = altitudeAGL !== null && altitudeAGL < THRESHOLD.ON_GROUND_AGL;
+    const isNearDestination = distanceToDestNM < THRESHOLD.APPROACH_DIST_NM;
+
+    // --- State Machine Logic ---
+    if (isOnGround) {
+        // --- Ground Operations ---
+        if (gs <= THRESHOLD.PARKED_MAX_GS) {
+            flightPhase = 'PARKED';
+            phaseIcon = 'fa-parking';
+        } else if (gs <= THRESHOLD.TAXI_MAX_GS) {
+            flightPhase = 'TAXIING';
+            phaseIcon = 'fa-road';
+        } else {
+            // High speed on ground implies takeoff roll or landing rollout.
+            // We default to 'Taking Off' as landing rollout is brief and transitions to Taxi.
+            flightPhase = 'TAKING OFF';
             phaseClass = 'phase-climb';
-            phaseIcon = 'fa-arrow-trend-up';
-        } else if (vs < -500) {
-            flightPhase = 'DESCENT';
-            phaseClass = 'phase-descent';
-            phaseIcon = 'fa-arrow-trend-down';
-        } else if (hasPlan && isNearDestination && isNotClimbing && (isLowAltitudeAGL || isLowAltitudeMSLFallback)) {
+            phaseIcon = 'fa-plane-departure';
+        }
+    } else {
+        // --- Airborne Operations (priority-ordered) ---
+        // 1. Most specific: Initial takeoff climb.
+        if (vs > THRESHOLD.TAKEOFF_MIN_VS && altitudeAGL !== null && altitudeAGL < THRESHOLD.TAKEOFF_CEILING_AGL) {
+            flightPhase = 'TAKING OFF';
+            phaseClass = 'phase-climb';
+            phaseIcon = 'fa-plane-departure';
+        }
+        // 2. Most specific: Final moments of landing.
+        else if (hasPlan && isNearDestination && vs < 0 && altitudeAGL !== null && altitudeAGL < THRESHOLD.LANDING_CEILING_AGL) {
+            flightPhase = 'LANDING';
+            phaseClass = 'phase-approach';
+            phaseIcon = 'fa-plane-arrival';
+        }
+        // 3. General approach.
+        else if (hasPlan && isNearDestination && vs <= 200 && altitudeAGL !== null && altitudeAGL < THRESHOLD.APPROACH_CEILING_AGL) {
             flightPhase = 'APPROACH';
             phaseClass = 'phase-approach';
             phaseIcon = 'fa-plane-arrival';
-        } else if (altitude > 28000 && Math.abs(vs) <= 500) {
+        }
+        // 4. General climb.
+        else if (vs > THRESHOLD.CLIMB_MIN_VS) {
+            flightPhase = 'CLIMB';
+            phaseClass = 'phase-climb';
+            phaseIcon = 'fa-arrow-trend-up';
+        }
+        // 5. General descent.
+        else if (vs < THRESHOLD.DESCENT_MIN_VS) {
+            flightPhase = 'DESCENT';
+            phaseClass = 'phase-descent';
+            phaseIcon = 'fa-arrow-trend-down';
+        }
+        // 6. Cruise conditions.
+        else if (altitude > THRESHOLD.CRUISE_MIN_ALT_MSL && Math.abs(vs) < THRESHOLD.CRUISE_VS_TOLERANCE) {
             flightPhase = 'CRUISE';
             phaseClass = 'phase-cruise';
             phaseIcon = 'fa-minus';
         }
-        // If none of the above, it defaults to ENROUTE.
-    
-        const progressBarFill = document.getElementById('header-progress-bar');
-        const phaseIndicator = document.getElementById('flight-phase-indicator');
-        const footerGS = document.getElementById('footer-gs');
-        const footerVS = document.getElementById('footer-vs');
-        const footerDist = document.getElementById('footer-dist');
-        const footerETE = document.getElementById('footer-ete');
-    
-        if(progressBarFill) progressBarFill.style.width = `${progress.toFixed(1)}%`;
-        
-        if (phaseIndicator) {
-            phaseIndicator.className = `flight-phase-indicator ${phaseClass}`;
-            phaseIndicator.innerHTML = `<i class="fa-solid ${phaseIcon}"></i> ${flightPhase}`;
-        }
-    
-        if(footerGS) footerGS.innerHTML = `${Math.round(baseProps.position.gs_kt)}<span class="unit">kts</span>`;
-        if(footerVS) footerVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
-        if(footerDist) footerDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
-        if(footerETE) footerETE.textContent = ete;
-
-
-
-        // --- DYNAMIC IMAGE LOGIC ---
-        const aircraftImageElement = document.getElementById('dynamic-aircraft-image');
-        if (aircraftImageElement) {
-            // Helper function to create a URL-friendly string from the aircraft/livery name
-            const sanitizeFilename = (name) => {
-                if (!name || typeof name !== 'string') return 'unknown';
-                return name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '_');
-            };
-
-            // Get the names from the API data, with fallbacks
-            const aircraftName = baseProps.aircraft?.aircraftName || 'Generic Aircraft';
-            const liveryName = baseProps.aircraft?.liveryName || 'Default Livery';
-
-            // Sanitize the names for the path
-            const sanitizedAircraft = sanitizeFilename(aircraftName);
-            const sanitizedLivery = sanitizeFilename(liveryName);
-
-            // Construct the final image path based on the aircraft and livery
-            const imagePath = `/CommunityPlanes/${sanitizedAircraft}/${sanitizedLivery}.png`;
-            
-            // Only update the src if it's different, to prevent flickering
-            if (aircraftImageElement.src !== imagePath) {
-                 aircraftImageElement.src = imagePath;
-            }
-
-            // This is a crucial fallback. If the specific livery image isn't found,
-            // it will show a default placeholder image.
-            aircraftImageElement.onerror = function() { 
-                this.onerror = null; // Prevents an infinite loop if the default is also missing
-                this.src = '/CommunityPlanes/default.png';
-            };
+        // 7. Fallback for any other airborne state.
+        else {
+            flightPhase = 'ENROUTE';
+            phaseClass = 'phase-enroute';
+            phaseIcon = 'fa-route';
         }
     }
+
+    // --- Update DOM Elements (No changes needed below this line) ---
+    const progressBarFill = document.getElementById('header-progress-bar');
+    const phaseIndicator = document.getElementById('flight-phase-indicator');
+    const footerGS = document.getElementById('footer-gs');
+    const footerVS = document.getElementById('footer-vs');
+    const footerDist = document.getElementById('footer-dist');
+    const footerETE = document.getElementById('footer-ete');
+
+    if (progressBarFill) progressBarFill.style.width = `${progress.toFixed(1)}%`;
+
+    if (phaseIndicator) {
+        phaseIndicator.className = `flight-phase-indicator ${phaseClass}`;
+        phaseIndicator.innerHTML = `<i class="fa-solid ${phaseIcon}"></i> ${flightPhase}`;
+    }
+
+    if (footerGS) footerGS.innerHTML = `${Math.round(gs)}<span class="unit">kts</span>`;
+    if (footerVS) footerVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
+    if (footerDist) footerDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
+    if (footerETE) footerETE.textContent = ete;
+
+    const aircraftImageElement = document.getElementById('dynamic-aircraft-image');
+    if (aircraftImageElement) {
+        const sanitizeFilename = (name) => {
+            if (!name || typeof name !== 'string') return 'unknown';
+            return name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '_');
+        };
+
+        const aircraftName = baseProps.aircraft?.aircraftName || 'Generic Aircraft';
+        const liveryName = baseProps.aircraft?.liveryName || 'Default Livery';
+
+        const sanitizedAircraft = sanitizeFilename(aircraftName);
+        const sanitizedLivery = sanitizeFilename(liveryName);
+
+        const imagePath = `/CommunityPlanes/${sanitizedAircraft}/${sanitizedLivery}.png`;
+
+        if (aircraftImageElement.src !== imagePath) {
+            aircraftImageElement.src = imagePath;
+        }
+
+        aircraftImageElement.onerror = function () {
+            this.onerror = null;
+            this.src = '/CommunityPlanes/default.png';
+        };
+    }
+}
 
 
     /**
