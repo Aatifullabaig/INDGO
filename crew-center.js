@@ -3023,6 +3023,14 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // Contextual booleans for state logic
     const isLinedUpForLanding = nearestRunwayInfo && nearestRunwayInfo.airport === arrivalIcao && nearestRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE;
 
+    console.log({
+        callsign: baseProps.callsign,
+        phase: flightPhase,
+        isLinedUp: isLinedUpForLanding,
+        nearestRunway: nearestRunwayInfo,
+        AGL: altitudeAGL,
+        progress: progress
+    });
     // --- State Machine Logic (Processed in order of priority) ---
 
     // 1. ON-GROUND STATES (Highest Priority)
