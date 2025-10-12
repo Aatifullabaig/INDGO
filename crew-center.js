@@ -3091,7 +3091,10 @@ function updateAircraftInfoWindow(baseProps, plan) {
     } 
     
     // 4. GENERAL AIRBORNE STATES (This block only runs if a specific phase wasn't set above)
-    if (flightPhase === 'ENROUTE') {
+    else { // [!code --]
+// This was the problem: it was `if (flightPhase === 'ENROUTE')` which was never true after LIFTOFF.
+// By changing it to an `else`, it becomes the default catch-all for any airborne state not covered above.
+    // [!code ++]
         if (hasPlan && distanceToDestNM < THRESHOLD.TERMINAL_AREA_DIST_NM && progress > THRESHOLD.APPROACH_PROGRESS_MIN) {
             flightPhase = 'APPROACH';
             phaseClass = 'phase-approach';
