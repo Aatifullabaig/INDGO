@@ -2973,7 +2973,9 @@ function updateAircraftInfoWindow(baseProps, plan) {
         // +++ NEW THRESHOLDS FOR RUNWAY LOGIC +++
         RUNWAY_PROXIMITY_NM: 1.5,      // Max distance from a runway end to be considered "near"
         RUNWAY_HEADING_TOLERANCE: 25, // Max heading difference (in degrees) for alignment
-        LANDING_FLARE_MAX_GS: 220     // Max ground speed to be considered in landing phase
+        LANDING_FLARE_MAX_GS: 220,     // Max ground speed to be considered in landing phase
+        // +++ NEW THRESHOLD FOR FIX +++
+        APPROACH_CEILING_AGL: 2500,      // Max AGL for final approach detection
     };
 
     // --- [RE-ARCHITECTED V2] Flight Phase State Machine with Runway Logic ---
@@ -3036,14 +3038,18 @@ function updateAircraftInfoWindow(baseProps, plan) {
         }
     } else if (nearestRunwayInfo && nearestRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE) {
         // PRIORITY 2: Airborne, near a runway, AND aligned with it.
-        if (vs > THRESHOLD.TAKEOFF_MIN_VS && altitudeAGL < THRESHOLD.TAKEOFF_CEILING_AGL) {
+        // --- FIX START: Made AGL check permissive. If AGL isn't available, this condition won't fail. ---
+        if (vs > THRESHOLD.TAKEOFF_MIN_VS && (altitudeAGL === null || altitudeAGL < THRESHOLD.TAKEOFF_CEILING_AGL)) {
             flightPhase = 'LIFTOFF';
             phaseClass = 'phase-climb';
             phaseIcon = 'fa-plane-up';
-        } else if (vs < -100 && gs < THRESHOLD.LANDING_FLARE_MAX_GS) {
+        // --- FIX END ---
+        // --- FIX START: Added a permissive AGL check to make Final Approach detection more accurate. ---
+        } else if (vs < -100 && gs < THRESHOLD.LANDING_FLARE_MAX_GS && (altitudeAGL === null || altitudeAGL < THRESHOLD.APPROACH_CEILING_AGL)) {
             flightPhase = 'FINAL APPROACH';
             phaseClass = 'phase-approach';
             phaseIcon = 'fa-plane-arrival';
+        // --- FIX END ---
         } else {
              // Default for aligned but in a weird state (e.g., go-around)
             flightPhase = 'ON RWY HEADING';
@@ -3075,6 +3081,54 @@ function updateAircraftInfoWindow(baseProps, plan) {
             phaseIcon = 'fa-route';
         }
     }
+
+    // --- Update DOM Elements ---
+    const progressBarFill = document.getElementById('header-progress-bar');
+    const phaseIndicator = document.getElementById('flight-phase-indicator');
+    const footerGS = document.getElementById('footer-gs');
+    const footerVS = document.getElementById('footer-vs');
+    const footerDist = document.getElementById('footer-dist');
+    const footerETE = document.getElementById('footer-ete');
+
+    if (progressBarFill) progressBarFill.style.width = `${progress.toFixed(1)}%`;
+
+    if (phaseIndicator) {
+        phaseIndicator.className = `flight-phase-indicator ${phaseClass}`;
+        phaseIndicator.innerHTML = `<i class="fa-solid ${phaseIcon}"></i> ${flightPhase}`;
+    }
+
+    if (footerGS) footerGS.innerHTML = `${Math.round(gs)}<span class="unit">kts</span>`;
+    if (footerVS) footerVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
+    if (footerDist) footerDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
+    if (footerETE) footerETE.textContent = ete;
+
+    const aircraftImageElement = document.getElementById('dynamic-aircraft-image');
+    if (aircraftImageElement) {
+        const sanitizeFilename = (name) => {
+            if (!name || typeof name !== 'string') return 'unknown';
+            return name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '_');
+        };
+
+        const aircraftName = baseProps.aircraft?.aircraftName || 'Generic Aircraft';
+        const liveryName = baseProps.aircraft?.liveryName || 'Default Livery';
+
+        const sanitizedAircraft = sanitizeFilename(aircraftName);
+        const sanitizedLivery = sanitizeFilename(liveryName);
+
+        const imagePath = `/CommunityPlanes/${sanitizedAircraft}/${sanitizedLivery}.png`;
+
+        if (aircraftImageElement.dataset.currentPath !== imagePath) {
+            aircraftImageElement.src = imagePath;
+            aircraftImageElement.dataset.currentPath = imagePath; 
+        }
+
+        aircraftImageElement.onerror = function () {
+            this.onerror = null;
+            this.src = '/CommunityPlanes/default.png';
+            this.dataset.currentPath = '/CommunityPlanes/default.png';
+        };
+    }
+}
 
     // --- Update DOM Elements ---
     const progressBarFill = document.getElementById('header-progress-bar');
