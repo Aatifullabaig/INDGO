@@ -3005,8 +3005,8 @@ function renderPilotStatsHTML(stats, username) {
     }
 
 /**
- * --- [MAJOR REVISION V4.2 - CORRECTED AGL] Updates the non-PFD parts of the Aircraft Info Window.
- * This version uses runway-specific elevation for highly accurate AGL calculation and phase detection.
+ * --- [MAJOR REVISION V4.3 - Refactored State Machine] Updates the non-PFD parts of the Aircraft Info Window.
+ * This version uses a fully refactored state machine for more robust and reliable phase detection.
 */
 function updateAircraftInfoWindow(baseProps, plan) {
     // Calculation logic for progress, ETE, etc. (This part remains unchanged)
@@ -3066,7 +3066,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
         APPROACH_CEILING_AGL: 2500,
     };
 
-    // --- [START OF FIXED LOGIC] ---
+    // --- [START OF REFACTORED LOGIC] ---
     // --- Flight Phase State Machine ---
     let flightPhase = 'ENROUTE'; // Default state
     let phaseClass = 'phase-enroute';
@@ -3090,14 +3090,14 @@ function updateAircraftInfoWindow(baseProps, plan) {
     let nearestRunwayInfo = null;
     if (hasPlan) {
         const distanceFlownKm = totalDistanceNM * 1.852 - distanceToDestNM * 1.852;
-        if (distanceToDestNM * 1.852 < distanceFlownKm) {
-             if (arrivalIcao) nearestRunwayInfo = getNearestRunway(aircraftPos, arrivalIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
-        } else {
-             if (departureIcao) nearestRunwayInfo = getNearestRunway(aircraftPos, departureIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
+        if (distanceToDestNM * 1.852 < distanceFlownKm && arrivalIcao) {
+             nearestRunwayInfo = getNearestRunway(aircraftPos, arrivalIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
+        } else if (departureIcao) {
+             nearestRunwayInfo = getNearestRunway(aircraftPos, departureIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
         }
     }
     
-    // Calculate AGL based on the most relevant elevation data available
+    // Calculate AGL based on the most relevant elevation data
     let altitudeAGL = null;
     if (nearestRunwayInfo && nearestRunwayInfo.elevation_ft != null) {
         altitudeAGL = altitude - nearestRunwayInfo.elevation_ft;
@@ -3116,7 +3116,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
     
     // Contextual booleans for state logic
     const isLinedUpForLanding = nearestRunwayInfo && nearestRunwayInfo.airport === arrivalIcao && nearestRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE;
-    
+
     // --- State Machine Logic (Processed in order of priority) ---
 
     // 1. ON-GROUND STATES (Highest Priority)
@@ -3145,59 +3145,55 @@ function updateAircraftInfoWindow(baseProps, plan) {
             }
         }
     } 
-    // 2. AIRBORNE LANDING SEQUENCE (High Priority)
-    else if (isLinedUpForLanding && altitudeAGL !== null) {
-        if (altitudeAGL < 60 && vs < -50) {
-            flightPhase = 'FLARE';
-            phaseClass = 'phase-approach';
-            phaseIcon = 'fa-arrows-down-to-line';
-        } else if (altitudeAGL < THRESHOLD.LANDING_CEILING_AGL) {
-            flightPhase = 'SHORT FINAL';
-            phaseClass = 'phase-approach';
-            phaseIcon = 'fa-plane-arrival';
-        } else if (altitudeAGL < THRESHOLD.APPROACH_CEILING_AGL) {
-            flightPhase = 'FINAL APPROACH';
+    // 2. ALL AIRBORNE STATES
+    else {
+        const isInLandingSequence = isLinedUpForLanding && altitudeAGL !== null;
+
+        // Specific landing sequences take highest priority when airborne
+        if (isInLandingSequence && altitudeAGL < THRESHOLD.APPROACH_CEILING_AGL) {
+            if (altitudeAGL < 60 && vs < -50) {
+                flightPhase = 'FLARE';
+            } else if (altitudeAGL < THRESHOLD.LANDING_CEILING_AGL) {
+                flightPhase = 'SHORT FINAL';
+            } else {
+                flightPhase = 'FINAL APPROACH';
+            }
             phaseClass = 'phase-approach';
             phaseIcon = 'fa-plane-arrival';
         }
-    }
-    // 3. GENERAL AIRBORNE STATES (This block contains all climb/cruise/descent logic)
-    else {
-        // Approach takes precedence in the terminal area, overriding climb/descent.
-        if (hasPlan && distanceToDestNM < THRESHOLD.TERMINAL_AREA_DIST_NM && progress > THRESHOLD.APPROACH_PROGRESS_MIN) {
+        // General approach in the terminal area
+        else if (hasPlan && distanceToDestNM < THRESHOLD.TERMINAL_AREA_DIST_NM && progress > THRESHOLD.APPROACH_PROGRESS_MIN) {
             flightPhase = 'APPROACH';
             phaseClass = 'phase-approach';
             phaseIcon = 'fa-plane-arrival';
         } 
-        // Check for any climbing state using the lower takeoff VS threshold to avoid gaps.
+        // Any climbing state (uses lower threshold to prevent gaps after liftoff)
         else if (vs > THRESHOLD.TAKEOFF_MIN_VS) {
-            // It's some form of climb. Default to CLIMB.
             flightPhase = 'CLIMB';
             phaseClass = 'phase-climb';
             phaseIcon = 'fa-arrow-trend-up';
             
-            // If it's very early in the flight and below the ceiling, refine the state to LIFTOFF.
-            // This ensures a smooth transition from LIFTOFF to CLIMB.
+            // Refine to LIFTOFF if in the initial takeoff phase
             if (progress < 10 && altitudeAGL !== null && altitudeAGL < THRESHOLD.TAKEOFF_CEILING_AGL) {
                  flightPhase = 'LIFTOFF';
                  phaseIcon = 'fa-plane-up';
             }
         } 
-        // General descent check.
+        // General descent
         else if (vs < THRESHOLD.DESCENT_MIN_VS) {
             flightPhase = 'DESCENT';
             phaseClass = 'phase-descent';
             phaseIcon = 'fa-arrow-trend-down';
         } 
-        // Cruise check.
+        // Cruise
         else if (altitude > THRESHOLD.CRUISE_MIN_ALT_MSL && Math.abs(vs) < THRESHOLD.CRUISE_VS_TOLERANCE) {
             flightPhase = 'CRUISE';
             phaseClass = 'phase-cruise';
             phaseIcon = 'fa-minus';
         }
-        // If nothing else matches, it remains 'ENROUTE' by default.
+        // If nothing else matches, it remains ENROUTE by default.
     }
-    // --- [END OF FIXED LOGIC] ---
+
 
 
     // --- Update DOM Elements (This section remains unchanged) ---
