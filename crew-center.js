@@ -726,6 +726,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             console.error('Failed to fetch airport data:', error);
             showNotification('Could not load airport location data; map features will be limited.', 'error');
+        }
     }
 
     // --- NEW: Fetch Runway Data ---
@@ -2914,9 +2915,10 @@ function renderPilotStatsHTML(stats, username) {
     }
 
 /**
- * --- [MAJOR REVISION V4.3 - DIRECT MSL] Updates the non-PFD parts of the Aircraft Info Window.
- * This version uses a direct MSL altitude comparison for phase detection, per user request.
- */
+ * --- [MAJOR REVISION V4.2 - CORRECTED AGL] Updates the non-PFD parts of the Aircraft Info Window.
+ * This version uses runway-specific elevation for highly accurate AGL calculation and phase detection.
+*/
+
 function updateAircraftInfoWindow(baseProps, plan) {
     // Calculation logic for progress, ETE, etc. (This part remains unchanged)
     const allWaypoints = [];
@@ -2957,32 +2959,35 @@ function updateAircraftInfoWindow(baseProps, plan) {
 
     // --- Configuration Thresholds (Unchanged) ---
     const THRESHOLD = {
-        ON_GROUND_AGL: 75, // This now represents height above runway MSL
+        ON_GROUND_AGL: 75,
         PARKED_MAX_GS: 2,
         TAXI_MAX_GS: 45,
         TAKEOFF_MIN_VS: 300,
-        TAKEOFF_CEILING_AGL: 1500, // Height above runway MSL
+        TAKEOFF_CEILING_AGL: 1500,
         CLIMB_MIN_VS: 500,
         DESCENT_MIN_VS: -500,
         TERMINAL_AREA_DIST_NM: 40,
         APPROACH_PROGRESS_MIN: 5,
+        LANDING_CEILING_AGL: 500,
         CRUISE_MIN_ALT_MSL: 18000,
         CRUISE_VS_TOLERANCE: 500,
         RUNWAY_PROXIMITY_NM: 1.5,
         RUNWAY_HEADING_TOLERANCE: 25,
         LANDING_FLARE_MAX_GS: 220,
-        APPROACH_CEILING_AGL: 2500, // Height above runway MSL
+        APPROACH_CEILING_AGL: 2500,
     };
 
-    // --- State Machine Variables ---
+    // --- [RE-ARCHITECTED V2] Flight Phase State Machine with Runway Logic ---
     let flightPhase = 'ENROUTE';
     let phaseClass = 'phase-enroute';
     let phaseIcon = 'fa-route';
+
+    // --- Live Flight Data (Unchanged) ---
     const vs = baseProps.position.vs_fpm || 0;
-    const altitude = baseProps.position.alt_ft || 0; // Aircraft Altitude in MSL
+    const altitude = baseProps.position.alt_ft || 0;
     const gs = baseProps.position.gs_kt || 0;
 
-    // --- Runway Proximity & Ground Elevation Logic ---
+    // --- [✅ NEW] Runway Proximity Detection (comes first now) ---
     const departureIcao = plan?.origin?.icao_code;
     const arrivalIcao = plan?.destination?.icao_code;
     const aircraftPos = { lat: baseProps.position.lat, lon: baseProps.position.lon, track_deg: baseProps.position.track_deg };
@@ -2994,25 +2999,30 @@ function updateAircraftInfoWindow(baseProps, plan) {
     if (!nearestRunwayInfo && departureIcao) {
         nearestRunwayInfo = getNearestRunway(aircraftPos, departureIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
     }
-
-    // ✅ CORRECTION: Determine the relevant ground elevation in MSL
-    let groundElevationMsl = null;
-    if (nearestRunwayInfo && nearestRunwayInfo.elevation_ft != null) {
-        // Use precise runway elevation if near a runway
-        groundElevationMsl = nearestRunwayInfo.elevation_ft;
-    } else {
-        // Fallback to general airport elevation
-        const originElevationFt = plan?.origin?.elevation_ft ? parseFloat(plan.origin.elevation_ft) : null;
-        const destElevationFt = plan?.destination?.elevation_ft ? parseFloat(plan.destination.elevation_ft) : null;
-        groundElevationMsl = (totalDistanceNM > 0 && distanceToDestNM < totalDistanceNM / 2) ? destElevationFt : originElevationFt;
-    }
     
-    // ✅ CORRECTION: The isOnGround check now uses the direct MSL comparison
-    const groundCheck = groundElevationMsl !== null && (altitude < groundElevationMsl + THRESHOLD.ON_GROUND_AGL);
-    const fallbackGroundCheck = groundElevationMsl === null && gs < THRESHOLD.TAXI_MAX_GS && Math.abs(vs) < 150;
-    const isOnGround = groundCheck || fallbackGroundCheck;
+    // --- [✅ OVERHAULED] Contextual Calculations with Prioritized Elevation ---
+    let altitudeAGL = null;
+    if (nearestRunwayInfo && nearestRunwayInfo.elevation_ft != null) {
+        // PRIORITY 1: Use precise runway elevation if available.
+        altitudeAGL = altitude - nearestRunwayInfo.elevation_ft;
+    } else {
+        // PRIORITY 2: Fallback to general airport elevation from flight plan.
+        const originElevationFt = (plan?.origin?.elevation_ft) ? parseFloat(plan.origin.elevation_ft) : null;
+        const destElevationFt = (plan?.destination?.elevation_ft) ? parseFloat(plan.destination.elevation_ft) : null;
+        
+        // Determine which airport is more relevant based on flight progress
+        const relevantElevationFt = (totalDistanceNM > 0 && distanceToDestNM < totalDistanceNM / 2) ? destElevationFt : originElevationFt;
+        
+        if (relevantElevationFt !== null) {
+            altitudeAGL = altitude - relevantElevationFt;
+        }
+    }
 
-    // --- Priority-Based State Machine Logic ---
+    const aglCheck = altitudeAGL !== null && altitudeAGL < THRESHOLD.ON_GROUND_AGL;
+    const fallbackGroundCheck = altitudeAGL === null && gs < THRESHOLD.TAXI_MAX_GS && Math.abs(vs) < 150;
+    const isOnGround = aglCheck || fallbackGroundCheck;
+    
+    // --- Priority-Based State Machine Logic (This section remains unchanged) ---
     if (isOnGround) {
         if (nearestRunwayInfo && gs > THRESHOLD.TAXI_MAX_GS) {
             if (progress < 10) {
@@ -3033,13 +3043,12 @@ function updateAircraftInfoWindow(baseProps, plan) {
             phaseIcon = 'fa-road';
             phaseClass = 'phase-enroute';
         }
-    } else if (nearestRunwayInfo && nearestRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE && groundElevationMsl !== null) {
-        // ✅ CORRECTION: Liftoff and Final Approach checks now use direct MSL comparison
-        if (vs > THRESHOLD.TAKEOFF_MIN_VS && (altitude < groundElevationMsl + THRESHOLD.TAKEOFF_CEILING_AGL)) {
+    } else if (nearestRunwayInfo && nearestRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE) {
+        if (vs > THRESHOLD.TAKEOFF_MIN_VS && (altitudeAGL === null || altitudeAGL < THRESHOLD.TAKEOFF_CEILING_AGL)) {
             flightPhase = 'LIFTOFF';
             phaseClass = 'phase-climb';
             phaseIcon = 'fa-plane-up';
-        } else if (vs < -100 && gs < THRESHOLD.LANDING_FLARE_MAX_GS && (altitude < groundElevationMsl + THRESHOLD.APPROACH_CEILING_AGL)) {
+        } else if (vs < -100 && gs < THRESHOLD.LANDING_FLARE_MAX_GS && (altitudeAGL === null || altitudeAGL < THRESHOLD.APPROACH_CEILING_AGL)) {
             flightPhase = 'FINAL APPROACH';
             phaseClass = 'phase-approach';
             phaseIcon = 'fa-plane-arrival';
@@ -3053,7 +3062,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
         phaseClass = 'phase-approach';
         phaseIcon = 'fa-plane-arrival';
     } else {
-        // Standard enroute phases (no change here)
         if (vs > THRESHOLD.CLIMB_MIN_VS) {
             flightPhase = 'CLIMB';
             phaseClass = 'phase-climb';
@@ -3074,6 +3082,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
     }
 
     // --- Update DOM Elements (This section remains unchanged) ---
+    // (The rest of the function continues as it was)
     const progressBarFill = document.getElementById('header-progress-bar');
     const phaseIndicator = document.getElementById('flight-phase-indicator');
     const footerGS = document.getElementById('footer-gs');
@@ -3111,54 +3120,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
         if (aircraftImageElement.dataset.currentPath !== imagePath) {
             aircraftImageElement.src = imagePath;
             aircraftImageElement.dataset.currentPath = imagePath;
-        }
-
-        aircraftImageElement.onerror = function () {
-            this.onerror = null;
-            this.src = '/CommunityPlanes/default.png';
-            this.dataset.currentPath = '/CommunityPlanes/default.png';
-        };
-    }
-}
-
-    // --- Update DOM Elements ---
-    const progressBarFill = document.getElementById('header-progress-bar');
-    const phaseIndicator = document.getElementById('flight-phase-indicator');
-    const footerGS = document.getElementById('footer-gs');
-    const footerVS = document.getElementById('footer-vs');
-    const footerDist = document.getElementById('footer-dist');
-    const footerETE = document.getElementById('footer-ete');
-
-    if (progressBarFill) progressBarFill.style.width = `${progress.toFixed(1)}%`;
-
-    if (phaseIndicator) {
-        phaseIndicator.className = `flight-phase-indicator ${phaseClass}`;
-        phaseIndicator.innerHTML = `<i class="fa-solid ${phaseIcon}"></i> ${flightPhase}`;
-    }
-
-    if (footerGS) footerGS.innerHTML = `${Math.round(gs)}<span class="unit">kts</span>`;
-    if (footerVS) footerVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
-    if (footerDist) footerDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
-    if (footerETE) footerETE.textContent = ete;
-
-    const aircraftImageElement = document.getElementById('dynamic-aircraft-image');
-    if (aircraftImageElement) {
-        const sanitizeFilename = (name) => {
-            if (!name || typeof name !== 'string') return 'unknown';
-            return name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '_');
-        };
-
-        const aircraftName = baseProps.aircraft?.aircraftName || 'Generic Aircraft';
-        const liveryName = baseProps.aircraft?.liveryName || 'Default Livery';
-
-        const sanitizedAircraft = sanitizeFilename(aircraftName);
-        const sanitizedLivery = sanitizeFilename(liveryName);
-
-        const imagePath = `/CommunityPlanes/${sanitizedAircraft}/${sanitizedLivery}.png`;
-
-        if (aircraftImageElement.dataset.currentPath !== imagePath) {
-            aircraftImageElement.src = imagePath;
-            aircraftImageElement.dataset.currentPath = imagePath; 
         }
 
         aircraftImageElement.onerror = function () {
