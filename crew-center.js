@@ -2379,8 +2379,8 @@ function updatePfdDisplay(pfdData) {
         return waypoints;
     }
 
-   /**
- * --- [REMODEL V5 - SMOOTH PATHING] Handles aircraft clicks, data fetching, map plotting, and window population.
+/**
+ * --- [REMODEL V5.1 - CORRECTED PATHING] Handles aircraft clicks, data fetching, map plotting, and window population.
  */
 async function handleAircraftClick(flightProps, sessionId) {
     if (!flightProps || !flightProps.flightId) return;
@@ -2406,7 +2406,7 @@ async function handleAircraftClick(flightProps, sessionId) {
     const windowEl = document.getElementById('aircraft-info-window');
     windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
 
-    // NEW: Array to hold the raw, unsmoothed coordinates for this specific flight
+    // Array to hold the raw, unsmoothed coordinates for this specific flight
     let rawPathCoordinates = [];
 
     try {
@@ -2426,12 +2426,13 @@ async function handleAircraftClick(flightProps, sessionId) {
         const flownLayerId = `flown-path-${flightProps.flightId}`;
         let allCoordsForBounds = [currentPosition];
 
+        // --- THIS IS THE CORRECTED LINE ---
         const historicalRoute = (routeData && routeData.ok && Array.isArray(routeData.route)) 
-            ? routeData.route.map(p => [p.longitude, p.latitude]) 
+            ? routeData.route.map(p => [p.lon, p.lat]) // ✅ FIX: Changed to lon/lat
             : [];
         
         // 1. Populate our raw coordinates array with the initial data
-        rawPathCoordinates = [...historicalRoute, currentPosition];
+        rawPathCoordinates = [...historicalRoute, currentPosition].filter(p => p[0] != null && p[1] != null);
         
         // 2. Generate the initial smooth path if we have enough points
         let initialPathData = { type: 'Feature', geometry: { type: 'LineString', coordinates: rawPathCoordinates } };
@@ -2453,6 +2454,9 @@ async function handleAircraftClick(flightProps, sessionId) {
                 source: flownLayerId,
                 paint: { 'line-color': '#00b894', 'line-width': 4, 'line-opacity': 0.9 }
             }, 'sector-ops-live-flights-layer');
+        } else {
+             const pathSource = sectorOpsMap.getSource(flownLayerId);
+             if(pathSource) pathSource.setData(initialPathData);
         }
 
         sectorOpsLiveFlightPathLayers[flightProps.flightId] = { flown: flownLayerId };
@@ -2485,26 +2489,20 @@ async function handleAircraftClick(flightProps, sessionId) {
                         }
                     }
                     
-                    // --- NEW SMOOTHING LOGIC ---
+                    // --- SMOOTHING LOGIC ---
                     const pathSource = sectorOpsMap.getSource(flownLayerId);
                     if (pathSource) {
                         const newPosition = [updatedFlight.position.lon, updatedFlight.position.lat];
                         
-                        // 1. Add the new raw coordinate
                         rawPathCoordinates.push(newPosition);
 
-                        // 2. Generate a new smooth line from the updated raw coordinates
                         let smoothedPathData = { type: 'Feature', geometry: { type: 'LineString', coordinates: rawPathCoordinates } };
                         if (rawPathCoordinates.length > 2) {
                             const line = turf.lineString(rawPathCoordinates);
                             smoothedPathData = turf.bezierSpline(line, { resolution: 10000, sharpness: 0.85 });
                         }
-
-                        // 3. Update the map source with the newly generated smooth path
                         pathSource.setData(smoothedPathData);
                     }
-                    // --- END OF NEW SMOOTHING LOGIC ---
-
                 } else {
                     clearInterval(activePfdUpdateInterval);
                     activePfdUpdateInterval = null;
