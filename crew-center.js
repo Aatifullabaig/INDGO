@@ -2625,7 +2625,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
     if (aircraftImageElement) {
         const sanitizeFilename = (name) => {
             if (!name || typeof name !== 'string') return 'unknown';
-            return name.trim().toLowerCase().replace(/[^a-z0--9-]/g, '_');
+            return name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '_');
         };
 
         const aircraftName = baseProps.aircraft?.aircraftName || 'Generic Aircraft';
