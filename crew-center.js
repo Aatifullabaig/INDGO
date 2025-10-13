@@ -2266,7 +2266,7 @@ function updatePfdDisplay(pfdData) {
             const closeBtn = e.target.closest('.aircraft-window-close-btn');
             const hideBtn = e.target.closest('.aircraft-window-hide-btn');
             const statsBtn = e.target.closest('.pilot-name-button');
-            const backToPfdBtn = e.target.closest('.back-to-pfd-btn');
+            // The '.back-to-pfd-btn' logic has been removed from here
 
             if (closeBtn) {
                 aircraftInfoWindow.classList.remove('visible');
@@ -2295,21 +2295,9 @@ function updatePfdDisplay(pfdData) {
                     await displayPilotStats(userId, username);
                 }
             }
-
-            if (backToPfdBtn) {
-                const { flightProps, plan } = cachedFlightDataForStatsView;
-                if (flightProps) {
-                    // Repopulate the PFD view and restart the update loop
-                     const sessionsRes = await fetch('https://acars-backend-uxln.onrender.com/if-sessions');
-                     const expertSession = (await sessionsRes.json()).sessions.find(s => s.name.toLowerCase().includes('expert'));
-                     if (expertSession) {
-                        handleAircraftClick(flightProps, expertSession.id);
-                     }
-                }
-            }
         });
     
-        // The recall button logic remains largely the same.
+        // The recall button logic remains the same.
         aircraftInfoWindowRecallBtn.addEventListener('click', () => {
             if (currentFlightInWindow) {
                 const layer = sectorOpsMap.getLayer('sector-ops-live-flights-layer');
@@ -2983,11 +2971,7 @@ if (flightPathState && pathSource && flightPathState.coordinates.length > 0) {
 
     // --- [NEW - CORRECTED] Renders the creative Pilot Stats view inside the info window ---
 /**
- * --- [OVERHAULED] Renders a data-rich, modern Pilot Report view.
- * Focuses on current and next grade progression, and detailed stats.
- */
-/**
- * --- [REHAULED v2] Renders the Pilot Report with collapsible sections.
+ * --- [REHAULED v2.1] Renders the Pilot Report with collapsible sections and a case-sensitive profile link.
  */
 function renderPilotStatsHTML(stats, username) {
     if (!stats) return '<p class="error-text">Could not load pilot statistics.</p>';
@@ -3046,7 +3030,7 @@ function renderPilotStatsHTML(stats, username) {
         <div class="stats-rehaul-container">
             <div class="stats-header">
                 <h4>${username}</h4>
-                <a href="https://community.infiniteflight.com/u/${username.toLowerCase().replace(/\s/g, '-')}/summary" target="_blank" rel="noopener noreferrer" class="community-profile-link" title="View Community Profile">
+                <a href="https://community.infiniteflight.com/u/${username}/summary" target="_blank" rel="noopener noreferrer" class="community-profile-link" title="View Community Profile">
                     <i class="fa-solid fa-external-link-alt"></i> View Profile
                 </a>
             </div>
@@ -3095,57 +3079,77 @@ function renderPilotStatsHTML(stats, username) {
     `;
 }
 
-   // --- [NEW] Fetches and displays the pilot stats ---
-async function displayPilotStats(userId, username) {
-    if (!userId) return;
-    const windowEl = document.getElementById('aircraft-info-window');
-    
-    // Stop the PFD updates while viewing stats
-    if (activePfdUpdateInterval) {
-        clearInterval(activePfdUpdateInterval);
-        activePfdUpdateInterval = null;
-    }
-
-    windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading pilot report for ${username}...</p>`;
-
-    try {
-        const res = await fetch(`${ACARS_USER_API_URL}/${userId}/grade`);
-        if (!res.ok) throw new Error('Could not fetch pilot data.');
+// --- [NEW & FIXED] Fetches and displays the pilot stats, and attaches its own event listeners ---
+    async function displayPilotStats(userId, username) {
+        if (!userId) return;
+        const windowEl = document.getElementById('aircraft-info-window');
         
-        const data = await res.json();
-        if (data.ok && data.gradeInfo) {
-            windowEl.innerHTML = renderPilotStatsHTML(data.gradeInfo, username);
-            
-            // --- ADDED: Accordion event listeners ---
-            const accordionHeaders = windowEl.querySelectorAll('.accordion-header');
-            accordionHeaders.forEach(header => {
-                header.addEventListener('click', () => {
-                    const item = header.closest('.accordion-item');
-                    const content = header.nextElementSibling;
-                    const isExpanded = item.classList.contains('active');
-                    
-                    item.classList.toggle('active');
+        if (activePfdUpdateInterval) {
+            clearInterval(activePfdUpdateInterval);
+            activePfdUpdateInterval = null;
+        }
 
-                    if (isExpanded) {
-                        content.style.maxHeight = null;
-                    } else {
-                        // Set max-height to the content's scroll height for a smooth transition
-                        content.style.maxHeight = content.scrollHeight + 'px';
+        windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading pilot report for ${username}...</p>`;
+
+        // This function will handle the logic for returning to the PFD
+        const attachBackToPfdListener = () => {
+            const backBtn = windowEl.querySelector('.back-to-pfd-btn');
+            if (backBtn) {
+                backBtn.addEventListener('click', async () => {
+                    const { flightProps } = cachedFlightDataForStatsView;
+                    if (flightProps) {
+                        const sessionsRes = await fetch('https://acars-backend-uxln.onrender.com/if-sessions');
+                        const expertSession = (await sessionsRes.json()).sessions.find(s => s.name.toLowerCase().includes('expert'));
+                        if (expertSession) {
+                            handleAircraftClick(flightProps, expertSession.id);
+                        }
                     }
                 });
-            });
+            }
+        };
 
-        } else {
-            throw new Error('Pilot data not found or invalid.');
+        try {
+            const res = await fetch(`${ACARS_USER_API_URL}/${userId}/grade`);
+            if (!res.ok) throw new Error('Could not fetch pilot data.');
+            
+            const data = await res.json();
+            if (data.ok && data.gradeInfo) {
+                windowEl.innerHTML = renderPilotStatsHTML(data.gradeInfo, username);
+                
+                // --- Accordion event listeners ---
+                const accordionHeaders = windowEl.querySelectorAll('.accordion-header');
+                accordionHeaders.forEach(header => {
+                    header.addEventListener('click', () => {
+                        const item = header.closest('.accordion-item');
+                        const content = header.nextElementSibling;
+                        const isExpanded = item.classList.contains('active');
+                        
+                        item.classList.toggle('active');
+
+                        if (isExpanded) {
+                            content.style.maxHeight = null;
+                        } else {
+                            content.style.maxHeight = content.scrollHeight + 'px';
+                        }
+                    });
+                });
+
+                // Attach the listener for the back button
+                attachBackToPfdListener();
+
+            } else {
+                throw new Error('Pilot data not found or invalid.');
+            }
+        } catch (error) {
+            console.error('Error fetching pilot stats:', error);
+            windowEl.innerHTML = `<div class="pilot-stats-view">
+                <p class="error-text">${error.message}</p>
+                <button class="back-to-pfd-btn"><i class="fa-solid fa-arrow-left"></i> Back to Flight Display</button>
+            </div>`;
+            // Also attach the listener here in case of an error
+            attachBackToPfdListener();
         }
-    } catch (error) {
-        console.error('Error fetching pilot stats:', error);
-        windowEl.innerHTML = `<div class="pilot-stats-view">
-            <p class="error-text">${error.message}</p>
-            <button class="back-to-pfd-btn"><i class="fa-solid fa-arrow-left"></i> Back to Flight Display</button>
-        </div>`;
     }
-}
 
 /**
  * --- [MAJOR REVISION V4.3 - Refactored State Machine] Updates the non-PFD parts of the Aircraft Info Window.
