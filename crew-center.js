@@ -2623,21 +2623,40 @@ async function handleAircraftClick(flightProps, sessionId) {
                     }
                     
                     // --- FIX: Logic to update the flown path using the stored array ---
-                    const flightPathState = sectorOpsLiveFlightPathLayers[flightProps.flightId];
-                    const pathSource = flightPathState ? sectorOpsMap.getSource(flightPathState.flown) : null;
-                    
-                    if (flightPathState && pathSource) {
-                        const newPosition = [updatedFlight.position.lon, updatedFlight.position.lat];
-                        flightPathState.coordinates.push(newPosition); // Add to our stored array
-                        
-                        // Update map source with the complete, consistent array
-                        pathSource.setData({
-                            type: 'Feature',
-                            geometry: {
-                                type: 'LineString',
-                                coordinates: flightPathState.coordinates
-                            }
-                        });
+                    // --- FIX: Logic to update and smooth the flown path in real-time ---
+const flightPathState = sectorOpsLiveFlightPathLayers[flightProps.flightId];
+const pathSource = flightPathState ? sectorOpsMap.getSource(flightPathState.flown) : null;
+
+if (flightPathState && pathSource && flightPathState.coordinates.length > 0) {
+    const newPosition = [updatedFlight.position.lon, updatedFlight.position.lat];
+    const lastPosition = flightPathState.coordinates[flightPathState.coordinates.length - 1];
+
+    const [lon1, lat1] = lastPosition;
+    const [lon2, lat2] = newPosition;
+
+    // Only add points if the aircraft has actually moved
+    if (lat1 !== lat2 || lon1 !== lon2) {
+        const pointsToInterpolate = 5; // Increase for even smoother curves
+        for (let i = 1; i <= pointsToInterpolate; i++) {
+            const fraction = i / (pointsToInterpolate + 1);
+            const intermediate = getIntermediatePoint(lat1, lon1, lat2, lon2, fraction);
+            flightPathState.coordinates.push([intermediate.lon, intermediate.lat]);
+        }
+    }
+
+    // Add the final, actual position from the API
+    flightPathState.coordinates.push(newPosition);
+
+    // Update the map source with the newly densified path
+    pathSource.setData({
+        type: 'Feature',
+        geometry: {
+            type: 'LineString',
+            coordinates: flightPathState.coordinates
+        }
+    });
+}
+// --- END OF FIX ---
                     }
                     // --- END OF FIX ---
 
