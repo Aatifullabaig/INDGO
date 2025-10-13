@@ -889,7 +889,7 @@ function densifyRoute(coordinates, numPoints = 20) {
         const [lon2, lat2] = coordinates[i + 1];
 
         // Only densify if the points are reasonably far apart
-        if (getDistanceKm(lat1, lon1, lat2, lon2) > 50) { // e.g., don't densify short taxi segments
+        if (getDistanceKm(lat1, lon1, lat2, lon2) > 5) { // e.g., don't densify short taxi segments
             for (let j = 1; j <= numPoints; j++) {
                 const fraction = j / (numPoints + 1);
                 const intermediate = getIntermediatePoint(lat1, lon1, lat2, lon2, fraction);
@@ -2561,8 +2561,9 @@ async function handleAircraftClick(flightProps, sessionId) {
         let allCoordsForBounds = [currentPosition];
 
         const historicalRoute = (routeData && routeData.ok && Array.isArray(routeData.route)) 
-            ? routeData.route.map(p => [p.longitude, p.latitude]) 
-            : [];
+    ? routeData.route.map(p => [p.lon, p.lat]) 
+    : [];
+
         
         if (historicalRoute.length > 0) {
             // ---- FIX APPLIED HERE: Densify the historical route for a smooth great-circle path ----
