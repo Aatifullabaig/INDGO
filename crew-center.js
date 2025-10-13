@@ -125,6 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     
     // --- [REHAULED] Helper to inject custom CSS for new features ---
+    // --- [REHAULED] Helper to inject custom CSS for new features ---
     function injectCustomStyles() {
         const styleId = 'sector-ops-custom-styles';
         if (document.getElementById(styleId)) return;
@@ -132,24 +133,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         const css = `
             /* --- [FIX] Sector Ops View Layout --- */
             #view-rosters.active {
-    position: absolute;
-    inset: 0; /* Sets top, right, bottom, left to 0 */
-    width: 100%;
-    height: 100%;
-    padding: 0;
-    overflow: hidden;
+                position: absolute;
+                inset: 0; /* Sets top, right, bottom, left to 0 */
+                width: 100%;
+                height: 100%;
+                padding: 0;
+                overflow: hidden;
 
-    /* Use Grid to layer the map and floating panel */
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr;
-}
+                /* Use Grid to layer the map and floating panel */
+                display: grid;
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr;
+            }
 
-/* This places the map into the grid, filling the entire space */
-#sector-ops-map-fullscreen {
-    grid-column: 1 / -1;
-    grid-row: 1 / -1;
-}
+            /* This places the map into the grid, filling the entire space */
+            #sector-ops-map-fullscreen {
+                grid-column: 1 / -1;
+                grid-row: 1 / -1;
+            }
             
             /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
             .info-window {
@@ -310,34 +311,34 @@ document.addEventListener('DOMContentLoaded', async () => {
             .flight-main-details h3 { margin: 0; font-size: 1.6rem; font-weight: 700; color: #fff; letter-spacing: 1px; }
 
             /* --- [NEW & IMPROVED] Clickable Pilot Name Button --- */
-.pilot-name-button {
-    display: inline-flex; /* Use flexbox for easy alignment */
-    align-items: center;
-    gap: 8px; /* Space between name and icon */
-    background-color: rgba(255, 255, 255, 0.05); /* Subtle background to stand out */
-    border: 1px solid rgba(255, 255, 255, 0.1); /* Faint border */
-    padding: 4px 10px; /* Give it some comfortable spacing */
-    margin: 0;
-    font-size: 0.9rem; /* Slightly larger for clarity */
-    font-weight: 500;
-    color: #c5cae9;
-    cursor: pointer;
-    border-radius: 20px; /* This creates the "pill" shape */
-    transition: all 0.2s ease-in-out;
-    line-height: 1;
-}
-.pilot-name-button:hover,
-.pilot-name-button:focus {
-    background-color: #00a8ff; /* Use your brand's accent color on hover */
-    color: #fff; /* White text for contrast */
-    border-color: #00a8ff;
-    transform: translateY(-2px) scale(1.03); /* Add a little "pop" effect */
-    box-shadow: 0 4px 15px rgba(0, 168, 255, 0.3);
-}
-.pilot-name-button .fa-solid {
-    margin: 0; /* Remove the old margin */
-    font-size: 0.8rem;
-}
+            .pilot-name-button {
+                display: inline-flex; /* Use flexbox for easy alignment */
+                align-items: center;
+                gap: 8px; /* Space between name and icon */
+                background-color: rgba(255, 255, 255, 0.05); /* Subtle background to stand out */
+                border: 1px solid rgba(255, 255, 255, 0.1); /* Faint border */
+                padding: 4px 10px; /* Give it some comfortable spacing */
+                margin: 0;
+                font-size: 0.9rem; /* Slightly larger for clarity */
+                font-weight: 500;
+                color: #c5cae9;
+                cursor: pointer;
+                border-radius: 20px; /* This creates the "pill" shape */
+                transition: all 0.2s ease-in-out;
+                line-height: 1;
+            }
+            .pilot-name-button:hover,
+            .pilot-name-button:focus {
+                background-color: #00a8ff; /* Use your brand's accent color on hover */
+                color: #fff; /* White text for contrast */
+                border-color: #00a8ff;
+                transform: translateY(-2px) scale(1.03); /* Add a little "pop" effect */
+                box-shadow: 0 4px 15px rgba(0, 168, 255, 0.3);
+            }
+            .pilot-name-button .fa-solid {
+                margin: 0; /* Remove the old margin */
+                font-size: 0.8rem;
+            }
 
             /* --- [NEW] Wrapper for Image and Overlay Route --- */
             .image-and-route-wrapper {
@@ -557,121 +558,122 @@ document.addEventListener('DOMContentLoaded', async () => {
             .grade-requirement { display: flex; align-items: center; gap: 6px; margin-left: 10px; font-size: 0.8rem; color: #c5cae9;}
             .grade-requirement .fa-check { color: #28a745; }
             .grade-requirement .fa-times { color: #dc3545; }
-            /* --- [REHAULED] Pilot Stats View --- */
-.stats-rehaul-container {
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    color: #e8eaf6;
-}
-.section-title {
-    margin: 8px 0 -8px 0;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #9fa8da;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    padding-bottom: 8px;
-}
-.kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 12px;
-}
-.kpi-card {
-    background: rgba(10, 12, 26, 0.7);
-    border-radius: 8px;
-    padding: 12px;
-    text-align: center;
-    border: 1px solid rgba(255,255,255,0.05);
-}
-.kpi-label {
-    font-size: 0.75rem;
-    color: #c5cae9;
-    margin-bottom: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-}
-.kpi-value {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #fff;
-    line-height: 1.2;
-}
-.progression-container {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 12px;
-}
-.progress-card {
-    background: rgba(10, 12, 26, 0.6);
-    border-radius: 8px;
-    padding: 16px;
-    border-left: 4px solid #00a8ff;
-}
-.progress-card.complete {
-    border-left-color: #28a745;
-    text-align: center;
-}
-.progress-card h4 {
-    margin: 0 0 12px 0;
-    font-size: 1.1rem;
-    color: #fff;
-}
-.progress-item {
-    margin-bottom: 12px;
-}
-.progress-item:last-child {
-    margin-bottom: 0;
-}
-.progress-label {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.85rem;
-    margin-bottom: 6px;
-    color: #e8eaf6;
-}
-.progress-label .fa-solid { color: #9fa8da; margin-right: 6px; }
-.progress-bar-bg {
-    width: 100%;
-    height: 8px;
-    background-color: rgba(0,0,0,0.3);
-    border-radius: 4px;
-    overflow: hidden;
-}
-.progress-bar-fg {
-    height: 100%;
-    background: linear-gradient(90deg, #00a8ff, #89f7fe);
-    border-radius: 4px;
-    transition: width 0.5s ease-out;
-}
-.req-met { color: #28a745; }
-.req-not-met { color: #dc3545; }
-.req-met .fa-solid, .req-not-met .fa-solid { margin-left: 6px; }
 
-.details-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px 16px;
-    background: rgba(10, 12, 26, 0.6);
-    padding: 16px;
-    border-radius: 8px;
-}
-.detail-item {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.9rem;
-    padding: 6px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-.detail-item:last-child, .detail-item:nth-last-child(2) { border-bottom: none; }
-.detail-label { color: #c5cae9; }
-.detail-value { color: #fff; font-weight: 600; }
+            /* --- [REHAULED] Pilot Stats View --- */
+            .stats-rehaul-container {
+                padding: 16px;
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                color: #e8eaf6;
+            }
+            .section-title {
+                margin: 8px 0 -8px 0;
+                font-size: 0.9rem;
+                font-weight: 600;
+                color: #9fa8da;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+                padding-bottom: 8px;
+            }
+            .kpi-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 12px;
+            }
+            .kpi-card {
+                background: rgba(10, 12, 26, 0.7);
+                border-radius: 8px;
+                padding: 12px;
+                text-align: center;
+                border: 1px solid rgba(255,255,255,0.05);
+            }
+            .kpi-label {
+                font-size: 0.75rem;
+                color: #c5cae9;
+                margin-bottom: 6px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+            }
+            .kpi-value {
+                font-size: 1.5rem;
+                font-weight: 700;
+                color: #fff;
+                line-height: 1.2;
+            }
+            .progression-container {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            .progress-card {
+                background: rgba(10, 12, 26, 0.6);
+                border-radius: 8px;
+                padding: 16px;
+                border-left: 4px solid #00a8ff;
+            }
+            .progress-card.complete {
+                border-left-color: #28a745;
+                text-align: center;
+            }
+            .progress-card h4 {
+                margin: 0 0 12px 0;
+                font-size: 1.1rem;
+                color: #fff;
+            }
+            .progress-item {
+                margin-bottom: 12px;
+            }
+            .progress-item:last-child {
+                margin-bottom: 0;
+            }
+            .progress-label {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 0.85rem;
+                margin-bottom: 6px;
+                color: #e8eaf6;
+            }
+            .progress-label .fa-solid { color: #9fa8da; margin-right: 6px; }
+            .progress-bar-bg {
+                width: 100%;
+                height: 8px;
+                background-color: rgba(0,0,0,0.3);
+                border-radius: 4px;
+                overflow: hidden;
+            }
+            .progress-bar-fg {
+                height: 100%;
+                background: linear-gradient(90deg, #00a8ff, #89f7fe);
+                border-radius: 4px;
+                transition: width 0.5s ease-out;
+            }
+            .req-met { color: #28a745; }
+            .req-not-met { color: #dc3545; }
+            .req-met .fa-solid, .req-not-met .fa-solid { margin-left: 6px; }
+
+            .details-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px 16px;
+                background: rgba(10, 12, 26, 0.6);
+                padding: 16px;
+                border-radius: 8px;
+            }
+            .detail-item {
+                display: flex;
+                justify-content: space-between;
+                font-size: 0.9rem;
+                padding: 6px 0;
+                border-bottom: 1px solid rgba(255,255,255,0.05);
+            }
+            .detail-item:last-child, .detail-item:nth-last-child(2) { border-bottom: none; }
+            .detail-label { color: #c5cae9; }
+            .detail-value { color: #fff; font-weight: 600; }
             .back-to-pfd-btn { 
                 background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
                 color: #e8eaf6; padding: 8px 12px; width: 100%;
@@ -716,6 +718,94 @@ document.addEventListener('DOMContentLoaded', async () => {
                 content: ''; grid-area: 1 / 1; width: 250%; height: 250%; border-radius: 50%;
                 background-color: rgba(240, 173, 78, 0.8); z-index: -1; 
                 animation: atc-breathe 4s ease-in-out infinite;
+            }
+            
+            /* --- [NEW] Pilot Report Rehaul --- */
+            .stats-rehaul-container .stats-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 12px;
+            }
+            .stats-rehaul-container .stats-header h4 {
+                margin: 0;
+                font-size: 1.4rem;
+            }
+            .community-profile-link {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                background-color: rgba(0, 168, 255, 0.1);
+                color: #00a8ff;
+                padding: 6px 12px;
+                border-radius: 20px;
+                font-size: 0.8rem;
+                font-weight: 600;
+                text-decoration: none;
+                border: 1px solid rgba(0, 168, 255, 0.3);
+                transition: all 0.2s ease-in-out;
+            }
+            .community-profile-link:hover {
+                background-color: #00a8ff;
+                color: #fff;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 10px rgba(0, 168, 255, 0.3);
+            }
+
+            .stats-accordion {
+                margin-top: 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            .accordion-item {
+                background: rgba(10, 12, 26, 0.5);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 8px;
+                overflow: hidden;
+                transition: background-color 0.2s;
+            }
+            .accordion-item.active {
+                background: rgba(10, 12, 26, 0.8);
+            }
+            .accordion-header {
+                width: 100%;
+                background: none;
+                border: none;
+                padding: 16px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                cursor: pointer;
+                font-size: 1rem;
+                font-weight: 600;
+                color: #e8eaf6;
+                text-align: left;
+            }
+            .accordion-header span {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .accordion-header .toggle-icon {
+                transition: transform 0.3s ease-in-out;
+                color: #9fa8da;
+            }
+            .accordion-item.active .toggle-icon {
+                transform: rotate(180deg);
+            }
+            .accordion-content {
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
+                padding: 0 16px;
+            }
+            .accordion-item.active .accordion-content {
+                padding: 0 16px 16px 16px;
+            }
+            .accordion-content > .progression-container,
+            .accordion-content > .details-grid {
+                padding-top: 8px;
             }
         `;
 
@@ -2896,6 +2986,9 @@ if (flightPathState && pathSource && flightPathState.coordinates.length > 0) {
  * --- [OVERHAULED] Renders a data-rich, modern Pilot Report view.
  * Focuses on current and next grade progression, and detailed stats.
  */
+/**
+ * --- [REHAULED v2] Renders the Pilot Report with collapsible sections.
+ */
 function renderPilotStatsHTML(stats, username) {
     if (!stats) return '<p class="error-text">Could not load pilot statistics.</p>';
 
@@ -2905,12 +2998,9 @@ function renderPilotStatsHTML(stats, username) {
         const rule = rules.find(r => r.definition?.name === ruleName);
         return rule ? rule.referenceValue : null;
     };
-
     const formatViolationDate = (dateString) => {
         if (!dateString) return 'N/A';
-        return new Date(dateString).toLocaleDateString('en-US', {
-            year: 'numeric', month: 'short', day: 'numeric'
-        });
+        return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     };
 
     const currentGradeIndex = stats.gradeDetails?.gradeIndex;
@@ -2926,9 +3016,7 @@ function renderPilotStatsHTML(stats, username) {
         grade: currentGrade?.name.replace('Grade ', '') || 'N/A',
         xp: (stats.totalXP || 0).toLocaleString(),
         atcRank: atcRankName,
-        totalViolations: (stats.violationCountByLevel?.level1 || 0) +
-                         (stats.violationCountByLevel?.level2 || 0) +
-                         (stats.violationCountByLevel?.level3 || 0)
+        totalViolations: (stats.violationCountByLevel?.level1 || 0) + (stats.violationCountByLevel?.level2 || 0) + (stats.violationCountByLevel?.level3 || 0)
     };
     
     // --- Detailed Stats ---
@@ -2942,104 +3030,63 @@ function renderPilotStatsHTML(stats, username) {
     };
 
     // --- Progression Card Generator ---
-    const createProgressCard = (title, gradeData, isNextGrade = false) => {
+    const createProgressCard = (title, gradeData) => {
         if (!gradeData) {
-            // This handles the max grade scenario
-            return `
-            <div class="progress-card complete">
-                <h4><i class="fa-solid fa-crown"></i> Max Grade Achieved</h4>
-                <p>Congratulations, you have reached the highest available grade!</p>
-            </div>`;
+            return `<div class="progress-card complete"><h4><i class="fa-solid fa-crown"></i> Max Grade Achieved</h4><p>Congratulations, you have reached the highest available grade!</p></div>`;
         }
-        
         const reqXp = getRuleValue(gradeData.rules, 'XP');
         const reqVios = getRuleValue(gradeData.rules, 'All Level 2/3 Violations (1 year)');
-
         const xpProgress = reqXp > 0 ? Math.min(100, (stats.totalXP / reqXp) * 100) : 100;
         const viosMet = stats.total12MonthsViolations <= reqVios;
-
-        return `
-            <div class="progress-card">
-                <h4>${title}</h4>
-                <div class="progress-item">
-                    <div class="progress-label">
-                        <span><i class="fa-solid fa-star"></i> XP</span>
-                        <span>${stats.totalXP.toLocaleString()} / ${reqXp.toLocaleString()}</span>
-                    </div>
-                    <div class="progress-bar-bg">
-                        <div class="progress-bar-fg" style="width: ${xpProgress.toFixed(1)}%;"></div>
-                    </div>
-                </div>
-                <div class="progress-item">
-                    <div class="progress-label">
-                        <span><i class="fa-solid fa-shield-halved"></i> 1-Year Violations</span>
-                        <span class="${viosMet ? 'req-met' : 'req-not-met'}">
-                            ${stats.total12MonthsViolations} / ${reqVios} max
-                            <i class="fa-solid ${viosMet ? 'fa-check-circle' : 'fa-times-circle'}"></i>
-                        </span>
-                    </div>
-                </div>
-            </div>`;
+        return `<div class="progress-card"><h4>${title}</h4><div class="progress-item"><div class="progress-label"><span><i class="fa-solid fa-star"></i> XP</span><span>${stats.totalXP.toLocaleString()} / ${reqXp.toLocaleString()}</span></div><div class="progress-bar-bg"><div class="progress-bar-fg" style="width: ${xpProgress.toFixed(1)}%;"></div></div></div><div class="progress-item"><div class="progress-label"><span><i class="fa-solid fa-shield-halved"></i> 1-Year Violations</span><span class="${viosMet ? 'req-met' : 'req-not-met'}">${stats.total12MonthsViolations} / ${reqVios} max<i class="fa-solid ${viosMet ? 'fa-check-circle' : 'fa-times-circle'}"></i></span></div></div></div>`;
     };
     
-    // --- Final HTML Assembly ---
+    // --- Final HTML Assembly with Accordion ---
     return `
         <div class="stats-rehaul-container">
             <div class="stats-header">
-                <h4>Pilot Report</h4>
-                <p>${username}</p>
+                <h4>${username}</h4>
+                <a href="https://community.infiniteflight.com/u/${username.toLowerCase().replace(/\s/g, '-')}/summary" target="_blank" rel="noopener noreferrer" class="community-profile-link" title="View Community Profile">
+                    <i class="fa-solid fa-external-link-alt"></i> View Profile
+                </a>
             </div>
 
             <div class="kpi-grid">
-                <div class="kpi-card">
-                    <div class="kpi-label"><i class="fa-solid fa-user-shield"></i> Grade</div>
-                    <div class="kpi-value">${kpis.grade}</div>
-                </div>
-                <div class="kpi-card">
-                    <div class="kpi-label"><i class="fa-solid fa-star"></i> Total XP</div>
-                    <div class="kpi-value">${kpis.xp}</div>
-                </div>
-                <div class="kpi-card">
-                    <div class="kpi-label"><i class="fa-solid fa-headset"></i> ATC Rank</div>
-                    <div class="kpi-value">${kpis.atcRank}</div>
-                </div>
-                <div class="kpi-card">
-                    <div class="kpi-label"><i class="fa-solid fa-triangle-exclamation"></i> Total Violations</div>
-                    <div class="kpi-value">${kpis.totalViolations}</div>
-                </div>
+                <div class="kpi-card"><div class="kpi-label"><i class="fa-solid fa-user-shield"></i> Grade</div><div class="kpi-value">${kpis.grade}</div></div>
+                <div class="kpi-card"><div class="kpi-label"><i class="fa-solid fa-star"></i> Total XP</div><div class="kpi-value">${kpis.xp}</div></div>
+                <div class="kpi-card"><div class="kpi-label"><i class="fa-solid fa-headset"></i> ATC Rank</div><div class="kpi-value">${kpis.atcRank}</div></div>
+                <div class="kpi-card"><div class="kpi-label"><i class="fa-solid fa-triangle-exclamation"></i> Total Violations</div><div class="kpi-value">${kpis.totalViolations}</div></div>
             </div>
 
-            <h5 class="section-title">Grade Progression</h5>
-            <div class="progression-container">
-                ${createProgressCard(`Current: Grade ${kpis.grade}`, currentGrade)}
-                ${createProgressCard(`Next: Grade ${nextGrade?.name.replace('Grade ', '') || ''}`, nextGrade, true)}
-            </div>
+            <div class="stats-accordion">
+                <div class="accordion-item">
+                    <button class="accordion-header">
+                        <span><i class="fa-solid fa-chart-line"></i> Grade Progression</span>
+                        <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="progression-container">
+                            ${createProgressCard(`Current: Grade ${kpis.grade}`, currentGrade)}
+                            ${createProgressCard(`Next: Grade ${nextGrade?.name.replace('Grade ', '') || ''}`, nextGrade)}
+                        </div>
+                    </div>
+                </div>
 
-            <h5 class="section-title">Detailed Statistics</h5>
-            <div class="details-grid">
-                 <div class="detail-item">
-                    <span class="detail-label">Level 1 Violations</span>
-                    <span class="detail-value">${details.lvl1Vios}</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">Level 2 Violations</span>
-                    <span class="detail-value">${details.lvl2Vios}</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">Level 3 Violations</span>
-                    <span class="detail-value">${details.lvl3Vios}</span>
-                </div>
-                 <div class="detail-item">
-                    <span class="detail-label">Last Violation Date</span>
-                    <span class="detail-value">${details.lastViolation}</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">Flight Time (90 days)</span>
-                    <span class="detail-value">${details.flightTime90d ? details.flightTime90d.toFixed(1) + ' hrs' : 'N/A'}</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">Landings (90 days)</span>
-                    <span class="detail-value">${details.landings90d || 'N/A'}</span>
+                <div class="accordion-item">
+                    <button class="accordion-header">
+                        <span><i class="fa-solid fa-list-check"></i> Detailed Statistics</span>
+                        <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                    </button>
+                    <div class="accordion-content">
+                        <div class="details-grid">
+                             <div class="detail-item"><span class="detail-label">Level 1 Violations</span><span class="detail-value">${details.lvl1Vios}</span></div>
+                            <div class="detail-item"><span class="detail-label">Level 2 Violations</span><span class="detail-value">${details.lvl2Vios}</span></div>
+                            <div class="detail-item"><span class="detail-label">Level 3 Violations</span><span class="detail-value">${details.lvl3Vios}</span></div>
+                             <div class="detail-item"><span class="detail-label">Last Violation Date</span><span class="detail-value">${details.lastViolation}</span></div>
+                            <div class="detail-item"><span class="detail-label">Flight Time (90 days)</span><span class="detail-value">${details.flightTime90d ? details.flightTime90d.toFixed(1) + ' hrs' : 'N/A'}</span></div>
+                            <div class="detail-item"><span class="detail-label">Landings (90 days)</span><span class="detail-value">${details.landings90d || 'N/A'}</span></div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -3048,37 +3095,57 @@ function renderPilotStatsHTML(stats, username) {
     `;
 }
 
-    // --- [NEW] Fetches and displays the pilot stats ---
-    async function displayPilotStats(userId, username) {
-        if (!userId) return;
-        const windowEl = document.getElementById('aircraft-info-window');
-        
-        // Stop the PFD updates while viewing stats
-        if (activePfdUpdateInterval) {
-            clearInterval(activePfdUpdateInterval);
-            activePfdUpdateInterval = null;
-        }
-
-        windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading pilot report for ${username}...</p>`;
-
-        try {
-            const res = await fetch(`${ACARS_USER_API_URL}/${userId}/grade`);
-            if (!res.ok) throw new Error('Could not fetch pilot data.');
-            
-            const data = await res.json();
-            if (data.ok && data.gradeInfo) {
-                windowEl.innerHTML = renderPilotStatsHTML(data.gradeInfo, username);
-            } else {
-                throw new Error('Pilot data not found or invalid.');
-            }
-        } catch (error) {
-            console.error('Error fetching pilot stats:', error);
-            windowEl.innerHTML = `<div class="pilot-stats-view">
-                <p class="error-text">${error.message}</p>
-                <button class="back-to-pfd-btn"><i class="fa-solid fa-arrow-left"></i> Back to Flight Display</button>
-            </div>`;
-        }
+   // --- [NEW] Fetches and displays the pilot stats ---
+async function displayPilotStats(userId, username) {
+    if (!userId) return;
+    const windowEl = document.getElementById('aircraft-info-window');
+    
+    // Stop the PFD updates while viewing stats
+    if (activePfdUpdateInterval) {
+        clearInterval(activePfdUpdateInterval);
+        activePfdUpdateInterval = null;
     }
+
+    windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading pilot report for ${username}...</p>`;
+
+    try {
+        const res = await fetch(`${ACARS_USER_API_URL}/${userId}/grade`);
+        if (!res.ok) throw new Error('Could not fetch pilot data.');
+        
+        const data = await res.json();
+        if (data.ok && data.gradeInfo) {
+            windowEl.innerHTML = renderPilotStatsHTML(data.gradeInfo, username);
+            
+            // --- ADDED: Accordion event listeners ---
+            const accordionHeaders = windowEl.querySelectorAll('.accordion-header');
+            accordionHeaders.forEach(header => {
+                header.addEventListener('click', () => {
+                    const item = header.closest('.accordion-item');
+                    const content = header.nextElementSibling;
+                    const isExpanded = item.classList.contains('active');
+                    
+                    item.classList.toggle('active');
+
+                    if (isExpanded) {
+                        content.style.maxHeight = null;
+                    } else {
+                        // Set max-height to the content's scroll height for a smooth transition
+                        content.style.maxHeight = content.scrollHeight + 'px';
+                    }
+                });
+            });
+
+        } else {
+            throw new Error('Pilot data not found or invalid.');
+        }
+    } catch (error) {
+        console.error('Error fetching pilot stats:', error);
+        windowEl.innerHTML = `<div class="pilot-stats-view">
+            <p class="error-text">${error.message}</p>
+            <button class="back-to-pfd-btn"><i class="fa-solid fa-arrow-left"></i> Back to Flight Display</button>
+        </div>`;
+    }
+}
 
 /**
  * --- [MAJOR REVISION V4.3 - Refactored State Machine] Updates the non-PFD parts of the Aircraft Info Window.
@@ -3126,7 +3193,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
     const THRESHOLD = {
         ON_GROUND_AGL: 75,
         PARKED_MAX_GS: 2,
-        TAXI_MAX_GS: 45,
+        TAXI_MAX_GS: 35,
         TAKEOFF_MIN_VS: 300,
         TAKEOFF_CEILING_AGL: 1500,
         CLIMB_MIN_VS: 500,
