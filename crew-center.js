@@ -2561,9 +2561,8 @@ async function handleAircraftClick(flightProps, sessionId) {
         let allCoordsForBounds = [currentPosition];
 
         const historicalRoute = (routeData && routeData.ok && Array.isArray(routeData.route)) 
-    ? routeData.route.map(p => [p.lon, p.lat]) 
-    : [];
-
+            ? routeData.route.map(p => [p.longitude, p.latitude]) 
+            : [];
         
         if (historicalRoute.length > 0) {
             // ---- FIX APPLIED HERE: Densify the historical route for a smooth great-circle path ----
