@@ -2657,7 +2657,6 @@ if (flightPathState && pathSource && flightPathState.coordinates.length > 0) {
     });
 }
 // --- END OF FIX ---
-                    }
                     // --- END OF FIX ---
 
                 } else {
