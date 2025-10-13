@@ -2016,7 +2016,7 @@ function updatePfdDisplay(pfdData) {
     function startLiveLoop() {
         if (!liveFlightsInterval) {
             updateLiveFlights();
-            liveFlightsInterval = setInterval(updateLiveFlights, 20000);
+            liveFlightsInterval = setInterval(updateLiveFlights, 3000);
         }
     }
 
