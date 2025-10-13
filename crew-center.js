@@ -784,6 +784,44 @@ async function fetchRunwaysData() {
 
     // --- Helper Functions ---
 
+function getAircraftCategory(aircraftName) {
+    if (!aircraftName) return 'default';
+    const name = aircraftName.toLowerCase();
+
+    // Fighter / Military
+    if (['f-16', 'f-18', 'f-22', 'f-35', 'f/a-18', 'a-10'].some(ac => name.includes(ac))) {
+        return 'fighter';
+    }
+
+    // --- NEW: Jumbo Jets (Supers) ---
+    // This check MUST come before the wide-body check.
+    if (['a380', '747', 'vc-25'].some(ac => name.includes(ac))) {
+        return 'jumbo';
+    }
+
+    // Wide-body Jets
+    if (['a330', 'a340', 'a350', '767', '777', '787', 'dc-10', 'md-11'].some(ac => name.includes(ac))) {
+        return 'widebody';
+    }
+    
+    // Regional Jets (CRJs, Embraer, etc.)
+    if (['crj', 'erj', 'dh8d', 'q400'].some(ac => name.includes(ac))) {
+        return 'regional';
+    }
+    
+    // Private / General Aviation
+    if (['cessna', 'citation', 'cirrus', 'tbm', 'sr22','xcub'].some(ac => name.includes(ac))) {
+        return 'private';
+    }
+
+    // Narrow-body Jets
+    if (['a318', 'a319', 'a320', 'a321', '717', '727', '737', '757', 'a220', 'e17', 'e19'].some(ac => name.includes(ac))) {
+        return 'narrowbody';
+    }
+    
+    return 'default';
+}
+
     /**
      * Calculates the distance between two coordinates in kilometers using the Haversine formula.
      */
@@ -2312,45 +2350,65 @@ function updatePfdDisplay(pfdData) {
         }
     }
 
-    /**
-     * Initializes or resets the main Sector Ops Mapbox map.
-     */
-    async function initializeSectorOpsMap(centerICAO) {
-        if (!MAPBOX_ACCESS_TOKEN) {
-            document.getElementById('sector-ops-map-fullscreen').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
-            return;
-        }
-        if (sectorOpsMap) sectorOpsMap.remove();
-
-        const centerCoords = airportsData[centerICAO] ? [airportsData[centerICAO].lon, airportsData[centerICAO].lat] : [77.2, 28.6]; // Default to Delhi
-
-        sectorOpsMap = new mapboxgl.Map({
-            container: 'sector-ops-map-fullscreen', // UPDATE: Target the new full-screen container
-            style: 'mapbox://styles/mapbox/dark-v11',
-            center: centerCoords,
-            zoom: 4.5,
-            interactive: true
-        });
-
-        return new Promise(resolve => {
-            sectorOpsMap.on('load', () => {
-                // Load the icon for live aircraft markers. Assumes an icon exists at this path.
-                sectorOpsMap.loadImage(
-                    '/Images/whiteplane.png',
-                    (error, image) => {
-                        if (error) {
-                            console.warn('Could not load plane icon for map.');
-                        } else {
-                            if (!sectorOpsMap.hasImage('plane-icon')) {
-                                sectorOpsMap.addImage('plane-icon', image);
-                            }
-                        }
-                        resolve(); // Resolve the promise once the image is loaded or fails
-                    }
-                );
-            });
-        });
+    // --- MODIFY THIS FUNCTION ---
+async function initializeSectorOpsMap(centerICAO) {
+    if (!MAPBOX_ACCESS_TOKEN) {
+        document.getElementById('sector-ops-map-fullscreen').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
+        return;
     }
+    if (sectorOpsMap) sectorOpsMap.remove();
+
+    const centerCoords = airportsData[centerICAO] ? [airportsData[centerICAO].lon, airportsData[centerICAO].lat] : [77.2, 28.6]; // Default to Delhi
+
+    sectorOpsMap = new mapboxgl.Map({
+        container: 'sector-ops-map-fullscreen',
+        style: 'mapbox://styles/mapbox/dark-v11',
+        center: centerCoords,
+        zoom: 4.5,
+        interactive: true
+    });
+
+    return new Promise(resolve => {
+        sectorOpsMap.on('load', () => {
+            // --- REPLACEMENT: Load all aircraft icons in parallel ---
+            const iconsToLoad = [
+                { id: 'icon-jumbo', path: '/Images/map_icons/jumbo.png' },
+                { id: 'icon-widebody', path: '/Images/map_icons/widebody.png' },
+                { id: 'icon-narrowbody', path: '/Images/map_icons/narrowbody.png' },
+                { id: 'icon-regional', path: '/Images/map_icons/regional.png' },
+                { id: 'icon-private', path: '/Images/map_icons/private.png' },
+                { id: 'icon-fighter', path: '/Images/map_icons/fighter.png' },
+                { id: 'icon-default', path: '/Images/map_icons/default.png' } // Fallback icon
+            ];
+
+            const imagePromises = iconsToLoad.map(icon => 
+                new Promise((res, rej) => {
+                    sectorOpsMap.loadImage(icon.path, (error, image) => {
+                        if (error) {
+                            console.warn(`Could not load icon: ${icon.path}`);
+                            rej(error); // Reject on error
+                        } else {
+                            if (!sectorOpsMap.hasImage(icon.id)) {
+                                sectorOpsMap.addImage(icon.id, image);
+                            }
+                            res(); // Resolve successfully
+                        }
+                    });
+                })
+            );
+
+            Promise.all(imagePromises)
+                .then(() => {
+                    console.log('All custom aircraft icons loaded.');
+                    resolve(); // Resolve the main promise once all icons are loaded
+                })
+                .catch(error => {
+                    console.error('Failed to load one or more aircraft icons.', error);
+                    resolve(); // Still resolve, so the map doesn't get stuck
+                });
+        });
+    });
+}
 
     /**
      * (REFACTORED) Clears only the route line layers from the map.
@@ -3591,129 +3649,113 @@ function updateAircraftInfoWindow(baseProps, plan) {
         });
     }
 
-    /**
-     * Fetches all live data (flights, ATC, NOTAMs) and plots them on the Sector Ops map.
-     */
-    async function updateSectorOpsLiveFlights() {
-        if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
+    // --- MODIFY THIS FUNCTION ---
+async function updateSectorOpsLiveFlights() {
+    if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
-        const LIVE_FLIGHTS_BACKEND = 'https://acars-backend-uxln.onrender.com';
+    const LIVE_FLIGHTS_BACKEND = 'https://acars-backend-uxln.onrender.com';
 
-        try {
-            // 1. Fetch the server session ID
-            const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
-            const sessionsData = await sessionsRes.json();
-            const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
+    try {
+        const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
+        const sessionsData = await sessionsRes.json();
+        const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
 
-            if (!expertSession) {
-                console.warn('Sector Ops Map: Expert Server session not found.');
-                return;
-            }
-
-            // 2. Fetch ALL live data in parallel for efficiency
-            const [flightsRes, atcRes, notamsRes] = await Promise.all([
-                fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
-                fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
-                fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
-            ]);
-            
-            // 3. Process ATC and NOTAM data, then render all airport markers
-            const atcData = await atcRes.json();
-            activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
-            
-            const notamsData = await notamsRes.json();
-            activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
-
-            renderAirportMarkers(); 
-
-            // 4. Process flight data
-            const flightsData = await flightsRes.json();
-            if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
-                console.warn('Sector Ops Map: Could not fetch live flights.');
-                return;
-            }
-
-            // --- FIX: Prevent flickering by merging data ---
-            const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-            let finalFeatures = [];
-
-            if (source && source._data && currentFlightInWindow) {
-                // If a flight is selected, find its current feature on the map
-                const selectedFeature = source._data.features.find(f => f.properties.flightId === currentFlightInWindow);
-                
-                // Process all other flights from the new API call
-                const otherFlights = flightsData.flights.filter(f => f.flightId !== currentFlightInWindow);
-                finalFeatures = otherFlights.map(flight => {
-                    if (!flight.position || flight.position.lat == null || flight.position.lon == null) return null;
-                    return {
-                        type: 'Feature',
-                        geometry: { type: 'Point', coordinates: [flight.position.lon, flight.position.lat] },
-                        properties: {
-                            flightId: flight.flightId, callsign: flight.callsign, username: flight.username,
-                            altitude: flight.position.alt_ft, speed: flight.position.gs_kt, heading: flight.position.track_deg || 0,
-                            verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft),
-                            userId: flight.userId
-                        }
-                    };
-                }).filter(Boolean);
-
-                // Add the selected flight's feature (from its last high-frequency update) back into the array
-                if (selectedFeature) {
-                    finalFeatures.push(selectedFeature);
-                }
-            } else {
-                // If no flight is selected, just process all flights normally
-                finalFeatures = flightsData.flights.map(flight => {
-                    if (!flight.position || flight.position.lat == null || flight.position.lon == null) return null;
-                    return {
-                        type: 'Feature',
-                        geometry: { type: 'Point', coordinates: [flight.position.lon, flight.position.lat] },
-                        properties: {
-                            flightId: flight.flightId, callsign: flight.callsign, username: flight.username,
-                            altitude: flight.position.alt_ft, speed: flight.position.gs_kt, heading: flight.position.track_deg || 0,
-                            verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft),
-                             userId: flight.userId
-                        }
-                    };
-                }).filter(Boolean);
-            }
-            // --- END OF FIX ---
-
-            const geojsonData = { type: 'FeatureCollection', features: finalFeatures };
-
-            // 5. Update the flight map source and layer
-            if (source) {
-                source.setData(geojsonData);
-            } else {
-                sectorOpsMap.addSource('sector-ops-live-flights-source', {
-                    type: 'geojson',
-                    data: geojsonData
-                });
-
-                sectorOpsMap.addLayer({
-                    id: 'sector-ops-live-flights-layer',
-                    type: 'symbol',
-                    source: 'sector-ops-live-flights-source',
-                    layout: {
-                        'icon-image': 'plane-icon', 'icon-size': 0.07, 'icon-rotate': ['get', 'heading'],
-                        'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true
-                    }
-                });
-
-                sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
-                    const props = e.features[0].properties;
-                    const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
-                    handleAircraftClick(flightProps, expertSession.id);
-                });
-
-                sectorOpsMap.on('mouseenter', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
-                sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
-            }
-
-        } catch (error) {
-            console.error('Error updating Sector Ops live data:', error);
+        if (!expertSession) {
+            console.warn('Sector Ops Map: Expert Server session not found.');
+            return;
         }
+
+        const [flightsRes, atcRes, notamsRes] = await Promise.all([
+            fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
+            fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
+            fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
+        ]);
+        
+        const atcData = await atcRes.json();
+        activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
+        
+        const notamsData = await notamsRes.json();
+        activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
+
+        renderAirportMarkers(); 
+
+        const flightsData = await flightsRes.json();
+        if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
+            console.warn('Sector Ops Map: Could not fetch live flights.');
+            return;
+        }
+        
+        const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+        // This function body remains largely the same, we just modify the feature creation...
+        
+        const finalFeatures = flightsData.flights.map(flight => {
+            if (!flight.position || flight.position.lat == null || flight.position.lon == null) return null;
+            
+            // --- CHANGE 1: Classify the aircraft here ---
+            const aircraftCategory = getAircraftCategory(flight.aircraft?.aircraftName);
+
+            return {
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [flight.position.lon, flight.position.lat] },
+                properties: {
+                    flightId: flight.flightId, callsign: flight.callsign, username: flight.username,
+                    altitude: flight.position.alt_ft, speed: flight.position.gs_kt, heading: flight.position.track_deg || 0,
+                    verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft),
+                    userId: flight.userId,
+                    category: aircraftCategory // <-- Add the new category property
+                }
+            };
+        }).filter(Boolean);
+
+        const geojsonData = { type: 'FeatureCollection', features: finalFeatures };
+
+        if (source) {
+            source.setData(geojsonData);
+        } else {
+            sectorOpsMap.addSource('sector-ops-live-flights-source', {
+                type: 'geojson',
+                data: geojsonData
+            });
+
+            sectorOpsMap.addLayer({
+                id: 'sector-ops-live-flights-layer',
+                type: 'symbol',
+                source: 'sector-ops-live-flights-source',
+                layout: {
+                    // --- CHANGE 2: Use a dynamic "match" expression for the icon ---
+                    'icon-image': [
+                        'match',
+                        ['get', 'category'], // Get the 'category' property from the feature
+                        'jumbo', 'icon-jumbo',
+                        'widebody', 'icon-widebody',
+                        'narrowbody', 'icon-narrowbody',
+                        'regional', 'icon-regional',
+                        'private', 'icon-private',
+                        'fighter', 'icon-fighter',
+                        'icon-default' // The fallback value
+                    ],
+                    'icon-size': 0.08, // You may need to adjust this for your new icons
+                    'icon-rotate': ['get', 'heading'],
+                    'icon-rotation-alignment': 'map', 
+                    'icon-allow-overlap': true, 
+                    'icon-ignore-placement': true
+                }
+            });
+
+            sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
+                const props = e.features[0].properties;
+                const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
+                handleAircraftClick(flightProps, expertSession.id);
+            });
+
+            sectorOpsMap.on('mouseenter', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
+            sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
+        }
+
+    } catch (error) {
+        console.error('Error updating Sector Ops live data:', error);
     }
+}
     // ====================================================================
     // END: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
