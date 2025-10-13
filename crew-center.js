@@ -3030,7 +3030,7 @@ function renderPilotStatsHTML(stats, username) {
         <div class="stats-rehaul-container">
             <div class="stats-header">
                 <h4>${username}</h4>
-                <a href="https://community.infiniteflight.com/u/${username}/summary" target="_blank" rel="noopener noreferrer" class="community-profile-link" title="View Community Profile">
+                <a href="https://community.infiniteflight.com/u/${username}" target="_blank" rel="noopener noreferrer" class="community-profile-link" title="View Community Profile">
                     <i class="fa-solid fa-external-link-alt"></i> View Profile
                 </a>
             </div>
