@@ -877,6 +877,12 @@ function injectCustomStyles() {
             .main-content, .dashboard-container.sidebar-collapsed .main-content {
                 padding-left: 0;
             }
+            
+            .main-content:has(#view-rosters.active) {
+    padding: 0; /* Remove ALL padding (top, right, bottom, left) */
+    height: 100vh; /* Set height to 100% of the viewport height */
+    overflow: hidden; /* Prevent the main container from scrolling */
+}
         }
     `;
 
