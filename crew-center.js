@@ -814,7 +814,7 @@ function injectCustomStyles() {
             position: fixed;
             top: 15px;
             left: 15px;
-            z-index: 1100; /* High z-index to be on top */
+            z-index: 1100; /* ✅ High z-index to be on top of everything */
             background-color: rgba(18, 20, 38, 0.8);
             border: 1px solid rgba(255, 255, 255, 0.1);
             color: #e8eaf6;
@@ -833,11 +833,11 @@ function injectCustomStyles() {
         }
 
         .mobile-nav-overlay {
-            display: none;
+            display: none; /* ✅ Should be hidden by default */
             position: fixed;
             inset: 0;
             background-color: rgba(0, 0, 0, 0.6);
-            z-index: 998; /* Below sidebar, above content */
+            z-index: 998; /* ✅ Below sidebar, above content */
         }
 
         /* --- [NEW] Responsive Media Query for Mobile --- */
@@ -859,7 +859,7 @@ function injectCustomStyles() {
                 width: 260px;
                 transform: translateX(-100%); /* Start off-screen */
                 transition: transform 0.3s ease-in-out;
-                z-index: 999;
+                z-index: 999; /* ✅ Higher than the overlay */
                 box-shadow: 5px 0 25px rgba(0,0,0,0.3);
             }
 
@@ -868,7 +868,7 @@ function injectCustomStyles() {
                 transform: translateX(0);
             }
 
-            /* When the menu is open, show the overlay */
+            /* ✅ When the menu is open, show the overlay */
             .dashboard-container.sidebar-mobile-open .mobile-nav-overlay {
                 display: block;
             }
