@@ -5096,9 +5096,10 @@ async function initializeApp() {
     switchView(initialView);
 
     // Sidebar state (Desktop)
-    if (localStorage.getItem('sidebarState') === 'collapsed') {
+    if (window.innerWidth > 992 && localStorage.getItem('sidebarState') === 'collapsed') {
         dashboardContainer.classList.add('sidebar-collapsed');
     }
+
     sidebarToggleBtn.addEventListener('click', () => {
         dashboardContainer.classList.toggle('sidebar-collapsed');
         localStorage.setItem('sidebarState', dashboardContainer.classList.contains('sidebar-collapsed') ? 'collapsed' : 'expanded');
