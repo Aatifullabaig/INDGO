@@ -856,6 +856,7 @@ function injectCustomStyles() {
                 left: 0;
                 top: 0;
                 height: 100%;
+                width: 260px;
                 transform: translateX(-100%); /* Start off-screen */
                 transition: transform 0.3s ease-in-out;
                 z-index: 999;
