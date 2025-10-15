@@ -878,17 +878,15 @@ function injectCustomStyles() {
                 padding-left: 0;
             }
             
-            //* This ensures the parent container fills the full screen height on mobile */
+            /* This ensures the parent container fills the full screen height on mobile */
             .main-content:has(#view-rosters.active) {
                 height: 100vh;
                 overflow: hidden; /* Prevent the main container from scrolling */
             }
 
-            /* This applies safe area padding ONLY to the bottom of the map's container */
+            /* This applies the safe area padding directly to the map's view container */
             #view-rosters.active {
-                box-sizing: border-box; /* Include padding in the element's size */
-                
-                /* Apply safe area padding ONLY to the bottom */
+                box-sizing: border-box; /* This is crucial! It includes padding in the element's size. */
                 padding-bottom: env(safe-area-inset-bottom, 10px);
             }
         }
@@ -985,7 +983,7 @@ function getAircraftCategory(aircraftName) {
     }
     
     // Private / General Aviation
-    if (['cessna', 'citation', 'cirrus', 'tbm', 'sr22','xcub'].some(ac => name.includes(ac))) {
+    if (['cessna', 'citation', 'cirrus', 'tbm', 'sr22','xcub', 'challenger'].some(ac => name.includes(ac))) {
         return 'private';
     }
 
