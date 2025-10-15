@@ -1,5 +1,5 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v3.4)
+ * MobileUIHandler Module (Creative HUD Rehaul - v3.5)
  *
  * This version reimagines the mobile aircraft info window with a modern,
  * cockpit-inspired "Heads-Up Display" (HUD) theme. It maintains the
@@ -32,7 +32,7 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (HUD Rehaul v3.4) Initialized.");
+        console.log("Mobile UI Handler (HUD Rehaul v3.5) Initialized.");
     },
 
     /**
@@ -84,7 +84,7 @@ const MobileUIHandler = {
 
             /* --- Top Floating Window: Image & Route --- */
             #mobile-aircraft-top-window {
-                top: env(safe-area-inset-top, 15px); /* MODIFIED: Respects safe area */
+                top: env(safe-area-inset-top, 15px); /* Respects safe area */
                 left: 15px;
                 right: 15px;
                 border-radius: 16px;
@@ -114,7 +114,7 @@ const MobileUIHandler = {
 
             /* --- Bottom Drawer: Flight Deck --- */
             #mobile-aircraft-bottom-drawer {
-                bottom: 0;
+                bottom: env(safe-area-inset-bottom, 0); /* CORRECT FIX: Lifts the entire drawer */
                 left: 0;
                 right: 0;
                 height: 85vh;
@@ -126,14 +126,12 @@ const MobileUIHandler = {
                 transition-property: transform;
                 transition-duration: 0.45s;
                 transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-                padding-bottom: env(safe-area-inset-bottom, 0); /* MODIFIED: Respects home bar */
-                box-sizing: border-box; /* Ensures padding is included in height */
             }
             #mobile-aircraft-bottom-drawer.dragging { transition: none; }
             #mobile-aircraft-bottom-drawer.off-screen { transform: translateY(100%); }
             #mobile-aircraft-bottom-drawer.expanded { transform: translateY(0); }
 
-            /* --- [NEW] Drawer Header / Handle --- */
+            /* --- Drawer Header / Handle --- */
             .drawer-header {
                 padding: 12px 20px;
                 text-align: center;
@@ -161,7 +159,7 @@ const MobileUIHandler = {
                 transform: rotate(180deg);
             }
             
-            /* --- [NEW] Drawer Content Wrapper --- */
+            /* --- Drawer Content Wrapper --- */
             .drawer-content {
                 overflow-y: auto;
                 flex-grow: 1;
@@ -175,28 +173,24 @@ const MobileUIHandler = {
             .drawer-content::-webkit-scrollbar-track { background: transparent; }
             .drawer-content::-webkit-scrollbar-thumb { background-color: var(--hud-accent); border-radius: 10px; }
             
-            /* --- [RE-STYLED] Content from crew-center.js --- */
+            /* --- RE-STYLED Content from crew-center.js --- */
             .drawer-content .unified-display-header {
-                /* This element is now removed via JS for a cleaner UI */
                 display: none;
             }
             .drawer-content .unified-display-main {
-                /* [MODIFIED] Now a 2-column grid to place PFD on left */
                 display: grid;
-                grid-template-columns: 1fr 120px; /* PFD takes space, side panel has fixed width */
+                grid-template-columns: 1fr 120px;
                 gap: 12px;
                 padding: 0;
-                order: 1; /* This will now be the first element */
+                order: 1;
             }
             .drawer-content .pfd-main-panel {
-                /* PFD container. No specific width needed, it will take the grid column space. */
-                min-width: 0; /* Important for flex/grid children */
+                min-width: 0;
             }
             .drawer-content .pfd-side-panel {
-                /* [MODIFIED] From a grid to a single column flexbox for the right side */
                 display: flex;
                 flex-direction: column;
-                justify-content: space-around; /* Distributes items nicely */
+                justify-content: space-around;
                 gap: 12px;
             }
             .drawer-content .readout-box {
@@ -257,7 +251,6 @@ const MobileUIHandler = {
         this.bottomDrawerEl = document.createElement('div');
         this.bottomDrawerEl.id = 'mobile-aircraft-bottom-drawer';
         this.bottomDrawerEl.className = 'mobile-aircraft-view off-screen';
-        // [NEW] Create the drawer header and content container
         this.bottomDrawerEl.innerHTML = `
             <div class="drawer-header">
                 <h4>
@@ -286,22 +279,18 @@ const MobileUIHandler = {
     },
 
     /**
-     * Moves content from the original window into the new HUD components and
-     * modifies text for mobile.
+     * Moves content from the original window into the new HUD components.
      */
     populateSplitView(sourceWindow) {
         if (!this.topWindowEl || !this.bottomDrawerEl) return;
 
-        // Get references to new mobile containers
         const drawerContentContainer = this.bottomDrawerEl.querySelector('.drawer-content');
 
-        // Find original content pieces
         const topContent = sourceWindow.querySelector('.image-and-route-wrapper');
         const pilotHeader = sourceWindow.querySelector('.unified-display-header');
         const flightDataMain = sourceWindow.querySelector('.unified-display-main');
         const closeBtn = sourceWindow.querySelector('.aircraft-window-close-btn');
         
-        // Update the drawer header with dynamic flight info
         const drawerHeaderH4 = this.bottomDrawerEl.querySelector('.drawer-header h4');
         const drawerHeaderTextSpan = drawerHeaderH4?.querySelector('span');
 
@@ -311,26 +300,21 @@ const MobileUIHandler = {
             drawerHeaderTextSpan.innerHTML = `${callsign} | ${username} <i class="fa-solid fa-user" style="opacity: 0.8;"></i>`;
         }
         
-        // --- FIX: Clone nodes instead of moving them to prevent destroying the original window ---
         if (topContent) this.topWindowEl.appendChild(topContent.cloneNode(true));
         if (closeBtn) this.topWindowEl.appendChild(closeBtn.cloneNode(true));
         
-        if (drawerContentContainer) {
-            // REMOVED: No longer need the redundant header inside the drawer.
-            if (flightDataMain) {
-                const clonedFlightData = flightDataMain.cloneNode(true);
-                drawerContentContainer.appendChild(clonedFlightData);
-                
-                // Modify text for a cleaner mobile view on the CLONED data
-                const readoutLabels = clonedFlightData.querySelectorAll('.readout-box .label');
-                readoutLabels.forEach(label => {
-                    let text = label.textContent.trim();
-                    if (text === 'Ground Speed') label.innerHTML = 'GSPD';
-                    if (text === 'Vertical Speed') label.innerHTML = 'V/S';
-                    if (text === 'Dist. to Dest.') label.innerHTML = 'DIST';
-                    if (text === 'Aircraft Type') label.innerHTML = '<i class="fa-solid fa-plane-circle-check"></i> AIRCRAFT';
-                });
-            }
+        if (drawerContentContainer && flightDataMain) {
+            const clonedFlightData = flightDataMain.cloneNode(true);
+            drawerContentContainer.appendChild(clonedFlightData);
+            
+            const readoutLabels = clonedFlightData.querySelectorAll('.readout-box .label');
+            readoutLabels.forEach(label => {
+                let text = label.textContent.trim();
+                if (text === 'Ground Speed') label.innerHTML = 'GSPD';
+                if (text === 'Vertical Speed') label.innerHTML = 'V/S';
+                if (text === 'Dist. to Dest.') label.innerHTML = 'DIST';
+                if (text === 'Aircraft Type') label.innerHTML = '<i class="fa-solid fa-plane-circle-check"></i> AIRCRAFT';
+            });
         }
 
         this.wireUpInteractions();
@@ -343,7 +327,6 @@ const MobileUIHandler = {
         if (!this.bottomDrawerEl || !this.topWindowEl) return;
 
         const drawerHeader = this.bottomDrawerEl.querySelector('.drawer-header');
-        // Important: Query the close button within the new mobile UI, not the original window
         const closeBtn = this.topWindowEl.querySelector('.aircraft-window-close-btn');
 
         if (drawerHeader) {
