@@ -1,23 +1,44 @@
 /**
- * MobileUIHandler Module (Floating Windows Redesign)
+ * MobileUIHandler Module (Floating Windows Redesign - v2)
+ *
  * Rebuilds the aircraft info window into a split-view layout on mobile,
- * featuring a floating top window and an expandable bottom drawer, both
- * positioned over the map container for an integrated feel.
+ * featuring a floating top window and an expandable bottom drawer with swipe gestures.
+ *
+ * Changes from v1:
+ * - Added touch/swipe gestures to control the bottom drawer.
+ * - Relocated the close button to the top window for better accessibility.
+ * - Centralized configuration for easier maintenance.
+ * - Improved state management and event listener cleanup.
+ * - Added CSS for smoother swipe interactions (`touch-action`).
  */
 const MobileUIHandler = {
+    // --- CONFIGURATION ---
+    CONFIG: {
+        breakpoint: 992, // The max-width in pixels to trigger mobile view
+    },
+
     // --- STATE ---
-    isMobile: () => window.innerWidth <= 992,
+    isMobile: () => window.innerWidth <= MobileUIHandler.CONFIG.breakpoint,
     activeWindow: null,        // The original, hidden .info-window element
     topWindowEl: null,         // The generated top window UI element
     bottomDrawerEl: null,      // The generated bottom drawer UI element
+    overlayEl: null,           // The background overlay element
     contentObserver: null,     // The MutationObserver to watch for content population
+
+    // --- Swipe Gesture State ---
+    swipeState: {
+        touchStartY: 0,
+        touchCurrentY: 0,
+        drawerStartY: 0,
+        isDragging: false,
+    },
 
     /**
      * Initializes the handler by injecting the necessary CSS.
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (Floating Windows) Initialized.");
+        console.log("Mobile UI Handler (Floating Windows v2) Initialized.");
     },
 
     /**
@@ -36,7 +57,7 @@ const MobileUIHandler = {
 
             /* --- Overlay for the expanded drawer --- */
             #mobile-window-overlay {
-                position: absolute; /* Changed from fixed to stay within the map view */
+                position: absolute;
                 inset: 0;
                 background: rgba(0, 0, 0, 0.6);
                 backdrop-filter: blur(4px);
@@ -50,7 +71,7 @@ const MobileUIHandler = {
 
             /* --- Base styles for new floating components --- */
             .mobile-aircraft-view {
-                position: absolute; /* Positioned relative to the map container */
+                position: absolute;
                 background: rgba(18, 20, 38, 0.8);
                 backdrop-filter: blur(20px) saturate(180%);
                 -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -61,7 +82,7 @@ const MobileUIHandler = {
                 box-shadow: 0 10px 40px rgba(0,0,0,0.4);
             }
 
-            /* --- [NEW] Top Floating Window Styling --- */
+            /* --- Top Floating Window Styling --- */
             #mobile-aircraft-top-window {
                 top: 15px;
                 left: 15px;
@@ -73,38 +94,53 @@ const MobileUIHandler = {
             #mobile-aircraft-top-window.visible {
                 transform: translateY(0);
             }
-            /* Tweak content from original script to fit the window */
             #mobile-aircraft-top-window .aircraft-image-container {
                 height: 140px;
-                border-radius: 16px 16px 0 0; /* Match the new border radius */
+                border-radius: 16px 16px 0 0;
                 overflow: hidden;
             }
-             #mobile-aircraft-top-window .flight-details-panel {
-                border-radius: 16px; /* Match the new border radius */
+            #mobile-aircraft-top-window .flight-details-panel {
+                border-radius: 16px;
+            }
+            /* [MODIFIED] Make the relocated close button look good */
+            #mobile-aircraft-top-window .aircraft-window-close-btn {
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                z-index: 10;
+                background: rgba(0,0,0,0.4);
+                border-radius: 50%;
+                width: 30px;
+                height: 30px;
+                line-height: 30px;
+                text-align: center;
             }
 
-            /* --- [NEW] Bottom Drawer Styling --- */
+            /* --- Bottom Drawer Styling --- */
             #mobile-aircraft-bottom-drawer {
                 bottom: 0;
                 left: 0;
                 right: 0;
-                height: 220px; /* Initial "peek" height */
+                height: 85vh; /* Set to max height */
+                max-height: calc(100vh - 80px); /* Ensure it doesn't overlap top ui */
                 border-radius: 20px 20px 0 0;
-                transform: translateY(200%); /* Start off-screen */
-                transition-property: transform, height;
+                transform: translateY(calc(85vh - 220px)); /* "Peek" state */
+                transition-property: transform; /* Only transition transform */
                 transition-duration: 0.45s;
                 transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
                 display: flex;
                 flex-direction: column;
             }
-            #mobile-aircraft-bottom-drawer.visible {
+            #mobile-aircraft-bottom-drawer.dragging {
+                transition: none; /* Disable transition while dragging for instant feedback */
+            }
+            #mobile-aircraft-bottom-drawer.off-screen {
+                transform: translateY(100%);
+            }
+             #mobile-aircraft-bottom-drawer.expanded {
                 transform: translateY(0);
             }
-            #mobile-aircraft-bottom-drawer.expanded {
-                height: 85vh; /* Expanded height */
-            }
             
-            /* Visual handle for the drawer */
             .drawer-handle-bar {
                 width: 50px;
                 height: 5px;
@@ -113,20 +149,22 @@ const MobileUIHandler = {
                 margin: 8px auto 0 auto;
                 flex-shrink: 0;
             }
-
-            /* Adapt original content for the drawer */
+            
+            /* [MODIFIED] Add touch-action for better swipe control */
             #mobile-aircraft-bottom-drawer .unified-display-header {
                 cursor: pointer;
                 padding: 8px 16px;
                 margin: 0;
                 border-bottom: 1px solid rgba(255,255,255,0.1);
+                touch-action: none; /* Prevents page scroll while swiping drawer */
+                user-select: none;
             }
             #mobile-aircraft-bottom-drawer .unified-display-main {
-                overflow-y: auto; /* Allow scrolling when expanded */
+                overflow-y: auto;
             }
             
             /* --- Hide the original desktop window on mobile --- */
-            @media (max-width: 992px) {
+            @media (max-width: ${this.CONFIG.breakpoint}px) {
                 #aircraft-info-window, #airport-info-window {
                     display: none !important;
                 }
@@ -140,7 +178,7 @@ const MobileUIHandler = {
     },
 
     /**
-     * Intercepts the command to open the aircraft window to create the new split view.
+     * Intercepts the command to open the aircraft window.
      */
     openWindow(windowElement) {
         if (!this.isMobile() || this.activeWindow) return;
@@ -149,9 +187,10 @@ const MobileUIHandler = {
             this.activeWindow = windowElement;
             this.createSplitViewUI();
 
+            // Animate in
             setTimeout(() => {
                 if (this.topWindowEl) this.topWindowEl.classList.add('visible');
-                if (this.bottomDrawerEl) this.bottomDrawerEl.classList.add('visible');
+                if (this.bottomDrawerEl) this.bottomDrawerEl.classList.remove('off-screen');
             }, 50);
 
             this.observeOriginalWindow(windowElement);
@@ -159,62 +198,54 @@ const MobileUIHandler = {
     },
 
     /**
- * Animates out and removes all mobile UI components.
- * Can be immediate to prevent race conditions.
- * @param {boolean} immediate - If true, removes elements instantly without animation.
- */
-closeActiveWindow(immediate = false) {
-    if (this.contentObserver) this.contentObserver.disconnect();
-    
-    const overlay = document.getElementById('mobile-window-overlay');
-    if (overlay) overlay.classList.remove('visible');
+     * Creates the empty DOM elements for the floating windows and overlay.
+     */
+    createSplitViewUI() {
+        this.closeActiveWindow(); // Ensure any old elements are removed first
 
-    const cleanup = (el) => {
-        if (el && el.parentNode) {
-            el.parentNode.removeChild(el);
-        }
-    };
+        const viewContainer = document.getElementById('view-rosters');
+        if (!viewContainer) return;
 
-    if (immediate) {
-        cleanup(this.topWindowEl);
-        cleanup(this.bottomDrawerEl);
-    } else {
-        if (this.topWindowEl) {
-            this.topWindowEl.classList.remove('visible');
-            setTimeout(() => cleanup(this.topWindowEl), 500);
-        }
-        if (this.bottomDrawerEl) {
-            this.bottomDrawerEl.classList.remove('visible');
-            setTimeout(() => cleanup(this.bottomDrawerEl), 500);
-        }
-    }
-    
-    this.topWindowEl = null;
-    this.bottomDrawerEl = null;
-    this.activeWindow = null;
-    this.contentObserver = null;
-},
+        // Create and store the overlay
+        this.overlayEl = document.createElement('div');
+        this.overlayEl.id = 'mobile-window-overlay';
+        viewContainer.appendChild(this.overlayEl);
+        this.overlayEl.addEventListener('click', () => this.toggleExpansion(false));
+
+        // Create top window
+        this.topWindowEl = document.createElement('div');
+        this.topWindowEl.id = 'mobile-aircraft-top-window';
+        this.topWindowEl.className = 'mobile-aircraft-view';
+        viewContainer.appendChild(this.topWindowEl);
+
+        // Create bottom drawer
+        this.bottomDrawerEl = document.createElement('div');
+        this.bottomDrawerEl.id = 'mobile-aircraft-bottom-drawer';
+        // Start off-screen before animating into peek view
+        this.bottomDrawerEl.className = 'mobile-aircraft-view off-screen'; 
+        this.bottomDrawerEl.innerHTML = `<div class="drawer-handle-bar"></div>`;
+        viewContainer.appendChild(this.bottomDrawerEl);
+    },
 
     /**
-     * Uses a MutationObserver to wait for the original window to be populated with content.
+     * Uses a MutationObserver to wait for the original window to be populated.
      */
     observeOriginalWindow(windowElement) {
         if (this.contentObserver) this.contentObserver.disconnect();
 
-        const observer = new MutationObserver((mutationsList, obs) => {
+        this.contentObserver = new MutationObserver((mutationsList, obs) => {
             if (windowElement.querySelector('.unified-display-container')) {
                 this.populateSplitView(windowElement);
-                obs.disconnect();
+                obs.disconnect(); // Stop observing once content is found
                 this.contentObserver = null;
             }
         });
 
-        observer.observe(windowElement, { childList: true, subtree: true });
-        this.contentObserver = observer;
+        this.contentObserver.observe(windowElement, { childList: true, subtree: true });
     },
 
     /**
-     * Moves the populated content from the original hidden window into the new mobile UI components.
+     * Moves content from the original window into the new mobile UI components.
      */
     populateSplitView(sourceWindow) {
         if (!this.topWindowEl || !this.bottomDrawerEl) return;
@@ -222,8 +253,16 @@ closeActiveWindow(immediate = false) {
         const topContent = sourceWindow.querySelector('.image-and-route-wrapper');
         const bottomHeader = sourceWindow.querySelector('.unified-display-header');
         const bottomMain = sourceWindow.querySelector('.unified-display-main');
+        // [NEW] Find the close button to move it
+        const closeBtn = sourceWindow.querySelector('.aircraft-window-close-btn');
 
-        if (topContent) this.topWindowEl.appendChild(topContent);
+        if (topContent) {
+            this.topWindowEl.appendChild(topContent);
+            if (closeBtn) {
+                 // [MODIFIED] Move the close button to the top window for visibility
+                this.topWindowEl.appendChild(closeBtn);
+            }
+        }
         if (bottomHeader) this.bottomDrawerEl.appendChild(bottomHeader);
         if (bottomMain) this.bottomDrawerEl.appendChild(bottomMain);
 
@@ -231,30 +270,98 @@ closeActiveWindow(immediate = false) {
     },
 
     /**
-     * Adds event listeners for expanding the drawer and closing the view.
+     * Adds event listeners for all interactions.
      */
     wireUpInteractions() {
-        if (!this.bottomDrawerEl) return;
+        if (!this.bottomDrawerEl || !this.topWindowEl) return;
 
         const drawerHeader = this.bottomDrawerEl.querySelector('.unified-display-header');
-        const overlay = document.getElementById('mobile-window-overlay');
+        const closeBtn = this.topWindowEl.querySelector('.aircraft-window-close-btn');
 
-        const toggleExpansion = (e) => {
-            if (e.target.closest('button')) return;
-            this.bottomDrawerEl.classList.toggle('expanded');
-            overlay.classList.toggle('visible', this.bottomDrawerEl.classList.contains('expanded'));
-        };
-
+        // Click to toggle
         if (drawerHeader) {
-            drawerHeader.addEventListener('click', toggleExpansion);
+            drawerHeader.addEventListener('click', () => this.toggleExpansion());
         }
 
-        const closeBtn = this.bottomDrawerEl.querySelector('.aircraft-window-close-btn');
+        // Close button
         if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
-                this.closeActiveWindow(true);
-            }, { once: true });
+            closeBtn.addEventListener('click', this.closeActiveWindow.bind(this), { once: true });
         }
+        
+        // [NEW] Swipe gesture listeners
+        if (drawerHeader) {
+            drawerHeader.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+            document.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
+            document.addEventListener('touchend', this.handleTouchEnd.bind(this));
+        }
+    },
+    
+    /**
+     * Toggles the drawer between its expanded and peek states.
+     * @param {boolean|undefined} force - `true` to expand, `false` to collapse.
+     */
+    toggleExpansion(force) {
+        if (!this.bottomDrawerEl || this.swipeState.isDragging) return;
+        
+        const isExpanded = this.bottomDrawerEl.classList.contains('expanded');
+        const shouldExpand = force === undefined ? !isExpanded : force;
+
+        this.bottomDrawerEl.classList.toggle('expanded', shouldExpand);
+        if (this.overlayEl) this.overlayEl.classList.toggle('visible', shouldExpand);
+    },
+
+    // --- [NEW] Swipe Gesture Handlers ---
+    handleTouchStart(e) {
+        if (e.target.closest('button')) return;
+        e.preventDefault();
+
+        this.swipeState.isDragging = true;
+        this.swipeState.touchStartY = e.touches[0].clientY;
+        
+        const currentTransform = new WebKitCSSMatrix(window.getComputedStyle(this.bottomDrawerEl).transform);
+        this.swipeState.drawerStartY = currentTransform.m42; // The 'y' translation value
+        
+        this.bottomDrawerEl.classList.add('dragging');
+    },
+
+    handleTouchMove(e) {
+        if (!this.swipeState.isDragging) return;
+        e.preventDefault();
+
+        this.swipeState.touchCurrentY = e.touches[0].clientY;
+        let deltaY = this.swipeState.touchCurrentY - this.swipeState.touchStartY;
+        
+        // Prevent dragging the drawer further down than its peek state
+        let newY = Math.max(0, this.swipeState.drawerStartY + deltaY);
+        this.bottomDrawerEl.style.transform = `translateY(${newY}px)`;
+    },
+    
+    handleTouchEnd() {
+        if (!this.swipeState.isDragging) return;
+
+        this.swipeState.isDragging = false;
+        this.bottomDrawerEl.classList.remove('dragging');
+        this.bottomDrawerEl.style.transform = ''; // Clear inline style to allow CSS transitions
+
+        const peekHeight = this.bottomDrawerEl.clientHeight - 220;
+        const deltaY = this.swipeState.touchCurrentY - this.swipeState.touchStartY;
+
+        // Swiped down significantly: Close everything
+        if (deltaY > 150) {
+            this.closeActiveWindow();
+            return;
+        }
+
+        // Determine whether to snap open or closed
+        if (deltaY < -50) { // Swiped up
+            this.toggleExpansion(true);
+        } else if (deltaY > 50) { // Swiped down
+            this.toggleExpansion(false);
+        }
+        
+        // Reset state
+        this.swipeState.touchStartY = 0;
+        this.swipeState.touchCurrentY = 0;
     },
 
     /**
@@ -263,22 +370,27 @@ closeActiveWindow(immediate = false) {
     closeActiveWindow() {
         if (this.contentObserver) this.contentObserver.disconnect();
         
-        const overlay = document.getElementById('mobile-window-overlay');
-        if (overlay) overlay.classList.remove('visible');
-
+        if (this.overlayEl) {
+            this.overlayEl.classList.remove('visible');
+            setTimeout(() => this.overlayEl?.remove(), 500);
+        }
         if (this.topWindowEl) {
             this.topWindowEl.classList.remove('visible');
-            setTimeout(() => this.topWindowEl.remove(), 500);
-            this.topWindowEl = null;
+            setTimeout(() => this.topWindowEl?.remove(), 500);
         }
         if (this.bottomDrawerEl) {
-            this.bottomDrawerEl.classList.remove('visible');
-            setTimeout(() => this.bottomDrawerEl.remove(), 500);
-            this.bottomDrawerEl = null;
+            // Use a specific class for the "out" animation
+            this.bottomDrawerEl.classList.add('off-screen');
+            this.bottomDrawerEl.classList.remove('expanded');
+            setTimeout(() => this.bottomDrawerEl?.remove(), 500);
         }
         
+        // Cleanup
         this.activeWindow = null;
         this.contentObserver = null;
+        this.topWindowEl = null;
+        this.bottomDrawerEl = null;
+        this.overlayEl = null;
     }
 };
 
@@ -287,6 +399,6 @@ closeActiveWindow(immediate = false) {
  */
 document.addEventListener('DOMContentLoaded', () => {
     MobileUIHandler.init();
-    // Make the handler globally accessible so crew-center.js can call it
+    // Make the handler globally accessible so other scripts can call it
     window.MobileUIHandler = MobileUIHandler;
 });
