@@ -2308,6 +2308,7 @@ function updatePfdDisplay(pfdData) {
 
         closeBtn.addEventListener('click', () => {
             airportInfoWindow.classList.remove('visible');
+            MobileUIHandler.closeActiveWindow();
             airportInfoWindowRecallBtn.classList.remove('visible');
             clearRouteLayers(); // Closing also clears the map routes
             currentAirportInWindow = null;
@@ -2347,6 +2348,7 @@ function updatePfdDisplay(pfdData) {
 
             if (closeBtn) {
                 aircraftInfoWindow.classList.remove('visible');
+                MobileUIHandler.closeActiveWindow();
                 aircraftInfoWindowRecallBtn.classList.remove('visible');
                 clearLiveFlightPath(currentFlightInWindow);
                 if (activePfdUpdateInterval) clearInterval(activePfdUpdateInterval);
@@ -2610,7 +2612,8 @@ async function initializeSectorOpsMap(centerICAO) {
         
         titleEl.innerHTML = `${icao} <small>- ${airport.name || 'Airport'}</small>`;
         contentEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div>`; // Loading state
-
+        
+        MobileUIHandler.openWindow(airportInfoWindow);
         airportInfoWindow.classList.add('visible');
         airportInfoWindowRecallBtn.classList.remove('visible');
         currentAirportInWindow = icao;
@@ -2691,8 +2694,17 @@ async function handleAircraftClick(flightProps, sessionId) {
     }
 
     currentFlightInWindow = flightProps.flightId;
+
+// ✅ NEW: This block replaces the two lines above
+if (window.MobileUIHandler && window.MobileUIHandler.isMobile()) {
+    window.MobileUIHandler.openWindow(aircraftInfoWindow);
+} else {
+    // Original desktop logic
     aircraftInfoWindow.classList.add('visible');
-    aircraftInfoWindowRecallBtn.classList.remove('visible');
+}
+
+aircraftInfoWindowRecallBtn.classList.remove('visible');
+
 
     const windowEl = document.getElementById('aircraft-info-window');
     windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
