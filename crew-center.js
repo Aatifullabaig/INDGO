@@ -132,798 +132,858 @@ function injectCustomStyles() {
     const css = `
         /* --- [FIX] Sector Ops View Layout --- */
         #view-rosters.active {
-            position: absolute;
-            inset: 0; /* Sets top, right, bottom, left to 0 */
-            width: 100%;
-            height: 100%;
-            padding: 0;
-            overflow: hidden;
+            position: fixed; /* ✅ Changed to fixed for true fullscreen overlay */
+            inset: 0; [cite_start]/* Sets top, right, bottom, left to 0 */ /* [cite: 3] */
+            width: 100%; [cite_start]/* [cite: 3] */
+            height: 100%; [cite_start]/* [cite: 4] */
+            padding: 0; [cite_start]/* [cite: 4] */
+            overflow: hidden; [cite_start]/* [cite: 4] */
+            z-index: 1000; /* ✅ Added z-index for stacking context */
 
             /* Use Grid to layer the map and floating panel */
-            display: grid;
-            grid-template-columns: 1fr;
-            grid-template-rows: 1fr;
+            display: grid; [cite_start]/* [cite: 4] */
+            grid-template-columns: 1fr; [cite_start]/* [cite: 5] */
+            grid-template-rows: 1fr; [cite_start]/* [cite: 5] */
         }
 
         /* This places the map into the grid, filling the entire space */
         #sector-ops-map-fullscreen {
-            grid-column: 1 / -1;
-            grid-row: 1 / -1;
+            grid-column: 1 / -1; [cite_start]/* [cite: 5] */
+            grid-row: 1 / -1; [cite_start]/* [cite: 6] */
         }
         
         /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
         .info-window {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 420px;
-            max-width: 90vw;
-            max-height: calc(100vh - 40px);
-            background: rgba(18, 20, 38, 0.75);
-            backdrop-filter: blur(20px) saturate(180%);
-            -webkit-backdrop-filter: blur(20px) saturate(180%);
-            border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 12px 40px rgba(0,0,0,0.6);
-            z-index: 1050;
-            display: none;
-            flex-direction: column;
-            overflow: hidden;
-            color: #e8eaf6;
-            transition: opacity 0.3s ease, transform 0.3s ease;
-            opacity: 0;
-            transform: translateX(20px);
+            position: absolute; [cite_start]/* [cite: 6] */
+            top: 20px; [cite_start]/* [cite: 7] */
+            right: 20px; [cite_start]/* [cite: 7] */
+            width: 420px; [cite_start]/* [cite: 7] */
+            max-width: 90vw; [cite_start]/* [cite: 7] */
+            max-height: calc(100vh - 40px); [cite_start]/* [cite: 7] */
+            background: rgba(18, 20, 38, 0.75); [cite_start]/* [cite: 7] */
+            backdrop-filter: blur(20px) saturate(180%); [cite_start]/* [cite: 7] */
+            -webkit-backdrop-filter: blur(20px) saturate(180%); [cite_start]/* [cite: 8] */
+            border-radius: 16px; [cite_start]/* [cite: 8] */
+            border: 1px solid rgba(255, 255, 255, 0.1); [cite_start]/* [cite: 8] */
+            box-shadow: 0 12px 40px rgba(0,0,0,0.6); [cite_start]/* [cite: 8] */
+            z-index: 1050; [cite_start]/* [cite: 8] */
+            display: none; [cite_start]/* [cite: 9] */
+            flex-direction: column; [cite_start]/* [cite: 9] */
+            overflow: hidden; [cite_start]/* [cite: 9] */
+            color: #e8eaf6; [cite_start]/* [cite: 9] */
+            transition: opacity 0.3s ease, transform 0.3s ease; [cite_start]/* [cite: 9] */
+            opacity: 0; [cite_start]/* [cite: 9] */
+            transform: translateX(20px); [cite_start]/* [cite: 9] */
         }
         .info-window.visible { 
-            display: flex; 
-            opacity: 1;
-            transform: translateX(0);
+            display: flex; [cite_start]/* [cite: 10] */
+            opacity: 1; [cite_start]/* [cite: 11] */
+            transform: translateX(0); [cite_start]/* [cite: 11] */
         }
         .info-window-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 16px 20px;
-            background: rgba(10, 12, 26, 0.6);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            flex-shrink: 0;
+            display: flex; [cite_start]/* [cite: 11] */
+            justify-content: space-between; [cite_start]/* [cite: 12] */
+            align-items: center; [cite_start]/* [cite: 12] */
+            padding: 16px 20px; [cite_start]/* [cite: 12] */
+            background: rgba(10, 12, 26, 0.6); [cite_start]/* [cite: 12] */
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1); [cite_start]/* [cite: 12] */
+            flex-shrink: 0; [cite_start]/* [cite: 13] */
         }
         .info-window-header h3 {
-            margin: 0; 
-            font-size: 1.3rem; 
-            color: #fff;
-            font-weight: 600;
-            text-shadow: 0 2px 5px rgba(0,0,0,0.4);
+            margin: 0; [cite_start]/* [cite: 13] */
+            font-size: 1.3rem; [cite_start]/* [cite: 14] */
+            color: #fff; [cite_start]/* [cite: 14] */
+            font-weight: 600; [cite_start]/* [cite: 14] */
+            text-shadow: 0 2px 5px rgba(0,0,0,0.4); [cite_start]/* [cite: 14] */
         }
         .info-window-header h3 small { 
-            font-weight: 300; 
-            color: #c5cae9; 
-            font-size: 0.9rem; 
-            margin-left: 5px; 
+            font-weight: 300; [cite_start]/* [cite: 15] */
+            color: #c5cae9; [cite_start]/* [cite: 16] */
+            font-size: 0.9rem; [cite_start]/* [cite: 16] */
+            margin-left: 5px; [cite_start]/* [cite: 16] */
         }
         .info-window-actions button {
-            background: rgba(255,255,255,0.05); 
-            border: 1px solid rgba(255,255,255,0.1);
-            color: #c5cae9; 
-            cursor: pointer;
-            font-size: 1rem; 
-            width: 32px; height: 32px;
-            border-radius: 50%;
-            margin-left: 8px;
-            line-height: 1; 
-            display: grid;
-            place-items: center;
-            transition: all 0.2s ease-in-out;
+            background: rgba(255,255,255,0.05); [cite_start]/* [cite: 16] */
+            border: 1px solid rgba(255,255,255,0.1); [cite_start]/* [cite: 17] */
+            color: #c5cae9; [cite_start]/* [cite: 17] */
+            cursor: pointer; [cite_start]/* [cite: 17] */
+            font-size: 1rem; [cite_start]/* [cite: 17] */
+            width: 32px; height: 32px; [cite_start]/* [cite: 17] */
+            border-radius: 50%; [cite_start]/* [cite: 17] */
+            margin-left: 8px; [cite_start]/* [cite: 17] */
+            line-height: 1; [cite_start]/* [cite: 17] */
+            display: grid; [cite_start]/* [cite: 18] */
+            place-items: center; [cite_start]/* [cite: 18] */
+            transition: all 0.2s ease-in-out; [cite_start]/* [cite: 18] */
         }
         .info-window-actions button:hover { 
-            background: #00a8ff;
-            color: #fff; 
-            transform: scale(1.1) rotate(90deg);
-            border-color: #00a8ff;
+            background: #00a8ff; [cite_start]/* [cite: 18] */
+            color: #fff; [cite_start]/* [cite: 19] */
+            transform: scale(1.1) rotate(90deg); [cite_start]/* [cite: 19] */
+            border-color: #00a8ff; [cite_start]/* [cite: 19] */
         }
         .info-window-content { 
-            overflow-y: auto; 
-            flex-grow: 1; 
-            padding: 0;
+            overflow-y: auto; [cite_start]/* [cite: 19] */
+            flex-grow: 1; [cite_start]/* [cite: 20] */
+            padding: 0; [cite_start]/* [cite: 20] */
         }
         /* Custom Scrollbar */
-        .info-window-content::-webkit-scrollbar { width: 8px; }
-        .info-window-content::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
-        .info-window-content::-webkit-scrollbar-thumb { background-color: #00a8ff; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
-        .info-window-content::-webkit-scrollbar-thumb:hover { background-color: #33c1ff; }
-
-        /* --- Ensure Sector Ops map always fills its parent and Mapbox canvas stretches --- */
-        /* Keeps the bottom boundary only by using a bottom border on the map container */
-        #sector-ops-map-fullscreen {
-            grid-column: 1 / -1;
-            grid-row: 1 / -1;
-            width: 100%;
-            height: 100%;
-            min-height: 0; /* important for flex/grid children to allow proper shrinking */
-            min-width: 0;
-            position: relative;
-            overflow: hidden;
-            border-bottom: 6px solid rgba(0,0,0,0.15); /* preserves bottom boundary only */
-            box-sizing: border-box;
+        .info-window-content::-webkit-scrollbar { width: 8px; [cite_start]/* [cite: 20] */
         }
-        /* Force Mapbox elements to occupy full size of container */
-        #sector-ops-map-fullscreen .mapboxgl-map,
-        #sector-ops-map-fullscreen .mapboxgl-canvas,
-        #sector-ops-map-fullscreen .mapboxgl-control-container {
-            width: 100% !important;
-            height: 100% !important;
-            min-height: 0 !important;
-            min-width: 0 !important;
+        .info-window-content::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); [cite_start]/* [cite: 21] */
+        }
+        .info-window-content::-webkit-scrollbar-thumb { background-color: #00a8ff; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; [cite_start]/* [cite: 22] */
+        }
+        .info-window-content::-webkit-scrollbar-thumb:hover { background-color: #33c1ff; [cite_start]/* [cite: 23] */
         }
 
         /* --- [OVERHAUL] Airport Window: Weather & Tabs --- */
         .airport-info-weather {
-            padding: 20px;
-            display: grid;
-            grid-template-columns: auto 1fr;
-            gap: 15px 20px;
-            align-items: center;
-            background: linear-gradient(135deg, rgba(0, 168, 255, 0.15), rgba(0, 100, 200, 0.25));
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px; [cite_start]/* [cite: 24] */
+            display: grid; [cite_start]/* [cite: 25] */
+            grid-template-columns: auto 1fr; [cite_start]/* [cite: 25] */
+            gap: 15px 20px; [cite_start]/* [cite: 25] */
+            align-items: center; [cite_start]/* [cite: 25] */
+            background: linear-gradient(135deg, rgba(0, 168, 255, 0.15), rgba(0, 100, 200, 0.25)); [cite_start]/* [cite: 25] */
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1); [cite_start]/* [cite: 26] */
         }
         .weather-flight-rules { 
-            font-size: 1.8rem; font-weight: 700; 
-            padding: 12px 18px; border-radius: 10px;
-            grid-row: 1 / 3;
-            text-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+            font-size: 1.8rem; [cite_start]/* [cite: 26] */
+            font-weight: 700; [cite_start]/* [cite: 27] */
+            padding: 12px 18px; border-radius: 10px; [cite_start]/* [cite: 27] */
+            grid-row: 1 / 3; [cite_start]/* [cite: 27] */
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.3); [cite_start]/* [cite: 27] */
         }
-        .flight-rules-vfr { background-color: #28a745; color: white; }
-        .flight-rules-mvfr { background-color: #007bff; color: white; }
-        .flight-rules-ifr { background-color: #dc3545; color: white; }
-        .flight-rules-lifr { background-color: #a33ea3; color: white; }
+        .flight-rules-vfr { background-color: #28a745; color: white; [cite_start]/* [cite: 28] */
+        }
+        .flight-rules-mvfr { background-color: #007bff; color: white; [cite_start]/* [cite: 29] */
+        }
+        .flight-rules-ifr { background-color: #dc3545; color: white; [cite_start]/* [cite: 30] */
+        }
+        .flight-rules-lifr { background-color: #a33ea3; color: white; [cite_start]/* [cite: 31] */
+        }
         .weather-details-grid { 
-            display: grid; grid-template-columns: 1fr 1fr; 
-            gap: 10px 15px; text-align: left;
+            display: grid; [cite_start]/* [cite: 32] */
+            grid-template-columns: 1fr 1fr; [cite_start]/* [cite: 33] */
+            gap: 10px 15px; text-align: left; [cite_start]/* [cite: 33] */
         }
-        .weather-details-grid span { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; }
-        .weather-details-grid .fa-solid { color: #00a8ff; width: 16px; text-align: center; }
+        .weather-details-grid span { display: flex; [cite_start]/* [cite: 33] */
+            align-items: center; gap: 8px; font-size: 0.95rem; [cite_start]} /* [cite: 34] */
+        .weather-details-grid .fa-solid { color: #00a8ff; [cite_start]/* [cite: 34] */
+            width: 16px; text-align: center; [cite_start]} /* [cite: 35] */
         .metar-code {
-            grid-column: 1 / -1; font-family: 'Courier New', Courier, monospace;
-            background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px;
-            font-size: 0.8rem; color: #e0e0e0; margin-top: 5px;
+            grid-column: 1 / -1; [cite_start]/* [cite: 35] */
+            font-family: 'Courier New', Courier, monospace; [cite_start]/* [cite: 36] */
+            background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; [cite_start]/* [cite: 36] */
+            font-size: 0.8rem; color: #e0e0e0; margin-top: 5px; [cite_start]/* [cite: 36] */
         }
         
-        .info-window-tabs { display: flex; background: rgba(10, 12, 26, 0.4); padding: 5px 15px 0 15px; }
-        .info-tab-btn {
-            padding: 14px 18px; border: none; background: none; color: #c5cae9;
-            cursor: pointer; font-size: 0.9rem; font-weight: 600;
-            border-bottom: 3px solid transparent; transition: all 0.25s;
-            display: flex; align-items: center; gap: 8px;
+        .info-window-tabs { display: flex; [cite_start]/* [cite: 37] */
+            background: rgba(10, 12, 26, 0.4); padding: 5px 15px 0 15px; [cite_start]/* [cite: 38] */
         }
-        .info-tab-btn:hover { color: #fff; }
-        .info-tab-btn.active { color: #00a8ff; border-bottom-color: #00a8ff; }
-        .info-tab-content { display: none; animation: fadeIn 0.4s; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .info-tab-content.active { display: block; }
-        .info-tab-content ul { list-style: none; padding: 0; margin: 0; }
-        .info-tab-content li { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
-        .info-tab-content li:last-child { border-bottom: none; }
-        .muted-text { color: #9fa8da; text-align: center; padding: 2rem; }
+        .info-tab-btn {
+            padding: 14px 18px; [cite_start]/* [cite: 39] */
+            border: none; background: none; color: #c5cae9; [cite_start]/* [cite: 40] */
+            cursor: pointer; font-size: 0.9rem; font-weight: 600; [cite_start]/* [cite: 40] */
+            border-bottom: 3px solid transparent; transition: all 0.25s; [cite_start]/* [cite: 40] */
+            display: flex; align-items: center; gap: 8px; [cite_start]/* [cite: 41] */
+        }
+        .info-tab-btn:hover { color: #fff; [cite_start]/* [cite: 41] */
+        }
+        .info-tab-btn.active { color: #00a8ff; border-bottom-color: #00a8ff; [cite_start]/* [cite: 42] */
+        }
+        .info-tab-content { display: none; animation: fadeIn 0.4s; [cite_start]/* [cite: 43] */
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; [cite_start]/* [cite: 44] */
+        } }
+        .info-tab-content.active { display: block; [cite_start]/* [cite: 45] */
+        }
+        .info-tab-content ul { list-style: none; padding: 0; margin: 0; [cite_start]/* [cite: 46] */
+        }
+        .info-tab-content li { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.08); [cite_start]/* [cite: 47] */
+        }
+        .info-tab-content li:last-child { border-bottom: none; [cite_start]/* [cite: 48] */
+        }
+        .muted-text { color: #9fa8da; text-align: center; padding: 2rem; [cite_start]/* [cite: 49] */
+        }
 
         /* --- [REDESIGNED] UNIFIED FLIGHT DISPLAY FOR AIRCRAFT WINDOW --- */
         .unified-display-container {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            gap: 0;
-            font-family: 'Segoe UI', sans-serif;
-            background: rgba(10, 12, 26, 0.5);
+            display: flex; [cite_start]/* [cite: 50] */
+            flex-direction: column; [cite_start]/* [cite: 51] */
+            height: 100%; [cite_start]/* [cite: 51] */
+            gap: 0; [cite_start]/* [cite: 51] */
+            font-family: 'Segoe UI', sans-serif; [cite_start]/* [cite: 51] */
+            background: rgba(10, 12, 26, 0.5); [cite_start]/* [cite: 51] */
         }
         
         .unified-display-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: linear-gradient(135deg, rgba(30, 35, 70, 0.8), rgba(15, 20, 45, 0.9));
-            border-radius: 12px;
-            padding: 10px 16px;
-            margin: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: #e8eaf6;
-            flex-shrink: 0;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            display: flex; [cite_start]/* [cite: 52] */
+            justify-content: space-between; [cite_start]/* [cite: 53] */
+            align-items: center; [cite_start]/* [cite: 53] */
+            background: linear-gradient(135deg, rgba(30, 35, 70, 0.8), rgba(15, 20, 45, 0.9)); [cite_start]/* [cite: 53] */
+            border-radius: 12px; [cite_start]/* [cite: 53] */
+            padding: 10px 16px; [cite_start]/* [cite: 53] */
+            margin: 12px; [cite_start]/* [cite: 54] */
+            border: 1px solid rgba(255, 255, 255, 0.1); [cite_start]/* [cite: 54] */
+            color: #e8eaf6; [cite_start]/* [cite: 54] */
+            flex-shrink: 0; [cite_start]/* [cite: 54] */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); [cite_start]/* [cite: 54] */
         }
         
-        .header-actions { display: flex; align-items: center; gap: 12px; }
-        .flight-main-details { line-height: 1.2; }
-        .flight-main-details h3 { margin: 0; font-size: 1.6rem; font-weight: 700; color: #fff; letter-spacing: 1px; }
+        .header-actions { display: flex; [cite_start]/* [cite: 55] */
+            align-items: center; gap: 12px; [cite_start]} /* [cite: 56] */
+        .flight-main-details { line-height: 1.2; [cite_start]/* [cite: 56] */
+        }
+        .flight-main-details h3 { margin: 0; font-size: 1.6rem; font-weight: 700; color: #fff; [cite_start]/* [cite: 57] */
+            letter-spacing: 1px; [cite_start]} /* [cite: 58] */
 
         /* --- [NEW & IMPROVED] Clickable Pilot Name Button --- */
         .pilot-name-button {
-            display: inline-flex; /* Use flexbox for easy alignment */
-            align-items: center;
-            gap: 8px; /* Space between name and icon */
-            background-color: rgba(255, 255, 255, 0.05); /* Subtle background to stand out */
-            border: 1px solid rgba(255, 255, 255, 0.1); /* Faint border */
-            padding: 4px 10px; /* Give it some comfortable spacing */
-            margin: 0;
-            font-size: 0.9rem; /* Slightly larger for clarity */
-            font-weight: 500;
-            color: #c5cae9;
-            cursor: pointer;
-            border-radius: 20px; /* This creates the "pill" shape */
-            transition: all 0.2s ease-in-out;
-            line-height: 1;
+            display: inline-flex; [cite_start]/* [cite: 58] */
+            align-items: center; [cite_start]/* [cite: 59] */
+            gap: 8px; [cite_start]/* Space between name and icon */ /* [cite: 60] */
+            background-color: rgba(255, 255, 255, 0.05); [cite_start]/* [cite: 60] */
+            border: 1px solid rgba(255, 255, 255, 0.1); [cite_start]/* [cite: 61] */
+            padding: 4px 10px; [cite_start]/* [cite: 62] */
+            margin: 0; [cite_start]/* [cite: 63] */
+            font-size: 0.9rem; [cite_start]/* Slightly larger for clarity */ /* [cite: 64] */
+            font-weight: 500; [cite_start]/* [cite: 64] */
+            color: #c5cae9; [cite_start]/* [cite: 65] */
+            cursor: pointer; [cite_start]/* [cite: 65] */
+            border-radius: 20px; [cite_start]/* This creates the "pill" shape */ /* [cite: 65] */
+            transition: all 0.2s ease-in-out; [cite_start]/* [cite: 65] */
+            line-height: 1; [cite_start]/* [cite: 66] */
         }
         .pilot-name-button:hover,
         .pilot-name-button:focus {
-            background-color: #00a8ff; /* Use your brand's accent color on hover */
-            color: #fff; /* White text for contrast */
-            border-color: #00a8ff;
-            transform: translateY(-2px) scale(1.03); /* Add a little "pop" effect */
-            box-shadow: 0 4px 15px rgba(0, 168, 255, 0.3);
+            background-color: #00a8ff; [cite_start]/* [cite: 67] */
+            color: #fff; [cite_start]/* [cite: 68] */
+            border-color: #00a8ff; [cite_start]/* [cite: 68] */
+            transform: translateY(-2px) scale(1.03); [cite_start]/* Add a little "pop" effect */ /* [cite: 69] */
+            box-shadow: 0 4px 15px rgba(0, 168, 255, 0.3); [cite_start]/* [cite: 69] */
         }
         .pilot-name-button .fa-solid {
-            margin: 0; /* Remove the old margin */
-            font-size: 0.8rem;
+            margin: 0; [cite_start]/* [cite: 70] */
+            font-size: 0.8rem; [cite_start]/* [cite: 71] */
         }
 
         /* --- [NEW] Wrapper for Image and Overlay Route --- */
         .image-and-route-wrapper {
-            position: relative;
-            background: rgba(10, 12, 26, 0.5);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            overflow: hidden;
+            position: relative; [cite_start]/* [cite: 72] */
+            background: rgba(10, 12, 26, 0.5); [cite_start]/* [cite: 73] */
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1); [cite_start]/* [cite: 73] */
+            overflow: hidden; [cite_start]/* [cite: 74] */
         }
 
         /* --- [NEW] Aircraft Image Display --- */
         .aircraft-image-container {
-            width: 100%;
-            height: 180px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            width: 100%; [cite_start]/* [cite: 74] */
+            height: 180px; [cite_start]/* [cite: 75] */
+            display: flex; [cite_start]/* [cite: 75] */
+            align-items: center; [cite_start]/* [cite: 75] */
+            justify-content: center; [cite_start]/* [cite: 75] */
         }
         .aircraft-image-container img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            background-color: rgba(0,0,0,0.2);
+            width: 100%; [cite_start]/* [cite: 75] */
+            height: 100%; [cite_start]/* [cite: 76] */
+            object-fit: cover; [cite_start]/* [cite: 76] */
+            background-color: rgba(0,0,0,0.2); [cite_start]/* [cite: 76] */
         }
 
         /* --- [MODIFIED] Flight Details Panel (now overlaid) --- */
         .flight-details-panel {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            padding: 8px 12px;
-            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.0));
-            z-index: 10;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+            position: absolute; [cite_start]/* [cite: 76] */
+            top: 0; [cite_start]/* [cite: 77] */
+            left: 0; [cite_start]/* [cite: 77] */
+            width: 100%; [cite_start]/* [cite: 77] */
+            padding: 8px 12px; [cite_start]/* [cite: 77] */
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.0)); [cite_start]/* [cite: 77] */
+            z-index: 10; [cite_start]/* [cite: 78] */
+            box-sizing: border-box; [cite_start]/* [cite: 78] */
+            display: flex; [cite_start]/* [cite: 78] */
+            flex-direction: column; [cite_start]/* [cite: 78] */
+            gap: 8px; [cite_start]/* [cite: 78] */
         }
 
         .flight-route-display {
-            display: grid;
-            grid-template-columns: auto 1fr auto;
-            align-items: center;
-            gap: 12px;
-            color: #e8eaf6;
+            display: grid; [cite_start]/* [cite: 79] */
+            grid-template-columns: auto 1fr auto; [cite_start]/* [cite: 80] */
+            align-items: center; [cite_start]/* [cite: 80] */
+            gap: 12px; [cite_start]/* [cite: 80] */
+            color: #e8eaf6; [cite_start]/* [cite: 80] */
         }
-        .route-point { display: flex; align-items: center; gap: 8px; }
-        .route-point.arrival { flex-direction: row-reverse; }
-        .route-point .icao { font-size: 1.6rem; font-weight: 700; font-family: 'Courier New', monospace; color: #fff; }
-        .route-point .fa-solid { font-size: 1.1rem; color: #00a8ff; }
-        .route-progress-container { display: flex; flex-direction: column; }
+        .route-point { display: flex; align-items: center; gap: 8px; [cite_start]/* [cite: 81] */
+        }
+        .route-point.arrival { flex-direction: row-reverse; [cite_start]/* [cite: 82] */
+        }
+        .route-point .icao { font-size: 1.6rem; font-weight: 700; font-family: 'Courier New', monospace; [cite_start]/* [cite: 83] */
+            color: #fff; [cite_start]} /* [cite: 84] */
+        .route-point .fa-solid { font-size: 1.1rem; color: #00a8ff; [cite_start]/* [cite: 84] */
+        }
+        .route-progress-container { display: flex; flex-direction: column; [cite_start]/* [cite: 85] */
+        }
 
 
         /* [NEW] Redesigned Hide/Close Buttons */
         .header-actions button {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            color: #e8eaf6;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            cursor: pointer;
-            display: grid;
-            place-items: center;
-            transition: all 0.2s ease-in-out;
+            background: rgba(255, 255, 255, 0.08); [cite_start]/* [cite: 86] */
+            border: 1px solid rgba(255, 255, 255, 0.15); [cite_start]/* [cite: 87] */
+            color: #e8eaf6; [cite_start]/* [cite: 87] */
+            width: 32px; [cite_start]/* [cite: 87] */
+            height: 32px; [cite_start]/* [cite: 87] */
+            border-radius: 50%; [cite_start]/* [cite: 87] */
+            cursor: pointer; [cite_start]/* [cite: 87] */
+            display: grid; [cite_start]/* [cite: 87] */
+            place-items: center; [cite_start]/* [cite: 88] */
+            transition: all 0.2s ease-in-out; [cite_start]/* [cite: 88] */
         }
         .header-actions button:hover {
-            background: #00a8ff;
-            color: #fff;
-            transform: scale(1.1);
-            border-color: transparent;
+            background: #00a8ff; [cite_start]/* [cite: 88] */
+            color: #fff; [cite_start]/* [cite: 89] */
+            transform: scale(1.1); [cite_start]/* [cite: 89] */
+            border-color: transparent; [cite_start]/* [cite: 89] */
         }
 
         /* [MODIFIED] Progress Bar */
         .route-progress-bar-container {
-            width: 100%;
-            height: 6px;
-            background: rgba(10, 12, 26, 0.7);
-            border-radius: 3px;
-            overflow: hidden;
+            width: 100%; [cite_start]/* [cite: 89] */
+            height: 6px; [cite_start]/* [cite: 90] */
+            background: rgba(10, 12, 26, 0.7); [cite_start]/* [cite: 90] */
+            border-radius: 3px; [cite_start]/* [cite: 90] */
+            overflow: hidden; [cite_start]/* [cite: 90] */
         }
         .progress-bar-fill {
-            height: 100%;
-            width: 0%;
-            background: linear-gradient(90deg, #00a8ff, #89f7fe);
-            transition: width 0.5s ease-out;
-            border-radius: 3px;
+            height: 100%; [cite_start]/* [cite: 91] */
+            width: 0%; [cite_start]/* [cite: 92] */
+            background: linear-gradient(90deg, #00a8ff, #89f7fe); [cite_start]/* [cite: 92] */
+            transition: width 0.5s ease-out; [cite_start]/* [cite: 92] */
+            border-radius: 3px; [cite_start]/* [cite: 92] */
         }
 
 
         /* [MODIFIED] Upgraded Flight Phase Indicator */
         .flight-phase-indicator {
-            position: relative;
-            top: auto;
-            left: auto;
-            transform: none;
-            margin: 0 auto 8px auto;
-            width: fit-content;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(5px);
-            transition: all 0.4s ease-out;
+            position: relative; [cite_start]/* [cite: 93] */
+            top: auto; [cite_start]/* [cite: 94] */
+            left: auto; [cite_start]/* [cite: 94] */
+            transform: none; [cite_start]/* [cite: 94] */
+            margin: 0 auto 8px auto; [cite_start]/* [cite: 94] */
+            width: fit-content; [cite_start]/* [cite: 94] */
+            padding: 6px 16px; [cite_start]/* [cite: 94] */
+            border-radius: 20px; [cite_start]/* [cite: 94] */
+            font-size: 0.8rem; [cite_start]/* [cite: 94] */
+            font-weight: 700; [cite_start]/* [cite: 95] */
+            color: #fff; [cite_start]/* [cite: 95] */
+            display: flex; [cite_start]/* [cite: 95] */
+            align-items: center; [cite_start]/* [cite: 95] */
+            gap: 8px; [cite_start]/* [cite: 95] */
+            border: 1px solid rgba(255, 255, 255, 0.1); [cite_start]/* [cite: 95] */
+            backdrop-filter: blur(5px); [cite_start]/* [cite: 95] */
+            transition: all 0.4s ease-out; [cite_start]/* [cite: 96] */
         }
         .flight-phase-indicator .fa-solid {
-            font-size: 0.9rem;
+            font-size: 0.9rem; [cite_start]/* [cite: 96] */
         }
         /* Phase-specific colors */
-        .phase-climb { background: rgba(34, 139, 34, 0.7); box-shadow: 0 0 12px rgba(34, 139, 34, 0.8); }
-        .phase-cruise { background: rgba(0, 119, 255, 0.7); box-shadow: 0 0 12px rgba(0, 119, 255, 0.8); }
-        .phase-descent { background: rgba(255, 140, 0, 0.7); box-shadow: 0 0 12px rgba(255, 140, 0, 0.8); }
-        .phase-approach { background: rgba(138, 43, 226, 0.7); box-shadow: 0 0 12px rgba(138, 43, 226, 0.8); }
-        .phase-enroute { background: rgba(100, 110, 130, 0.7); box-shadow: 0 0 12px rgba(100, 110, 130, 0.8); }
+        .phase-climb { background: rgba(34, 139, 34, 0.7); [cite_start]/* [cite: 97] */
+            box-shadow: 0 0 12px rgba(34, 139, 34, 0.8); [cite_start]} /* [cite: 98] */
+        .phase-cruise { background: rgba(0, 119, 255, 0.7); [cite_start]/* [cite: 98] */
+            box-shadow: 0 0 12px rgba(0, 119, 255, 0.8); [cite_start]} /* [cite: 99] */
+        .phase-descent { background: rgba(255, 140, 0, 0.7); [cite_start]/* [cite: 99] */
+            box-shadow: 0 0 12px rgba(255, 140, 0, 0.8); [cite_start]} /* [cite: 100] */
+        .phase-approach { background: rgba(138, 43, 226, 0.7); [cite_start]/* [cite: 100] */
+            box-shadow: 0 0 12px rgba(138, 43, 226, 0.8); [cite_start]} /* [cite: 101] */
+        .phase-enroute { background: rgba(100, 110, 130, 0.7); [cite_start]/* [cite: 101] */
+            box-shadow: 0 0 12px rgba(100, 110, 130, 0.8); [cite_start]} /* [cite: 102] */
 
         .unified-display-main {
-            flex-grow: 1;
-            display: grid;
-            grid-template-columns: 1fr 140px;
-            gap: 16px;
-            min-height: 0;
-            overflow: hidden;
-            padding: 12px;
+            flex-grow: 1; [cite_start]/* [cite: 102] */
+            display: grid; [cite_start]/* [cite: 103] */
+            grid-template-columns: 1fr 140px; [cite_start]/* [cite: 103] */
+            gap: 16px; [cite_start]/* [cite: 103] */
+            min-height: 0; [cite_start]/* [cite: 103] */
+            overflow: hidden; [cite_start]/* [cite: 103] */
+            padding: 12px; [cite_start]/* [cite: 103] */
         }
         .pfd-side-panel {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            justify-content: space-around;
+            display: flex; [cite_start]/* [cite: 104] */
+            flex-direction: column; [cite_start]/* [cite: 105] */
+            gap: 12px; [cite_start]/* [cite: 105] */
+            justify-content: space-around; [cite_start]/* [cite: 105] */
         }
         .readout-box {
-            background: rgba(10, 12, 26, 0.6);
-            padding: 10px; border-radius: 8px; text-align: center;
+            background: rgba(10, 12, 26, 0.6); [cite_start]/* [cite: 105] */
+            padding: 10px; border-radius: 8px; text-align: center; [cite_start]/* [cite: 106] */
         }
         .readout-box .label {
-            font-size: 0.7rem; text-transform: uppercase; color: #c5cae9;
-            margin-bottom: 4px;
+            font-size: 0.7rem; [cite_start]/* [cite: 106] */
+            text-transform: uppercase; color: #c5cae9; [cite_start]/* [cite: 107] */
+            margin-bottom: 4px; [cite_start]/* [cite: 107] */
         }
         .readout-box .value {
-            font-size: 1.3rem; font-weight: 600; color: #fff;
-            font-family: 'Courier New', monospace;
-            line-height: 1.1;
+            font-size: 1.3rem; [cite_start]/* [cite: 107] */
+            font-weight: 600; color: #fff; [cite_start]/* [cite: 108] */
+            font-family: 'Courier New', monospace; [cite_start]/* [cite: 108] */
+            line-height: 1.1; [cite_start]/* [cite: 108] */
         }
-        .readout-box .value .unit { font-size: 0.8rem; color: #9fa8da; margin-left: 2px;}
-        .readout-box .value .fa-solid { font-size: 0.8rem; margin-right: 4px; color: #00a8ff; }
+        .readout-box .value .unit { font-size: 0.8rem; color: #9fa8da; [cite_start]/* [cite: 109] */
+            [cite_start]margin-left: 2px;} /* [cite: 110] */
+        .readout-box .value .fa-solid { font-size: 0.8rem; margin-right: 4px; color: #00a8ff; [cite_start]/* [cite: 110] */
+        }
 
 
         /* --- [UPGRADED & RESIZED] PFD (Primary Flight Display) Styles --- */
         #pfd-container {
-            display: grid;
-            place-items: center;
-            background: rgba(10, 12, 26, 0.5);
-            border-radius: 12px;
-            overflow: hidden;
-            min-width: 0;
+            display: grid; [cite_start]/* [cite: 111] */
+            place-items: center; [cite_start]/* [cite: 112] */
+            background: rgba(10, 12, 26, 0.5); [cite_start]/* [cite: 112] */
+            border-radius: 12px; [cite_start]/* [cite: 112] */
+            overflow: hidden; [cite_start]/* [cite: 112] */
+            min-width: 0; [cite_start]/* [cite: 112] */
         }
         #pfd-container svg {
-            width: 100%;
-            height: auto;
-            max-width: 350px;
-            aspect-ratio: 787 / 695;
-            background-color: #1a1a1a;
-            font-family: monospace, sans-serif;
-            color: white;
-            overflow: hidden;
-            position: relative;
-            border-radius: 8px;
+            width: 100%; [cite_start]/* [cite: 113] */
+            height: auto; [cite_start]/* [cite: 114] */
+            max-width: 350px; [cite_start]/* [cite: 114] */
+            aspect-ratio: 787 / 695; [cite_start]/* [cite: 114] */
+            background-color: #1a1a1a; [cite_start]/* [cite: 114] */
+            font-family: monospace, sans-serif; [cite_start]/* [cite: 114] */
+            color: white; [cite_start]/* [cite: 114] */
+            overflow: hidden; [cite_start]/* [cite: 114] */
+            position: relative; [cite_start]/* [cite: 114] */
+            border-radius: 8px; [cite_start]/* [cite: 115] */
         }
         #pfd-container svg #attitude_group {
-            transition: transform 0.5s ease-out;
+            transition: transform 0.5s ease-out; [cite_start]/* [cite: 115] */
         }
 
         /* --- [NEW] Aircraft Type Display --- */
         .pfd-main-panel {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            min-width: 0;
+            display: flex; [cite_start]/* [cite: 116] */
+            flex-direction: column; [cite_start]/* [cite: 117] */
+            gap: 12px; [cite_start]/* [cite: 117] */
+            min-width: 0; [cite_start]/* [cite: 117] */
         }
         #aircraft-type-readout .value {
-            font-size: 1.05rem;
-            font-family: 'Segoe UI', sans-serif;
-            font-weight: 500;
-            color: #fff;
-            padding: 4px 0;
-            line-height: 1.2;
+            font-size: 1.05rem; [cite_start]/* [cite: 117] */
+            font-family: 'Segoe UI', sans-serif; [cite_start]/* [cite: 118] */
+            font-weight: 500; [cite_start]/* [cite: 118] */
+            color: #fff; [cite_start]/* [cite: 118] */
+            padding: 4px 0; [cite_start]/* [cite: 118] */
+            line-height: 1.2; [cite_start]/* [cite: 118] */
         }
         #aircraft-type-readout .fa-solid {
-            color: #9fa8da;
+            color: #9fa8da; [cite_start]/* [cite: 119] */
         }
 
         /* --- Manufacturer Color Codes --- */
-        .aircraft-type-airbus { border-left: 4px solid #00a8ff; }
-        .aircraft-type-boeing { border-left: 4px solid #ffc107; }
-        .aircraft-type-bombardier { border-left: 4px solid #dc3545; }
-        .aircraft-type-embraer { border-left: 4px solid #28a745; }
-        .aircraft-type-mcdonnell-douglas { border-left: 4px solid #ff8c00; }
-        .aircraft-type-de-havilland { border-left: 4px solid #6f42c1; }
-        .aircraft-type-unknown { border-left: 4px solid #6c757d; }
+        .aircraft-type-airbus { border-left: 4px solid #00a8ff; [cite_start]/* [cite: 120] */
+        }
+        .aircraft-type-boeing { border-left: 4px solid #ffc107; [cite_start]/* [cite: 121] */
+        }
+        .aircraft-type-bombardier { border-left: 4px solid #dc3545; [cite_start]/* [cite: 122] */
+        }
+        .aircraft-type-embraer { border-left: 4px solid #28a745; [cite_start]/* [cite: 123] */
+        }
+        .aircraft-type-mcdonnell-douglas { border-left: 4px solid #ff8c00; [cite_start]/* [cite: 124] */
+        }
+        .aircraft-type-de-havilland { border-left: 4px solid #6f42c1; [cite_start]/* [cite: 125] */
+        }
+        .aircraft-type-unknown { border-left: 4px solid #6c757d; [cite_start]/* [cite: 126] */
+        }
         
         /* --- [NEW] Pilot Stats View --- */
-        .pilot-stats-view { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
-        .stats-header { text-align: center; margin-bottom: 8px; }
-        .stats-header h4 { margin: 0; font-size: 1.3rem; color: #fff; }
-        .stats-header p { margin: 0; font-size: 0.9rem; color: #c5cae9; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; }
-        .grade-table-container { background: rgba(10, 12, 26, 0.6); border-radius: 8px; padding: 12px; }
-        .grade-table-container h5 { margin: 0 0 10px 0; text-align: center; }
-        .grade-item { font-size: 0.85rem; padding: 8px; border-radius: 4px; transition: background-color 0.2s; }
-        .grade-item.current-grade { background-color: rgba(0, 168, 255, 0.2); border-left: 3px solid #00a8ff; }
-        .grade-item strong { color: #fff; }
-        .grade-requirement { display: flex; align-items: center; gap: 6px; margin-left: 10px; font-size: 0.8rem; color: #c5cae9;}
-        .grade-requirement .fa-check { color: #28a745; }
-        .grade-requirement .fa-times { color: #dc3545; }
+        .pilot-stats-view { padding: 12px; [cite_start]/* [cite: 127] */
+            display: flex; flex-direction: column; gap: 12px; [cite_start]} /* [cite: 128] */
+        .stats-header { text-align: center; margin-bottom: 8px; [cite_start]/* [cite: 128] */
+        }
+        .stats-header h4 { margin: 0; font-size: 1.3rem; color: #fff; [cite_start]/* [cite: 129] */
+        }
+        .stats-header p { margin: 0; font-size: 0.9rem; color: #c5cae9; [cite_start]/* [cite: 130] */
+        }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; [cite_start]/* [cite: 131] */
+        }
+        .grade-table-container { background: rgba(10, 12, 26, 0.6); border-radius: 8px; padding: 12px; [cite_start]/* [cite: 132] */
+        }
+        .grade-table-container h5 { margin: 0 0 10px 0; text-align: center; [cite_start]/* [cite: 133] */
+        }
+        .grade-item { font-size: 0.85rem; padding: 8px; border-radius: 4px; transition: background-color 0.2s; [cite_start]/* [cite: 134] */
+        }
+        .grade-item.current-grade { background-color: rgba(0, 168, 255, 0.2); border-left: 3px solid #00a8ff; [cite_start]/* [cite: 135] */
+        }
+        .grade-item strong { color: #fff; [cite_start]/* [cite: 136] */
+        }
+        .grade-requirement { display: flex; align-items: center; gap: 6px; margin-left: 10px; font-size: 0.8rem; [cite_start]/* [cite: 137] */
+            [cite_start]color: #c5cae9;} /* [cite: 138] */
+        .grade-requirement .fa-check { color: #28a745; [cite_start]/* [cite: 138] */
+        }
+        .grade-requirement .fa-times { color: #dc3545; [cite_start]/* [cite: 139] */
+        }
 
         /* --- [REHAULED] Pilot Stats View --- */
         .stats-rehaul-container {
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            color: #e8eaf6;
+            padding: 16px; [cite_start]/* [cite: 140] */
+            display: flex; [cite_start]/* [cite: 141] */
+            flex-direction: column; [cite_start]/* [cite: 141] */
+            gap: 16px; [cite_start]/* [cite: 141] */
+            color: #e8eaf6; [cite_start]/* [cite: 141] */
         }
         .section-title {
-            margin: 8px 0 -8px 0;
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #9fa8da;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            padding-bottom: 8px;
+            margin: 8px 0 -8px 0; [cite_start]/* [cite: 141] */
+            font-size: 0.9rem; [cite_start]/* [cite: 142] */
+            font-weight: 600; [cite_start]/* [cite: 142] */
+            color: #9fa8da; [cite_start]/* [cite: 142] */
+            text-transform: uppercase; [cite_start]/* [cite: 142] */
+            letter-spacing: 0.5px; [cite_start]/* [cite: 142] */
+            border-bottom: 1px solid rgba(255,255,255,0.1); [cite_start]/* [cite: 142] */
+            padding-bottom: 8px; [cite_start]/* [cite: 142] */
         }
         .kpi-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 12px;
+            display: grid; [cite_start]/* [cite: 143] */
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); [cite_start]/* [cite: 144] */
+            gap: 12px; [cite_start]/* [cite: 144] */
         }
         .kpi-card {
-            background: rgba(10, 12, 26, 0.7);
-            border-radius: 8px;
-            padding: 12px;
-            text-align: center;
-            border: 1px solid rgba(255,255,255,0.05);
+            background: rgba(10, 12, 26, 0.7); [cite_start]/* [cite: 144] */
+            border-radius: 8px; [cite_start]/* [cite: 145] */
+            padding: 12px; [cite_start]/* [cite: 145] */
+            text-align: center; [cite_start]/* [cite: 145] */
+            border: 1px solid rgba(255,255,255,0.05); [cite_start]/* [cite: 145] */
         }
         .kpi-label {
-            font-size: 0.75rem;
-            color: #c5cae9;
-            margin-bottom: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
+            font-size: 0.75rem; [cite_start]/* [cite: 146] */
+            color: #c5cae9; [cite_start]/* [cite: 147] */
+            margin-bottom: 6px; [cite_start]/* [cite: 147] */
+            display: flex; [cite_start]/* [cite: 147] */
+            align-items: center; [cite_start]/* [cite: 147] */
+            justify-content: center; [cite_start]/* [cite: 147] */
+            gap: 6px; [cite_start]/* [cite: 147] */
         }
         .kpi-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #fff;
-            line-height: 1.2;
+            font-size: 1.5rem; [cite_start]/* [cite: 148] */
+            font-weight: 700; [cite_start]/* [cite: 149] */
+            color: #fff; [cite_start]/* [cite: 149] */
+            line-height: 1.2; [cite_start]/* [cite: 149] */
         }
         .progression-container {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 12px;
+            display: grid; [cite_start]/* [cite: 149] */
+            grid-template-columns: 1fr; [cite_start]/* [cite: 150] */
+            gap: 12px; [cite_start]/* [cite: 150] */
         }
         .progress-card {
-            background: rgba(10, 12, 26, 0.6);
-            border-radius: 8px;
-            padding: 16px;
-            border-left: 4px solid #00a8ff;
+            background: rgba(10, 12, 26, 0.6); [cite_start]/* [cite: 150] */
+            border-radius: 8px; [cite_start]/* [cite: 151] */
+            padding: 16px; [cite_start]/* [cite: 151] */
+            border-left: 4px solid #00a8ff; [cite_start]/* [cite: 151] */
         }
         .progress-card.complete {
-            border-left-color: #28a745;
-            text-align: center;
+            border-left-color: #28a745; [cite_start]/* [cite: 151] */
+            text-align: center; [cite_start]/* [cite: 152] */
         }
         .progress-card h4 {
-            margin: 0 0 12px 0;
-            font-size: 1.1rem;
-            color: #fff;
+            margin: 0 0 12px 0; [cite_start]/* [cite: 152] */
+            font-size: 1.1rem; [cite_start]/* [cite: 153] */
+            color: #fff; [cite_start]/* [cite: 153] */
         }
         .progress-item {
-            margin-bottom: 12px;
+            margin-bottom: 12px; [cite_start]/* [cite: 153] */
         }
         .progress-item:last-child {
-            margin-bottom: 0;
+            margin-bottom: 0; [cite_start]/* [cite: 154] */
         }
         .progress-label {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.85rem;
-            margin-bottom: 6px;
-            color: #e8eaf6;
+            display: flex; [cite_start]/* [cite: 155] */
+            justify-content: space-between; [cite_start]/* [cite: 156] */
+            align-items: center; [cite_start]/* [cite: 156] */
+            font-size: 0.85rem; [cite_start]/* [cite: 156] */
+            margin-bottom: 6px; [cite_start]/* [cite: 156] */
+            color: #e8eaf6; [cite_start]/* [cite: 156] */
         }
-        .progress-label .fa-solid { color: #9fa8da; margin-right: 6px; }
+        .progress-label .fa-solid { color: #9fa8da; margin-right: 6px; [cite_start]/* [cite: 157] */
+        }
         .progress-bar-bg {
-            width: 100%;
-            height: 8px;
-            background-color: rgba(0,0,0,0.3);
-            border-radius: 4px;
-            overflow: hidden;
+            width: 100%; [cite_start]/* [cite: 158] */
+            height: 8px; [cite_start]/* [cite: 159] */
+            background-color: rgba(0,0,0,0.3); [cite_start]/* [cite: 159] */
+            border-radius: 4px; [cite_start]/* [cite: 159] */
+            overflow: hidden; [cite_start]/* [cite: 159] */
         }
         .progress-bar-fg {
-            height: 100%;
-            background: linear-gradient(90deg, #00a8ff, #89f7fe);
-            border-radius: 4px;
-            transition: width 0.5s ease-out;
+            height: 100%; [cite_start]/* [cite: 159] */
+            background: linear-gradient(90deg, #00a8ff, #89f7fe); [cite_start]/* [cite: 160] */
+            border-radius: 4px; [cite_start]/* [cite: 160] */
+            transition: width 0.5s ease-out; [cite_start]/* [cite: 160] */
         }
-        .req-met { color: #28a745; }
-        .req-not-met { color: #dc3545; }
-        .req-met .fa-solid, .req-not-met .fa-solid { margin-left: 6px; }
+        .req-met { color: #28a745; [cite_start]/* [cite: 161] */
+        }
+        .req-not-met { color: #dc3545; [cite_start]/* [cite: 162] */
+        }
+        .req-met .fa-solid, .req-not-met .fa-solid { margin-left: 6px; [cite_start]/* [cite: 163] */
+        }
 
         .details-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px 16px;
-            background: rgba(10, 12, 26, 0.6);
-            padding: 16px;
-            border-radius: 8px;
+            display: grid; [cite_start]/* [cite: 164] */
+            grid-template-columns: 1fr 1fr; [cite_start]/* [cite: 165] */
+            gap: 10px 16px; [cite_start]/* [cite: 165] */
+            background: rgba(10, 12, 26, 0.6); [cite_start]/* [cite: 165] */
+            padding: 16px; [cite_start]/* [cite: 165] */
+            border-radius: 8px; [cite_start]/* [cite: 165] */
         }
         .detail-item {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.9rem;
-            padding: 6px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex; [cite_start]/* [cite: 166] */
+            justify-content: space-between; [cite_start]/* [cite: 167] */
+            font-size: 0.9rem; [cite_start]/* [cite: 167] */
+            padding: 6px 0; [cite_start]/* [cite: 167] */
+            border-bottom: 1px solid rgba(255,255,255,0.05); [cite_start]/* [cite: 167] */
         }
-        .detail-item:last-child, .detail-item:nth-last-child(2) { border-bottom: none; }
-        .detail-label { color: #c5cae9; }
-        .detail-value { color: #fff; font-weight: 600; }
+        .detail-item:last-child, .detail-item:nth-last-child(2) { border-bottom: none; [cite_start]/* [cite: 168] */
+        }
+        .detail-label { color: #c5cae9; [cite_start]/* [cite: 169] */
+        }
+        .detail-value { color: #fff; font-weight: 600; [cite_start]/* [cite: 170] */
+        }
         .back-to-pfd-btn { 
-            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
-            color: #e8eaf6; padding: 8px 12px; width: 100%;
-            border-radius: 6px; cursor: pointer; text-align: center;
-            transition: all 0.2s;
+            background: rgba(255,255,255,0.08); [cite_start]/* [cite: 171] */
+            border: 1px solid rgba(255,255,255,0.15); [cite_start]/* [cite: 172] */
+            color: #e8eaf6; padding: 8px 12px; width: 100%; [cite_start]/* [cite: 172] */
+            border-radius: 6px; cursor: pointer; text-align: center; [cite_start]/* [cite: 172] */
+            transition: all 0.2s; [cite_start]/* [cite: 172] */
         }
-        .back-to-pfd-btn:hover { background: #00a8ff; color: #fff; }
+        .back-to-pfd-btn:hover { background: #00a8ff; color: #fff; [cite_start]/* [cite: 173] */
+        }
 
 
         /* --- Toolbar Recall Buttons --- */
         #airport-recall-btn, #aircraft-recall-btn {
-            display: none; font-size: 1.1rem; position: relative;
+            display: none; [cite_start]/* [cite: 174] */
+            font-size: 1.1rem; position: relative; [cite_start]/* [cite: 175] */
         }
         #airport-recall-btn.visible, #aircraft-recall-btn.visible {
-            display: inline-block;
+            display: inline-block; [cite_start]/* [cite: 175] */
         }
         #airport-recall-btn.palpitate, #aircraft-recall-btn.palpitate {
-            animation: palpitate 0.5s ease-in-out 2;
+            animation: palpitate 0.5s ease-in-out 2; [cite_start]/* [cite: 176] */
         }
         @keyframes palpitate {
-            0%, 100% { transform: scale(1); color: #00a8ff; }
-            50% { transform: scale(1.3); color: #fff; }
+            0%, 100% { transform: scale(1); [cite_start]/* [cite: 177] */
+                color: #00a8ff; [cite_start]} /* [cite: 178] */
+            50% { transform: scale(1.3); color: #fff; [cite_start]/* [cite: 178] */
+            }
         }
         
         /* Styles for Active ATC Markers on Sector Ops Map */
         @keyframes atc-pulse {
-            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); [cite_start]/* [cite: 179] */
+            }
+            70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); [cite_start]/* [cite: 180] */
+            }
+            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); [cite_start]/* [cite: 181] */
+            }
         }
         @keyframes atc-breathe {
-            0% { transform: scale(0.95); opacity: 0.6; }
-            50% { transform: scale(1.4); opacity: 0.9; }
-            100% { transform: scale(0.95); opacity: 0.6; }
+            0% { transform: scale(0.95); [cite_start]/* [cite: 182] */
+                opacity: 0.6; [cite_start]} /* [cite: 183] */
+            50% { transform: scale(1.4); opacity: 0.9; [cite_start]/* [cite: 183] */
+            }
+            100% { transform: scale(0.95); opacity: 0.6; [cite_start]/* [cite: 184] */
+            }
         }
         .atc-active-marker {
-            width: 15px; height: 15px; background-color: #dc3545; border-radius: 50%;
-            border: 2px solid #fff; cursor: pointer; animation: atc-pulse 2s infinite;
-            display: grid; place-items: center;
+            width: 15px; [cite_start]/* [cite: 185] */
+            height: 15px; background-color: #dc3545; border-radius: 50%; [cite_start]/* [cite: 186] */
+            border: 2px solid #fff; cursor: pointer; animation: atc-pulse 2s infinite; [cite_start]/* [cite: 186] */
+            display: grid; place-items: center; [cite_start]/* [cite: 186] */
         }
         .atc-approach-active::before {
-            content: ''; grid-area: 1 / 1; width: 250%; height: 250%; border-radius: 50%;
-            background-color: rgba(240, 173, 78, 0.8); z-index: -1; 
-            animation: atc-breathe 4s ease-in-out infinite;
+            content: ''; [cite_start]/* [cite: 187] */
+            grid-area: 1 / 1; width: 250%; height: 250%; border-radius: 50%; [cite_start]/* [cite: 188] */
+            background-color: rgba(240, 173, 78, 0.8); z-index: -1; [cite_start]/* [cite: 188] */
+            animation: atc-breathe 4s ease-in-out infinite; [cite_start]/* [cite: 189] */
         }
         
         /* --- [NEW] Pilot Report Rehaul --- */
         .stats-rehaul-container .stats-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
+            display: flex; [cite_start]/* [cite: 189] */
+            justify-content: space-between; [cite_start]/* [cite: 190] */
+            align-items: center; [cite_start]/* [cite: 190] */
+            margin-bottom: 12px; [cite_start]/* [cite: 190] */
         }
         .stats-rehaul-container .stats-header h4 {
-            margin: 0;
-            font-size: 1.4rem;
+            margin: 0; [cite_start]/* [cite: 190] */
+            font-size: 1.4rem; [cite_start]/* [cite: 191] */
         }
         .community-profile-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background-color: rgba(0, 168, 255, 0.1);
-            color: #00a8ff;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-decoration: none;
-            border: 1px solid rgba(0, 168, 255, 0.3);
-            transition: all 0.2s ease-in-out;
+            display: inline-flex; [cite_start]/* [cite: 191] */
+            align-items: center; [cite_start]/* [cite: 192] */
+            gap: 8px; [cite_start]/* [cite: 192] */
+            background-color: rgba(0, 168, 255, 0.1); [cite_start]/* [cite: 192] */
+            color: #00a8ff; [cite_start]/* [cite: 192] */
+            padding: 6px 12px; [cite_start]/* [cite: 192] */
+            border-radius: 20px; [cite_start]/* [cite: 192] */
+            font-size: 0.8rem; [cite_start]/* [cite: 192] */
+            font-weight: 600; [cite_start]/* [cite: 192] */
+            text-decoration: none; [cite_start]/* [cite: 193] */
+            border: 1px solid rgba(0, 168, 255, 0.3); [cite_start]/* [cite: 193] */
+            transition: all 0.2s ease-in-out; [cite_start]/* [cite: 193] */
         }
         .community-profile-link:hover {
-            background-color: #00a8ff;
-            color: #fff;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 10px rgba(0, 168, 255, 0.3);
+            background-color: #00a8ff; [cite_start]/* [cite: 194] */
+            color: #fff; [cite_start]/* [cite: 195] */
+            transform: translateY(-2px); [cite_start]/* [cite: 195] */
+            box-shadow: 0 4px 10px rgba(0, 168, 255, 0.3); [cite_start]/* [cite: 195] */
         }
 
         .stats-accordion {
-            margin-top: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
+            margin-top: 20px; [cite_start]/* [cite: 196] */
+            display: flex; [cite_start]/* [cite: 196] */
+            flex-direction: column; [cite_start]/* [cite: 197] */
+            gap: 12px; [cite_start]/* [cite: 197] */
         }
         .accordion-item {
-            background: rgba(10, 12, 26, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            overflow: hidden;
-            transition: background-color 0.2s;
+            background: rgba(10, 12, 26, 0.5); [cite_start]/* [cite: 197] */
+            border: 1px solid rgba(255, 255, 255, 0.1); [cite_start]/* [cite: 198] */
+            border-radius: 8px; [cite_start]/* [cite: 198] */
+            overflow: hidden; [cite_start]/* [cite: 198] */
+            transition: background-color 0.2s; [cite_start]/* [cite: 198] */
         }
         .accordion-item.active {
-            background: rgba(10, 12, 26, 0.8);
+            background: rgba(10, 12, 26, 0.8); [cite_start]/* [cite: 199] */
         }
         .accordion-header {
-            width: 100%;
-            background: none;
-            border: none;
-            padding: 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 600;
-            color: #e8eaf6;
-            text-align: left;
+            width: 100%; [cite_start]/* [cite: 200] */
+            background: none; [cite_start]/* [cite: 201] */
+            border: none; [cite_start]/* [cite: 201] */
+            padding: 16px; [cite_start]/* [cite: 201] */
+            display: flex; [cite_start]/* [cite: 201] */
+            justify-content: space-between; [cite_start]/* [cite: 201] */
+            align-items: center; [cite_start]/* [cite: 201] */
+            cursor: pointer; [cite_start]/* [cite: 201] */
+            font-size: 1rem; [cite_start]/* [cite: 201] */
+            font-weight: 600; [cite_start]/* [cite: 201] */
+            color: #e8eaf6; [cite_start]/* [cite: 201] */
+            text-align: left; [cite_start]/* [cite: 202] */
         }
         .accordion-header span {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            display: flex; [cite_start]/* [cite: 202] */
+            align-items: center; [cite_start]/* [cite: 203] */
+            gap: 10px; [cite_start]/* [cite: 203] */
         }
         .accordion-header .toggle-icon {
-            transition: transform 0.3s ease-in-out;
-            color: #9fa8da;
+            transition: transform 0.3s ease-in-out; [cite_start]/* [cite: 203] */
+            color: #9fa8da; [cite_start]/* [cite: 204] */
         }
         .accordion-item.active .toggle-icon {
-            transform: rotate(180deg);
+            transform: rotate(180deg); [cite_start]/* [cite: 204] */
         }
         .accordion-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
-            padding: 0 16px;
+            max-height: 0; [cite_start]/* [cite: 205] */
+            overflow: hidden; [cite_start]/* [cite: 206] */
+            transition: max-height 0.3s ease-in-out, padding 0.3s ease-in-out; [cite_start]/* [cite: 206] */
+            padding: 0 16px; [cite_start]/* [cite: 206] */
         }
         .accordion-item.active .accordion-content {
-            padding: 0 16px 16px 16px;
+            padding: 0 16px 16px 16px; [cite_start]/* [cite: 207] */
         }
         .accordion-content > .progression-container,
         .accordion-content > .details-grid {
-            padding-top: 8px;
+            padding-top: 8px; [cite_start]/* [cite: 208] */
         }
         
         /* --- [NEW] Mobile Sidebar Toggle & Overlay --- */
         .mobile-sidebar-toggle-btn {
-            display: none; /* Hidden by default on desktop */
-            place-items: center;
-            position: fixed;
-            top: 15px;
-            left: 15px;
-            z-index: 1100; /* ✅ High z-index to be on top of everything */
-            background-color: rgba(18, 20, 38, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: #e8eaf6;
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            cursor: pointer;
-            font-size: 1.2rem;
-            backdrop-filter: blur(10px);
-            transition: all 0.2s ease-in-out;
+            display: none; [cite_start]/* [cite: 209] */
+            place-items: center; [cite_start]/* [cite: 210] */
+            position: fixed; [cite_start]/* [cite: 211] */
+            top: 15px; [cite_start]/* [cite: 211] */
+            left: 15px; [cite_start]/* [cite: 211] */
+            z-index: 1100; [cite_start]/* High z-index to be on top of everything */ /* [cite: 211] */
+            background-color: rgba(18, 20, 38, 0.8); [cite_start]/* [cite: 211] */
+            border: 1px solid rgba(255, 255, 255, 0.1); [cite_start]/* [cite: 212] */
+            color: #e8eaf6; [cite_start]/* [cite: 212] */
+            width: 44px; [cite_start]/* [cite: 212] */
+            height: 44px; [cite_start]/* [cite: 212] */
+            border-radius: 50%; [cite_start]/* [cite: 212] */
+            cursor: pointer; [cite_start]/* [cite: 212] */
+            font-size: 1.2rem; [cite_start]/* [cite: 212] */
+            backdrop-filter: blur(10px); [cite_start]/* [cite: 213] */
+            transition: all 0.2s ease-in-out; [cite_start]/* [cite: 213] */
         }
         .mobile-sidebar-toggle-btn:hover {
-            background-color: #00a8ff;
-            color: #fff;
-            transform: scale(1.1);
+            background-color: #00a8ff; [cite_start]/* [cite: 213] */
+            color: #fff; [cite_start]/* [cite: 214] */
+            transform: scale(1.1); [cite_start]/* [cite: 214] */
         }
 
         .mobile-nav-overlay {
-            display: none; /* ✅ Should be hidden by default */
-            position: fixed;
-            inset: 0;
-            background-color: rgba(0, 0, 0, 0.6);
-            z-index: 998; /* ✅ Below sidebar, above content */
+            display: none; [cite_start]/* Should be hidden by default */ /* [cite: 214] */
+            position: fixed; [cite_start]/* [cite: 215] */
+            inset: 0; [cite_start]/* [cite: 216] */
+            background-color: rgba(0, 0, 0, 0.6); [cite_start]/* [cite: 216] */
+            z-index: 998; [cite_start]/* Below sidebar, above content */ /* [cite: 216] */
         }
 
         /* --- [NEW] Responsive Media Query for Mobile --- */
         @media (max-width: 992px) {
             .mobile-sidebar-toggle-btn {
-                display: grid; /* Show the button on mobile */
+                display: grid; [cite_start]/* Show the button on mobile */ /* [cite: 217] */
             }
 
             /* Hide the desktop toggle button on mobile */
             #sidebar-toggle {
-                display: none;
+                display: none; [cite_start]/* [cite: 218] */
             }
 
             .sidebar {
-                position: fixed;
-                left: 0;
-                top: 0;
-                height: 100%;
-                width: 260px;
-                transform: translateX(-100%); /* Start off-screen */
-                transition: transform 0.3s ease-in-out;
-                z-index: 999; /* ✅ Higher than the overlay */
-                box-shadow: 5px 0 25px rgba(0,0,0,0.3);
+                position: fixed; [cite_start]/* [cite: 218] */
+                left: 0; [cite_start]/* [cite: 219] */
+                top: 0; [cite_start]/* [cite: 219] */
+                height: 100%; [cite_start]/* [cite: 219] */
+                width: 260px; [cite_start]/* [cite: 219] */
+                transform: translateX(-100%); [cite_start]/* Start off-screen */ /* [cite: 219] */
+                transition: transform 0.3s ease-in-out; [cite_start]/* [cite: 220] */
+                z-index: 999; [cite_start]/* Higher than the overlay */ /* [cite: 221] */
+                box-shadow: 5px 0 25px rgba(0,0,0,0.3); [cite_start]/* [cite: 221] */
             }
 
             /* When the menu is open, slide the sidebar in */
             .dashboard-container.sidebar-mobile-open .sidebar {
-                transform: translateX(0);
+                transform: translateX(0); [cite_start]/* [cite: 222] */
             }
 
-            /* ✅ When the menu is open, show the overlay */
+            /* When the menu is open, show the overlay */
             .dashboard-container.sidebar-mobile-open .mobile-nav-overlay {
-                display: block;
+                display: block; [cite_start]/* [cite: 223] */
             }
             
             /* Remove the padding that makes space for a static sidebar */
             .main-content, .dashboard-container.sidebar-collapsed .main-content {
-                padding-left: 0;
+                padding-left: 0; [cite_start]/* [cite: 224] */
             }
             
-            /* This ensures the parent container fills the full screen height on mobile */
+            /* ❌ This rule is no longer needed with position: fixed */
+            /*
             .main-content:has(#view-rosters.active) {
                 height: 100vh;
-                overflow: hidden; /* Prevent the main container from scrolling */
+                overflow: hidden;
             }
+            */
 
-            /* This applies the safe area padding directly to the map's view container */
+            /* This applies the safe area padding directly to the fixed map container */
             #view-rosters.active {
-                box-sizing: border-box; /* This is crucial! It includes padding in the element's size. */
-                padding-top: env(safe-area-inset-top, 10px);
-                padding-bottom: env(safe-area-inset-bottom, 10px);
-                padding-left: env(safe-area-inset-left, 10px);
-                padding-right: env(safe-area-inset-right, 10px);
+                box-sizing: border-box; [cite_start]/* [cite: 226] */
+                padding-top: env(safe-area-inset-top, 10px); [cite_start]/* [cite: 228] */
+                padding-bottom: env(safe-area-inset-bottom, 10px); [cite_start]/* [cite: 229] */
+                padding-left: env(safe-area-inset-left, 10px); [cite_start]/* [cite: 229] */
+                padding-right: env(safe-area-inset-right, 10px); [cite_start]/* [cite: 229] */
             }
         }
     `;
 
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.type = 'text/css';
-    style.appendChild(document.createTextNode(css));
-    document.head.appendChild(style);
+    const styleElement = document.createElement('style');
+    styleElement.id = styleId;
+    styleElement.innerHTML = css;
+    document.head.appendChild(styleElement);
 }
 
     // --- NEW: Fetch Airport Coordinate Data ---
