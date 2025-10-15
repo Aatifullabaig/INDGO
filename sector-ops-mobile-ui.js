@@ -6,10 +6,6 @@
  * top-window and bottom-drawer interaction model but enhances it with
  * a new aesthetic, a more intuitive layout for mobile, and improved
  * visual feedback.
- *
- * v3.3 Update: Re-architected the bottom drawer to have a two-column layout,
- * fitting the PFD on the left and other key data readouts on the right for
- * a more compact and glanceable view on mobile screens.
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -178,56 +174,34 @@ const MobileUIHandler = {
             .drawer-content::-webkit-scrollbar-track { background: transparent; }
             .drawer-content::-webkit-scrollbar-thumb { background-color: var(--hud-accent); border-radius: 10px; }
             
-            /* --- [MODIFIED] Re-styled content for new PFD layout --- */
+            /* --- [RE-STYLED] Content from crew-center.js --- */
             .drawer-content .unified-display-header {
-                display: none; /* Remove the redundant header from the drawer */
+                /* This element is now removed via JS for a cleaner UI */
+                display: none;
             }
-
-            /* This is the new top grid container for PFD and side data */
-            .mobile-pfd-grid {
+            .drawer-content .unified-display-main {
+                /* [MODIFIED] Now a 2-column grid to place PFD on left */
                 display: grid;
-                grid-template-columns: 2fr 1fr; /* PFD takes 2/3, side data takes 1/3 */
+                grid-template-columns: 1fr 120px; /* PFD takes space, side panel has fixed width */
                 gap: 12px;
-                align-items: center;
+                padding: 0;
+                order: 1; /* This will now be the first element */
             }
-
-            /* This is the new container for the right-side data (ETE, Aircraft Type) */
-            .pfd-right-stack {
-                display: flex;
-                flex-direction: column;
-                gap: 12px;
-                height: 100%;
-                justify-content: center;
+            .drawer-content .pfd-main-panel {
+                /* PFD container. No specific width needed, it will take the grid column space. */
+                min-width: 0; /* Important for flex/grid children */
             }
-             .drawer-content .pfd-right-stack .readout-box {
-                flex-grow: 1;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-             }
-
-            /* Repurpose the side-panel for the bottom row of readouts (GS, VS, DIST) */
             .drawer-content .pfd-side-panel {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr); /* 3 equal columns */
+                /* [MODIFIED] From a grid to a single column flexbox for the right side */
+                display: flex;
+                flex-direction: column;
+                justify-content: space-around; /* Distributes items nicely */
                 gap: 12px;
-                width: 100%;
-            }
-
-            /* Explicitly size the PFD container and SVG for mobile */
-            .drawer-content #pfd-container {
-                min-width: 0;
-            }
-            .drawer-content #pfd-container svg {
-                width: 100%;
-                height: auto;
-                max-width: none; /* Override desktop max-width */
             }
             .drawer-content .readout-box {
                 background: rgba(0, 168, 255, 0.05);
                 border: 1px solid var(--hud-border);
             }
-
 
             @media (max-width: ${this.CONFIG.breakpoint}px) {
                 #aircraft-info-window, #airport-info-window {
@@ -312,81 +286,54 @@ const MobileUIHandler = {
 
     /**
      * Moves content from the original window into the new HUD components and
-     * modifies the layout for mobile.
+     * modifies text for mobile.
      */
     populateSplitView(sourceWindow) {
         if (!this.topWindowEl || !this.bottomDrawerEl) return;
 
-        // Populate Top Window (Image and Close Button)
-        const topContent = sourceWindow.querySelector('.image-and-route-wrapper');
-        const closeBtn = sourceWindow.querySelector('.aircraft-window-close-btn');
-        if (topContent) this.topWindowEl.appendChild(topContent.cloneNode(true));
-        if (closeBtn) this.topWindowEl.appendChild(closeBtn.cloneNode(true));
+        // Get references to new mobile containers
+        const drawerContentContainer = this.bottomDrawerEl.querySelector('.drawer-content');
 
-        // Update Drawer Header
+        // Find original content pieces
+        const topContent = sourceWindow.querySelector('.image-and-route-wrapper');
         const pilotHeader = sourceWindow.querySelector('.unified-display-header');
+        const flightDataMain = sourceWindow.querySelector('.unified-display-main');
+        const closeBtn = sourceWindow.querySelector('.aircraft-window-close-btn');
+        
+        // Update the drawer header with dynamic flight info
         const drawerHeaderH4 = this.bottomDrawerEl.querySelector('.drawer-header h4');
         const drawerHeaderTextSpan = drawerHeaderH4?.querySelector('span');
+
         if (drawerHeaderTextSpan && pilotHeader) {
             const callsign = pilotHeader.querySelector('#header-flight-num')?.textContent.trim() || 'Flight';
-            drawerHeaderTextSpan.innerHTML = `${callsign}`; // Simplified header
+            const username = pilotHeader.querySelector('.pilot-name-button')?.dataset.username || 'Pilot';
+            drawerHeaderTextSpan.innerHTML = `${callsign} | ${username} <i class="fa-solid fa-user" style="opacity: 0.8;"></i>`;
         }
         
-        // --- START: Re-architect the Bottom Drawer Content ---
-        const drawerContentContainer = this.bottomDrawerEl.querySelector('.drawer-content');
-        const flightDataMain = sourceWindow.querySelector('.unified-display-main');
-
-        if (drawerContentContainer && flightDataMain) {
-            // 1. Clone the entire block of flight data
-            const clonedFlightData = flightDataMain.cloneNode(true);
-            
-            // 2. Find all the pieces we need to rearrange from the clone
-            const pfdContainer = clonedFlightData.querySelector('#pfd-container');
-            const aircraftTypeReadout = clonedFlightData.querySelector('#aircraft-type-readout');
-            const sidePanel = clonedFlightData.querySelector('.pfd-side-panel');
-            const eteReadout = sidePanel?.querySelector('.readout-box:nth-child(4)'); // ETE is the 4th item
-            
-            // 3. Create the new layout elements
-            const topGrid = document.createElement('div');
-            topGrid.className = 'mobile-pfd-grid';
-
-            const rightStack = document.createElement('div');
-            rightStack.className = 'pfd-right-stack';
-
-            // 4. Assemble the new structure
-            if (eteReadout) rightStack.appendChild(eteReadout);
-            if (aircraftTypeReadout) rightStack.appendChild(aircraftTypeReadout);
-
-            if (pfdContainer) topGrid.appendChild(pfdContainer);
-            topGrid.appendChild(rightStack);
-
-            // Repurpose the sidePanel for the bottom readouts by removing ETE from it
-            if (sidePanel && eteReadout) {
-                sidePanel.removeChild(eteReadout);
+        // --- FIX: Clone nodes instead of moving them to prevent destroying the original window ---
+        if (topContent) this.topWindowEl.appendChild(topContent.cloneNode(true));
+        if (closeBtn) this.topWindowEl.appendChild(closeBtn.cloneNode(true));
+        
+        if (drawerContentContainer) {
+            // REMOVED: No longer need the redundant header inside the drawer.
+            if (flightDataMain) {
+                const clonedFlightData = flightDataMain.cloneNode(true);
+                drawerContentContainer.appendChild(clonedFlightData);
+                
+                // Modify text for a cleaner mobile view on the CLONED data
+                const readoutLabels = clonedFlightData.querySelectorAll('.readout-box .label');
+                readoutLabels.forEach(label => {
+                    let text = label.textContent.trim();
+                    if (text === 'Ground Speed') label.innerHTML = 'GSPD';
+                    if (text === 'Vertical Speed') label.innerHTML = 'V/S';
+                    if (text === 'Dist. to Dest.') label.innerHTML = 'DIST';
+                    if (text === 'Aircraft Type') label.innerHTML = '<i class="fa-solid fa-plane-circle-check"></i> AIRCRAFT';
+                });
             }
-            
-            // 5. Clear the drawer and append the new, structured content
-            drawerContentContainer.innerHTML = '';
-            drawerContentContainer.appendChild(topGrid);
-            if (sidePanel) {
-                drawerContentContainer.appendChild(sidePanel);
-            }
-
-            // 6. Apply mobile-specific text shortening
-            const readoutLabels = drawerContentContainer.querySelectorAll('.readout-box .label');
-            readoutLabels.forEach(label => {
-                let text = label.textContent.trim();
-                if (text === 'Ground Speed') label.innerHTML = 'GSPD';
-                if (text === 'Vertical Speed') label.innerHTML = 'V/S';
-                if (text === 'Dist. to Dest.') label.innerHTML = 'DIST';
-                if (text === 'Aircraft Type') label.innerHTML = '<i class="fa-solid fa-plane-circle-check"></i> A/C TYPE';
-            });
         }
-        // --- END: Re-architecture of Bottom Drawer Content ---
 
         this.wireUpInteractions();
     },
-
 
     /**
      * Adds event listeners for all interactions (tap, swipe, close).
@@ -395,6 +342,7 @@ const MobileUIHandler = {
         if (!this.bottomDrawerEl || !this.topWindowEl) return;
 
         const drawerHeader = this.bottomDrawerEl.querySelector('.drawer-header');
+        // Important: Query the close button within the new mobile UI, not the original window
         const closeBtn = this.topWindowEl.querySelector('.aircraft-window-close-btn');
 
         if (drawerHeader) {
