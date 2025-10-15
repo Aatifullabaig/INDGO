@@ -159,38 +159,41 @@ const MobileUIHandler = {
     },
 
     /**
-     * Creates the empty DOM elements for the floating windows and overlay.
-     */
-    createSplitViewUI() {
-        this.closeActiveWindow(); // Ensure any old elements are removed first
+ * Animates out and removes all mobile UI components.
+ * Can be immediate to prevent race conditions.
+ * @param {boolean} immediate - If true, removes elements instantly without animation.
+ */
+closeActiveWindow(immediate = false) {
+    if (this.contentObserver) this.contentObserver.disconnect();
+    
+    const overlay = document.getElementById('mobile-window-overlay');
+    if (overlay) overlay.classList.remove('visible');
 
-        const viewContainer = document.getElementById('view-rosters');
-        if (!viewContainer) return;
-
-        let overlay = document.getElementById('mobile-window-overlay');
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'mobile-window-overlay';
-            viewContainer.appendChild(overlay);
-            overlay.addEventListener('click', () => {
-                if (this.bottomDrawerEl && this.bottomDrawerEl.classList.contains('expanded')) {
-                    this.bottomDrawerEl.classList.remove('expanded');
-                    overlay.classList.remove('visible');
-                }
-            });
+    const cleanup = (el) => {
+        if (el && el.parentNode) {
+            el.parentNode.removeChild(el);
         }
+    };
 
-        this.topWindowEl = document.createElement('div');
-        this.topWindowEl.id = 'mobile-aircraft-top-window';
-        this.topWindowEl.className = 'mobile-aircraft-view';
-        viewContainer.appendChild(this.topWindowEl);
-
-        this.bottomDrawerEl = document.createElement('div');
-        this.bottomDrawerEl.id = 'mobile-aircraft-bottom-drawer';
-        this.bottomDrawerEl.className = 'mobile-aircraft-view';
-        this.bottomDrawerEl.innerHTML = `<div class="drawer-handle-bar"></div>`;
-        viewContainer.appendChild(this.bottomDrawerEl);
-    },
+    if (immediate) {
+        cleanup(this.topWindowEl);
+        cleanup(this.bottomDrawerEl);
+    } else {
+        if (this.topWindowEl) {
+            this.topWindowEl.classList.remove('visible');
+            setTimeout(() => cleanup(this.topWindowEl), 500);
+        }
+        if (this.bottomDrawerEl) {
+            this.bottomDrawerEl.classList.remove('visible');
+            setTimeout(() => cleanup(this.bottomDrawerEl), 500);
+        }
+    }
+    
+    this.topWindowEl = null;
+    this.bottomDrawerEl = null;
+    this.activeWindow = null;
+    this.contentObserver = null;
+},
 
     /**
      * Uses a MutationObserver to wait for the original window to be populated with content.
@@ -249,7 +252,7 @@ const MobileUIHandler = {
         const closeBtn = this.bottomDrawerEl.querySelector('.aircraft-window-close-btn');
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
-                this.closeActiveWindow();
+                this.closeActiveWindow(true);
             }, { once: true });
         }
     },
