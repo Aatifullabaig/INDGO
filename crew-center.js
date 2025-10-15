@@ -232,6 +232,30 @@ function injectCustomStyles() {
         .info-window-content::-webkit-scrollbar-thumb { background-color: #00a8ff; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
         .info-window-content::-webkit-scrollbar-thumb:hover { background-color: #33c1ff; }
 
+        /* --- Ensure Sector Ops map always fills its parent and Mapbox canvas stretches --- */
+        /* Keeps the bottom boundary only by using a bottom border on the map container */
+        #sector-ops-map-fullscreen {
+            grid-column: 1 / -1;
+            grid-row: 1 / -1;
+            width: 100%;
+            height: 100%;
+            min-height: 0; /* important for flex/grid children to allow proper shrinking */
+            min-width: 0;
+            position: relative;
+            overflow: hidden;
+            border-bottom: 6px solid rgba(0,0,0,0.15); /* preserves bottom boundary only */
+            box-sizing: border-box;
+        }
+        /* Force Mapbox elements to occupy full size of container */
+        #sector-ops-map-fullscreen .mapboxgl-map,
+        #sector-ops-map-fullscreen .mapboxgl-canvas,
+        #sector-ops-map-fullscreen .mapboxgl-control-container {
+            width: 100% !important;
+            height: 100% !important;
+            min-height: 0 !important;
+            min-width: 0 !important;
+        }
+
         /* --- [OVERHAUL] Airport Window: Weather & Tabs --- */
         .airport-info-weather {
             padding: 20px;
@@ -886,13 +910,12 @@ function injectCustomStyles() {
 
             /* This applies the safe area padding directly to the map's view container */
             #view-rosters.active {
-    box-sizing: border-box; /* This is crucial! It includes padding in the element's size. */
-    padding-top: env(safe-area-inset-top, 10px);
-    padding-bottom: env(safe-area-inset-bottom, 10px);
-    /* ✅ MODIFIED LINES: Add 15px of padding while respecting the safe area */
-    padding-left: calc(env(safe-area-inset-left, 0px) + 15px);
-    padding-right: calc(env(safe-area-inset-right, 0px) + 15px);
-}
+                box-sizing: border-box; /* This is crucial! It includes padding in the element's size. */
+                padding-top: env(safe-area-inset-top, 10px);
+                padding-bottom: env(safe-area-inset-bottom, 10px);
+                padding-left: env(safe-area-inset-left, 10px);
+                padding-right: env(safe-area-inset-right, 10px);
+            }
         }
     `;
 
