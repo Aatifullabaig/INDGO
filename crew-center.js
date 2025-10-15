@@ -879,8 +879,16 @@ function injectCustomStyles() {
             }
             
             .main-content:has(#view-rosters.active) {
-    padding: 0; /* Remove ALL padding (top, right, bottom, left) */
-    height: 100vh; /* Set height to 100% of the viewport height */
+    /* This ensures padding is calculated inside the element's height */
+    box-sizing: border-box;
+
+    /* Use safe-area insets for padding, with a 10px fallback */
+    padding-top: env(safe-area-inset-top, 10px);
+    padding-right: env(safe-area-inset-right, 10px);
+    padding-bottom: env(safe-area-inset-bottom, 10px);
+    padding-left: env(safe-area-inset-left, 10px);
+    
+    height: 100vh; /* Keep height at 100% of the viewport */
     overflow: hidden; /* Prevent the main container from scrolling */
 }
         }
