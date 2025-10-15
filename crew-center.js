@@ -886,9 +886,13 @@ function injectCustomStyles() {
 
             /* This applies the safe area padding directly to the map's view container */
             #view-rosters.active {
-                box-sizing: border-box; /* This is crucial! It includes padding in the element's size. */
-                padding-bottom: env(safe-area-inset-bottom, 10px);
-            }
+    box-sizing: border-box; /* This is crucial! It includes padding in the element's size. */
+    padding-top: env(safe-area-inset-top, 10px);
+    padding-bottom: env(safe-area-inset-bottom, 10px);
+    /* ✅ MODIFIED LINES: Add 15px of padding while respecting the safe area */
+    padding-left: calc(env(safe-area-inset-left, 0px) + 15px);
+    padding-right: calc(env(safe-area-inset-right, 0px) + 15px);
+}
         }
     `;
 
