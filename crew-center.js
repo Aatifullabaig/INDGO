@@ -2695,15 +2695,15 @@ async function handleAircraftClick(flightProps, sessionId) {
 
     currentFlightInWindow = flightProps.flightId;
 
-// ✅ NEW: This block replaces the two lines above
-if (window.MobileUIHandler && window.MobileUIHandler.isMobile()) {
-    window.MobileUIHandler.openWindow(aircraftInfoWindow);
-} else {
-    // Original desktop logic
-    aircraftInfoWindow.classList.add('visible');
-}
-
-aircraftInfoWindowRecallBtn.classList.remove('visible');
+    // ✅ REPLACEMENT: This block now defers to the MobileUIHandler
+    // This ensures the mobile script has full control on smaller screens.
+    if (window.MobileUIHandler && window.MobileUIHandler.isMobile()) {
+        window.MobileUIHandler.openWindow(aircraftInfoWindow);
+    } else {
+        // Original desktop logic
+        aircraftInfoWindow.classList.add('visible');
+    }
+    aircraftInfoWindowRecallBtn.classList.remove('visible');
 
 
     const windowEl = document.getElementById('aircraft-info-window');
