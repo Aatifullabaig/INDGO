@@ -1,11 +1,11 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v3.3)
+ * MobileUIHandler Module (Creative HUD Rehaul - v3.4)
  *
  * This version reimagines the mobile aircraft info window with a modern,
  * cockpit-inspired "Heads-Up Display" (HUD) theme. It maintains the
  * top-window and bottom-drawer interaction model but enhances it with
  * a new aesthetic, a more intuitive layout for mobile, and improved
- * visual feedback.
+ * visual feedback. Now with full safe area support.
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -32,7 +32,7 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (HUD Rehaul v3.3) Initialized.");
+        console.log("Mobile UI Handler (HUD Rehaul v3.4) Initialized.");
     },
 
     /**
@@ -84,12 +84,11 @@ const MobileUIHandler = {
 
             /* --- Top Floating Window: Image & Route --- */
             #mobile-aircraft-top-window {
-                top: 15px;
+                top: env(safe-area-inset-top, 15px); /* MODIFIED: Respects safe area */
                 left: 15px;
                 right: 15px;
                 border-radius: 16px;
-                transform: translateY(-200%);
-                padding-top: env(safe-area-inset-top, 0);
+                transform: translateY(-250%); /* Increased for a better off-screen position */
                 overflow: hidden;
             }
             #mobile-aircraft-top-window.visible {
@@ -127,6 +126,8 @@ const MobileUIHandler = {
                 transition-property: transform;
                 transition-duration: 0.45s;
                 transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+                padding-bottom: env(safe-area-inset-bottom, 0); /* MODIFIED: Respects home bar */
+                box-sizing: border-box; /* Ensures padding is included in height */
             }
             #mobile-aircraft-bottom-drawer.dragging { transition: none; }
             #mobile-aircraft-bottom-drawer.off-screen { transform: translateY(100%); }
