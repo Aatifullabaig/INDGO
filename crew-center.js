@@ -878,19 +878,18 @@ function injectCustomStyles() {
                 padding-left: 0;
             }
             
-            /* This ensures the parent container fills the full screen height on mobile */
+            //* This ensures the parent container fills the full screen height on mobile */
             .main-content:has(#view-rosters.active) {
                 height: 100vh;
                 overflow: hidden; /* Prevent the main container from scrolling */
             }
 
-            /* This applies the safe area padding directly to the map's view container */
+            /* This applies safe area padding ONLY to the bottom of the map's container */
             #view-rosters.active {
-                box-sizing: border-box; /* This is crucial! It includes padding in the element's size. */
-                padding-top: env(safe-area-inset-top, 10px);
+                box-sizing: border-box; /* Include padding in the element's size */
+                
+                /* Apply safe area padding ONLY to the bottom */
                 padding-bottom: env(safe-area-inset-bottom, 10px);
-                padding-left: env(safe-area-inset-left, 10px);
-                padding-right: env(safe-area-inset-right, 10px);
             }
         }
     `;
