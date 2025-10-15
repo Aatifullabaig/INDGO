@@ -1,11 +1,11 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v3.5)
+ * MobileUIHandler Module (Creative HUD Rehaul - v3.6)
  *
  * This version reimagines the mobile aircraft info window with a modern,
  * cockpit-inspired "Heads-Up Display" (HUD) theme. It maintains the
  * top-window and bottom-drawer interaction model but enhances it with
  * a new aesthetic, a more intuitive layout for mobile, and improved
- * visual feedback. Now with full safe area support.
+ * visual feedback. Now with full safe area support and a more compact layout.
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -32,7 +32,7 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (HUD Rehaul v3.5) Initialized.");
+        console.log("Mobile UI Handler (HUD Rehaul v3.6) Initialized.");
     },
 
     /**
@@ -49,7 +49,8 @@ const MobileUIHandler = {
                 --hud-border: rgba(0, 168, 255, 0.3);
                 --hud-accent: #00a8ff;
                 --hud-glow: 0 0 15px rgba(0, 168, 255, 0.5);
-                --drawer-peek-height: 235px; /* How much of the drawer is visible */
+                /* --- MODIFIED: Reduced peek height for a tighter layout --- */
+                --drawer-peek-height: 210px;
             }
 
             #view-rosters.active {
@@ -88,14 +89,15 @@ const MobileUIHandler = {
                 left: 15px;
                 right: 15px;
                 border-radius: 16px;
-                transform: translateY(-250%); /* Increased for a better off-screen position */
+                transform: translateY(-250%);
                 overflow: hidden;
             }
             #mobile-aircraft-top-window.visible {
                 transform: translateY(0);
             }
             #mobile-aircraft-top-window .aircraft-image-container {
-                height: 140px;
+                 /* --- MODIFIED: Reduced image height for a tighter layout --- */
+                height: 120px;
             }
             #mobile-aircraft-top-window .aircraft-window-close-btn {
                 position: absolute;
@@ -114,21 +116,24 @@ const MobileUIHandler = {
 
             /* --- Bottom Drawer: Flight Deck --- */
             #mobile-aircraft-bottom-drawer {
-                bottom: env(safe-area-inset-bottom, 0); /* CORRECT FIX: Lifts the entire drawer */
+                /* --- MODIFIED: Changed bottom to 0, padding will handle safe area --- */
+                bottom: 0;
                 left: 0;
                 right: 0;
                 height: 85vh;
                 max-height: calc(100vh - 80px);
                 border-radius: 20px 20px 0 0;
-                transform: translateY(calc(85vh - var(--drawer-peek-height))); /* "Peek" state */
+                transform: translateY(calc(85vh - var(--drawer-peek-height)));
                 display: flex;
                 flex-direction: column;
                 transition-property: transform;
                 transition-duration: 0.45s;
                 transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+                /* --- NEW: Add padding to the bottom of the drawer itself for the safe area --- */
+                padding-bottom: env(safe-area-inset-bottom);
             }
             #mobile-aircraft-bottom-drawer.dragging { transition: none; }
-            #mobile-aircraft-bottom-drawer.off-screen { transform: translateY(100%); }
+            #mobile-aircraft-bottom-drawer.off-screen { transform: translateY(calc(100% + env(safe-area-inset-bottom))); }
             #mobile-aircraft-bottom-drawer.expanded { transform: translateY(0); }
 
             /* --- Drawer Header / Handle --- */
@@ -223,6 +228,7 @@ const MobileUIHandler = {
 
             setTimeout(() => {
                 if (this.topWindowEl) this.topWindowEl.classList.add('visible');
+                // The overlay becomes visible when the drawer is expanded, not on open
                 if (this.bottomDrawerEl) this.bottomDrawerEl.classList.remove('off-screen');
             }, 50);
 
@@ -259,7 +265,7 @@ const MobileUIHandler = {
                 </h4>
             </div>
             <div class="drawer-content"></div>
-        `;
+            `;
         viewContainer.appendChild(this.bottomDrawerEl);
     },
 
@@ -331,7 +337,7 @@ const MobileUIHandler = {
 
         if (drawerHeader) {
             drawerHeader.addEventListener('click', () => this.toggleExpansion());
-            drawerHeader.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+            drawerHeader.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: true }); // passive:true for better scroll performance
         }
 
         if (closeBtn) {
@@ -357,7 +363,6 @@ const MobileUIHandler = {
     // --- Swipe Gesture Handlers ---
     handleTouchStart(e) {
         if (e.target.closest('button')) return;
-        e.preventDefault();
         this.swipeState.isDragging = true;
         this.swipeState.touchStartY = e.touches[0].clientY;
         const currentTransform = new WebKitCSSMatrix(window.getComputedStyle(this.bottomDrawerEl).transform);
@@ -367,6 +372,7 @@ const MobileUIHandler = {
 
     handleTouchMove(e) {
         if (!this.swipeState.isDragging) return;
+        // Prevent default only if dragging, to allow scrolling inside the drawer
         e.preventDefault();
         this.swipeState.touchCurrentY = e.touches[0].clientY;
         let deltaY = this.swipeState.touchCurrentY - this.swipeState.touchStartY;
@@ -382,6 +388,11 @@ const MobileUIHandler = {
 
         const deltaY = this.swipeState.touchCurrentY - this.swipeState.touchStartY;
 
+        if (Math.abs(deltaY) < 10) {
+            this.swipeState = { ...this.swipeState, touchStartY: 0, touchCurrentY: 0 };
+            return; 
+        }
+
         if (deltaY > 150) { // Swiped down a lot, close everything
             this.closeActiveWindow();
             return;
@@ -390,6 +401,10 @@ const MobileUIHandler = {
         // Snap open or closed based on swipe direction
         if (deltaY < -50) this.toggleExpansion(true); // Swiped up
         else if (deltaY > 50) this.toggleExpansion(false); // Swiped down
+        else {
+            // If it was a small swipe, snap back to original position
+            this.toggleExpansion(this.bottomDrawerEl.classList.contains('expanded'));
+        }
         
         this.swipeState = { ...this.swipeState, touchStartY: 0, touchCurrentY: 0 };
     },
