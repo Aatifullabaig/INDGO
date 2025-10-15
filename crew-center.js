@@ -878,19 +878,20 @@ function injectCustomStyles() {
                 padding-left: 0;
             }
             
+            /* This ensures the parent container fills the full screen height on mobile */
             .main-content:has(#view-rosters.active) {
-    /* This ensures padding is calculated inside the element's height */
-    box-sizing: border-box;
+                height: 100vh;
+                overflow: hidden; /* Prevent the main container from scrolling */
+            }
 
-    /* Use safe-area insets for padding, with a 10px fallback */
-    padding-top: env(safe-area-inset-top, 10px);
-    padding-right: env(safe-area-inset-right, 10px);
-    padding-bottom: env(safe-area-inset-bottom, 10px);
-    padding-left: env(safe-area-inset-left, 10px);
-    
-    height: 100vh; /* Keep height at 100% of the viewport */
-    overflow: hidden; /* Prevent the main container from scrolling */
-}
+            /* This applies the safe area padding directly to the map's view container */
+            #view-rosters.active {
+                box-sizing: border-box; /* This is crucial! It includes padding in the element's size. */
+                padding-top: env(safe-area-inset-top, 10px);
+                padding-bottom: env(safe-area-inset-bottom, 10px);
+                padding-left: env(safe-area-inset-left, 10px);
+                padding-right: env(safe-area-inset-right, 10px);
+            }
         }
     `;
 
