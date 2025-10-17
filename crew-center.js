@@ -80,7 +80,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let airportsData = {};
     let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
     let runwaysData = {}; // NEW: To store runway data indexed by airport ICAO
-    let flightInterpolatorWorker = null;
 
     // --- Map-related State ---
     let liveFlightsMap = null;
@@ -94,6 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let activeAtcFacilities = []; // To store fetched ATC data
     let activeNotams = []; // To store fetched NOTAMs data
     let atcPopup = null; // To manage a single, shared popup instance
+    let flightInterpolatorWorker = null;
     // State for the airport info window
     let airportInfoWindow = null;
     let airportInfoWindowRecallBtn = null;
@@ -952,6 +952,43 @@ async function fetchRunwaysData() {
 
     // --- Helper Functions ---
 
+// --- [NEW] Helper to manage the flight animation worker ---
+function initializeFlightInterpolator() {
+    // Terminate any existing worker to prevent duplicates
+    if (flightInterpolatorWorker) {
+        flightInterpolatorWorker.terminate();
+    }
+    
+    flightInterpolatorWorker = new Worker('worker/flight_interpolator.js');
+
+    // This listener receives the high-frequency updates from the worker
+    flightInterpolatorWorker.onmessage = (e) => {
+        if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
+
+        const interpolatedPositions = e.data;
+        const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+
+        if (source && source._data && Array.isArray(source._data.features)) {
+            // Create a fast-lookup map for performance
+            const featureMap = new Map(
+                source._data.features.map(f => [f.properties.flightId, f])
+            );
+
+            // Update the coordinates and heading of each feature
+            for (const pos of interpolatedPositions) {
+                const feature = featureMap.get(pos.flightId);
+                if (feature) {
+                    feature.geometry.coordinates = [pos.lon, pos.lat];
+                    feature.properties.heading = pos.heading;
+                }
+            }
+            
+            // Tell Mapbox the data has changed so it can re-render the screen
+            source.setData(source._data);
+        }
+    };
+}
+
 function getAircraftCategory(aircraftName) {
     if (!aircraftName) return 'default';
     const name = aircraftName.toLowerCase();
@@ -988,37 +1025,6 @@ function getAircraftCategory(aircraftName) {
     }
     
     return 'default';
-}
-
-// Add these new state variables near the top of your script
-let isMapUpdateScheduled = false;
-const MAP_UPDATE_INTERVAL_MS = 100; // Update the map 10 times per second
-
-// In crew-center.js
-
-function setupWorkerListener() {
-    flightInterpolatorWorker.onmessage = (e) => {
-        const newPositions = e.data;
-        if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded() || !newPositions || newPositions.length === 0) return;
-
-        const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-        if (!source || !source._data || !source._data.features) return;
-
-        // Create a Map for quick lookups of new position data
-        const positionsMap = new Map(newPositions.map(p => [p.flightId, p]));
-
-        // Update the coordinates and heading for each feature in the source's data object
-        source._data.features.forEach(feature => {
-            const updatedData = positionsMap.get(feature.properties.flightId);
-            if (updatedData) {
-                feature.geometry.coordinates = [updatedData.lon, updatedData.lat];
-                feature.properties.heading = updatedData.heading;
-            }
-        });
-
-        // Tell Mapbox to render the changes immediately with the updated data.
-        source.setData(source._data);
-    };
 }
 
     /**
@@ -3781,7 +3787,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
     function startSectorOpsLiveLoop() {
         stopSectorOpsLiveLoop(); // Ensure no duplicate intervals are running
         updateSectorOpsLiveFlights(); // Fetch immediately
-        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 3000); // Then update every 30 seconds
+        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 30000); // Then update every 30 seconds
     }
 
     /**
@@ -3859,9 +3865,9 @@ function updateAircraftInfoWindow(baseProps, plan) {
         });
     }
 
-
- async function updateSectorOpsLiveFlights() {
-    if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
+    // --- MODIFY THIS FUNCTION ---
+async function updateSectorOpsLiveFlights() {
+    if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded() || !flightInterpolatorWorker) return;
 
     const LIVE_FLIGHTS_BACKEND = 'https://site--acars-backend--6dmjph8ltlhv.code.run';
 
@@ -3875,7 +3881,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
             return;
         }
 
-        // Fetch all data in parallel
         const [flightsRes, atcRes, notamsRes] = await Promise.all([
             fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
@@ -3896,42 +3901,36 @@ function updateAircraftInfoWindow(baseProps, plan) {
             return;
         }
         
-        // ✅ FIX: The main thread's ONLY job is to send fresh data to the worker.
-        // It no longer directly updates the map source, preventing the race condition.
-        if (flightInterpolatorWorker) {
-            flightInterpolatorWorker.postMessage({
-                flights: flightsData.flights,
-                interval: 3000 // Pass the 3-second API poll interval
-            });
-        }
+        // Send the raw flight data to the worker for processing
+        flightInterpolatorWorker.postMessage({
+            flights: flightsData.flights,
+            interval: 30000 // Tell worker the API refresh rate is 30 seconds
+        });
 
         const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
         
-        const createFeatureFromFlight = (flight) => {
-            if (!flight.position || flight.position.lat == null || flight.position.lon == null) return null;
-            const aircraftCategory = getAircraftCategory(flight.aircraft?.aircraftName);
-            return {
-                type: 'Feature',
-                geometry: { type: 'Point', coordinates: [flight.position.lon, flight.position.lat] },
-                properties: {
-                    flightId: flight.flightId,
-                    callsign: flight.callsign,
-                    username: flight.username,
-                    heading: flight.position.track_deg || 0,
-                    position: JSON.stringify(flight.position),
-                    aircraft: JSON.stringify(flight.aircraft),
-                    userId: flight.userId,
-                    category: aircraftCategory
-                }
-            };
-        };
-
+        // This logic runs only ONCE to create the source and layer.
+        // All subsequent updates are handled by the worker.
         if (!source) {
-            // This initialization block runs only once and is correct.
-            console.log("Creating Sector Ops live flights layer for the first time.");
-            
-            const initialFeatures = flightsData.flights.map(createFeatureFromFlight).filter(Boolean);
-            const geojsonData = { type: 'FeatureCollection', features: initialFeatures };
+            const finalFeatures = flightsData.flights.map(flight => {
+                if (!flight.position || flight.position.lat == null || flight.position.lon == null) return null;
+                
+                const aircraftCategory = getAircraftCategory(flight.aircraft?.aircraftName);
+
+                return {
+                    type: 'Feature',
+                    geometry: { type: 'Point', coordinates: [flight.position.lon, flight.position.lat] },
+                    properties: {
+                        flightId: flight.flightId, callsign: flight.callsign, username: flight.username,
+                        altitude: flight.position.alt_ft, speed: flight.position.gs_kt, heading: flight.position.track_deg || 0,
+                        verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft),
+                        userId: flight.userId,
+                        category: aircraftCategory
+                    }
+                };
+            }).filter(Boolean);
+
+            const geojsonData = { type: 'FeatureCollection', features: finalFeatures };
 
             sectorOpsMap.addSource('sector-ops-live-flights-source', {
                 type: 'geojson',
@@ -3954,60 +3953,24 @@ function updateAircraftInfoWindow(baseProps, plan) {
                         'fighter', 'icon-fighter',
                         'icon-default'
                     ],
-                    // ✅ FIX: Increased icon size for visibility
-                    'icon-size': 0.7,
+                    'icon-size': 0.08,
                     'icon-rotate': ['get', 'heading'],
-                    'icon-rotation-alignment': 'map',
-                    'icon-allow-overlap': true,
+                    'icon-rotation-alignment': 'map', 
+                    'icon-allow-overlap': true, 
                     'icon-ignore-placement': true
                 }
             });
 
-            // Set up event listeners once the layer is created
             sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
                 const props = e.features[0].properties;
                 const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
                 handleAircraftClick(flightProps, expertSession.id);
             });
+
             sectorOpsMap.on('mouseenter', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
             sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
-
-        } else {
-            // ✅ FIX: This block now correctly handles adding and removing aircraft
-            // without interfering with the worker's position updates.
-            
-            const currentData = source._data;
-            const existingFeatureIds = new Set(currentData.features.map(f => f.properties.flightId));
-            const newFlightIds = new Set(flightsData.flights.map(f => f.flightId));
-
-            // Find aircraft to add
-            const flightsToAdd = flightsData.flights.filter(f => !existingFeatureIds.has(f.flightId));
-            
-            // Determine if any features need to be removed
-            const featuresToRemove = currentData.features.some(f => !newFlightIds.has(f.properties.flightId));
-            
-            // Only update the source if there's a structural change (add/remove)
-            if (flightsToAdd.length > 0 || featuresToRemove) {
-                // Keep all existing features that are still in the new data
-                const updatedFeatures = currentData.features.filter(f => newFlightIds.has(f.properties.flightId));
-                
-                // Add the new flights
-                flightsToAdd.forEach(flight => {
-                    const newFeature = createFeatureFromFlight(flight);
-                    if (newFeature) {
-                        updatedFeatures.push(newFeature);
-                    }
-                });
-
-                // Set the data with the new feature list. The worker will immediately
-                // take over interpolating the positions of all features.
-                source.setData({
-                    type: 'FeatureCollection',
-                    features: updatedFeatures
-                });
-            }
         }
-        
+
     } catch (error) {
         console.error('Error updating Sector Ops live data:', error);
     }
@@ -4020,60 +3983,59 @@ function updateAircraftInfoWindow(baseProps, plan) {
      * Main view switching logic.
      */
     const switchView = (viewId) => {
-        sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
-        mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
+    sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
+    mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
 
-        // --- FIX: START ---
-        // Explicitly hide Sector Ops pop-out windows and their recall buttons
-        // when switching away to prevent them from appearing over other tabs.
-        if (viewId !== 'view-rosters') {
-            const airportWindow = document.getElementById('airport-info-window');
-            const aircraftWindow = document.getElementById('aircraft-info-window');
-            const airportRecall = document.getElementById('airport-recall-btn');
-            const aircraftRecall = document.getElementById('aircraft-recall-btn');
+    if (viewId !== 'view-rosters') {
+        const airportWindow = document.getElementById('airport-info-window');
+        const aircraftWindow = document.getElementById('aircraft-info-window');
+        const airportRecall = document.getElementById('airport-recall-btn');
+        const aircraftRecall = document.getElementById('aircraft-recall-btn');
 
-            if (airportWindow) airportWindow.classList.remove('visible');
-            if (aircraftWindow) aircraftWindow.classList.remove('visible');
-            if (airportRecall) airportRecall.classList.remove('visible');
-            if (aircraftRecall) aircraftRecall.classList.remove('visible');
+        if (airportWindow) airportWindow.classList.remove('visible');
+        if (aircraftWindow) aircraftWindow.classList.remove('visible');
+        if (airportRecall) airportRecall.classList.remove('visible');
+        if (aircraftRecall) aircraftRecall.classList.remove('visible');
 
-            // NEW: Stop the PFD update interval when leaving the view
-            if (activePfdUpdateInterval) {
-                clearInterval(activePfdUpdateInterval);
-                activePfdUpdateInterval = null;
-            }
-        }
-        // --- FIX: END ---
-
-        const newLink = sidebarNav.querySelector(`.nav-link[data-view="${viewId}"]`);
-        const newView = document.getElementById(viewId);
-
-        if (newLink && newView) {
-            newLink.classList.add('active');
-            newView.classList.add('active');
-        }
-
-        // Stop the dashboard live map loop
-        if (liveFlightsInterval) {
-            clearInterval(liveFlightsInterval);
-            liveFlightsInterval = null;
+        if (activePfdUpdateInterval) {
+            clearInterval(activePfdUpdateInterval);
+            activePfdUpdateInterval = null;
         }
         
-        // Stop the Sector Ops live map loop
-        stopSectorOpsLiveLoop();
-
-        if (sectorOpsMap) {
-            // Ensure map is resized if sidebar state changes while view is inactive
-            setTimeout(() => sectorOpsMap.resize(), 400); 
+        // Terminate the worker when leaving the Sector Ops view to save resources
+        if (flightInterpolatorWorker) {
+            flightInterpolatorWorker.terminate();
+            flightInterpolatorWorker = null;
         }
+    }
 
-        // Conditionally start the correct loop based on the new view
-        if (viewId === 'view-duty-status') {
-            initializeLiveMap();
-        } else if (viewId === 'view-rosters') {
-            initializeSectorOpsView();
-        }
-    };
+    const newLink = sidebarNav.querySelector(`.nav-link[data-view="${viewId}"]`);
+    const newView = document.getElementById(viewId);
+
+    if (newLink && newView) {
+        newLink.classList.add('active');
+        newView.classList.add('active');
+    }
+
+    if (liveFlightsInterval) {
+        clearInterval(liveFlightsInterval);
+        liveFlightsInterval = null;
+    }
+    
+    stopSectorOpsLiveLoop();
+
+    if (sectorOpsMap) {
+        setTimeout(() => sectorOpsMap.resize(), 400); 
+    }
+
+    if (viewId === 'view-duty-status') {
+        initializeLiveMap();
+    } else if (viewId === 'view-rosters') {
+        // Initialize a new worker instance when entering the Sector Ops view
+        initializeFlightInterpolator();
+        initializeSectorOpsView();
+    }
+};
 
 
     // --- New function to fetch fleet data ---
@@ -4146,8 +4108,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
             }
         }
     };
-
-    
 
     const showPromotionModal = (newRank) => {
         const rankNameElem = document.getElementById('promo-rank-name');
@@ -5162,11 +5122,8 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // --- Initial Load ---
 async function initializeApp() {
     mainContentLoader.classList.add('active');
-
-    // NEW: Inject all custom CSS needed for new features
     injectCustomStyles();
 
-    // --- [NEW] Inject Mobile Toggle Button & Overlay ---
     const dashboardContainer = document.querySelector('.dashboard-container');
     if (dashboardContainer) {
         dashboardContainer.insertAdjacentHTML('afterbegin', `
@@ -5176,29 +5133,27 @@ async function initializeApp() {
             <div id="mobile-nav-overlay" class="mobile-nav-overlay"></div>
         `);
     }
-    // --- End of New Injection ---
 
-    // Fetch essential data in parallel
     await Promise.all([
         fetchMapboxToken(),
         fetchAirportsData(),
         fetchRunwaysData()
     ]);
+    
+    // Initialize the worker once on application load
+    initializeFlightInterpolator();
 
-    flightInterpolatorWorker = new Worker('worker/flight_interpolator.js');
-    setupWorkerListener(); // A new function to handle messages from the worker
     await fetchPilotData();
 
-    // Initial view setup
     const urlParams = new URLSearchParams(window.location.search);
     const initialView = urlParams.get('view') || 'view-duty-status';
     switchView(initialView);
 
-    // Sidebar state (Desktop)
     if (window.innerWidth > 992 && localStorage.getItem('sidebarState') === 'collapsed') {
         dashboardContainer.classList.add('sidebar-collapsed');
     }
 
+    const sidebarToggleBtn = document.getElementById('sidebar-toggle');
     sidebarToggleBtn.addEventListener('click', () => {
         dashboardContainer.classList.toggle('sidebar-collapsed');
         localStorage.setItem('sidebarState', dashboardContainer.classList.contains('sidebar-collapsed') ? 'collapsed' : 'expanded');
@@ -5208,31 +5163,27 @@ async function initializeApp() {
         }
     });
 
-    // --- [NEW] Mobile Sidebar Event Listeners ---
     const mobileToggleBtn = document.getElementById('mobile-sidebar-toggle');
     const mobileOverlay = document.getElementById('mobile-nav-overlay');
     const sidebar = document.querySelector('.sidebar');
 
     if (mobileToggleBtn && mobileOverlay && dashboardContainer && sidebar) {
-        // Open/close with the button
         mobileToggleBtn.addEventListener('click', () => {
             dashboardContainer.classList.toggle('sidebar-mobile-open');
         });
 
-        // Close by clicking the overlay
         mobileOverlay.addEventListener('click', () => {
             dashboardContainer.classList.remove('sidebar-mobile-open');
         });
 
-        // Close sidebar when a nav link is clicked
         sidebar.addEventListener('click', (e) => {
             if (e.target.closest('.nav-link')) {
                 dashboardContainer.classList.remove('sidebar-mobile-open');
             }
         });
     }
-    // --- End of New Mobile Listeners ---
-
+    
+    const logoutButton = document.getElementById('logout-button');
     logoutButton.addEventListener('click', (e) => {
         e.preventDefault();
         localStorage.removeItem('authToken');
