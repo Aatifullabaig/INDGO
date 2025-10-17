@@ -3956,7 +3956,24 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 id: 'sector-ops-live-flights-layer',
                 type: 'symbol',
                 source: 'sector-ops-live-flights-source',
-                layout: { /* ... your layout properties ... */ }
+                layout: {
+                    'icon-image': [
+                        'match',
+                        ['get', 'category'],
+                        'jumbo', 'icon-jumbo',
+                        'widebody', 'icon-widebody',
+                        'narrowbody', 'icon-narrowbody',
+                        'regional', 'icon-regional',
+                        'private', 'icon-private',
+                        'fighter', 'icon-fighter',
+                        'icon-default'
+                    ],
+                    'icon-size': 0.08,
+                    'icon-rotate': ['get', 'heading'],
+                    'icon-rotation-alignment': 'map',
+                    'icon-allow-overlap': true,
+                    'icon-ignore-placement': true
+                }
             });
 
             // Set up event listeners once the layer is created
