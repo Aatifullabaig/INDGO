@@ -3874,10 +3874,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
         });
     }
 
-    // --- MODIFY THIS FUNCTION ---
-// Replace your old updateSectorOpsLiveFlights function with this one
-
-async function updateSectorOpsLiveFlights() {
+ async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
     const LIVE_FLIGHTS_BACKEND = 'https://site--acars-backend--6dmjph8ltlhv.code.run';
@@ -3892,14 +3889,12 @@ async function updateSectorOpsLiveFlights() {
             return;
         }
 
-        // Fetch all data in parallel as before
         const [flightsRes, atcRes, notamsRes] = await Promise.all([
             fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
         
-        // Process ATC and NOTAMs as before
         const atcData = await atcRes.json();
         activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
         
@@ -3914,40 +3909,43 @@ async function updateSectorOpsLiveFlights() {
             return;
         }
         
-        // --- CORE CHANGE ---
-        // 1. Send the latest flight data directly to the worker for processing.
-        // The worker will start interpolating positions from this new data.
+        // Send the latest, complete flight data to the worker for interpolation
         if (flightInterpolatorWorker) {
             flightInterpolatorWorker.postMessage({
                 flights: flightsData.flights,
-                interval: 30000 // Tell the worker our API poll rate is 30 seconds
+                interval: 30000 
             });
         }
 
-        // 2. Check if the layer has been created yet. If not, do it once.
-        if (!sectorOpsMap.getSource('sector-ops-live-flights-source')) {
+        const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+
+        // --- FIX STARTS HERE ---
+        
+        // Helper function to create a feature from flight data
+        const createFeatureFromFlight = (flight) => {
+            if (!flight.position || flight.position.lat == null || flight.position.lon == null) return null;
+            const aircraftCategory = getAircraftCategory(flight.aircraft?.aircraftName);
+            return {
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [flight.position.lon, flight.position.lat] },
+                properties: {
+                    flightId: flight.flightId,
+                    callsign: flight.callsign,
+                    username: flight.username,
+                    heading: flight.position.track_deg || 0,
+                    position: JSON.stringify(flight.position),
+                    aircraft: JSON.stringify(flight.aircraft),
+                    userId: flight.userId,
+                    category: aircraftCategory
+                }
+            };
+        };
+
+        if (!source) {
+            // This runs ONLY ONCE to initialize the layer
             console.log("Creating Sector Ops live flights layer for the first time.");
             
-            // Create the initial set of features for the layer's first appearance.
-            // This code is the same as your original 'else' block.
-            const initialFeatures = flightsData.flights.map(flight => {
-                if (!flight.position || flight.position.lat == null || flight.position.lon == null) return null;
-                
-                const aircraftCategory = getAircraftCategory(flight.aircraft?.aircraftName);
-
-                return {
-                    type: 'Feature',
-                    geometry: { type: 'Point', coordinates: [flight.position.lon, flight.position.lat] },
-                    properties: {
-                        flightId: flight.flightId, callsign: flight.callsign, username: flight.username,
-                        altitude: flight.position.alt_ft, speed: flight.position.gs_kt, heading: flight.position.track_deg || 0,
-                        verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft),
-                        userId: flight.userId,
-                        category: aircraftCategory
-                    }
-                };
-            }).filter(Boolean);
-
+            const initialFeatures = flightsData.flights.map(createFeatureFromFlight).filter(Boolean);
             const geojsonData = { type: 'FeatureCollection', features: initialFeatures };
 
             sectorOpsMap.addSource('sector-ops-live-flights-source', {
@@ -3973,22 +3971,58 @@ async function updateSectorOpsLiveFlights() {
                     ],
                     'icon-size': 0.08,
                     'icon-rotate': ['get', 'heading'],
-                    'icon-rotation-alignment': 'map', 
-                    'icon-allow-overlap': true, 
+                    'icon-rotation-alignment': 'map',
+                    'icon-allow-overlap': true,
                     'icon-ignore-placement': true
                 }
             });
 
-            // Set up the event listeners once, when the layer is created.
+            // Set up event listeners once the layer is created
             sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
                 const props = e.features[0].properties;
                 const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
                 handleAircraftClick(flightProps, expertSession.id);
             });
-
             sectorOpsMap.on('mouseenter', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
             sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
+
+        } else {
+            // This runs on EVERY SUBSEQUENT update to synchronize the map
+            const newFlightsMap = new Map(flightsData.flights.map(f => [f.flightId, f]));
+            const currentData = source._data;
+            const newFeatures = [];
+
+            // Update existing features and keep them
+            for (const feature of currentData.features) {
+                const flightId = feature.properties.flightId;
+                if (newFlightsMap.has(flightId)) {
+                    const updatedFlight = newFlightsMap.get(flightId);
+                    // Update coordinates and properties for the main source
+                    feature.geometry.coordinates = [updatedFlight.position.lon, updatedFlight.position.lat];
+                    feature.properties.heading = updatedFlight.position.track_deg || 0;
+                    feature.properties.position = JSON.stringify(updatedFlight.position);
+                    feature.properties.aircraft = JSON.stringify(updatedFlight.aircraft);
+                    newFeatures.push(feature);
+                    newFlightsMap.delete(flightId); // Remove from map to track new flights
+                }
+                // If a flight is not in newFlightsMap, it has landed and is implicitly removed.
+            }
+
+            // Add any new flights that were not on the map before
+            for (const newFlight of newFlightsMap.values()) {
+                const newFeature = createFeatureFromFlight(newFlight);
+                if (newFeature) {
+                    newFeatures.push(newFeature);
+                }
+            }
+
+            // Update the source with the reconciled list of features
+            source.setData({
+                type: 'FeatureCollection',
+                features: newFeatures
+            });
         }
+        // --- FIX ENDS HERE ---
         
     } catch (error) {
         console.error('Error updating Sector Ops live data:', error);
