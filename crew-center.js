@@ -3549,8 +3549,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
         // If nothing else matches, it remains ENROUTE by default.
     }
 
-
-
     // --- Update DOM Elements (This section remains unchanged) ---
     const progressBarFill = document.getElementById('header-progress-bar');
     const phaseIndicator = document.getElementById('flight-phase-indicator');
