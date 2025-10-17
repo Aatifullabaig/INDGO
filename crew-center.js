@@ -3796,7 +3796,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
     function startSectorOpsLiveLoop() {
         stopSectorOpsLiveLoop(); // Ensure no duplicate intervals are running
         updateSectorOpsLiveFlights(); // Fetch immediately
-        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 30000); // Then update every 30 seconds
+        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 3000); // Then update every 30 seconds
     }
 
     /**
@@ -3909,17 +3909,14 @@ function updateAircraftInfoWindow(baseProps, plan) {
             return;
         }
         
-        // Send the latest, complete flight data to the worker for interpolation
-        if (flightInterpolatorWorker) {
-            flightInterpolatorWorker.postMessage({
-                flights: flightsData.flights,
-                interval: 30000 
-            });
-        }
-
         const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
 
-        // --- FIX STARTS HERE ---
+        if (flightInterpolatorWorker) {
+            // ✅ FIX: Removed the unnecessary 'interval' property
+            flightInterpolatorWorker.postMessage({
+                flights: flightsData.flights 
+            });
+        }
         
         // Helper function to create a feature from flight data
         const createFeatureFromFlight = (flight) => {
@@ -3988,41 +3985,37 @@ function updateAircraftInfoWindow(baseProps, plan) {
 
         } else {
             // This runs on EVERY SUBSEQUENT update to synchronize the map
+            // Note: The worker handles the smooth animation, this just provides the periodic "truth" data.
+            // This logic is important to add/remove planes from the map.
             const newFlightsMap = new Map(flightsData.flights.map(f => [f.flightId, f]));
             const currentData = source._data;
             const newFeatures = [];
 
-            // Update existing features and keep them
             for (const feature of currentData.features) {
                 const flightId = feature.properties.flightId;
                 if (newFlightsMap.has(flightId)) {
                     const updatedFlight = newFlightsMap.get(flightId);
-                    // Update coordinates and properties for the main source
                     feature.geometry.coordinates = [updatedFlight.position.lon, updatedFlight.position.lat];
                     feature.properties.heading = updatedFlight.position.track_deg || 0;
                     feature.properties.position = JSON.stringify(updatedFlight.position);
                     feature.properties.aircraft = JSON.stringify(updatedFlight.aircraft);
                     newFeatures.push(feature);
-                    newFlightsMap.delete(flightId); // Remove from map to track new flights
+                    newFlightsMap.delete(flightId);
                 }
-                // If a flight is not in newFlightsMap, it has landed and is implicitly removed.
             }
 
-            // Add any new flights that were not on the map before
             for (const newFlight of newFlightsMap.values()) {
                 const newFeature = createFeatureFromFlight(newFlight);
                 if (newFeature) {
                     newFeatures.push(newFeature);
                 }
             }
-
-            // Update the source with the reconciled list of features
+            
             source.setData({
                 type: 'FeatureCollection',
                 features: newFeatures
             });
         }
-        // --- FIX ENDS HERE ---
         
     } catch (error) {
         console.error('Error updating Sector Ops live data:', error);
