@@ -1,7 +1,7 @@
 // Crew Center – Merged Script with Pilot Stats Card & Upgraded PFD
 document.addEventListener('DOMContentLoaded', async () => {
     // --- Global Configuration ---
-    const API_BASE_URL = 'https://site--indgo-backend--6dmjph8ltlhv.code.run/';
+    const API_BASE_URL = 'https://site--indgo-backend--6dmjph8ltlhv.code.run';
     const LIVE_FLIGHTS_API_URL = 'https://site--acars-backend--6dmjph8ltlhv.code.run/flights';
     const ACARS_USER_API_URL = 'https://site--acars-backend--6dmjph8ltlhv.code.run/users'; // NEW: For user stats
     const TARGET_SERVER_NAME = 'Expert Server';
@@ -2204,7 +2204,7 @@ function updatePfdDisplay(pfdData) {
         if (!liveFlightsMap || !liveFlightsMap.isStyleLoaded()) return;
 
         try {
-            const sessionsRes = await fetch('https://acars-backend-uxln.onrender.com/if-sessions');
+            const sessionsRes = await fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions');
             const expertSession = (await sessionsRes.json()).sessions.find(s => s.name.toLowerCase().includes('expert'));
             if (!expertSession) {
                 console.warn('No Expert Server session found for live flights.');
@@ -2388,7 +2388,7 @@ function updatePfdDisplay(pfdData) {
                         const props = feature.properties;
                         const flightProps = { ...props, position: JSON.parse(props.position) };
                         
-                        fetch('https://acars-backend-uxln.onrender.com/if-sessions').then(res => res.json()).then(data => {
+                        fetch('https://site--acars-backend--6dmjph8v.code.run/if-sessions').then(res => res.json()).then(data => {
                             const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
                             if(expertSession) {
                                 handleAircraftClick(flightProps, expertSession.id);
@@ -3187,7 +3187,7 @@ function renderPilotStatsHTML(stats, username) {
                 backBtn.addEventListener('click', async () => {
                     const { flightProps } = cachedFlightDataForStatsView;
                     if (flightProps) {
-                        const sessionsRes = await fetch('https://acars-backend-uxln.onrender.com/if-sessions');
+                        const sessionsRes = await fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions');
                         const expertSession = (await sessionsRes.json()).sessions.find(s => s.name.toLowerCase().includes('expert'));
                         if (expertSession) {
                             handleAircraftClick(flightProps, expertSession.id);
@@ -3831,7 +3831,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
-    const LIVE_FLIGHTS_BACKEND = 'https://acars-backend-uxln.onrender.com';
+    const LIVE_FLIGHTS_BACKEND = 'https://site--acars-backend--6dmjph8ltlhv.code.run';
 
     try {
         const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
