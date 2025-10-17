@@ -3883,7 +3883,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
     function startSectorOpsLiveLoop() {
         stopSectorOpsLiveLoop(); // Ensure no duplicate intervals are running
         updateSectorOpsLiveFlights(); // Fetch immediately
-        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 30000); // Then update every 30 seconds
+        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 3000); // Then update every 30 seconds
     }
 
     /**
@@ -3962,7 +3962,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
     }
 
     // --- MODIFY THIS FUNCTION ---
-// --- REPLACE your existing updateSectorOpsLiveFlights function with this one ---
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -3970,6 +3969,11 @@ async function updateSectorOpsLiveFlights() {
 
     try {
         const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
+        // --- [FIX 1] --- Add a check to ensure the sessions response is valid
+        if (!sessionsRes.ok) {
+            console.warn('Sector Ops Map: Could not fetch server sessions. Skipping update.');
+            return; // Exit the function if we can't get session data
+        }
         const sessionsData = await sessionsRes.json();
         const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
 
@@ -3984,20 +3988,31 @@ async function updateSectorOpsLiveFlights() {
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
         
-        // Update ATC & NOTAMs (this logic is unchanged and correct)
-        const atcData = await atcRes.json();
-        activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
-        const notamsData = await notamsRes.json();
-        activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
+        // Update ATC & NOTAMs (this logic is fine)
+        if (atcRes.ok) {
+            const atcData = await atcRes.json();
+            activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
+        }
+        if (notamsRes.ok) {
+            const notamsData = await notamsRes.json();
+            activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
+        }
         renderAirportMarkers(); 
 
-        // --- [NEW LOGIC] Process flights by updating their live state ---
-        const flightsData = await flightsRes.json();
-        if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
-            console.warn('Sector Ops Map: Could not fetch live flights.');
-            return;
+        // --- [FIX 2] --- The most critical change: Check the flights response BEFORE updating the state
+        if (!flightsRes.ok) {
+            console.warn('Sector Ops Map: Failed to fetch live flights data. Holding last known positions.');
+            return; // Exit without clearing data if the fetch fails
         }
         
+        const flightsData = await flightsRes.json();
+        // Also check if the data format is what we expect
+        if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
+            console.warn('Sector Ops Map: Received invalid flights data. Holding last known positions.');
+            return; // Exit if the data is malformed
+        }
+        // --- [END OF FIXES] --- At this point, we know we have good, valid data ---
+
         const now = performance.now();
         const updatedFlightIds = new Set();
 
@@ -4007,14 +4022,12 @@ async function updateSectorOpsLiveFlights() {
             const flightId = flight.flightId;
             updatedFlightIds.add(flightId);
 
-            // Update or create the live data entry for this flight
             liveFlightData[flightId] = {
                 lat: flight.position.lat,
                 lon: flight.position.lon,
                 heading: flight.position.track_deg || 0,
                 speed: flight.position.gs_kt || 0,
                 timestamp: now,
-                // Also store the original properties for the info window click
                 properties: {
                     flightId: flight.flightId,
                     callsign: flight.callsign,
@@ -4030,19 +4043,19 @@ async function updateSectorOpsLiveFlights() {
             };
         });
 
-        // Clean up data for planes that are no longer being tracked
+        // Now that we've processed the good data, we can safely clean up old flights
         for (const flightId in liveFlightData) {
             if (!updatedFlightIds.has(flightId)) {
                 delete liveFlightData[flightId];
             }
         }
 
-        // Start the animation loop if it's not already running
         if (!animationFrameId) {
             animationFrameId = requestAnimationFrame(animationLoop);
         }
 
     } catch (error) {
+        // A catch block ensures that any unexpected error won't crash the update loop
         console.error('Error updating Sector Ops live data:', error);
     }
 }
