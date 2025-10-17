@@ -116,45 +116,50 @@ self.onmessage = (e) => {
     // Filter out flights with no position data before processing
     const validFlights = flights.filter(f => f.position && f.position.lat != null && f.position.lon != null);
 
-    validFlights.forEach(flight => {
-        const flightId = flight.flightId;
-        const currentData = aircraftState.get(flightId);
-        const newHeading = flight.position.track_deg || 0;
+    // In flight_interpolator.js inside the self.onmessage function
 
-        if (currentData) {
-            // This is an existing aircraft, update its state.
-            // We use the last "target" as the new "last" position to ensure a continuous path.
-            currentData.lastPos = {
-                lat: currentData.targetPos.lat,
-                lon: currentData.targetPos.lon,
-                heading: currentData.targetPos.heading
-            };
-            currentData.targetPos = {
-                lat: flight.position.lat,
-                lon: flight.position.lon,
-                heading: newHeading
-            };
-            currentData.lastApiUpdate = updateTimestamp;
-            currentData.nextApiUpdate = updateTimestamp + updateInterval;
-        } else {
-            // This is a new aircraft, create its initial state.
-            // Start and end positions are the same initially to prevent jumping.
-            aircraftState.set(flightId, {
-                lastPos: {
-                    lat: flight.position.lat,
-                    lon: flight.position.lon,
-                    heading: newHeading
-                },
-                targetPos: {
-                    lat: flight.position.lat,
-                    lon: flight.position.lon,
-                    heading: newHeading
-                },
-                lastApiUpdate: updateTimestamp,
-                nextApiUpdate: updateTimestamp + updateInterval,
-            });
-        }
-    });
+validFlights.forEach(flight => {
+    const flightId = flight.flightId;
+    const currentData = aircraftState.get(flightId);
+    
+    // ✅ FIX: Smarter heading logic
+    let newHeading;
+    if (flight.position.track_deg != null) {
+        // Use the new heading if it's valid
+        newHeading = flight.position.track_deg;
+    } else if (currentData) {
+        // Otherwise, reuse the last known target heading to prevent resetting to 0
+        newHeading = currentData.targetPos.heading;
+    } else {
+        // Fallback for brand new aircraft with no initial heading
+        newHeading = 0;
+    }
+
+    if (currentData) {
+        // This is an existing aircraft, update its state.
+        currentData.lastPos = { ...currentData.targetPos }; // A cleaner way to copy
+        currentData.targetPos = {
+            lat: flight.position.lat,
+            lon: flight.position.lon,
+            heading: newHeading // Use the new, smarter heading value
+        };
+        currentData.lastApiUpdate = updateTimestamp;
+        currentData.nextApiUpdate = updateTimestamp + updateInterval;
+    } else {
+        // This is a new aircraft, create its initial state.
+        const initialPos = {
+            lat: flight.position.lat,
+            lon: flight.position.lon,
+            heading: newHeading
+        };
+        aircraftState.set(flightId, {
+            lastPos: { ...initialPos },
+            targetPos: { ...initialPos },
+            lastApiUpdate: updateTimestamp,
+            nextApiUpdate: updateTimestamp + updateInterval,
+        });
+    }
+});
 
     // Clean up old aircraft that are no longer in the API feed
     const activeFlightIds = new Set(validFlights.map(f => f.flightId));
