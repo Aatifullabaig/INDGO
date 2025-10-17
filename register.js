@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const inviteCode = document.getElementById('invite-code').value;
 
         try {
-            const response = await fetch('https://indgo-backend.onrender.com/api/register', {
+            const response = await fetch('https://site--indgo-backend--6dmjph8ltlhv.code.run/api/register', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

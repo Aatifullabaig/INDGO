@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadAirportsData() {
         if (airportsData) return;
         try {
-            const response = await fetch('https://indgo-backend.onrender.com/api/airports');
+            const response = await fetch('https://site--indgo-backend--6dmjph8ltlhv.code.run/api/airports');
             if (!response.ok) throw new Error('Failed to load airport data');
             airportsData = await response.json();
         } catch (error) {

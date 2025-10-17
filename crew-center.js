@@ -1,9 +1,9 @@
 // Crew Center – Merged Script with Pilot Stats Card & Upgraded PFD
 document.addEventListener('DOMContentLoaded', async () => {
     // --- Global Configuration ---
-    const API_BASE_URL = 'https://indgo-backend.onrender.com';
-    const LIVE_FLIGHTS_API_URL = 'https://acars-backend-uxln.onrender.com/flights';
-    const ACARS_USER_API_URL = 'https://acars-backend-uxln.onrender.com/users'; // NEW: For user stats
+    const API_BASE_URL = 'https://site--indgo-backend--6dmjph8ltlhv.code.run/';
+    const LIVE_FLIGHTS_API_URL = 'https://site--acars-backend--6dmjph8ltlhv.code.run/flights';
+    const ACARS_USER_API_URL = 'https://site--acars-backend--6dmjph8ltlhv.code.run/users'; // NEW: For user stats
     const TARGET_SERVER_NAME = 'Expert Server';
     const AIRCRAFT_SELECTION_LIST = [
         // Airbus
