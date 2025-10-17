@@ -1016,9 +1016,7 @@ function setupWorkerListener() {
             }
         });
 
-        // ✅ FIX: Removed the throttling.
         // Tell Mapbox to render the changes immediately with the updated data.
-        // Mapbox is optimized for this and will handle it smoothly.
         source.setData(source._data);
     };
 }
@@ -3877,7 +3875,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
             return;
         }
 
-        // Fetch all data in parallel as before
+        // Fetch all data in parallel
         const [flightsRes, atcRes, notamsRes] = await Promise.all([
             fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
@@ -3898,11 +3896,12 @@ function updateAircraftInfoWindow(baseProps, plan) {
             return;
         }
         
-        // The ONLY job of the main thread regarding position is to send data to the worker.
+        // ✅ FIX: The main thread's ONLY job is to send fresh data to the worker.
+        // It no longer directly updates the map source, preventing the race condition.
         if (flightInterpolatorWorker) {
             flightInterpolatorWorker.postMessage({
                 flights: flightsData.flights,
-                interval: 3000 // Your API poll interval (30 seconds)
+                interval: 3000 // Pass the 3-second API poll interval
             });
         }
 
@@ -3928,7 +3927,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
         };
 
         if (!source) {
-            // This initialization block is correct and should remain.
+            // This initialization block runs only once and is correct.
             console.log("Creating Sector Ops live flights layer for the first time.");
             
             const initialFeatures = flightsData.flights.map(createFeatureFromFlight).filter(Boolean);
@@ -3955,7 +3954,8 @@ function updateAircraftInfoWindow(baseProps, plan) {
                         'fighter', 'icon-fighter',
                         'icon-default'
                     ],
-                    'icon-size': 0.08,
+                    // ✅ FIX: Increased icon size for visibility
+                    'icon-size': 0.7,
                     'icon-rotate': ['get', 'heading'],
                     'icon-rotation-alignment': 'map',
                     'icon-allow-overlap': true,
@@ -3973,34 +3973,37 @@ function updateAircraftInfoWindow(baseProps, plan) {
             sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
 
         } else {
-            // --- ✅ CORRECTED LOGIC ---
-            // The main thread is now only responsible for ADDING new aircraft
-            // and REMOVING old ones from the source. It NEVER touches the position
-            // of existing aircraft.
-
-            const newFlightIds = new Set(flightsData.flights.map(f => f.flightId));
-            const currentData = source._data;
+            // ✅ FIX: This block now correctly handles adding and removing aircraft
+            // without interfering with the worker's position updates.
             
+            const currentData = source._data;
             const existingFeatureIds = new Set(currentData.features.map(f => f.properties.flightId));
+            const newFlightIds = new Set(flightsData.flights.map(f => f.flightId));
 
             // Find aircraft to add
             const flightsToAdd = flightsData.flights.filter(f => !existingFeatureIds.has(f.flightId));
             
-            // Find features to remove
-            const featuresToRemove = currentData.features.filter(f => !newFlightIds.has(f.properties.flightId));
+            // Determine if any features need to be removed
+            const featuresToRemove = currentData.features.some(f => !newFlightIds.has(f.properties.flightId));
             
-            if (flightsToAdd.length > 0 || featuresToRemove.length > 0) {
-                const newFeatures = currentData.features.filter(f => newFlightIds.has(f.properties.flightId));
+            // Only update the source if there's a structural change (add/remove)
+            if (flightsToAdd.length > 0 || featuresToRemove) {
+                // Keep all existing features that are still in the new data
+                const updatedFeatures = currentData.features.filter(f => newFlightIds.has(f.properties.flightId));
+                
+                // Add the new flights
                 flightsToAdd.forEach(flight => {
                     const newFeature = createFeatureFromFlight(flight);
                     if (newFeature) {
-                        newFeatures.push(newFeature);
+                        updatedFeatures.push(newFeature);
                     }
                 });
 
+                // Set the data with the new feature list. The worker will immediately
+                // take over interpolating the positions of all features.
                 source.setData({
                     type: 'FeatureCollection',
-                    features: newFeatures
+                    features: updatedFeatures
                 });
             }
         }

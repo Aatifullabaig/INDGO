@@ -4,7 +4,7 @@
 let aircraftState = new Map();
 const INTERPOLATION_RATE_MS = 16; // Target ~60fps
 
-// --- HELPER FUNCTIONS (Copied from crew-center.js) ---
+// --- HELPER FUNCTIONS ---
 
 /**
  * Calculates the distance between two coordinates in kilometers using the Haversine formula.
@@ -79,12 +79,8 @@ function tick() {
     aircraftState.forEach((craft, flightId) => {
         const timeSinceUpdate = now - craft.lastApiUpdate;
         const totalDuration = craft.nextApiUpdate - craft.lastApiUpdate;
-
-        // Calculate how far along the animation is (a value from 0.0 to 1.0)
-        // Use Math.max with totalDuration to prevent division by zero on the first frame
         const fraction = Math.min(timeSinceUpdate / Math.max(1, totalDuration), 1.0);
 
-        // ✅ FIX: Calculate the new interpolated position using the great-circle function
         const intermediatePoint = getIntermediatePoint(
             craft.lastPos.lat,
             craft.lastPos.lon,
@@ -113,53 +109,62 @@ self.onmessage = (e) => {
     const updateTimestamp = performance.now();
     const updateInterval = e.data.interval;
 
-    // Filter out flights with no position data before processing
     const validFlights = flights.filter(f => f.position && f.position.lat != null && f.position.lon != null);
 
-    // In flight_interpolator.js inside the self.onmessage function
+    validFlights.forEach(flight => {
+        const flightId = flight.flightId;
+        const currentData = aircraftState.get(flightId);
+        
+        const newHeading = flight.position.track_deg != null ? flight.position.track_deg : (currentData ? currentData.targetPos.heading : 0);
 
-validFlights.forEach(flight => {
-    const flightId = flight.flightId;
-    const currentData = aircraftState.get(flightId);
-    
-    // ✅ FIX: Smarter heading logic
-    let newHeading;
-    if (flight.position.track_deg != null) {
-        // Use the new heading if it's valid
-        newHeading = flight.position.track_deg;
-    } else if (currentData) {
-        // Otherwise, reuse the last known target heading to prevent resetting to 0
-        newHeading = currentData.targetPos.heading;
-    } else {
-        // Fallback for brand new aircraft with no initial heading
-        newHeading = 0;
-    }
+        if (currentData) {
+            // This is an existing aircraft, update its state.
+            currentData.lastPos = { ...currentData.targetPos };
+            currentData.targetPos = {
+                lat: flight.position.lat,
+                lon: flight.position.lon,
+                heading: newHeading
+            };
+            currentData.lastApiUpdate = updateTimestamp;
+            currentData.nextApiUpdate = updateTimestamp + updateInterval;
+        } else {
+            // ✅ FIX: This is a new aircraft. Create a smarter initial state to prevent it from being static.
+            const targetPos = {
+                lat: flight.position.lat,
+                lon: flight.position.lon,
+                heading: newHeading,
+            };
 
-    if (currentData) {
-        // This is an existing aircraft, update its state.
-        currentData.lastPos = { ...currentData.targetPos }; // A cleaner way to copy
-        currentData.targetPos = {
-            lat: flight.position.lat,
-            lon: flight.position.lon,
-            heading: newHeading // Use the new, smarter heading value
-        };
-        currentData.lastApiUpdate = updateTimestamp;
-        currentData.nextApiUpdate = updateTimestamp + updateInterval;
-    } else {
-        // This is a new aircraft, create its initial state.
-        const initialPos = {
-            lat: flight.position.lat,
-            lon: flight.position.lon,
-            heading: newHeading
-        };
-        aircraftState.set(flightId, {
-            lastPos: { ...initialPos },
-            targetPos: { ...initialPos },
-            lastApiUpdate: updateTimestamp,
-            nextApiUpdate: updateTimestamp + updateInterval,
-        });
-    }
-});
+            // Estimate a logical starting ("last") position by projecting backwards based on its current speed.
+            // This makes the plane appear to be moving smoothly from the moment it appears.
+            const speedKts = flight.position.gs_kt || 0;
+            // Calculate distance moved in km over one update interval (e.g., 3000 ms)
+            const distanceKm = (speedKts * 1.852) * (updateInterval / 3600000); 
+            // Total angular distance of the Earth is 2*PI*R, so 1km is 1/R radians.
+            const angularDist = distanceKm / 6371; 
+            
+            const latRad = targetPos.lat * Math.PI / 180;
+            const lonRad = targetPos.lon * Math.PI / 180;
+            // Project backwards, so use the opposite heading
+            const bearingRad = (newHeading - 180) * Math.PI / 180;
+
+            const lastLatRad = Math.asin(Math.sin(latRad) * Math.cos(angularDist) + Math.cos(latRad) * Math.sin(angularDist) * Math.cos(bearingRad));
+            const lastLonRad = lonRad + Math.atan2(Math.sin(bearingRad) * Math.sin(angularDist) * Math.cos(latRad), Math.cos(angularDist) - Math.sin(latRad) * Math.sin(lastLatRad));
+            
+            const lastPos = {
+                lat: lastLatRad * 180 / Math.PI,
+                lon: lastLonRad * 180 / Math.PI,
+                heading: newHeading, // Start with the correct heading
+            };
+
+            aircraftState.set(flightId, {
+                lastPos: lastPos,
+                targetPos: targetPos,
+                lastApiUpdate: updateTimestamp - updateInterval, // Pretend the last update was one interval ago
+                nextApiUpdate: updateTimestamp,
+            });
+        }
+    });
 
     // Clean up old aircraft that are no longer in the API feed
     const activeFlightIds = new Set(validFlights.map(f => f.flightId));
