@@ -89,6 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let pilotMarkers = {};
     let liveFlightsInterval = null;
     let sectorOpsMap = null;
+    let sectorOpsLiveMarkers = {};
     let airportAndAtcMarkers = {}; // Holds all airport markers (blue dots and red ATC dots)
     let sectorOpsMapRouteLayers = [];
     let sectorOpsLiveFlightPathLayers = {}; // NEW: To track multiple flight trails
@@ -133,6 +134,26 @@ function injectCustomStyles() {
     if (document.getElementById(styleId)) return;
 
     const css = `
+
+        /* --- [NEW] High-Performance Sector Ops Aircraft Markers --- */
+    .sector-ops-plane-marker {
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+        width: 28px;
+        height: 28px;
+        cursor: pointer;
+    }
+    .sector-ops-plane-marker.category-jumbo { background-image: url('/Images/map_icons/jumbo.png'); }
+    .sector-ops-plane-marker.category-widebody { background-image: url('/Images/map_icons/widebody.png'); }
+    .sector-ops-plane-marker.category-narrowbody { background-image: url('/Images/map_icons/narrowbody.png'); }
+    .sector-ops-plane-marker.category-regional { background-image: url('/Images/map_icons/regional.png'); }
+    .sector-ops-plane-marker.category-private { background-image: url('/Images/map_icons/private.png'); }
+    .sector-ops-plane-marker.category-fighter { background-image: url('/Images/map_icons/fighter.png'); }
+    .sector-ops-plane-marker.category-default { background-image: url('/Images/map_icons/default.png'); }
+    }
+
+
         /* --- [FIX] Sector Ops View Layout --- */
         #view-rosters.active {
             position: absolute;
@@ -884,7 +905,7 @@ function injectCustomStyles() {
             .main-content:has(#view-rosters.active) {
     padding: 0; /* Remove ALL padding (top, right, bottom, left) */
     height: 100vh; /* Set height to 100% of the viewport height */
-    overflow: hidden; /* Prevent the main container from scrolling */
+    overflow: hidden; /* Prevent the main container from scrolling */ 
 }
         }
     `;
@@ -1005,47 +1026,65 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
         return (start + delta * progress + 360) % 360;
     }
 
-/**
- * --- [REWRITTEN & SIMPLIFIED] The main predictive animation loop.
- * This function's only job is to update the data of the existing map source.
- */
-function animationLoop(timestamp) {
-    const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-    
-    // Safety check: if the source doesn't exist for some reason, stop the loop.
-    if (!source) {
+function animationLoop() {
+    if (!sectorOpsMap) {
         animationFrameId = null;
-        return;
+        return; // Stop if map isn't ready
     }
 
-    const newFeatures = [];
     const ktsToKmPerMs = 1.852 / 3600000;
+    const now = performance.now();
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
-        const elapsedTimeMs = timestamp - flight.timestamp;
+
+        // Extrapolate position (your logic is already great here)
+        const elapsedTimeMs = now - flight.timestamp;
         const distanceKm = flight.speed * ktsToKmPerMs * elapsedTimeMs;
         const predictedPos = predictNewPosition(flight.lat, flight.lon, flight.heading, distanceKm);
 
-        newFeatures.push({
-            type: 'Feature',
-            geometry: {
-                type: 'Point',
-                coordinates: [predictedPos.lon, predictedPos.lat]
-            },
-            properties: {
-                ...flight.properties,
-                heading: flight.heading
-            }
-        });
-    }
+        // Check if a marker for this flight already exists
+        if (sectorOpsLiveMarkers[flightId]) {
+            // If it exists, just update its position and rotation. This is VERY fast.
+            const markerData = sectorOpsLiveMarkers[flightId];
+            markerData.marker.setLngLat([predictedPos.lon, predictedPos.lat]);
+            markerData.element.style.transform = `rotate(${flight.heading}deg)`;
+        } else {
+            // If it's a new flight, create a new marker
+            const el = document.createElement('div');
+            el.className = `sector-ops-plane-marker category-${flight.properties.category}`;
+            
+            const newMarker = new mapboxgl.Marker(el)
+                .setLngLat([predictedPos.lon, predictedPos.lat])
+                .addTo(sectorOpsMap);
 
-    // Directly update the source data. No need to check for existence here.
-    source.setData({ type: 'FeatureCollection', features: newFeatures });
+            el.style.transform = `rotate(${flight.heading}deg)`;
+
+            // Add the click handler directly to the element
+            el.addEventListener('click', () => {
+                // We need to pass a fresh copy of the properties
+                const flightProps = { 
+                    ...flight.properties, 
+                    position: JSON.parse(flight.properties.position), 
+                    aircraft: JSON.parse(flight.properties.aircraft) 
+                };
+                 fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions').then(res => res.json()).then(data => {
+                    const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
+                    if (expertSession) {
+                        handleAircraftClick(flightProps, expertSession.id);
+                    }
+                });
+            });
+
+            // Store the new marker and its element for future updates
+            sectorOpsLiveMarkers[flightId] = { marker: newMarker, element: el };
+        }
+    }
 
     // Continue the loop for the next frame
     animationFrameId = requestAnimationFrame(animationLoop);
 }
+
 
 
 function getAircraftCategory(aircraftName) {
@@ -2606,6 +2645,7 @@ function updatePfdDisplay(pfdData) {
 
     // --- MODIFY THIS FUNCTION ---
 // --- MODIFY THIS FUNCTION ---
+// --- MODIFY THIS FUNCTION ---
 async function initializeSectorOpsMap(centerICAO) {
     if (!MAPBOX_ACCESS_TOKEN) {
         document.getElementById('sector-ops-map-fullscreen').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
@@ -2623,80 +2663,13 @@ async function initializeSectorOpsMap(centerICAO) {
         interactive: true
     });
 
+    // The function now resolves right away after the map loads.
+    // All the old logic for adding the 'sector-ops-live-flights-source'
+    // and 'sector-ops-live-flights-layer' should be REMOVED.
     return new Promise(resolve => {
         sectorOpsMap.on('load', () => {
-            const iconsToLoad = [
-                { id: 'icon-jumbo', path: '/Images/map_icons/jumbo.png' },
-                { id: 'icon-widebody', path: '/Images/map_icons/widebody.png' },
-                { id: 'icon-narrowbody', path: '/Images/map_icons/narrowbody.png' },
-                { id: 'icon-regional', path: '/Images/map_icons/regional.png' },
-                { id: 'icon-private', path: '/Images/map_icons/private.png' },
-                { id: 'icon-fighter', path: '/Images/map_icons/fighter.png' },
-                { id: 'icon-default', path: '/Images/map_icons/default.png' }
-            ];
-
-            const imagePromises = iconsToLoad.map(icon =>
-                new Promise((res, rej) => {
-                    sectorOpsMap.loadImage(icon.path, (error, image) => {
-                        if (error) {
-                            console.warn(`Could not load icon: ${icon.path}`);
-                            rej(error);
-                        } else {
-                            if (!sectorOpsMap.hasImage(icon.id)) {
-                                sectorOpsMap.addImage(icon.id, image);
-                            }
-                            res();
-                        }
-                    });
-                })
-            );
-
-            // --- [MODIFIED] Set up layers after icons are loaded ---
-            Promise.all(imagePromises).then(() => {
-                console.log('All custom aircraft icons loaded.');
-
-                // --- [NEW] Create the source and layer ONCE with empty data ---
-                if (!sectorOpsMap.getSource('sector-ops-live-flights-source')) {
-                    sectorOpsMap.addSource('sector-ops-live-flights-source', {
-                        type: 'geojson',
-                        // Start with an empty collection
-                        data: { type: 'FeatureCollection', features: [] }
-                    });
-
-                    sectorOpsMap.addLayer({
-                        id: 'sector-ops-live-flights-layer',
-                        type: 'symbol',
-                        source: 'sector-ops-live-flights-source',
-                        layout: {
-                            'icon-image': ['match', ['get', 'category'], 'jumbo', 'icon-jumbo', 'widebody', 'icon-widebody', 'narrowbody', 'icon-narrowbody', 'regional', 'icon-regional', 'private', 'icon-private', 'fighter', 'icon-fighter', 'icon-default'],
-                            'icon-size': 0.08,
-                            'icon-rotate': ['get', 'heading'],
-                            'icon-rotation-alignment': 'map',
-                            'icon-allow-overlap': true,
-                            'icon-ignore-placement': true
-                        }
-                    });
-
-                    // Set up the click/hover event listeners ONCE
-                    sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
-                        const props = e.features[0].properties;
-                        const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
-                        fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions').then(res => res.json()).then(data => {
-                            const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
-                            if (expertSession) {
-                                handleAircraftClick(flightProps, expertSession.id);
-                            }
-                        });
-                    });
-                    sectorOpsMap.on('mouseenter', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
-                    sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
-                }
-
-                resolve(); // Resolve the main promise
-            }).catch(error => {
-                console.error('Failed to load aircraft icons, flight layer not added.', error);
-                resolve(); // Still resolve so the app doesn't hang
-            });
+            console.log('Sector Ops Map loaded. Ready for markers.');
+            resolve();
         });
     });
 }
@@ -3962,7 +3935,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
     }
 
     // --- MODIFY THIS FUNCTION ---
-// --- REPLACE your existing updateSectorOpsLiveFlights function with this one ---
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -3970,13 +3942,8 @@ async function updateSectorOpsLiveFlights() {
 
     try {
         const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
-        const sessionsData = await sessionsRes.json();
-        const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
-
-        if (!expertSession) {
-            console.warn('Sector Ops Map: Expert Server session not found.');
-            return;
-        }
+        const expertSession = (await sessionsRes.json()).sessions.find(s => s.name.toLowerCase().includes('expert'));
+        if (!expertSession) return;
 
         const [flightsRes, atcRes, notamsRes] = await Promise.all([
             fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
@@ -3984,60 +3951,47 @@ async function updateSectorOpsLiveFlights() {
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
         
-        // Update ATC & NOTAMs (this logic is unchanged and correct)
-        const atcData = await atcRes.json();
-        activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
-        const notamsData = await notamsRes.json();
-        activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
+        // Update ATC & NOTAMs (this logic is unchanged)
+        activeAtcFacilities = (await atcRes.json()).atc || [];
+        activeNotams = (await notamsRes.json()).notams || [];
         renderAirportMarkers(); 
 
-        // --- [NEW LOGIC] Process flights by updating their live state ---
         const flightsData = await flightsRes.json();
-        if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
-            console.warn('Sector Ops Map: Could not fetch live flights.');
-            return;
-        }
+        if (!flightsData.ok || !Array.isArray(flightsData.flights)) return;
         
         const now = performance.now();
         const updatedFlightIds = new Set();
 
+        // 1. Update our master data object with the latest info
         flightsData.flights.forEach(flight => {
-            if (!flight.position || flight.position.lat == null || flight.position.lon == null) return;
+            if (!flight.position || flight.position.lat == null) return;
             
             const flightId = flight.flightId;
             updatedFlightIds.add(flightId);
 
-            // Update or create the live data entry for this flight
             liveFlightData[flightId] = {
                 lat: flight.position.lat,
                 lon: flight.position.lon,
                 heading: flight.position.track_deg || 0,
                 speed: flight.position.gs_kt || 0,
                 timestamp: now,
-                // Also store the original properties for the info window click
-                properties: {
-                    flightId: flight.flightId,
-                    callsign: flight.callsign,
-                    username: flight.username,
-                    altitude: flight.position.alt_ft,
-                    speed: flight.position.gs_kt,
-                    verticalSpeed: flight.position.vs_fpm || 0,
-                    position: JSON.stringify(flight.position),
-                    aircraft: JSON.stringify(flight.aircraft),
-                    userId: flight.userId,
-                    category: getAircraftCategory(flight.aircraft?.aircraftName)
-                }
+                properties: { /* your existing properties object */ }
             };
         });
 
-        // Clean up data for planes that are no longer being tracked
+        // 2. Clean up old data and markers
         for (const flightId in liveFlightData) {
             if (!updatedFlightIds.has(flightId)) {
+                // If a plane is no longer in the API feed, remove its marker and data
+                if (sectorOpsLiveMarkers[flightId]) {
+                    sectorOpsLiveMarkers[flightId].marker.remove();
+                    delete sectorOpsLiveMarkers[flightId];
+                }
                 delete liveFlightData[flightId];
             }
         }
 
-        // Start the animation loop if it's not already running
+        // 3. Start the animation loop if it's not running
         if (!animationFrameId) {
             animationFrameId = requestAnimationFrame(animationLoop);
         }
@@ -4046,6 +4000,7 @@ async function updateSectorOpsLiveFlights() {
         console.error('Error updating Sector Ops live data:', error);
     }
 }
+
     // ====================================================================
     // END: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
