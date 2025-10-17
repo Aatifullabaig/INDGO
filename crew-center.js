@@ -80,16 +80,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     let airportsData = {};
     let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
     let runwaysData = {}; // NEW: To store runway data indexed by airport ICAO
-    let animationFrameId = null;
-    let liveFlightData = {}; // Key: flightId, Value: { lon, lat, heading, speed, timestamp }
-    const DATA_REFRESH_INTERVAL_MS = 3000; // Your current refresh interval
+    let flightInterpolatorWorker = null;
 
     // --- Map-related State ---
     let liveFlightsMap = null;
     let pilotMarkers = {};
     let liveFlightsInterval = null;
     let sectorOpsMap = null;
-    let sectorOpsLiveMarkers = {};
     let airportAndAtcMarkers = {}; // Holds all airport markers (blue dots and red ATC dots)
     let sectorOpsMapRouteLayers = [];
     let sectorOpsLiveFlightPathLayers = {}; // NEW: To track multiple flight trails
@@ -134,26 +131,6 @@ function injectCustomStyles() {
     if (document.getElementById(styleId)) return;
 
     const css = `
-
-        /* --- [NEW] High-Performance Sector Ops Aircraft Markers --- */
-    .sector-ops-plane-marker {
-        background-size: contain;
-        background-repeat: no-repeat;
-        background-position: center;
-        width: 28px;
-        height: 28px;
-        cursor: pointer;
-    }
-    .sector-ops-plane-marker.category-jumbo { background-image: url('/Images/map_icons/jumbo.png'); }
-    .sector-ops-plane-marker.category-widebody { background-image: url('/Images/map_icons/widebody.png'); }
-    .sector-ops-plane-marker.category-narrowbody { background-image: url('/Images/map_icons/narrowbody.png'); }
-    .sector-ops-plane-marker.category-regional { background-image: url('/Images/map_icons/regional.png'); }
-    .sector-ops-plane-marker.category-private { background-image: url('/Images/map_icons/private.png'); }
-    .sector-ops-plane-marker.category-fighter { background-image: url('/Images/map_icons/fighter.png'); }
-    .sector-ops-plane-marker.category-default { background-image: url('/Images/map_icons/default.png'); }
-    }
-
-
         /* --- [FIX] Sector Ops View Layout --- */
         #view-rosters.active {
             position: absolute;
@@ -905,7 +882,7 @@ function injectCustomStyles() {
             .main-content:has(#view-rosters.active) {
     padding: 0; /* Remove ALL padding (top, right, bottom, left) */
     height: 100vh; /* Set height to 100% of the viewport height */
-    overflow: hidden; /* Prevent the main container from scrolling */ 
+    overflow: hidden; /* Prevent the main container from scrolling */
 }
         }
     `;
@@ -973,119 +950,7 @@ async function fetchRunwaysData() {
         }
     }
 
-    /// --- Helper Functions ---
-
-/**
- * --- [NEW] Predicts a new coordinate based on a starting point, bearing, and distance.
- * This is the core of the extrapolation logic.
- * @param {number} lat - Starting latitude in degrees.
- * @param {number} lon - Starting longitude in degrees.
- * @param {number} bearing - Bearing in degrees (0-360).
- * @param {number} distanceKm - Distance to travel in kilometers.
- * @returns {{lat: number, lon: number}} The new predicted coordinates.
- */
-function predictNewPosition(lat, lon, bearing, distanceKm) {
-    const R = 6371; // Earth's radius in km
-    const toRad = (v) => v * Math.PI / 180;
-    const toDeg = (v) => v * 180 / Math.PI;
-
-    const latRad = toRad(lat);
-    const lonRad = toRad(lon);
-    const bearingRad = toRad(bearing);
-
-    const lat2Rad = Math.asin(Math.sin(latRad) * Math.cos(distanceKm / R) +
-                             Math.cos(latRad) * Math.sin(distanceKm / R) * Math.cos(bearingRad));
-
-    const lon2Rad = lonRad + Math.atan2(Math.sin(bearingRad) * Math.sin(distanceKm / R) * Math.cos(latRad),
-                                       Math.cos(distanceKm / R) - Math.sin(latRad) * Math.sin(lat2Rad));
-
-    return { lat: toDeg(lat2Rad), lon: toDeg(lon2Rad) };
-}
-
-/**
-     * Linearly interpolates a value.
-     */
-    /**
-     * Linearly interpolates between two values.
-     * @param {number} start - The starting value.
-     * @param {number} end - The ending value.
-     * @param {number} progress - The interpolation factor (0.0 to 1.0).
-     * @returns {number} The interpolated value.
-     */
-    function lerp(start, end, progress) {
-        return start * (1 - progress) + end * progress;
-    }
-
-    /**
-     * Interpolates heading degrees along the shortest path (e.g., from 350° to 10°).
-     */
-    function interpolateHeading(start, end, progress) {
-        let delta = end - start;
-        if (delta > 180) delta -= 360;
-        if (delta < -180) delta += 360;
-        return (start + delta * progress + 360) % 360;
-    }
-
-function animationLoop() {
-    if (!sectorOpsMap) {
-        animationFrameId = null;
-        return; // Stop if map isn't ready
-    }
-
-    const ktsToKmPerMs = 1.852 / 3600000;
-    const now = performance.now();
-
-    for (const flightId in liveFlightData) {
-        const flight = liveFlightData[flightId];
-
-        // Extrapolate position (your logic is already great here)
-        const elapsedTimeMs = now - flight.timestamp;
-        const distanceKm = flight.speed * ktsToKmPerMs * elapsedTimeMs;
-        const predictedPos = predictNewPosition(flight.lat, flight.lon, flight.heading, distanceKm);
-
-        // Check if a marker for this flight already exists
-        if (sectorOpsLiveMarkers[flightId]) {
-            // If it exists, just update its position and rotation. This is VERY fast.
-            const markerData = sectorOpsLiveMarkers[flightId];
-            markerData.marker.setLngLat([predictedPos.lon, predictedPos.lat]);
-            markerData.element.style.transform = `rotate(${flight.heading}deg)`;
-        } else {
-            // If it's a new flight, create a new marker
-            const el = document.createElement('div');
-            el.className = `sector-ops-plane-marker category-${flight.properties.category}`;
-            
-            const newMarker = new mapboxgl.Marker(el)
-                .setLngLat([predictedPos.lon, predictedPos.lat])
-                .addTo(sectorOpsMap);
-
-            el.style.transform = `rotate(${flight.heading}deg)`;
-
-            // Add the click handler directly to the element
-            el.addEventListener('click', () => {
-                // We need to pass a fresh copy of the properties
-                const flightProps = { 
-                    ...flight.properties, 
-                    position: JSON.parse(flight.properties.position), 
-                    aircraft: JSON.parse(flight.properties.aircraft) 
-                };
-                 fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions').then(res => res.json()).then(data => {
-                    const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
-                    if (expertSession) {
-                        handleAircraftClick(flightProps, expertSession.id);
-                    }
-                });
-            });
-
-            // Store the new marker and its element for future updates
-            sectorOpsLiveMarkers[flightId] = { marker: newMarker, element: el };
-        }
-    }
-
-    // Continue the loop for the next frame
-    animationFrameId = requestAnimationFrame(animationLoop);
-}
-
-
+    // --- Helper Functions ---
 
 function getAircraftCategory(aircraftName) {
     if (!aircraftName) return 'default';
@@ -1123,6 +988,31 @@ function getAircraftCategory(aircraftName) {
     }
     
     return 'default';
+}
+
+// Add this new function inside your main script
+function setupWorkerListener() {
+    flightInterpolatorWorker.onmessage = (e) => {
+        // Use requestAnimationFrame to ensure the map update happens at the optimal time for rendering
+        requestAnimationFrame(() => {
+            const newPositions = e.data;
+            if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
+
+            const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+            if (source && source._data && source._data.features) {
+                // Update the coordinates and heading of each feature in place
+                source._data.features.forEach(feature => {
+                    const updatedData = newPositions.find(p => p.flightId === feature.properties.flightId);
+                    if (updatedData) {
+                        feature.geometry.coordinates = [updatedData.lon, updatedData.lat];
+                        feature.properties.heading = updatedData.heading;
+                    }
+                });
+                // Tell Mapbox the data has changed so it can re-render
+                source.setData(source._data);
+            }
+        });
+    };
 }
 
     /**
@@ -2644,8 +2534,6 @@ function updatePfdDisplay(pfdData) {
     }
 
     // --- MODIFY THIS FUNCTION ---
-// --- MODIFY THIS FUNCTION ---
-// --- MODIFY THIS FUNCTION ---
 async function initializeSectorOpsMap(centerICAO) {
     if (!MAPBOX_ACCESS_TOKEN) {
         document.getElementById('sector-ops-map-fullscreen').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
@@ -2653,7 +2541,7 @@ async function initializeSectorOpsMap(centerICAO) {
     }
     if (sectorOpsMap) sectorOpsMap.remove();
 
-    const centerCoords = airportsData[centerICAO] ? [airportsData[centerICAO].lon, airportsData[centerICAO].lat] : [77.2, 28.6];
+    const centerCoords = airportsData[centerICAO] ? [airportsData[centerICAO].lon, airportsData[centerICAO].lat] : [77.2, 28.6]; // Default to Delhi
 
     sectorOpsMap = new mapboxgl.Map({
         container: 'sector-ops-map-fullscreen',
@@ -2663,13 +2551,44 @@ async function initializeSectorOpsMap(centerICAO) {
         interactive: true
     });
 
-    // The function now resolves right away after the map loads.
-    // All the old logic for adding the 'sector-ops-live-flights-source'
-    // and 'sector-ops-live-flights-layer' should be REMOVED.
     return new Promise(resolve => {
         sectorOpsMap.on('load', () => {
-            console.log('Sector Ops Map loaded. Ready for markers.');
-            resolve();
+            // --- REPLACEMENT: Load all aircraft icons in parallel ---
+            const iconsToLoad = [
+                { id: 'icon-jumbo', path: '/Images/map_icons/jumbo.png' },
+                { id: 'icon-widebody', path: '/Images/map_icons/widebody.png' },
+                { id: 'icon-narrowbody', path: '/Images/map_icons/narrowbody.png' },
+                { id: 'icon-regional', path: '/Images/map_icons/regional.png' },
+                { id: 'icon-private', path: '/Images/map_icons/private.png' },
+                { id: 'icon-fighter', path: '/Images/map_icons/fighter.png' },
+                { id: 'icon-default', path: '/Images/map_icons/default.png' } // Fallback icon
+            ];
+
+            const imagePromises = iconsToLoad.map(icon => 
+                new Promise((res, rej) => {
+                    sectorOpsMap.loadImage(icon.path, (error, image) => {
+                        if (error) {
+                            console.warn(`Could not load icon: ${icon.path}`);
+                            rej(error); // Reject on error
+                        } else {
+                            if (!sectorOpsMap.hasImage(icon.id)) {
+                                sectorOpsMap.addImage(icon.id, image);
+                            }
+                            res(); // Resolve successfully
+                        }
+                    });
+                })
+            );
+
+            Promise.all(imagePromises)
+                .then(() => {
+                    console.log('All custom aircraft icons loaded.');
+                    resolve(); // Resolve the main promise once all icons are loaded
+                })
+                .catch(error => {
+                    console.error('Failed to load one or more aircraft icons.', error);
+                    resolve(); // Still resolve, so the map doesn't get stuck
+                });
         });
     });
 }
@@ -3935,6 +3854,8 @@ function updateAircraftInfoWindow(baseProps, plan) {
     }
 
     // --- MODIFY THIS FUNCTION ---
+// Replace your old updateSectorOpsLiveFlights function with this one
+
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -3942,65 +3863,116 @@ async function updateSectorOpsLiveFlights() {
 
     try {
         const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
-        const expertSession = (await sessionsRes.json()).sessions.find(s => s.name.toLowerCase().includes('expert'));
-        if (!expertSession) return;
+        const sessionsData = await sessionsRes.json();
+        const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
 
+        if (!expertSession) {
+            console.warn('Sector Ops Map: Expert Server session not found.');
+            return;
+        }
+
+        // Fetch all data in parallel as before
         const [flightsRes, atcRes, notamsRes] = await Promise.all([
             fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
         
-        // Update ATC & NOTAMs (this logic is unchanged)
-        activeAtcFacilities = (await atcRes.json()).atc || [];
-        activeNotams = (await notamsRes.json()).notams || [];
+        // Process ATC and NOTAMs as before
+        const atcData = await atcRes.json();
+        activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
+        
+        const notamsData = await notamsRes.json();
+        activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
+
         renderAirportMarkers(); 
 
         const flightsData = await flightsRes.json();
-        if (!flightsData.ok || !Array.isArray(flightsData.flights)) return;
+        if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
+            console.warn('Sector Ops Map: Could not fetch live flights.');
+            return;
+        }
         
-        const now = performance.now();
-        const updatedFlightIds = new Set();
+        // --- CORE CHANGE ---
+        // 1. Send the latest flight data directly to the worker for processing.
+        // The worker will start interpolating positions from this new data.
+        if (flightInterpolatorWorker) {
+            flightInterpolatorWorker.postMessage({
+                flights: flightsData.flights,
+                interval: 30000 // Tell the worker our API poll rate is 30 seconds
+            });
+        }
 
-        // 1. Update our master data object with the latest info
-        flightsData.flights.forEach(flight => {
-            if (!flight.position || flight.position.lat == null) return;
+        // 2. Check if the layer has been created yet. If not, do it once.
+        if (!sectorOpsMap.getSource('sector-ops-live-flights-source')) {
+            console.log("Creating Sector Ops live flights layer for the first time.");
             
-            const flightId = flight.flightId;
-            updatedFlightIds.add(flightId);
+            // Create the initial set of features for the layer's first appearance.
+            // This code is the same as your original 'else' block.
+            const initialFeatures = flightsData.flights.map(flight => {
+                if (!flight.position || flight.position.lat == null || flight.position.lon == null) return null;
+                
+                const aircraftCategory = getAircraftCategory(flight.aircraft?.aircraftName);
 
-            liveFlightData[flightId] = {
-                lat: flight.position.lat,
-                lon: flight.position.lon,
-                heading: flight.position.track_deg || 0,
-                speed: flight.position.gs_kt || 0,
-                timestamp: now,
-                properties: { /* your existing properties object */ }
-            };
-        });
+                return {
+                    type: 'Feature',
+                    geometry: { type: 'Point', coordinates: [flight.position.lon, flight.position.lat] },
+                    properties: {
+                        flightId: flight.flightId, callsign: flight.callsign, username: flight.username,
+                        altitude: flight.position.alt_ft, speed: flight.position.gs_kt, heading: flight.position.track_deg || 0,
+                        verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft),
+                        userId: flight.userId,
+                        category: aircraftCategory
+                    }
+                };
+            }).filter(Boolean);
 
-        // 2. Clean up old data and markers
-        for (const flightId in liveFlightData) {
-            if (!updatedFlightIds.has(flightId)) {
-                // If a plane is no longer in the API feed, remove its marker and data
-                if (sectorOpsLiveMarkers[flightId]) {
-                    sectorOpsLiveMarkers[flightId].marker.remove();
-                    delete sectorOpsLiveMarkers[flightId];
+            const geojsonData = { type: 'FeatureCollection', features: initialFeatures };
+
+            sectorOpsMap.addSource('sector-ops-live-flights-source', {
+                type: 'geojson',
+                data: geojsonData
+            });
+
+            sectorOpsMap.addLayer({
+                id: 'sector-ops-live-flights-layer',
+                type: 'symbol',
+                source: 'sector-ops-live-flights-source',
+                layout: {
+                    'icon-image': [
+                        'match',
+                        ['get', 'category'],
+                        'jumbo', 'icon-jumbo',
+                        'widebody', 'icon-widebody',
+                        'narrowbody', 'icon-narrowbody',
+                        'regional', 'icon-regional',
+                        'private', 'icon-private',
+                        'fighter', 'icon-fighter',
+                        'icon-default'
+                    ],
+                    'icon-size': 0.08,
+                    'icon-rotate': ['get', 'heading'],
+                    'icon-rotation-alignment': 'map', 
+                    'icon-allow-overlap': true, 
+                    'icon-ignore-placement': true
                 }
-                delete liveFlightData[flightId];
-            }
-        }
+            });
 
-        // 3. Start the animation loop if it's not running
-        if (!animationFrameId) {
-            animationFrameId = requestAnimationFrame(animationLoop);
-        }
+            // Set up the event listeners once, when the layer is created.
+            sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
+                const props = e.features[0].properties;
+                const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
+                handleAircraftClick(flightProps, expertSession.id);
+            });
 
+            sectorOpsMap.on('mouseenter', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
+            sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
+        }
+        
     } catch (error) {
         console.error('Error updating Sector Ops live data:', error);
     }
 }
-
     // ====================================================================
     // END: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
@@ -4135,6 +4107,8 @@ async function updateSectorOpsLiveFlights() {
             }
         }
     };
+
+    
 
     const showPromotionModal = (newRank) => {
         const rankNameElem = document.getElementById('promo-rank-name');
@@ -5147,7 +5121,6 @@ async function updateSectorOpsLiveFlights() {
     };
 
     // --- Initial Load ---
-    // --- Initial Load ---
 async function initializeApp() {
     mainContentLoader.classList.add('active');
 
@@ -5173,6 +5146,8 @@ async function initializeApp() {
         fetchRunwaysData()
     ]);
 
+    flightInterpolatorWorker = new Worker('worker/flight_interpolator.js');
+    setupWorkerListener(); // A new function to handle messages from the worker
     await fetchPilotData();
 
     // Initial view setup
