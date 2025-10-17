@@ -81,9 +81,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
     let runwaysData = {}; // NEW: To store runway data indexed by airport ICAO
     let animationFrameId = null;
-    let flightAnimationState = {}; // Key: flightId, Value: { startPos, targetPos, startHeading, targetHeading, startTime, duration }
+    let liveFlightData = {}; // Key: flightId, Value: { lon, lat, heading, speed, timestamp }
     const DATA_REFRESH_INTERVAL_MS = 3000; // Your current refresh interval
-    const ANIMATION_DURATION_MS = DATA_REFRESH_INTERVAL_MS - 500; // Animate for slightly less than the refresh interval for smoothness
 
     // --- Map-related State ---
     let liveFlightsMap = null;
@@ -953,8 +952,34 @@ async function fetchRunwaysData() {
         }
     }
 
-    // --- Helper Functions ---
+    /// --- Helper Functions ---
 
+/**
+ * --- [NEW] Predicts a new coordinate based on a starting point, bearing, and distance.
+ * This is the core of the extrapolation logic.
+ * @param {number} lat - Starting latitude in degrees.
+ * @param {number} lon - Starting longitude in degrees.
+ * @param {number} bearing - Bearing in degrees (0-360).
+ * @param {number} distanceKm - Distance to travel in kilometers.
+ * @returns {{lat: number, lon: number}} The new predicted coordinates.
+ */
+function predictNewPosition(lat, lon, bearing, distanceKm) {
+    const R = 6371; // Earth's radius in km
+    const toRad = (v) => v * Math.PI / 180;
+    const toDeg = (v) => v * 180 / Math.PI;
+
+    const latRad = toRad(lat);
+    const lonRad = toRad(lon);
+    const bearingRad = toRad(bearing);
+
+    const lat2Rad = Math.asin(Math.sin(latRad) * Math.cos(distanceKm / R) +
+                             Math.cos(latRad) * Math.sin(distanceKm / R) * Math.cos(bearingRad));
+
+    const lon2Rad = lonRad + Math.atan2(Math.sin(bearingRad) * Math.sin(distanceKm / R) * Math.cos(latRad),
+                                       Math.cos(distanceKm / R) - Math.sin(latRad) * Math.sin(lat2Rad));
+
+    return { lat: toDeg(lat2Rad), lon: toDeg(lon2Rad) };
+}
 
 /**
      * Linearly interpolates a value.
@@ -981,56 +1006,91 @@ async function fetchRunwaysData() {
     }
 
 /**
- * --- [NEW] The main animation loop for smoothly moving aircraft icons.
- * This function is called on every frame to update positions and headings.
+ * --- [REWRITTEN] The main predictive animation loop.
+ * This function runs continuously, extrapolating positions for every aircraft
+ * based on its last known vector and the time elapsed.
  */
 function animationLoop(timestamp) {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-    if (!source || !source._data) {
+    if (!source) {
         animationFrameId = null; // Stop if the source is gone
         return;
     }
 
-    let isStillAnimating = false;
-    const currentGeoJSON = source._data;
+    const newFeatures = [];
+    const ktsToKmPerMs = 1.852 / 3600000; // Conversion factor for speed
 
-    // Iterate over every aircraft feature currently on the map
-    currentGeoJSON.features.forEach(feature => {
-        const flightId = feature.properties.flightId;
-        const state = flightAnimationState[flightId];
+    // Iterate over our live flight data, not the map features
+    for (const flightId in liveFlightData) {
+        const flight = liveFlightData[flightId];
 
-        // Skip if this flight isn't supposed to be animating
-        if (!state || state.startTime === null) return;
+        // Calculate how much time has passed since the last real data point
+        const elapsedTimeMs = timestamp - flight.timestamp;
 
-        const elapsedTime = timestamp - state.startTime;
-        let progress = elapsedTime / state.duration;
-
-        if (progress >= 1) {
-            progress = 1;
-            state.startTime = null; // Mark this animation as complete
-        } else {
-            isStillAnimating = true; // At least one flight is still moving
-        }
-
-        // Calculate the new interpolated position and heading
-        const lon = lerp(state.startPos[0], state.targetPos[0], progress);
-        const lat = lerp(state.startPos[1], state.targetPos[1], progress);
-        const heading = interpolateHeading(state.startHeading, state.targetHeading, progress);
+        // Predict how far the plane has traveled in that time
+        const distanceKm = flight.speed * ktsToKmPerMs * elapsedTimeMs;
         
-        // Update the feature's data in-place
-        feature.geometry.coordinates = [lon, lat];
-        feature.properties.heading = heading;
-    });
-
-    // Efficiently update the map's data source with all the new positions
-    source.setData(currentGeoJSON);
-
-    // If any flight is still animating, request the next frame. Otherwise, stop the loop.
-    if (isStillAnimating) {
-        animationFrameId = requestAnimationFrame(animationLoop);
-    } else {
-        animationFrameId = null;
+        // Calculate the new predicted position
+        const predictedPos = predictNewPosition(flight.lat, flight.lon, flight.heading, distanceKm);
+        
+        // Create a new feature for the map with the predicted position
+        newFeatures.push({
+            type: 'Feature',
+            geometry: {
+                type: 'Point',
+                coordinates: [predictedPos.lon, predictedPos.lat]
+            },
+            // The properties now include the latest heading for rotation
+            properties: {
+                ...flight.properties,
+                heading: flight.heading
+            }
+        });
     }
+
+    const geojsonData = { type: 'FeatureCollection', features: newFeatures };
+
+    // Update the map source with all new predicted positions.
+    // This is much more efficient than updating features one by one.
+    if (!sectorOpsMap.getSource('sector-ops-live-flights-source')) {
+        // This runs only once to create the source and layer if they don't exist
+        sectorOpsMap.addSource('sector-ops-live-flights-source', {
+            type: 'geojson',
+            data: geojsonData
+        });
+        sectorOpsMap.addLayer({
+            id: 'sector-ops-live-flights-layer',
+            type: 'symbol',
+            source: 'sector-ops-live-flights-source',
+            layout: {
+                'icon-image': ['match', ['get', 'category'], 'jumbo', 'icon-jumbo', 'widebody', 'icon-widebody', 'narrowbody', 'icon-narrowbody', 'regional', 'icon-regional', 'private', 'icon-private', 'fighter', 'icon-fighter', 'icon-default'],
+                'icon-size': 0.08,
+                'icon-rotate': ['get', 'heading'],
+                'icon-rotation-alignment': 'map',
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true
+            }
+        });
+        // Attach click handlers here as before
+        sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
+            const props = e.features[0].properties;
+            const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
+            // You might need to fetch the session ID again here or store it globally
+             fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions').then(res => res.json()).then(data => {
+                const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
+                if(expertSession) {
+                    handleAircraftClick(flightProps, expertSession.id);
+                }
+            });
+        });
+        sectorOpsMap.on('mouseenter', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
+        sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
+    } else {
+        source.setData(geojsonData);
+    }
+    
+    // The loop continues indefinitely
+    animationFrameId = requestAnimationFrame(animationLoop);
 }
 
 
@@ -3927,122 +3987,63 @@ async function updateSectorOpsLiveFlights() {
             return;
         }
 
-        // Fetch all live data in parallel
         const [flightsRes, atcRes, notamsRes] = await Promise.all([
             fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
         
-        // Update ATC & NOTAMs (no change here)
+        // Update ATC & NOTAMs (this logic is unchanged and correct)
         const atcData = await atcRes.json();
         activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
         const notamsData = await notamsRes.json();
         activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
         renderAirportMarkers(); 
 
-        // Process Flight Data for Animation
+        // --- [NEW LOGIC] Process flights by updating their live state ---
         const flightsData = await flightsRes.json();
         if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
             console.warn('Sector Ops Map: Could not fetch live flights.');
             return;
         }
         
-        const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-        const oldFeatures = source ? source._data.features : [];
-        const oldFeaturesMap = new Map(oldFeatures.map(f => [f.properties.flightId, f]));
         const now = performance.now();
+        const updatedFlightIds = new Set();
 
-        const finalFeatures = flightsData.flights.map(flight => {
-            if (!flight.position || flight.position.lat == null || flight.position.lon == null) return null;
+        flightsData.flights.forEach(flight => {
+            if (!flight.position || flight.position.lat == null || flight.position.lon == null) return;
             
             const flightId = flight.flightId;
-            const aircraftCategory = getAircraftCategory(flight.aircraft?.aircraftName);
-            const oldFeature = oldFeaturesMap.get(flightId);
+            updatedFlightIds.add(flightId);
 
-            const newPosition = [flight.position.lon, flight.position.lat];
-            const newHeading = flight.position.track_deg || 0;
-
-            if (oldFeature) {
-                // This flight already exists. Set its animation state.
-                flightAnimationState[flightId] = {
-                    startPos: oldFeature.geometry.coordinates,
-                    targetPos: newPosition,
-                    startHeading: oldFeature.properties.heading,
-                    targetHeading: newHeading,
-                    startTime: now,
-                    duration: ANIMATION_DURATION_MS
-                };
-            } else {
-                // This is a new flight. It will appear instantly without animating.
-                flightAnimationState[flightId] = {
-                    startPos: newPosition,
-                    targetPos: newPosition,
-                    startHeading: newHeading,
-                    targetHeading: newHeading,
-                    startTime: null, // No animation on first appearance
-                    duration: ANIMATION_DURATION_MS
-                };
-            }
-            
-            // Create the feature. It is initialized at the animation's START position.
-            // The animationLoop will handle moving it to the target position.
-            return {
-                type: 'Feature',
-                geometry: { 
-                    type: 'Point', 
-                    coordinates: oldFeature ? oldFeature.geometry.coordinates : newPosition 
-                },
+            // Update or create the live data entry for this flight
+            liveFlightData[flightId] = {
+                lat: flight.position.lat,
+                lon: flight.position.lon,
+                heading: flight.position.track_deg || 0,
+                speed: flight.position.gs_kt || 0,
+                timestamp: now,
+                // Also store the original properties for the info window click
                 properties: {
-                    flightId: flight.flightId, callsign: flight.callsign, username: flight.username,
-                    altitude: flight.position.alt_ft, speed: flight.position.gs_kt, 
-                    heading: oldFeature ? oldFeature.properties.heading : newHeading,
-                    verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft),
+                    flightId: flight.flightId,
+                    callsign: flight.callsign,
+                    username: flight.username,
+                    altitude: flight.position.alt_ft,
+                    speed: flight.position.gs_kt,
+                    verticalSpeed: flight.position.vs_fpm || 0,
+                    position: JSON.stringify(flight.position),
+                    aircraft: JSON.stringify(flight.aircraft),
                     userId: flight.userId,
-                    category: aircraftCategory 
+                    category: getAircraftCategory(flight.aircraft?.aircraftName)
                 }
             };
-        }).filter(Boolean);
-        
-        // Clean up animation state for planes that are no longer being tracked
-        const newFlightIds = new Set(flightsData.flights.map(f => f.flightId));
-        for (const flightId in flightAnimationState) {
-            if (!newFlightIds.has(flightId)) {
-                delete flightAnimationState[flightId];
+        });
+
+        // Clean up data for planes that are no longer being tracked
+        for (const flightId in liveFlightData) {
+            if (!updatedFlightIds.has(flightId)) {
+                delete liveFlightData[flightId];
             }
-        }
-
-        const geojsonData = { type: 'FeatureCollection', features: finalFeatures };
-
-        if (source) {
-            source.setData(geojsonData);
-        } else {
-            // This logic runs only once to create the source and layer
-            sectorOpsMap.addSource('sector-ops-live-flights-source', {
-                type: 'geojson',
-                data: geojsonData
-            });
-            sectorOpsMap.addLayer({
-                id: 'sector-ops-live-flights-layer',
-                type: 'symbol',
-                source: 'sector-ops-live-flights-source',
-                layout: {
-                    'icon-image': ['match', ['get', 'category'], 'jumbo', 'icon-jumbo', 'widebody', 'icon-widebody', 'narrowbody', 'icon-narrowbody', 'regional', 'icon-regional', 'private', 'icon-private', 'fighter', 'icon-fighter', 'icon-default'],
-                    'icon-size': 0.08,
-                    'icon-rotate': ['get', 'heading'],
-                    'icon-rotation-alignment': 'map', 
-                    'icon-allow-overlap': true, 
-                    'icon-ignore-placement': true
-                }
-            });
-            // Click/hover event listeners (no change here)
-            sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
-                const props = e.features[0].properties;
-                const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
-                handleAircraftClick(flightProps, expertSession.id);
-            });
-            sectorOpsMap.on('mouseenter', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
-            sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
         }
 
         // Start the animation loop if it's not already running
