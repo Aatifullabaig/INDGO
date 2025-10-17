@@ -990,28 +990,49 @@ function getAircraftCategory(aircraftName) {
     return 'default';
 }
 
-// Add this new function inside your main script
+// Add these new state variables near the top of your script
+let isMapUpdateScheduled = false;
+const MAP_UPDATE_INTERVAL_MS = 100; // Update the map 10 times per second
+
 function setupWorkerListener() {
     flightInterpolatorWorker.onmessage = (e) => {
-        // Use requestAnimationFrame to ensure the map update happens at the optimal time for rendering
-        requestAnimationFrame(() => {
-            const newPositions = e.data;
-            if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
+        // The worker is sending updates very frequently (e.g., 60fps).
+        // We receive them and update our 'source' data object in memory immediately.
+        // This part is cheap and happens on every message.
+        const newPositions = e.data;
+        if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded() || !newPositions || newPositions.length === 0) return;
 
-            const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-            if (source && source._data && source._data.features) {
-                // Update the coordinates and heading of each feature in place
-                source._data.features.forEach(feature => {
-                    const updatedData = newPositions.find(p => p.flightId === feature.properties.flightId);
-                    if (updatedData) {
-                        feature.geometry.coordinates = [updatedData.lon, updatedData.lat];
-                        feature.properties.heading = updatedData.heading;
-                    }
-                });
-                // Tell Mapbox the data has changed so it can re-render
-                source.setData(source._data);
-            }
-        });
+        const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+        if (source && source._data && source._data.features) {
+            const positionsMap = new Map(newPositions.map(p => [p.flightId, p]));
+
+            source._data.features.forEach(feature => {
+                const updatedData = positionsMap.get(feature.properties.flightId);
+                if (updatedData) {
+                    feature.geometry.coordinates = [updatedData.lon, updatedData.lat];
+                    feature.properties.heading = updatedData.heading;
+                }
+            });
+        }
+
+        // --- THE THROTTLING LOGIC ---
+        // Now, we check if an expensive map update is already scheduled.
+        // If not, we schedule one to run in a moment.
+        if (!isMapUpdateScheduled) {
+            isMapUpdateScheduled = true; // Set the flag so we don't schedule more updates
+            
+            setTimeout(() => {
+                // When the timeout fires, grab the MOST RECENT data we've been updating
+                // in the background and tell Mapbox to draw it just ONCE.
+                if (sectorOpsMap && sectorOpsMap.getSource('sector-ops-live-flights-source')) {
+                    const latestSourceData = sectorOpsMap.getSource('sector-ops-live-flights-source')._data;
+                    sectorOpsMap.getSource('sector-ops-live-flights-source').setData(latestSourceData);
+                }
+                
+                // Reset the flag so the next update can be scheduled after the interval has passed.
+                isMapUpdateScheduled = false;
+            }, MAP_UPDATE_INTERVAL_MS);
+        }
     };
 }
 
