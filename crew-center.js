@@ -954,11 +954,9 @@ async function fetchRunwaysData() {
 
     /// --- Helper Functions ---
 
-// --- ADD THESE NEW FUNCTIONS ---
-
 /**
  * --- [NEW] Predicts a new coordinate based on a starting point, bearing, and distance.
- * This is the core of the extrapolation logic for smooth animation.
+ * This is the core of the extrapolation logic.
  * @param {number} lat - Starting latitude in degrees.
  * @param {number} lon - Starting longitude in degrees.
  * @param {number} bearing - Bearing in degrees (0-360).
@@ -983,35 +981,52 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
     return { lat: toDeg(lat2Rad), lon: toDeg(lon2Rad) };
 }
 
+/**
+     * Linearly interpolates a value.
+     */
+    /**
+     * Linearly interpolates between two values.
+     * @param {number} start - The starting value.
+     * @param {number} end - The ending value.
+     * @param {number} progress - The interpolation factor (0.0 to 1.0).
+     * @returns {number} The interpolated value.
+     */
+    function lerp(start, end, progress) {
+        return start * (1 - progress) + end * progress;
+    }
+
+    /**
+     * Interpolates heading degrees along the shortest path (e.g., from 350° to 10°).
+     */
+    function interpolateHeading(start, end, progress) {
+        let delta = end - start;
+        if (delta > 180) delta -= 360;
+        if (delta < -180) delta += 360;
+        return (start + delta * progress + 360) % 360;
+    }
 
 /**
- * --- [NEW & OPTIMIZED] The main predictive animation loop.
- * This function's only job is to update the data of the existing map source for a smooth 60fps animation.
+ * --- [REWRITTEN & SIMPLIFIED] The main predictive animation loop.
+ * This function's only job is to update the data of the existing map source.
  */
 function animationLoop(timestamp) {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
     
     // Safety check: if the source doesn't exist for some reason, stop the loop.
     if (!source) {
-        animationFrameId = null; // Ensure the loop stops
+        animationFrameId = null;
         return;
     }
 
     const newFeatures = [];
-    const ktsToKmPerMs = 1.852 / 3600000; // Conversion factor for knots to km/ms
+    const ktsToKmPerMs = 1.852 / 3600000;
 
-    // Iterate over all flights we are currently tracking
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
         const elapsedTimeMs = timestamp - flight.timestamp;
-        
-        // Calculate how far the plane should have traveled since the last API update
         const distanceKm = flight.speed * ktsToKmPerMs * elapsedTimeMs;
-        
-        // Predict its new position
         const predictedPos = predictNewPosition(flight.lat, flight.lon, flight.heading, distanceKm);
 
-        // Create a new GeoJSON feature for the plane at its predicted position
         newFeatures.push({
             type: 'Feature',
             geometry: {
@@ -1019,13 +1034,13 @@ function animationLoop(timestamp) {
                 coordinates: [predictedPos.lon, predictedPos.lat]
             },
             properties: {
-                ...flight.properties, // Carry over all original properties (callsign, etc.)
-                heading: flight.heading // Ensure heading is updated
+                ...flight.properties,
+                heading: flight.heading
             }
         });
     }
 
-    // Directly update the source data. This is extremely fast and is the correct way to animate in Mapbox.
+    // Directly update the source data. No need to check for existence here.
     source.setData({ type: 'FeatureCollection', features: newFeatures });
 
     // Continue the loop for the next frame
@@ -2418,160 +2433,71 @@ function updatePfdDisplay(pfdData) {
         airportInfoWindow.dataset.eventsAttached = 'true';
     }
     
-    /**
- * --- [REMODEL V4 - FULL SYNC WITH PATH DENSIFICATION] Handles aircraft clicks, data fetching, map plotting, and window population.
- */
-async function handleAircraftClick(flightProps, sessionId) {
-    if (!flightProps || !flightProps.flightId) return;
+    // --- [MODIFIED] Event listener setup using Event Delegation ---
+    function setupAircraftWindowEvents() {
+        if (!aircraftInfoWindow || aircraftInfoWindow.dataset.eventsAttached === 'true') return;
+    
+        aircraftInfoWindow.addEventListener('click', async (e) => {
+            const closeBtn = e.target.closest('.aircraft-window-close-btn');
+            const hideBtn = e.target.closest('.aircraft-window-hide-btn');
+            const statsBtn = e.target.closest('.pilot-name-button');
+            // The '.back-to-pfd-btn' logic has been removed from here
 
-    // FIX: Prevent re-fetch if the user clicks the same aircraft while its window is already open.
-    if (currentFlightInWindow === flightProps.flightId && aircraftInfoWindow.classList.contains('visible')) {
-        return;
-    }
-
-    resetPfdState();
-
-    if (currentFlightInWindow && currentFlightInWindow !== flightProps.flightId) {
-        clearLiveFlightPath(currentFlightInWindow);
-    }
-    if (activePfdUpdateInterval) {
-        clearInterval(activePfdUpdateInterval);
-        activePfdUpdateInterval = null;
-    }
-
-    currentFlightInWindow = flightProps.flightId;
-
-    // ✅ REPLACEMENT: This block now defers to the MobileUIHandler
-    // This ensures the mobile script has full control on smaller screens.
-    if (window.MobileUIHandler && window.MobileUIHandler.isMobile()) {
-        window.MobileUIHandler.openWindow(aircraftInfoWindow);
-    } else {
-        // Original desktop logic
-        aircraftInfoWindow.classList.add('visible');
-    }
-    aircraftInfoWindowRecallBtn.classList.remove('visible');
-
-
-    const windowEl = document.getElementById('aircraft-info-window');
-    windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
-
-    try {
-        const [planRes, routeRes] = await Promise.all([
-            fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/plan`),
-            fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/route`)
-        ]);
-        
-        const planData = planRes.ok ? await planRes.json() : null;
-        const plan = (planData && planData.ok) ? planData.plan : null;
-        const routeData = routeRes.ok ? await routeRes.json() : null;
-        
-        // NEW: Cache data for stats view
-        cachedFlightDataForStatsView = { flightProps, plan };
-        populateAircraftInfoWindow(flightProps, plan);
-
-        const currentPosition = [flightProps.position.lon, flightProps.position.lat];
-        const flownLayerId = `flown-path-${flightProps.flightId}`;
-        let allCoordsForBounds = [currentPosition];
-
-        const historicalRoute = (routeData && routeData.ok && Array.isArray(routeData.route)) 
-            ? routeData.route.map(p => [p.longitude, p.latitude]) 
-            : [];
-        
-        if (historicalRoute.length > 0) {
-            // ---- FIX APPLIED HERE: Densify the historical route for a smooth great-circle path ----
-            const densifiedPath = densifyRoute(historicalRoute, 30); // Add 30 points between each segment
-            const completeFlownPath = [...densifiedPath, currentPosition];
-            // ---- END OF FIX ----
-
-            allCoordsForBounds.push(...historicalRoute);
-
-            if (!sectorOpsMap.getSource(flownLayerId)) {
-                sectorOpsMap.addSource(flownLayerId, {
-                    type: 'geojson',
-                    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: completeFlownPath } }
-                });
-                sectorOpsMap.addLayer({
-                    id: flownLayerId,
-                    type: 'line',
-                    source: flownLayerId,
-                    paint: { 'line-color': '#00b894', 'line-width': 4, 'line-opacity': 0.9 }
-                }, 'sector-ops-live-flights-layer');
+            if (closeBtn) {
+                aircraftInfoWindow.classList.remove('visible');
+                MobileUIHandler.closeActiveWindow();
+                aircraftInfoWindowRecallBtn.classList.remove('visible');
+                clearLiveFlightPath(currentFlightInWindow);
+                if (activePfdUpdateInterval) clearInterval(activePfdUpdateInterval);
+                activePfdUpdateInterval = null;
+                currentFlightInWindow = null;
+                cachedFlightDataForStatsView = { flightProps: null, plan: null };
+            }
+    
+            if (hideBtn) {
+                aircraftInfoWindow.classList.remove('visible');
+                if (activePfdUpdateInterval) clearInterval(activePfdUpdateInterval);
+                activePfdUpdateInterval = null;
+                if (currentFlightInWindow) {
+                    aircraftInfoWindowRecallBtn.classList.add('visible', 'palpitate');
+                    setTimeout(() => aircraftInfoWindowRecallBtn.classList.remove('palpitate'), 1000);
+                }
             }
 
-            // --- FIX: Store the layer ID and the coordinates array for future updates ---
-            sectorOpsLiveFlightPathLayers[flightProps.flightId] = {
-                flown: flownLayerId,
-                coordinates: completeFlownPath
-            };
-        }
-        
-        if (allCoordsForBounds.length > 1) {
-            const bounds = allCoordsForBounds.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(allCoordsForBounds[0], allCoordsForBounds[0]));
-            sectorOpsMap.fitBounds(bounds, { padding: 80, maxZoom: 10, duration: 1000 });
-        }
-        
-        activePfdUpdateInterval = setInterval(async () => {
-            try {
-                const freshDataRes = await fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}`);
-                if (!freshDataRes.ok) throw new Error("Flight data update failed.");
-                
-                const allFlights = await freshDataRes.json();
-                const updatedFlight = allFlights.flights.find(f => f.flightId === flightProps.flightId);
-
-                if (updatedFlight && updatedFlight.position) {
-                    // --- Logic to update the info window ---
-                    updatePfdDisplay(updatedFlight.position);
-                    updateAircraftInfoWindow(updatedFlight, plan);
-                    
-                    // --- FIX: Logic to update and smooth the flown path in real-time ---
-                    const flightPathState = sectorOpsLiveFlightPathLayers[flightProps.flightId];
-                    const pathSource = flightPathState ? sectorOpsMap.getSource(flightPathState.flown) : null;
-
-                    if (flightPathState && pathSource && flightPathState.coordinates.length > 0) {
-                        const newPosition = [updatedFlight.position.lon, updatedFlight.position.lat];
-                        const lastPosition = flightPathState.coordinates[flightPathState.coordinates.length - 1];
-
-                        const [lon1, lat1] = lastPosition;
-                        const [lon2, lat2] = newPosition;
-
-                        // Only add points if the aircraft has actually moved
-                        if (lat1 !== lat2 || lon1 !== lon2) {
-                            const pointsToInterpolate = 5; // Increase for even smoother curves
-                            for (let i = 1; i <= pointsToInterpolate; i++) {
-                                const fraction = i / (pointsToInterpolate + 1);
-                                const intermediate = getIntermediatePoint(lat1, lon1, lat2, lon2, fraction);
-                                flightPathState.coordinates.push([intermediate.lon, intermediate.lat]);
-                            }
-                        }
-
-                        // Add the final, actual position from the API
-                        flightPathState.coordinates.push(newPosition);
-
-                        // Update the map source with the newly densified path
-                        pathSource.setData({
-                            type: 'Feature',
-                            geometry: {
-                                type: 'LineString',
-                                coordinates: flightPathState.coordinates
+            if (statsBtn) {
+                const userId = statsBtn.dataset.userId;
+                const username = statsBtn.dataset.username;
+                if (userId) {
+                    await displayPilotStats(userId, username);
+                }
+            }
+        });
+    
+        // The recall button logic remains the same.
+        aircraftInfoWindowRecallBtn.addEventListener('click', () => {
+            if (currentFlightInWindow) {
+                const layer = sectorOpsMap.getLayer('sector-ops-live-flights-layer');
+                if (layer) {
+                    const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+                    const features = source._data.features;
+                    const feature = features.find(f => f.properties.flightId === currentFlightInWindow);
+                    if (feature) {
+                        const props = feature.properties;
+                        const flightProps = { ...props, position: JSON.parse(props.position) };
+                        
+                        fetch('https://site--acars-backend--6dmjph8v.code.run/if-sessions').then(res => res.json()).then(data => {
+                            const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
+                            if(expertSession) {
+                                handleAircraftClick(flightProps, expertSession.id);
                             }
                         });
                     }
-                } else {
-                    clearInterval(activePfdUpdateInterval);
-                    activePfdUpdateInterval = null;
                 }
-            } catch (error) { // THIS CATCH BLOCK IS RESTORED
-                console.error("Stopping PFD update due to error:", error);
-                clearInterval(activePfdUpdateInterval);
-                activePfdUpdateInterval = null;
             }
-        }, 3000);
-
-    } catch (error) {
-        console.error("Error fetching or plotting aircraft details:", error);
-        windowEl.innerHTML = `<p class="error-text" style="padding: 2rem;">Could not retrieve complete flight details. The aircraft may have landed or disconnected.</p>`;
+        });
+        
+        aircraftInfoWindow.dataset.eventsAttached = 'true';
     }
-}
 
 
     /**
@@ -2679,6 +2605,7 @@ async function handleAircraftClick(flightProps, sessionId) {
     }
 
     // --- MODIFY THIS FUNCTION ---
+// --- MODIFY THIS FUNCTION ---
 async function initializeSectorOpsMap(centerICAO) {
     if (!MAPBOX_ACCESS_TOKEN) {
         document.getElementById('sector-ops-map-fullscreen').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
@@ -2698,7 +2625,6 @@ async function initializeSectorOpsMap(centerICAO) {
 
     return new Promise(resolve => {
         sectorOpsMap.on('load', () => {
-            // A list of all custom icons you use for different aircraft categories
             const iconsToLoad = [
                 { id: 'icon-jumbo', path: '/Images/map_icons/jumbo.png' },
                 { id: 'icon-widebody', path: '/Images/map_icons/widebody.png' },
@@ -2714,18 +2640,18 @@ async function initializeSectorOpsMap(centerICAO) {
                     sectorOpsMap.loadImage(icon.path, (error, image) => {
                         if (error) {
                             console.warn(`Could not load icon: ${icon.path}`);
-                            rej(error); // Reject on error
+                            rej(error);
                         } else {
                             if (!sectorOpsMap.hasImage(icon.id)) {
                                 sectorOpsMap.addImage(icon.id, image);
                             }
-                            res(); // Resolve on success
+                            res();
                         }
                     });
                 })
             );
 
-            // --- [MODIFIED] Set up layers only after all icons are loaded ---
+            // --- [MODIFIED] Set up layers after icons are loaded ---
             Promise.all(imagePromises).then(() => {
                 console.log('All custom aircraft icons loaded.');
 
@@ -2733,7 +2659,7 @@ async function initializeSectorOpsMap(centerICAO) {
                 if (!sectorOpsMap.getSource('sector-ops-live-flights-source')) {
                     sectorOpsMap.addSource('sector-ops-live-flights-source', {
                         type: 'geojson',
-                        // Start with an empty collection; the animation loop will populate it
+                        // Start with an empty collection
                         data: { type: 'FeatureCollection', features: [] }
                     });
 
@@ -2742,20 +2668,10 @@ async function initializeSectorOpsMap(centerICAO) {
                         type: 'symbol',
                         source: 'sector-ops-live-flights-source',
                         layout: {
-                            // Match the icon based on the 'category' property of the flight
-                            'icon-image': ['match', ['get', 'category'],
-                                'jumbo', 'icon-jumbo',
-                                'widebody', 'icon-widebody',
-                                'narrowbody', 'icon-narrowbody',
-                                'regional', 'icon-regional',
-                                'private', 'icon-private',
-                                'fighter', 'icon-fighter',
-                                'icon-default' // Fallback icon
-                            ],
+                            'icon-image': ['match', ['get', 'category'], 'jumbo', 'icon-jumbo', 'widebody', 'icon-widebody', 'narrowbody', 'icon-narrowbody', 'regional', 'icon-regional', 'private', 'icon-private', 'fighter', 'icon-fighter', 'icon-default'],
                             'icon-size': 0.08,
                             'icon-rotate': ['get', 'heading'],
                             'icon-rotation-alignment': 'map',
-                            // --- FIX for disappearing icons ---
                             'icon-allow-overlap': true,
                             'icon-ignore-placement': true
                         }
@@ -2764,7 +2680,6 @@ async function initializeSectorOpsMap(centerICAO) {
                     // Set up the click/hover event listeners ONCE
                     sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
                         const props = e.features[0].properties;
-                        // The properties are stringified, so we need to parse them back
                         const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
                         fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions').then(res => res.json()).then(data => {
                             const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
@@ -2995,7 +2910,18 @@ async function handleAircraftClick(flightProps, sessionId) {
                     // --- Logic to update the info window (Unchanged) ---
                     updatePfdDisplay(updatedFlight.position);
                     updateAircraftInfoWindow(updatedFlight, plan);
-                }
+                    
+                    // --- Logic to update the aircraft's icon on the map (Unchanged) ---
+                    const iconSource = sectorOpsMap.getSource('sector-ops-live-flights-source');
+                    if (iconSource && iconSource._data) {
+                        const currentData = iconSource._data;
+                        const featureToUpdate = currentData.features.find(f => f.properties.flightId === flightProps.flightId);
+                        if (featureToUpdate) {
+                            featureToUpdate.geometry.coordinates = [updatedFlight.position.lon, updatedFlight.position.lat];
+                            featureToUpdate.properties.heading = updatedFlight.position.track_deg || 0;
+                            iconSource.setData(currentData);
+                        }
+                    }
                     
                     // --- FIX: Logic to update the flown path using the stored array ---
                     // --- FIX: Logic to update and smooth the flown path in real-time ---
@@ -4035,7 +3961,8 @@ function updateAircraftInfoWindow(baseProps, plan) {
         });
     }
 
-    // --- REPLACE your existing updateSectorOpsLiveFlights function with this one ---
+    // --- MODIFY THIS FUNCTION ---
+// --- REPLACE your existing updateSectorOpsLiveFlights function with this one ---
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -4051,28 +3978,27 @@ async function updateSectorOpsLiveFlights() {
             return;
         }
 
-        // Fetch all live data in parallel for efficiency
         const [flightsRes, atcRes, notamsRes] = await Promise.all([
             fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
         
-        // Update ATC & NOTAMs (this logic is unchanged and can stay)
+        // Update ATC & NOTAMs (this logic is unchanged and correct)
         const atcData = await atcRes.json();
         activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
         const notamsData = await notamsRes.json();
         activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
-        renderAirportMarkers(); // Re-render airport dots with updated ATC status
+        renderAirportMarkers(); 
 
-        // --- [NEW LOGIC] Process flights by updating their live state object ---
+        // --- [NEW LOGIC] Process flights by updating their live state ---
         const flightsData = await flightsRes.json();
         if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
             console.warn('Sector Ops Map: Could not fetch live flights.');
             return;
         }
         
-        const now = performance.now(); // Get a high-precision timestamp
+        const now = performance.now();
         const updatedFlightIds = new Set();
 
         flightsData.flights.forEach(flight => {
@@ -4081,14 +4007,14 @@ async function updateSectorOpsLiveFlights() {
             const flightId = flight.flightId;
             updatedFlightIds.add(flightId);
 
-            // Update or create the live data entry for this flight. This object is what the animationLoop reads from.
+            // Update or create the live data entry for this flight
             liveFlightData[flightId] = {
                 lat: flight.position.lat,
                 lon: flight.position.lon,
                 heading: flight.position.track_deg || 0,
                 speed: flight.position.gs_kt || 0,
-                timestamp: now, // Store the exact time we received this data
-                // Store all the original properties so they can be used in the popup/info window
+                timestamp: now,
+                // Also store the original properties for the info window click
                 properties: {
                     flightId: flight.flightId,
                     callsign: flight.callsign,
@@ -4096,7 +4022,7 @@ async function updateSectorOpsLiveFlights() {
                     altitude: flight.position.alt_ft,
                     speed: flight.position.gs_kt,
                     verticalSpeed: flight.position.vs_fpm || 0,
-                    position: JSON.stringify(flight.position), // Stringify complex objects for GeoJSON
+                    position: JSON.stringify(flight.position),
                     aircraft: JSON.stringify(flight.aircraft),
                     userId: flight.userId,
                     category: getAircraftCategory(flight.aircraft?.aircraftName)
@@ -4104,7 +4030,7 @@ async function updateSectorOpsLiveFlights() {
             };
         });
 
-        // Clean up data for planes that are no longer in the API response
+        // Clean up data for planes that are no longer being tracked
         for (const flightId in liveFlightData) {
             if (!updatedFlightIds.has(flightId)) {
                 delete liveFlightData[flightId];
