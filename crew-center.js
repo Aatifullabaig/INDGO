@@ -2906,18 +2906,7 @@ async function handleAircraftClick(flightProps, sessionId) {
                     // --- Logic to update the info window (Unchanged) ---
                     updatePfdDisplay(updatedFlight.position);
                     updateAircraftInfoWindow(updatedFlight, plan);
-                    
-                    // --- Logic to update the aircraft's icon on the map (Unchanged) ---
-                    const iconSource = sectorOpsMap.getSource('sector-ops-live-flights-source');
-                    if (iconSource && iconSource._data) {
-                        const currentData = iconSource._data;
-                        const featureToUpdate = currentData.features.find(f => f.properties.flightId === flightProps.flightId);
-                        if (featureToUpdate) {
-                            featureToUpdate.geometry.coordinates = [updatedFlight.position.lon, updatedFlight.position.lat];
-                            featureToUpdate.properties.heading = updatedFlight.position.track_deg || 0;
-                            iconSource.setData(currentData);
-                        }
-                    }
+                }
                     
                     // --- FIX: Logic to update the flown path using the stored array ---
                     // --- FIX: Logic to update and smooth the flown path in real-time ---
