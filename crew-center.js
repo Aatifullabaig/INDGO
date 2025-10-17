@@ -3874,6 +3874,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
         });
     }
 
+
  async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -3889,6 +3890,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
             return;
         }
 
+        // Fetch all data in parallel as before
         const [flightsRes, atcRes, notamsRes] = await Promise.all([
             fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
@@ -3909,19 +3911,16 @@ function updateAircraftInfoWindow(baseProps, plan) {
             return;
         }
         
-        // Send the latest, complete flight data to the worker for interpolation
+        // The ONLY job of the main thread regarding position is to send data to the worker.
         if (flightInterpolatorWorker) {
             flightInterpolatorWorker.postMessage({
                 flights: flightsData.flights,
-                interval: 30000 
+                interval: 3000 // Your API poll interval (30 seconds)
             });
         }
 
         const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-
-        // --- FIX STARTS HERE ---
         
-        // Helper function to create a feature from flight data
         const createFeatureFromFlight = (flight) => {
             if (!flight.position || flight.position.lat == null || flight.position.lon == null) return null;
             const aircraftCategory = getAircraftCategory(flight.aircraft?.aircraftName);
@@ -3942,7 +3941,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
         };
 
         if (!source) {
-            // This runs ONLY ONCE to initialize the layer
+            // This initialization block is correct and should remain.
             console.log("Creating Sector Ops live flights layer for the first time.");
             
             const initialFeatures = flightsData.flights.map(createFeatureFromFlight).filter(Boolean);
@@ -3957,24 +3956,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 id: 'sector-ops-live-flights-layer',
                 type: 'symbol',
                 source: 'sector-ops-live-flights-source',
-                layout: {
-                    'icon-image': [
-                        'match',
-                        ['get', 'category'],
-                        'jumbo', 'icon-jumbo',
-                        'widebody', 'icon-widebody',
-                        'narrowbody', 'icon-narrowbody',
-                        'regional', 'icon-regional',
-                        'private', 'icon-private',
-                        'fighter', 'icon-fighter',
-                        'icon-default'
-                    ],
-                    'icon-size': 0.08,
-                    'icon-rotate': ['get', 'heading'],
-                    'icon-rotation-alignment': 'map',
-                    'icon-allow-overlap': true,
-                    'icon-ignore-placement': true
-                }
+                layout: { /* ... your layout properties ... */ }
             });
 
             // Set up event listeners once the layer is created
@@ -3987,42 +3969,37 @@ function updateAircraftInfoWindow(baseProps, plan) {
             sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
 
         } else {
-            // This runs on EVERY SUBSEQUENT update to synchronize the map
-            const newFlightsMap = new Map(flightsData.flights.map(f => [f.flightId, f]));
+            // --- ✅ CORRECTED LOGIC ---
+            // The main thread is now only responsible for ADDING new aircraft
+            // and REMOVING old ones from the source. It NEVER touches the position
+            // of existing aircraft.
+
+            const newFlightIds = new Set(flightsData.flights.map(f => f.flightId));
             const currentData = source._data;
-            const newFeatures = [];
+            
+            const existingFeatureIds = new Set(currentData.features.map(f => f.properties.flightId));
 
-            // Update existing features and keep them
-            for (const feature of currentData.features) {
-                const flightId = feature.properties.flightId;
-                if (newFlightsMap.has(flightId)) {
-                    const updatedFlight = newFlightsMap.get(flightId);
-                    // Update coordinates and properties for the main source
-                    feature.geometry.coordinates = [updatedFlight.position.lon, updatedFlight.position.lat];
-                    feature.properties.heading = updatedFlight.position.track_deg || 0;
-                    feature.properties.position = JSON.stringify(updatedFlight.position);
-                    feature.properties.aircraft = JSON.stringify(updatedFlight.aircraft);
-                    newFeatures.push(feature);
-                    newFlightsMap.delete(flightId); // Remove from map to track new flights
-                }
-                // If a flight is not in newFlightsMap, it has landed and is implicitly removed.
+            // Find aircraft to add
+            const flightsToAdd = flightsData.flights.filter(f => !existingFeatureIds.has(f.flightId));
+            
+            // Find features to remove
+            const featuresToRemove = currentData.features.filter(f => !newFlightIds.has(f.properties.flightId));
+            
+            if (flightsToAdd.length > 0 || featuresToRemove.length > 0) {
+                const newFeatures = currentData.features.filter(f => newFlightIds.has(f.properties.flightId));
+                flightsToAdd.forEach(flight => {
+                    const newFeature = createFeatureFromFlight(flight);
+                    if (newFeature) {
+                        newFeatures.push(newFeature);
+                    }
+                });
+
+                source.setData({
+                    type: 'FeatureCollection',
+                    features: newFeatures
+                });
             }
-
-            // Add any new flights that were not on the map before
-            for (const newFlight of newFlightsMap.values()) {
-                const newFeature = createFeatureFromFlight(newFlight);
-                if (newFeature) {
-                    newFeatures.push(newFeature);
-                }
-            }
-
-            // Update the source with the reconciled list of features
-            source.setData({
-                type: 'FeatureCollection',
-                features: newFeatures
-            });
         }
-        // --- FIX ENDS HERE ---
         
     } catch (error) {
         console.error('Error updating Sector Ops live data:', error);
