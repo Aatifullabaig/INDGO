@@ -80,15 +80,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     let airportsData = {};
     let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
     let runwaysData = {}; // NEW: To store runway data indexed by airport ICAO
-    let liveFlightData = {}; // Key: flightId, Value: { lon, lat, heading, speed, timestamp }
-    const DATA_REFRESH_INTERVAL_MS = 3000; // Your current refresh interval
 
     // --- Map-related State ---
     let liveFlightsMap = null;
     let pilotMarkers = {};
     let liveFlightsInterval = null;
     let sectorOpsMap = null;
-    let sectorOpsAnimationInterval = null; // Add this new variable
     let airportAndAtcMarkers = {}; // Holds all airport markers (blue dots and red ATC dots)
     let sectorOpsMapRouteLayers = [];
     let sectorOpsLiveFlightPathLayers = {}; // NEW: To track multiple flight trails
@@ -96,7 +93,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let activeAtcFacilities = []; // To store fetched ATC data
     let activeNotams = []; // To store fetched NOTAMs data
     let atcPopup = null; // To manage a single, shared popup instance
-    let sectorOpsAircraftLayer = null;
     // State for the airport info window
     let airportInfoWindow = null;
     let airportInfoWindowRecallBtn = null;
@@ -110,7 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let lastPfdState = { track_deg: 0, timestamp: 0, roll_deg: 0 };
     // --- NEW: To cache flight data when switching to stats view ---
     let cachedFlightDataForStatsView = { flightProps: null, plan: null };
-    let animationFrameId = null;
+    let sectorOpsAnimator = null;
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -954,59 +950,7 @@ async function fetchRunwaysData() {
         }
     }
 
-    /// --- Helper Functions ---
-
-/**
- * --- [NEW] Predicts a new coordinate based on a starting point, bearing, and distance.
- * This is the core of the extrapolation logic.
- * @param {number} lat - Starting latitude in degrees.
- * @param {number} lon - Starting longitude in degrees.
- * @param {number} bearing - Bearing in degrees (0-360).
- * @param {number} distanceKm - Distance to travel in kilometers.
- * @returns {{lat: number, lon: number}} The new predicted coordinates.
- */
-function predictNewPosition(lat, lon, bearing, distanceKm) {
-    const R = 6371; // Earth's radius in km
-    const toRad = (v) => v * Math.PI / 180;
-    const toDeg = (v) => v * 180 / Math.PI;
-
-    const latRad = toRad(lat);
-    const lonRad = toRad(lon);
-    const bearingRad = toRad(bearing);
-
-    const lat2Rad = Math.asin(Math.sin(latRad) * Math.cos(distanceKm / R) +
-                             Math.cos(latRad) * Math.sin(distanceKm / R) * Math.cos(bearingRad));
-
-    const lon2Rad = lonRad + Math.atan2(Math.sin(bearingRad) * Math.sin(distanceKm / R) * Math.cos(latRad),
-                                       Math.cos(distanceKm / R) - Math.sin(latRad) * Math.sin(lat2Rad));
-
-    return { lat: toDeg(lat2Rad), lon: toDeg(lon2Rad) };
-}
-
-/**
-     * Linearly interpolates a value.
-     */
-    /**
-     * Linearly interpolates between two values.
-     * @param {number} start - The starting value.
-     * @param {number} end - The ending value.
-     * @param {number} progress - The interpolation factor (0.0 to 1.0).
-     * @returns {number} The interpolated value.
-     */
-    function lerp(start, end, progress) {
-        return start * (1 - progress) + end * progress;
-    }
-
-    /**
-     * Interpolates heading degrees along the shortest path (e.g., from 350° to 10°).
-     */
-    function interpolateHeading(start, end, progress) {
-        let delta = end - start;
-        if (delta > 180) delta -= 360;
-        if (delta < -180) delta += 360;
-        return (start + delta * progress + 360) % 360;
-    }
-
+    // --- Helper Functions ---
 
 function getAircraftCategory(aircraftName) {
     if (!aircraftName) return 'default';
@@ -1518,236 +1462,6 @@ function getNearestRunway(aircraftPos, airportIcao, maxDistanceNM = 2.0) {
         const minutes = Math.floor((diffMs % 3600000) / 60000);
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
     }
-
-    /**
- * --- [NEW] Custom Canvas Layer for High-Performance Aircraft Rendering ---
- * This layer manages its own 60fps render loop for smooth animation
- * and performs "picking" (hit-testing) for click events.
- */
-class AircraftCanvasLayer {
-    constructor(options) {
-        this.id = options.id;
-        this.type = 'custom';
-        this.renderingMode = '2d';
-        this.images = {}; // To store loaded Image objects
-        this.dataObject = {};
-        this.projectedPoints = []; // Stores screen coordinates for click detection
-        this.imageUrls = {
-            'jumbo': '/Images/map_icons/jumbo.png',
-            'widebody': '/Images/map_icons/widebody.png',
-            'narrowbody': '/Images/map_icons/narrowbody.png',
-            'regional': '/Images/map_icons/regional.png',
-            'private': '/Images/map_icons/private.png',
-            'fighter': '/Images/map_icons/fighter.png',
-            'default': '/Images/map_icons/default.png'
-        };
-    }
-
-    /**
-     * Loads all aircraft icons into browser memory as Image objects.
-     * @returns {Promise<void>}
-     */
-    async loadImages() {
-        const promises = Object.entries(this.imageUrls).map(([id, url]) => {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    this.images[id] = img;
-                    resolve();
-                };
-                img.onerror = (err) => {
-                    console.warn(`Failed to load aircraft icon: ${url}`);
-                    // Resolve even on error so one missing icon doesn't break everything
-                    resolve(); 
-                };
-                img.src = url;
-            });
-        });
-        
-        await Promise.all(promises);
-        
-        // Ensure a default fallback exists if the PNG failed to load
-        if (!this.images['default']) {
-            console.warn('Default aircraft icon failed to load. Creating a canvas fallback.');
-            const canvas = document.createElement('canvas');
-            canvas.width = 20;
-            canvas.height = 20;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = 'white';
-            ctx.beginPath();
-            ctx.moveTo(10, 0);
-            ctx.lineTo(0, 20);
-            ctx.lineTo(20, 20);
-            ctx.closePath();
-            ctx.fill();
-            const fallbackImg = new Image();
-            fallbackImg.src = canvas.toDataURL();
-            this.images['default'] = fallbackImg;
-        }
-    }
-
-    /**
-     * Called by Mapbox when the layer is added to the map.
-     */
-    onAdd(map, gl) {
-        this.map = map;
-        this.canvas = document.createElement('canvas');
-        this.canvas.className = 'mapbox-canvas-layer';
-        this.canvas.width = this.map.getCanvas().width;
-        this.canvas.height = this.map.getCanvas().height;
-        
-        // Style canvas to overlay map but not intercept mouse events
-        this.canvas.style.position = 'absolute';
-        this.canvas.style.left = '0px';
-        this.canvas.style.top = '0px';
-        // This is crucial: the canvas itself doesn't block map clicks.
-        this.canvas.style.pointerEvents = 'none'; 
-        
-        this.map.getCanvasContainer().appendChild(this.canvas);
-        this.ctx = this.canvas.getContext('2d');
-    }
-
-    /**
-     * Called by Mapbox when the layer is removed.
-     */
-    onRemove() {
-        if (this.canvas.parentNode) {
-            this.canvas.parentNode.removeChild(this.canvas);
-        }
-        this.map = undefined;
-    }
-
-    /**
-     * Helper function to predict position.
-     * This is copied directly from your global helper function.
-     */
-    _predictNewPosition(lat, lon, bearing, distanceKm) {
-        const R = 6371; // Earth's radius in km
-        const toRad = (v) => v * Math.PI / 180;
-        const toDeg = (v) => v * 180 / Math.PI;
-
-        const latRad = toRad(lat);
-        const lonRad = toRad(lon);
-        const bearingRad = toRad(bearing);
-
-        const lat2Rad = Math.asin(Math.sin(latRad) * Math.cos(distanceKm / R) +
-                                 Math.cos(latRad) * Math.sin(distanceKm / R) * Math.cos(bearingRad));
-
-        const lon2Rad = lonRad + Math.atan2(Math.sin(bearingRad) * Math.sin(distanceKm / R) * Math.cos(latRad),
-                                           Math.cos(distanceKm / R) - Math.sin(latRad) * Math.sin(lat2Rad));
-
-        return { lat: toDeg(lat2Rad), lon: toDeg(lon2Rad) };
-    }
-
-/**
-     * The main render loop, called every frame by Mapbox.
-     * [PERFORMANCE FIX v3 - LEVEL OF DETAIL (LOD)]
-     * This function now has two distinct render paths based on zoom level
-     * to prevent lag when the whole globe is visible.
-     */
-    render(gl, matrix) {
-        const ctx = this.ctx;
-        if (!ctx) return;
-
-        // 1. Sync canvas size and clear
-        this.canvas.width = this.map.getCanvas().width;
-        this.canvas.height = this.map.getCanvas().height;
-        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-        // 3. Exit if no data (Uses this.dataObject from our previous fix)
-        if (Object.keys(this.dataObject).length === 0 || Object.keys(this.images).length === 0) {
-            return;
-        }
-
-        const currentZoom = this.map.getZoom();
-        const ANIMATION_ZOOM_THRESHOLD = 3.5; // <-- Controls when we switch modes
-
-        if (currentZoom > ANIMATION_ZOOM_THRESHOLD) {
-            // --- PATH 1: HIGH DETAIL (Zoomed In) ---
-            // Run the 60fps, high-detail animation with culling
-            
-            this.projectedPoints = []; // Clear and repopulate for click detection
-            const ktsToKmPerMs = 1.852 / 3600000;
-            const timestamp = performance.now();
-            const iconScale = 0.08;
-            const bounds = this.map.getBounds().pad(0.1); // Culling bounds
-
-            for (const flightId in this.dataObject) {
-                const flight = this.dataObject[flightId];
-
-                // CULLING: Skip planes outside the viewport
-                if (!bounds.contains([flight.lon, flight.lat])) {
-                    continue;
-                }
-
-                // 6. Extrapolate position
-                const elapsedTimeMs = timestamp - flight.timestamp;
-                const distanceKm = flight.speed * ktsToKmPerMs * elapsedTimeMs;
-                const predictedPos = this._predictNewPosition(flight.lat, flight.lon, flight.heading, distanceKm);
-
-                // 7. Project
-                const screenPoint = this.map.project([predictedPos.lon, predictedPos.lat]);
-
-                // 8. Get icon
-                const category = flight.properties.category || 'default';
-                const img = this.images[category] || this.images['default'];
-                if (!img || !img.width || !img.height) continue;
-                
-                const imgWidth = img.width * iconScale;
-                const imgHeight = img.height * iconScale;
-
-                // 9. Store for click detection
-                this.projectedPoints.push({
-                    x: screenPoint.x,
-                    y: screenPoint.y,
-                    width: imgWidth,
-                    height: imgHeight,
-                    flightProps: flight.properties
-                });
-
-                // 10. Draw rotated icon
-                const headingRad = (flight.heading * Math.PI) / 180;
-                ctx.save();
-                ctx.translate(screenPoint.x, screenPoint.y);
-                ctx.rotate(headingRad);
-                ctx.drawImage(img, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
-                ctx.restore();
-            }
-
-            // 11. CRITICAL: Trigger the next frame for 60fps animation
-            this.map.triggerRepaint();
-
-        } else {
-            // --- PATH 2: LOW DETAIL (Zoomed Out) ---
-            // Run a static, low-detail render. This is *much* faster.
-            
-            this.projectedPoints = []; // Click detection is disabled in this mode for performance
-            
-            // Set a simple style for all planes
-            ctx.fillStyle = '#00a8ff'; // Your brand's blue
-            ctx.globalAlpha = 0.8;
-
-            for (const flightId in this.dataObject) {
-                const flight = this.dataObject[flightId];
-
-                // NO extrapolation, NO culling
-                // 1. Project the plane's last *known* position
-                const screenPoint = this.map.project([flight.lon, flight.lat]);
-
-                // 2. Draw a simple, fast circle
-                ctx.beginPath();
-                ctx.arc(screenPoint.x, screenPoint.y, 2, 0, 2 * Math.PI); // 2px radius
-                ctx.fill();
-            }
-            
-            ctx.globalAlpha = 1.0; // Reset alpha for other map layers
-
-            // 11. CRITICAL: DO NOT call triggerRepaint().
-            // This stops the 60fps loop. The map will only redraw
-            // if the user pans or zooms, which is exactly what we want.
-        }
-    }
-}
 
     // --- [NEW] PFD Constants and Functions ---
     const PFD_PITCH_SCALE = 8;
@@ -2794,14 +2508,15 @@ function updatePfdDisplay(pfdData) {
         }
     }
 
-    async function initializeSectorOpsMap(centerICAO) {
+   // --- MODIFY THIS FUNCTION ---
+async function initializeSectorOpsMap(centerICAO) {
     if (!MAPBOX_ACCESS_TOKEN) {
         document.getElementById('sector-ops-map-fullscreen').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
         return;
     }
     if (sectorOpsMap) sectorOpsMap.remove();
 
-    const centerCoords = airportsData[centerICAO] ? [airportsData[centerICAO].lon, airportsData[centerICAO].lat] : [77.2, 28.6];
+    const centerCoords = airportsData[centerICAO] ? [airportsData[centerICAO].lon, airportsData[centerICAO].lat] : [77.2, 28.6]; // Default to Delhi
 
     sectorOpsMap = new mapboxgl.Map({
         container: 'sector-ops-map-fullscreen',
@@ -2812,101 +2527,109 @@ function updatePfdDisplay(pfdData) {
     });
 
     return new Promise(resolve => {
-        sectorOpsMap.on('load', async () => { // Make this async
+        sectorOpsMap.on('load', () => {
+            // --- REPLACEMENT: Load all aircraft icons in parallel ---
+            const iconsToLoad = [
+                { id: 'icon-jumbo', path: '/Images/map_icons/jumbo.png' },
+                { id: 'icon-widebody', path: '/Images/map_icons/widebody.png' },
+                { id: 'icon-narrowbody', path: '/Images/map_icons/narrowbody.png' },
+                { id: 'icon-regional', path: '/Images/map_icons/regional.png' },
+                { id: 'icon-private', path: '/Images/map_icons/private.png' },
+                { id: 'icon-fighter', path: '/Images/map_icons/fighter.png' },
+                { id: 'icon-default', path: '/Images/map_icons/default.png' } // Fallback icon
+            ];
 
-            // --- [NEW] Instantiate, load images, and add the custom canvas layer ---
-            sectorOpsAircraftLayer = new AircraftCanvasLayer({ id: 'sector-ops-live-flights' });
-            try {
-                await sectorOpsAircraftLayer.loadImages();
-                console.log('All custom aircraft icons loaded for Canvas layer.');
-                
-                // Add the custom layer. We add it before a label layer (like 'airport-label')
-                // so that text labels appear on top of the planes.
-                // Find a good layer to insert before, e.g., 'road-label', 'airport-label', 'place-label'
-                const firstLabelLayer = sectorOpsMap.getStyle().layers.find(
-                    layer => layer.type === 'symbol' && layer.layout && layer.layout['text-field']
-                );
-                
-                if (firstLabelLayer) {
-                    sectorOpsMap.addLayer(sectorOpsAircraftLayer, firstLabelLayer.id);
-                } else {
-                    sectorOpsMap.addLayer(sectorOpsAircraftLayer);
-                }
-
-            } catch (err) {
-                console.error('Failed to load aircraft icons, canvas layer not added.', err);
-            }
-
-            // --- [NEW] Add map-level click listener for "picking" ---
-            // We can no longer listen for clicks on a specific layer ID.
-            // We must listen for all map clicks and do manual hit-testing.
-            sectorOpsMap.on('click', (e) => {
-                // Check if the custom layer exists and has drawn points
-                if (!sectorOpsAircraftLayer || !sectorOpsAircraftLayer.projectedPoints) return;
-
-                const clickPoint = e.point;
-                let closestFlight = null;
-                let minDistance = Infinity;
-                const clickRadius = 20; // 20px click radius is generous
-
-                // Loop through the points drawn in the last render frame
-                for (const point of sectorOpsAircraftLayer.projectedPoints) {
-                    const dx = point.x - clickPoint.x;
-                    const dy = point.y - clickPoint.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    
-                    // Use a simple bounding box or radius check
-                    const hitBox = Math.max(point.width / 2, point.height / 2, clickRadius);
-
-                    if (distance < hitBox && distance < minDistance) {
-                        minDistance = distance;
-                        closestFlight = point.flightProps;
-                    }
-                }
-
-                // If we found a flight that was clicked, call the handler
-                if (closestFlight) {
-                    // Re-hydrate the flight properties from the stored JSON strings
-                    const flightProps = { 
-                        ...closestFlight, 
-                        position: JSON.parse(closestFlight.position), 
-                        aircraft: JSON.parse(closestFlight.aircraft) 
-                    };
-                    
-                    // Fetch session ID and call the handler (this logic is from your old listener)
-                    fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions').then(res => res.json()).then(data => {
-                        const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
-                        if (expertSession) {
-                            handleAircraftClick(flightProps, expertSession.id);
+            const imagePromises = iconsToLoad.map(icon => 
+                new Promise((res, rej) => {
+                    sectorOpsMap.loadImage(icon.path, (error, image) => {
+                        if (error) {
+                            console.warn(`Could not load icon: ${icon.path}`);
+                            rej(error); // Reject on error
+                        } else {
+                            if (!sectorOpsMap.hasImage(icon.id)) {
+                                sectorOpsMap.addImage(icon.id, image);
+                            }
+                            res(); // Resolve successfully
                         }
                     });
-                }
-            });
-            
-            // --- [NEW] Add mousemove listener for cursor style ---
-            sectorOpsMap.on('mousemove', (e) => {
-                if (!sectorOpsAircraftLayer || !sectorOpsAircraftLayer.projectedPoints) return;
-                
-                const hoverPoint = e.point;
-                const clickRadius = 20; // Same radius as click
-                let hovering = false;
+                })
+            );
 
-                // Check if cursor is over any rendered point
-                for (const point of sectorOpsAircraftLayer.projectedPoints) {
-                    const dx = point.x - hoverPoint.x;
-                    const dy = point.y - hoverPoint.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    const hitBox = Math.max(point.width / 2, point.height / 2, clickRadius);
-
-                    if (distance < hitBox) {
-                        hovering = true;
-                        break;
+            Promise.all(imagePromises)
+                .then(() => {
+                    console.log('All custom aircraft icons loaded.');
+                    
+                    // --- [NEW BLOCK] ---
+                    // This block sets up the source, layer, and animator ONCE.
+                    
+                    // 1. Add the source (it starts empty)
+                    if (!sectorOpsMap.getSource('sector-ops-live-flights-source')) {
+                        sectorOpsMap.addSource('sector-ops-live-flights-source', {
+                            type: 'geojson',
+                            data: { type: 'FeatureCollection', features: [] } // Start with empty data
+                        });
                     }
-                }
-                sectorOpsMap.getCanvas().style.cursor = hovering ? 'pointer' : '';
-            });
 
-            resolve(); // Resolve the main promise
+                    // 2. Add the layer that styles the source
+                    if (!sectorOpsMap.getLayer('sector-ops-live-flights-layer')) {
+                        sectorOpsMap.addLayer({
+                            id: 'sector-ops-live-flights-layer',
+                            type: 'symbol',
+                            source: 'sector-ops-live-flights-source',
+                            layout: {
+                                'icon-image': [
+                                    'match',
+                                    ['get', 'category'],
+                                    'jumbo', 'icon-jumbo',
+                                    'widebody', 'icon-widebody',
+                                    'narrowbody', 'icon-narrowbody',
+                                    'regional', 'icon-regional',
+                                    'private', 'icon-private',
+                                    'fighter', 'icon-fighter',
+                                    'icon-default' // Fallback
+                                ],
+                                'icon-size': 0.08,
+                                'icon-rotate': ['get', 'heading'],
+                                'icon-rotation-alignment': 'map',
+                                'icon-allow-overlap': true,
+                                'icon-ignore-placement': true
+                            }
+                        });
+
+                        // 3. Add the click/hover event listeners for the layer
+                        sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
+                            if (e.features && e.features.length > 0) {
+                                const props = e.features[0].properties;
+                                const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
+                                // We need to find the sessionId to pass to handleAircraftClick
+                                // This is a bit tricky, but we can fetch it quickly.
+                                fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions')
+                                    .then(res => res.json())
+                                    .then(data => {
+                                        const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
+                                        if (expertSession) {
+                                            handleAircraftClick(flightProps, expertSession.id);
+                                        }
+                                    });
+                            }
+                        });
+
+                        sectorOpsMap.on('mouseenter', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
+                        sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
+                    }
+                    
+                    // 4. Initialize and start the animator
+                    // Use 3000ms to match your 3-second data refresh
+                    sectorOpsAnimator = new AircraftAnimator(sectorOpsMap, 'sector-ops-live-flights-source', 3000);
+                    sectorOpsAnimator.start();
+                    // --- [END OF NEW BLOCK] ---
+
+                    resolve(); // Resolve the main promise
+                })
+                .catch(error => {
+                    console.error('Failed to load one or more aircraft icons.', error);
+                    resolve(); // Still resolve, so the map doesn't get stuck
+                });
         });
     });
 }
@@ -4087,27 +3810,22 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // START: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
 
+    /**
+     * Starts the polling loop for live flights specifically for the Sector Ops map.
+     */
     function startSectorOpsLiveLoop() {
         stopSectorOpsLiveLoop(); // Ensure no duplicate intervals are running
-
-        // 1. Start the data fetching loop (infrequent)
         updateSectorOpsLiveFlights(); // Fetch immediately
-        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 3000); // Your existing interval
-
-        // 2. The animation loop is now 60fps and handled automatically
-        //    by the 'AircraftCanvasLayer.render' method.
-        //    We no longer need 'sectorOpsAnimationInterval'.
+        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 30000); // Then update every 30 seconds
     }
 
-function stopSectorOpsLiveLoop() {
+    /**
+     * Stops the polling loop for Sector Ops live flights to save resources.
+     */
+    function stopSectorOpsLiveLoop() {
         if (sectorOpsLiveFlightsInterval) {
             clearInterval(sectorOpsLiveFlightsInterval);
             sectorOpsLiveFlightsInterval = null;
-        }
-        // The 'sectorOpsAnimationInterval' is gone, so no need to clear it.
-        if (sectorOpsAnimationInterval) {
-             clearInterval(sectorOpsAnimationInterval);
-             sectorOpsAnimationInterval = null;
         }
     }
 
@@ -4176,17 +3894,14 @@ function stopSectorOpsLiveLoop() {
         });
     }
 
-   async function updateSectorOpsLiveFlights() {
+// --- MODIFY THIS FUNCTION ---
+async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
     const LIVE_FLIGHTS_BACKEND = 'https://site--acars-backend--6dmjph8ltlhv.code.run';
 
     try {
         const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
-        if (!sessionsRes.ok) {
-            console.warn('Sector Ops Map: Could not fetch server sessions. Skipping update.');
-            return;
-        }
         const sessionsData = await sessionsRes.json();
         const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
 
@@ -4201,74 +3916,48 @@ function stopSectorOpsLiveLoop() {
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
         
-        // Update ATC & NOTAMs (this logic is unchanged)
-        if (atcRes.ok) {
-            const atcData = await atcRes.json();
-            activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
-        }
-        if (notamsRes.ok) {
-            const notamsData = await notamsRes.json();
-            activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
-        }
-        renderAirportMarkers(); // This is fine to keep
-
-        // --- Flight Data Update ---
-        if (!flightsRes.ok) {
-            console.warn('Sector Ops Map: Failed to fetch live flights data. Holding last known positions.');
-            return; 
-        }
+        const atcData = await atcRes.json();
+        activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
         
+        const notamsData = await notamsRes.json();
+        activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
+
+        renderAirportMarkers(); 
+
         const flightsData = await flightsRes.json();
         if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
-            console.warn('Sector Ops Map: Received invalid flights data. Holding last known positions.');
+            console.warn('Sector Ops Map: Could not fetch live flights.');
             return;
         }
-
-        const now = performance.now();
-        const updatedFlightIds = new Set();
-
-        // This function now ONLY updates the 'liveFlightData' global variable.
-        // The canvas layer will read from this variable on its next render frame.
-        flightsData.flights.forEach(flight => {
-            if (!flight.position || flight.position.lat == null || flight.position.lon == null) return;
+        
+        // This function body remains largely the same, we just modify the feature creation...
+        
+        const finalFeatures = flightsData.flights.map(flight => {
+            if (!flight.position || flight.position.lat == null || flight.position.lon == null) return null;
             
-            const flightId = flight.flightId;
-            updatedFlightIds.add(flightId);
+            // --- Classify the aircraft here ---
+            const aircraftCategory = getAircraftCategory(flight.aircraft?.aircraftName);
 
-            sectorOpsAircraftLayer.dataObject[flightId] = {
-                lat: flight.position.lat,
-                lon: flight.position.lon,
-                heading: flight.position.track_deg || 0,
-                speed: flight.position.gs_kt || 0,
-                timestamp: now,
-                properties: { // Store all properties needed for click handlers
-                    flightId: flight.flightId,
-                    callsign: flight.callsign,
-                    username: flight.username,
-                    altitude: flight.position.alt_ft,
-                    speed: flight.position.gs_kt,
-                    verticalSpeed: flight.position.vs_fpm || 0,
-                    position: JSON.stringify(flight.position),
-                    aircraft: JSON.stringify(flight.aircraft),
+            return {
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [flight.position.lon, flight.position.lat] },
+                properties: {
+                    flightId: flight.flightId, callsign: flight.callsign, username: flight.username,
+                    altitude: flight.position.alt_ft, speed: flight.position.gs_kt, heading: flight.position.track_deg || 0,
+                    verticalSpeed: flight.position.vs_fpm || 0, position: JSON.stringify(flight.position), aircraft: JSON.stringify(flight.aircraft),
                     userId: flight.userId,
-                    category: getAircraftCategory(flight.aircraft?.aircraftName)
+                    category: aircraftCategory // <-- Add the new category property
                 }
             };
-        });
+        }).filter(Boolean); // Filter out any null entries
 
-        // Clean up old flights
-        for (const flightId in sectorOpsAircraftLayer.dataObject) {
-        if (!updatedFlightIds.has(flightId)) {
-            delete sectorOpsAircraftLayer.dataObject[flightId];
+        // --- [THIS IS THE REPLACEMENT] ---
+        // Instead of setting data directly, we feed it to the animator.
+        // The animator will handle the setData() calls inside its own animation loop.
+        if (sectorOpsAnimator) {
+            sectorOpsAnimator.updateFlights(finalFeatures);
         }
-    }
-
-        // --- [ADD THIS LINE] ---
-        // This "wakes up" the render loop, which will then continue
-        // animating at 60fps.
-        if (sectorOpsMap) {
-            sectorOpsMap.triggerRepaint();
-        }
+        // --- [END OF REPLACEMENT] ---
 
     } catch (error) {
         console.error('Error updating Sector Ops live data:', error);
