@@ -1530,6 +1530,7 @@ class AircraftCanvasLayer {
         this.type = 'custom';
         this.renderingMode = '2d';
         this.images = {}; // To store loaded Image objects
+        this.dataObject = {};
         this.projectedPoints = []; // Stores screen coordinates for click detection
         this.imageUrls = {
             'jumbo': '/Images/map_icons/jumbo.png',
@@ -4234,7 +4235,7 @@ function stopSectorOpsLiveLoop() {
             const flightId = flight.flightId;
             updatedFlightIds.add(flightId);
 
-            liveFlightData[flightId] = {
+            sectorOpsAircraftLayer.dataObject[flightId] = {
                 lat: flight.position.lat,
                 lon: flight.position.lon,
                 heading: flight.position.track_deg || 0,
@@ -4256,11 +4257,11 @@ function stopSectorOpsLiveLoop() {
         });
 
         // Clean up old flights
-        for (const flightId in liveFlightData) {
-            if (!updatedFlightIds.has(flightId)) {
-                delete liveFlightData[flightId];
-            }
+        for (const flightId in sectorOpsAircraftLayer.dataObject) {
+        if (!updatedFlightIds.has(flightId)) {
+            delete sectorOpsAircraftLayer.dataObject[flightId];
         }
+    }
 
         // --- [ADD THIS LINE] ---
         // This "wakes up" the render loop, which will then continue
