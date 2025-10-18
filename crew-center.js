@@ -1638,81 +1638,114 @@ class AircraftCanvasLayer {
         return { lat: toDeg(lat2Rad), lon: toDeg(lon2Rad) };
     }
 
-    /**
+   /**
      * The main render loop, called every frame by Mapbox.
+     * [PERFORMANCE FIX v3 - LEVEL OF DETAIL (LOD)]
+     * This function now has two distinct render paths based on zoom level
+     * to prevent lag when the whole globe is visible.
      */
     render(gl, matrix) {
         const ctx = this.ctx;
         if (!ctx) return;
 
-        // 1. Sync canvas size with map's viewport
+        // 1. Sync canvas size and clear
         this.canvas.width = this.map.getCanvas().width;
         this.canvas.height = this.map.getCanvas().height;
-
-        // 2. Clear the canvas for the new frame
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // 3. Exit if we have no data or no images
-        if (Object.keys(liveFlightData).length === 0 || Object.keys(this.images).length === 0) {
+        // 3. Exit if no data (Uses this.dataObject from our previous fix)
+        if (Object.keys(this.dataObject).length === 0 || Object.keys(this.images).length === 0) {
             return;
         }
 
-        const ktsToKmPerMs = 1.852 / 3600000;
-        const timestamp = performance.now();
-        const iconScale = 0.08; // This was your 'icon-size'
-        
-        // 4. Clear and repopulate projected points array for click detection
-        this.projectedPoints = [];
+        const currentZoom = this.map.getZoom();
+        const ANIMATION_ZOOM_THRESHOLD = 3.5; // <-- Controls when we switch modes
 
-        // 5. Loop through all live flights
-        for (const flightId in liveFlightData) {
-            const flight = liveFlightData[flightId];
+        if (currentZoom > ANIMATION_ZOOM_THRESHOLD) {
+            // --- PATH 1: HIGH DETAIL (Zoomed In) ---
+            // Run the 60fps, high-detail animation with culling
             
-            // 6. Extrapolate position (this is the animation logic)
-            const elapsedTimeMs = timestamp - flight.timestamp;
-            const distanceKm = flight.speed * ktsToKmPerMs * elapsedTimeMs;
-            const predictedPos = this._predictNewPosition(flight.lat, flight.lon, flight.heading, distanceKm);
+            this.projectedPoints = []; // Clear and repopulate for click detection
+            const ktsToKmPerMs = 1.852 / 3600000;
+            const timestamp = performance.now();
+            const iconScale = 0.08;
+            const bounds = this.map.getBounds().pad(0.1); // Culling bounds
 
-            // 7. Project Geo-coordinate to screen coordinate
-            const screenPoint = this.map.project([predictedPos.lon, predictedPos.lat]);
+            for (const flightId in this.dataObject) {
+                const flight = this.dataObject[flightId];
 
-            // 8. Get the correct icon
-            const category = flight.properties.category || 'default';
-            const img = this.images[category] || this.images['default'];
-            if (!img || !img.width || !img.height) continue;
+                // CULLING: Skip planes outside the viewport
+                if (!bounds.contains([flight.lon, flight.lat])) {
+                    continue;
+                }
+
+                // 6. Extrapolate position
+                const elapsedTimeMs = timestamp - flight.timestamp;
+                const distanceKm = flight.speed * ktsToKmPerMs * elapsedTimeMs;
+                const predictedPos = this._predictNewPosition(flight.lat, flight.lon, flight.heading, distanceKm);
+
+                // 7. Project
+                const screenPoint = this.map.project([predictedPos.lon, predictedPos.lat]);
+
+                // 8. Get icon
+                const category = flight.properties.category || 'default';
+                const img = this.images[category] || this.images['default'];
+                if (!img || !img.width || !img.height) continue;
+                
+                const imgWidth = img.width * iconScale;
+                const imgHeight = img.height * iconScale;
+
+                // 9. Store for click detection
+                this.projectedPoints.push({
+                    x: screenPoint.x,
+                    y: screenPoint.y,
+                    width: imgWidth,
+                    height: imgHeight,
+                    flightProps: flight.properties
+                });
+
+                // 10. Draw rotated icon
+                const headingRad = (flight.heading * Math.PI) / 180;
+                ctx.save();
+                ctx.translate(screenPoint.x, screenPoint.y);
+                ctx.rotate(headingRad);
+                ctx.drawImage(img, -imgWidth / 2, -imgHeight / 2, imgWidth, imgHeight);
+                ctx.restore();
+            }
+
+            // 11. CRITICAL: Trigger the next frame for 60fps animation
+            this.map.triggerRepaint();
+
+        } else {
+            // --- PATH 2: LOW DETAIL (Zoomed Out) ---
+            // Run a static, low-detail render. This is *much* faster.
             
-            const imgWidth = img.width * iconScale;
-            const imgHeight = img.height * iconScale;
-
-            // 9. Store this plane's screen data for click detection
-            this.projectedPoints.push({
-                x: screenPoint.x,
-                y: screenPoint.y,
-                width: imgWidth,
-                height: imgHeight,
-                flightProps: flight.properties // Store all data needed for the click handler
-            });
-
-            // 10. Draw the icon to the canvas
-            const headingRad = (flight.heading * Math.PI) / 180;
+            this.projectedPoints = []; // Click detection is disabled in this mode for performance
             
-            ctx.save();
-            ctx.translate(screenPoint.x, screenPoint.y);
-            ctx.rotate(headingRad);
-            ctx.drawImage(
-                img,
-                -imgWidth / 2,  // Center image horizontally
-                -imgHeight / 2, // Center image vertically
-                imgWidth,
-                imgHeight
-            );
-            ctx.restore();
+            // Set a simple style for all planes
+            ctx.fillStyle = '#00a8ff'; // Your brand's blue
+            ctx.globalAlpha = 0.8;
+
+            for (const flightId in this.dataObject) {
+                const flight = this.dataObject[flightId];
+
+                // NO extrapolation, NO culling
+                // 1. Project the plane's last *known* position
+                const screenPoint = this.map.project([flight.lon, flight.lat]);
+
+                // 2. Draw a simple, fast circle
+                ctx.beginPath();
+                ctx.arc(screenPoint.x, screenPoint.y, 2, 0, 2 * Math.PI); // 2px radius
+                ctx.fill();
+            }
+            
+            ctx.globalAlpha = 1.0; // Reset alpha for other map layers
+
+            // 11. CRITICAL: DO NOT call triggerRepaint().
+            // This stops the 60fps loop. The map will only redraw
+            // if the user pans or zooms, which is exactly what we want.
         }
-
-        // 11. IMPORTANT: Tell Mapbox to repaint the next frame to create a 60fps loop
-        this.map.triggerRepaint();
     }
-}
 
     // --- [NEW] PFD Constants and Functions ---
     const PFD_PITCH_SCALE = 8;
