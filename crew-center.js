@@ -1638,7 +1638,7 @@ class AircraftCanvasLayer {
         return { lat: toDeg(lat2Rad), lon: toDeg(lon2Rad) };
     }
 
-   /**
+/**
      * The main render loop, called every frame by Mapbox.
      * [PERFORMANCE FIX v3 - LEVEL OF DETAIL (LOD)]
      * This function now has two distinct render paths based on zoom level
@@ -1746,6 +1746,7 @@ class AircraftCanvasLayer {
             // if the user pans or zooms, which is exactly what we want.
         }
     }
+}
 
     // --- [NEW] PFD Constants and Functions ---
     const PFD_PITCH_SCALE = 8;
