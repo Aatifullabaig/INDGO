@@ -109,6 +109,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let lastPfdState = { track_deg: 0, timestamp: 0, roll_deg: 0 };
     // --- NEW: To cache flight data when switching to stats view ---
     let cachedFlightDataForStatsView = { flightProps: null, plan: null };
+    let animationFrameId = null;
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
