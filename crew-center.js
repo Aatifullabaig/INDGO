@@ -133,6 +133,15 @@ function injectCustomStyles() {
     if (document.getElementById(styleId)) return;
 
     const css = `
+        .plane-marker {
+    width: 25px;
+    height: 25px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    transition: transform 0.2s linear; /* Smooth rotation */
+}
+
         /* --- [FIX] Sector Ops View Layout --- */
         #view-rosters.active {
             position: absolute;
@@ -981,70 +990,97 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
     return { lat: toDeg(lat2Rad), lon: toDeg(lon2Rad) };
 }
 
-/**
-     * Linearly interpolates a value.
-     */
-    /**
-     * Linearly interpolates between two values.
-     * @param {number} start - The starting value.
-     * @param {number} end - The ending value.
-     * @param {number} progress - The interpolation factor (0.0 to 1.0).
-     * @returns {number} The interpolated value.
-     */
-    function lerp(start, end, progress) {
-        return start * (1 - progress) + end * progress;
-    }
+// --- Helper functions for interpolation ---
+function lerp(start, end, progress) {
+    return start * (1 - progress) + end * progress;
+}
 
-    /**
-     * Interpolates heading degrees along the shortest path (e.g., from 350° to 10°).
-     */
-    function interpolateHeading(start, end, progress) {
-        let delta = end - start;
-        if (delta > 180) delta -= 360;
-        if (delta < -180) delta += 360;
-        return (start + delta * progress + 360) % 360;
-    }
+function interpolateHeading(start, end, progress) {
+    let delta = end - start;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    return (start + delta * progress + 360) % 360;
+}
 
-/**
- * --- [REWRITTEN & SIMPLIFIED] The main predictive animation loop.
- * This function's only job is to update the data of the existing map source.
- */
-function animationLoop(timestamp) {
-    const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+
+// --- REWRITTEN & HIGHLY-PERFORMANT ANIMATION LOOP ---
+function animationLoop() {
+    const DATA_FETCH_INTERVAL = 3000; // Must match your setInterval
+    const now = Date.now();
+    let activeAnimations = false;
+
+    for (const flightId in liveFlightMarkers) {
+        const entry = liveFlightMarkers[flightId];
+        const { marker, element, previousState, currentState } = entry;
+        
+        // Calculate how far along we are in the animation (0.0 to 1.0)
+        const timeElapsed = now - currentState.timestamp;
+        const progress = Math.min(timeElapsed / DATA_FETCH_INTERVAL, 1.0);
+
+        // Interpolate position and heading
+        const interpolatedLat = lerp(previousState.lat, currentState.lat, progress);
+        const interpolatedLon = lerp(previousState.lon, currentState.lon, progress);
+        const interpolatedHdg = interpolateHeading(previousState.heading, currentState.heading, progress);
+
+        // Update the marker's position and rotation
+        marker.setLngLat([interpolatedLon, interpolatedLat]);
+        element.style.transform = `rotate(${interpolatedHdg}deg)`;
+        
+        // If progress is less than 1, we need to keep animating
+        if (progress < 1.0) {
+            activeAnimations = true;
+        }
+    }
     
-    // Safety check: if the source doesn't exist for some reason, stop the loop.
-    if (!source) {
-        animationFrameId = null;
-        return;
+    // Continue the loop only if there are active animations
+    if (activeAnimations) {
+        animationFrameId = requestAnimationFrame(animationLoop);
+    } else {
+        animationFrameId = null; // Stop the loop to save CPU when idle
+    }
+}
+
+/**
+ * --- [REWRITTEN & HIGH-PERFORMANCE] The main animation loop.
+ * This function's only job is to smoothly interpolate markers between their
+ * last known position and their new target position. It does NOT touch map sources.
+ */
+function animationLoop() {
+    // This value MUST match the interval of your updateSectorOpsLiveFlights function
+    const DATA_FETCH_INTERVAL = 3000;
+    const now = Date.now();
+    let activeAnimations = false;
+
+    for (const flightId in liveFlightMarkers) {
+        const entry = liveFlightMarkers[flightId];
+        const { marker, element, previousState, currentState } = entry;
+
+        // Calculate how far along we are in the current animation cycle (0.0 to 1.0)
+        const timeElapsed = now - currentState.timestamp;
+        const progress = Math.min(timeElapsed / DATA_FETCH_INTERVAL, 1.0);
+
+        // Interpolate position and heading for a smooth transition
+        const interpolatedLat = lerp(previousState.lat, currentState.lat, progress);
+        const interpolatedLon = lerp(previousState.lon, currentState.lon, progress);
+        const interpolatedHdg = interpolateHeading(previousState.heading, currentState.heading, progress);
+
+        // Directly update the marker's position and the element's rotation
+        marker.setLngLat([interpolatedLon, interpolatedLat]);
+        element.style.transform = `rotate(${interpolatedHdg}deg)`;
+
+        // If progress is less than 1.0, it means this animation isn't finished yet
+        if (progress < 1.0) {
+            activeAnimations = true;
+        }
     }
 
-    const newFeatures = [];
-    const ktsToKmPerMs = 1.852 / 3600000;
-
-    for (const flightId in liveFlightData) {
-        const flight = liveFlightData[flightId];
-        const elapsedTimeMs = timestamp - flight.timestamp;
-        const distanceKm = flight.speed * ktsToKmPerMs * elapsedTimeMs;
-        const predictedPos = predictNewPosition(flight.lat, flight.lon, flight.heading, distanceKm);
-
-        newFeatures.push({
-            type: 'Feature',
-            geometry: {
-                type: 'Point',
-                coordinates: [predictedPos.lon, predictedPos.lat]
-            },
-            properties: {
-                ...flight.properties,
-                heading: flight.heading
-            }
-        });
+    // Continue the loop only if there are active animations.
+    // This saves CPU cycles when all aircraft have reached their target positions.
+    if (activeAnimations) {
+        animationFrameId = requestAnimationFrame(animationLoop);
+    } else {
+        animationFrameId = null; // Stop the loop
     }
-
-    // Directly update the source data. No need to check for existence here.
-    source.setData({ type: 'FeatureCollection', features: newFeatures });
-
-    // Continue the loop for the next frame
-    animationFrameId = requestAnimationFrame(animationLoop);
 }
 
 
@@ -3961,7 +3997,12 @@ function updateAircraftInfoWindow(baseProps, plan) {
         });
     }
 
-    // --- MODIFY THIS FUNCTION ---
+    /**
+ * --- [FULLY REFACTORED FOR PERFORMANCE]
+ * Fetches live flight data and manages the state of mapboxgl.Marker objects.
+ * This function provides the start and end points for the animation loop but does
+ * not perform the animation itself, separating data updates from rendering.
+ */
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -3969,10 +4010,9 @@ async function updateSectorOpsLiveFlights() {
 
     try {
         const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
-        // --- [FIX 1] --- Add a check to ensure the sessions response is valid
         if (!sessionsRes.ok) {
             console.warn('Sector Ops Map: Could not fetch server sessions. Skipping update.');
-            return; // Exit the function if we can't get session data
+            return;
         }
         const sessionsData = await sessionsRes.json();
         const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
@@ -3987,75 +4027,98 @@ async function updateSectorOpsLiveFlights() {
             fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
-        
-        // Update ATC & NOTAMs (this logic is fine)
-        if (atcRes.ok) {
-            const atcData = await atcRes.json();
-            activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
-        }
-        if (notamsRes.ok) {
-            const notamsData = await notamsRes.json();
-            activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
-        }
-        renderAirportMarkers(); 
 
-        // --- [FIX 2] --- The most critical change: Check the flights response BEFORE updating the state
+        // --- ATC & NOTAMs Update (Your existing logic is fine here) ---
+        if (atcRes.ok) activeAtcFacilities = (await atcRes.json()).atc || [];
+        if (notamsRes.ok) activeNotams = (await notamsRes.json()).notams || [];
+        renderAirportMarkers();
+
+        // --- Live Flights Processing ---
         if (!flightsRes.ok) {
-            console.warn('Sector Ops Map: Failed to fetch live flights data. Holding last known positions.');
+            console.warn('Sector Ops Map: Failed to fetch live flights. Holding last known positions.');
             return; // Exit without clearing data if the fetch fails
         }
-        
         const flightsData = await flightsRes.json();
-        // Also check if the data format is what we expect
         if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
-            console.warn('Sector Ops Map: Received invalid flights data. Holding last known positions.');
-            return; // Exit if the data is malformed
+            console.warn('Sector Ops Map: Received invalid flights data format.');
+            return;
         }
-        // --- [END OF FIXES] --- At this point, we know we have good, valid data ---
 
-        const now = performance.now();
+        const now = Date.now(); // Use a single timestamp for this entire data batch
         const updatedFlightIds = new Set();
 
         flightsData.flights.forEach(flight => {
             if (!flight.position || flight.position.lat == null || flight.position.lon == null) return;
-            
+
             const flightId = flight.flightId;
             updatedFlightIds.add(flightId);
 
-            liveFlightData[flightId] = {
-                lat: flight.position.lat,
+            // This is the new target state for the animation
+            const newState = {
                 lon: flight.position.lon,
+                lat: flight.position.lat,
                 heading: flight.position.track_deg || 0,
-                speed: flight.position.gs_kt || 0,
-                timestamp: now,
-                properties: {
-                    flightId: flight.flightId,
-                    callsign: flight.callsign,
-                    username: flight.username,
-                    altitude: flight.position.alt_ft,
-                    speed: flight.position.gs_kt,
-                    verticalSpeed: flight.position.vs_fpm || 0,
-                    position: JSON.stringify(flight.position),
-                    aircraft: JSON.stringify(flight.aircraft),
-                    userId: flight.userId,
-                    category: getAircraftCategory(flight.aircraft?.aircraftName)
-                }
+                timestamp: now // Marks the start time of this animation segment
             };
+
+            const fullFlightProperties = {
+                ...flight, // Keep all original properties for the click handler
+                category: getAircraftCategory(flight.aircraft?.aircraftName)
+            };
+
+
+            if (liveFlightMarkers[flightId]) {
+                // FLIGHT ALREADY EXISTS: Update its animation state
+                const entry = liveFlightMarkers[flightId];
+                entry.previousState = { ...entry.currentState }; // Old target becomes the new start point
+                entry.currentState = newState; // The data we just received is the new target
+                entry.properties = fullFlightProperties; // Update properties for click handler
+            } else {
+                // NEW FLIGHT: Create a marker and add it to our state object
+                const el = document.createElement('div');
+                el.className = 'plane-marker';
+                el.style.backgroundImage = `url('/Images/map_icons/${fullFlightProperties.category}.png')`;
+
+                const marker = new mapboxgl.Marker(el)
+                    .setLngLat([newState.lon, newState.lat])
+                    .addTo(sectorOpsMap);
+
+                // Add click handler to the marker's HTML element
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent the map's click event from firing
+                    const flightData = liveFlightMarkers[flightId]?.properties;
+                    if (flightData) {
+                        handleAircraftClick(flightData, expertSession.id);
+                    }
+                });
+
+                // Store the new marker and its state
+                liveFlightMarkers[flightId] = {
+                    marker: marker,
+                    element: el,
+                    previousState: newState, // Start and end points are the same initially
+                    currentState: newState,
+                    properties: fullFlightProperties
+                };
+            }
         });
 
-        // Now that we've processed the good data, we can safely clean up old flights
-        for (const flightId in liveFlightData) {
+        // --- Cleanup Phase ---
+        // Remove markers for flights that are no longer in the API response
+        for (const flightId in liveFlightMarkers) {
             if (!updatedFlightIds.has(flightId)) {
-                delete liveFlightData[flightId];
+                liveFlightMarkers[flightId].marker.remove();
+                delete liveFlightMarkers[flightId];
             }
         }
 
+        // --- Trigger Animation ---
+        // Start the animation loop if it's not already running
         if (!animationFrameId) {
             animationFrameId = requestAnimationFrame(animationLoop);
         }
 
     } catch (error) {
-        // A catch block ensures that any unexpected error won't crash the update loop
         console.error('Error updating Sector Ops live data:', error);
     }
 }
