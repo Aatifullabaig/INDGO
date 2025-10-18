@@ -4052,7 +4052,19 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // START: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
 
-    function stopSectorOpsLiveLoop() {
+    function startSectorOpsLiveLoop() {
+        stopSectorOpsLiveLoop(); // Ensure no duplicate intervals are running
+
+        // 1. Start the data fetching loop (infrequent)
+        updateSectorOpsLiveFlights(); // Fetch immediately
+        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 3000); // Your existing interval
+
+        // 2. The animation loop is now 60fps and handled automatically
+        //    by the 'AircraftCanvasLayer.render' method.
+        //    We no longer need 'sectorOpsAnimationInterval'.
+    }
+
+function stopSectorOpsLiveLoop() {
         if (sectorOpsLiveFlightsInterval) {
             clearInterval(sectorOpsLiveFlightsInterval);
             sectorOpsLiveFlightsInterval = null;
@@ -4063,20 +4075,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
              sectorOpsAnimationInterval = null;
         }
     }
-
-/**
- * Stops all polling loops for Sector Ops to save resources.
- */
-function stopSectorOpsLiveLoop() {
-    if (sectorOpsLiveFlightsInterval) {
-        clearInterval(sectorOpsLiveFlightsInterval);
-        sectorOpsLiveFlightsInterval = null;
-    }
-    if (sectorOpsAnimationInterval) { // Add this part
-        clearInterval(sectorOpsAnimationInterval);
-        sectorOpsAnimationInterval = null;
-    }
-}
 
     /**
      * NEW / REFACTORED: Renders all airport markers based on current route and ATC data.
