@@ -2337,71 +2337,77 @@ function updatePfdDisplay(pfdData) {
         airportInfoWindow.dataset.eventsAttached = 'true';
     }
     
-    // --- [MODIFIED] Event listener setup using Event Delegation ---
     function setupAircraftWindowEvents() {
-        if (!aircraftInfoWindow || aircraftInfoWindow.dataset.eventsAttached === 'true') return;
-    
-        aircraftInfoWindow.addEventListener('click', async (e) => {
-            const closeBtn = e.target.closest('.aircraft-window-close-btn');
-            const hideBtn = e.target.closest('.aircraft-window-hide-btn');
-            const statsBtn = e.target.closest('.pilot-name-button');
-            // The '.back-to-pfd-btn' logic has been removed from here
+    if (!aircraftInfoWindow || aircraftInfoWindow.dataset.eventsAttached === 'true') return;
 
-            if (closeBtn) {
-                aircraftInfoWindow.classList.remove('visible');
-                MobileUIHandler.closeActiveWindow();
-                aircraftInfoWindowRecallBtn.classList.remove('visible');
-                clearLiveFlightPath(currentFlightInWindow);
-                if (activePfdUpdateInterval) clearInterval(activePfdUpdateInterval);
-                activePfdUpdateInterval = null;
-                currentFlightInWindow = null;
-                cachedFlightDataForStatsView = { flightProps: null, plan: null };
-            }
-    
-            if (hideBtn) {
-                aircraftInfoWindow.classList.remove('visible');
-                if (activePfdUpdateInterval) clearInterval(activePfdUpdateInterval);
-                activePfdUpdateInterval = null;
-                if (currentFlightInWindow) {
-                    aircraftInfoWindowRecallBtn.classList.add('visible', 'palpitate');
-                    setTimeout(() => aircraftInfoWindowRecallBtn.classList.remove('palpitate'), 1000);
-                }
-            }
+    aircraftInfoWindow.addEventListener('click', async (e) => {
+        const closeBtn = e.target.closest('.aircraft-window-close-btn');
+        const hideBtn = e.target.closest('.aircraft-window-hide-btn');
+        const statsBtn = e.target.closest('.pilot-name-button');
+        // The '.back-to-pfd-btn' logic has been removed from here
 
-            if (statsBtn) {
-                const userId = statsBtn.dataset.userId;
-                const username = statsBtn.dataset.username;
-                if (userId) {
-                    await displayPilotStats(userId, username);
-                }
-            }
-        });
-    
-        // The recall button logic remains the same.
-        aircraftInfoWindowRecallBtn.addEventListener('click', () => {
+        if (closeBtn) {
+            aircraftInfoWindow.classList.remove('visible');
+            MobileUIHandler.closeActiveWindow();
+            aircraftInfoWindowRecallBtn.classList.remove('visible');
+            clearLiveFlightPath(currentFlightInWindow);
+            if (activePfdUpdateInterval) clearInterval(activePfdUpdateInterval);
+            activePfdUpdateInterval = null;
+            currentFlightInWindow = null;
+            cachedFlightDataForStatsView = { flightProps: null, plan: null };
+        }
+
+        if (hideBtn) {
+            aircraftInfoWindow.classList.remove('visible');
+            if (activePfdUpdateInterval) clearInterval(activePfdUpdateInterval);
+            activePfdUpdateInterval = null;
             if (currentFlightInWindow) {
-                const layer = sectorOpsMap.getLayer('sector-ops-live-flights-layer');
-                if (layer) {
-                    const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-                    const features = source._data.features;
-                    const feature = features.find(f => f.properties.flightId === currentFlightInWindow);
-                    if (feature) {
-                        const props = feature.properties;
-                        const flightProps = { ...props, position: JSON.parse(props.position) };
-                        
-                        fetch('https://site--acars-backend--6dmjph8v.code.run/if-sessions').then(res => res.json()).then(data => {
-                            const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
-                            if(expertSession) {
-                                handleAircraftClick(flightProps, expertSession.id);
-                            }
-                        });
-                    }
+                aircraftInfoWindowRecallBtn.classList.add('visible', 'palpitate');
+                setTimeout(() => aircraftInfoWindowRecallBtn.classList.remove('palpitate'), 1000);
+            }
+        }
+
+        if (statsBtn) {
+            const userId = statsBtn.dataset.userId;
+            const username = statsBtn.dataset.username;
+            if (userId) {
+                await displayPilotStats(userId, username);
+            }
+        }
+    });
+
+    // --- [THIS IS THE CORRECTED RECALL BUTTON LISTENER] ---
+    aircraftInfoWindowRecallBtn.addEventListener('click', () => {
+        if (currentFlightInWindow && sectorOpsAnimator) {
+            // Get the deck.gl layer from the animator
+            const deckLayer = sectorOpsAnimator.deckLayer;
+            if (deckLayer) {
+                // Get the data directly from the layer's current properties
+                const features = deckLayer.props.data || [];
+                const feature = features.find(f => f.properties.flightId === currentFlightInWindow);
+
+                if (feature) {
+                    const props = feature.properties;
+                    // Re-parse the position property just as the main click handler does
+                    const flightProps = { ...props, position: JSON.parse(props.position) };
+
+                    // The rest of your logic is correct
+                    fetch('https://site--acars-backend--6dmjph8v.code.run/if-sessions').then(res => res.json()).then(data => {
+                        const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
+                        if (expertSession) {
+                            handleAircraftClick(flightProps, expertSession.id);
+                        }
+                    });
+                } else {
+                     console.warn('Could not find recalled flight in deck.gl data.');
                 }
             }
-        });
-        
-        aircraftInfoWindow.dataset.eventsAttached = 'true';
-    }
+        }
+    });
+    // --- [END OF CORRECTED LISTENER] ---
+    
+    aircraftInfoWindow.dataset.eventsAttached = 'true';
+}
 
 
     /**
@@ -2559,70 +2565,45 @@ async function initializeSectorOpsMap(centerICAO) {
                 .then(() => {
                     console.log('All custom aircraft icons loaded.');
                     
-                    // --- [NEW BLOCK] ---
-                    // This block sets up the source, layer, and animator ONCE.
+                    // --- [THIS IS THE CORRECTED BLOCK] ---
                     
-                    // 1. Add the source (it starts empty)
-                    if (!sectorOpsMap.getSource('sector-ops-live-flights-source')) {
-                        sectorOpsMap.addSource('sector-ops-live-flights-source', {
-                            type: 'geojson',
-                            data: { type: 'FeatureCollection', features: [] } // Start with empty data
-                        });
-                    }
+                    // 1. Define the click handler function for the animator
+                    // This is the function that will be called when an aircraft icon is clicked.
+                    const handleAircraftClickFromAnimator = (properties) => {
+                        // The 'properties' object is passed directly from the animator's onClick
+                        if (properties) {
+                            const flightProps = { 
+                                ...properties, 
+                                // Re-parse the stringified JSON properties
+                                position: JSON.parse(properties.position), 
+                                aircraft: JSON.parse(properties.aircraft) 
+                            };
+                            
+                            // Fetch session ID and call the main handler
+                            fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions')
+                                .then(res => res.json())
+                                .then(data => {
+                                    const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
+                                    if (expertSession) {
+                                        handleAircraftClick(flightProps, expertSession.id);
+                                    }
+                                });
+                        }
+                    };
 
-                    // 2. Add the layer that styles the source
-                    if (!sectorOpsMap.getLayer('sector-ops-live-flights-layer')) {
-                        sectorOpsMap.addLayer({
-                            id: 'sector-ops-live-flights-layer',
-                            type: 'symbol',
-                            source: 'sector-ops-live-flights-source',
-                            layout: {
-                                'icon-image': [
-                                    'match',
-                                    ['get', 'category'],
-                                    'jumbo', 'icon-jumbo',
-                                    'widebody', 'icon-widebody',
-                                    'narrowbody', 'icon-narrowbody',
-                                    'regional', 'icon-regional',
-                                    'private', 'icon-private',
-                                    'fighter', 'icon-fighter',
-                                    'icon-default' // Fallback
-                                ],
-                                'icon-size': 0.08,
-                                'icon-rotate': ['get', 'heading'],
-                                'icon-rotation-alignment': 'map',
-                                'icon-allow-overlap': true,
-                                'icon-ignore-placement': true
-                            }
-                        });
-
-                        // 3. Add the click/hover event listeners for the layer
-                        sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
-                            if (e.features && e.features.length > 0) {
-                                const props = e.features[0].properties;
-                                const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
-                                // We need to find the sessionId to pass to handleAircraftClick
-                                // This is a bit tricky, but we can fetch it quickly.
-                                fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions')
-                                    .then(res => res.json())
-                                    .then(data => {
-                                        const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
-                                        if (expertSession) {
-                                            handleAircraftClick(flightProps, expertSession.id);
-                                        }
-                                    });
-                            }
-                        });
-
-                        sectorOpsMap.on('mouseenter', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
-                        sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
-                    }
-                    
-                    // 4. Initialize and start the animator
-                    // Use 3000ms to match your 3-second data refresh
-                    sectorOpsAnimator = new AircraftAnimator(sectorOpsMap, 'sector-ops-live-flights-source', 3000);
+                    // 2. Initialize and start the animator
+                    // We pass the map, our new click handler function, and the duration.
+                    // The AircraftAnimator will create its own layer and manage it.
+                    sectorOpsAnimator = new AircraftAnimator(sectorOpsMap, handleAircraftClickFromAnimator, 3000);
                     sectorOpsAnimator.start();
-                    // --- [END OF NEW BLOCK] ---
+
+                    // 3. (Optional) Keep hover effects
+                    // The animator's layer ID is 'deck-gl-aircraft-layer' (defined in AircraftAnimator.js)
+                    // We can listen to it for cursor changes.
+                    sectorOpsMap.on('mouseenter', 'deck-gl-aircraft-layer', () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
+                    sectorOpsMap.on('mouseleave', 'deck-gl-aircraft-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
+                    
+                    // --- [END OF CORRECTED BLOCK] ---
 
                     resolve(); // Resolve the main promise
                 })
@@ -2634,11 +2615,11 @@ async function initializeSectorOpsMap(centerICAO) {
     });
 }
 
-    /**
-     * (REFACTORED) Clears only the route line layers from the map.
-     */
-    function clearRouteLayers() {
-        sectorOpsMapRouteLayers.forEach(id => {
+/**
+ * (REFACTORED) Clears only the route line layers from the map.
+ */
+function clearRouteLayers() {
+    sectorOpsMapRouteLayers.forEach(id => {
             if (sectorOpsMap.getLayer(id)) sectorOpsMap.removeLayer(id);
             if (sectorOpsMap.getSource(id)) sectorOpsMap.removeSource(id);
         });
