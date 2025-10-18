@@ -80,7 +80,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let airportsData = {};
     let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
     let runwaysData = {}; // NEW: To store runway data indexed by airport ICAO
-    let animationFrameId = null;
     let liveFlightData = {}; // Key: flightId, Value: { lon, lat, heading, speed, timestamp }
     const DATA_REFRESH_INTERVAL_MS = 3000; // Your current refresh interval
 
@@ -89,6 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let pilotMarkers = {};
     let liveFlightsInterval = null;
     let sectorOpsMap = null;
+    let sectorOpsAnimationInterval = null; // Add this new variable
     let airportAndAtcMarkers = {}; // Holds all airport markers (blue dots and red ATC dots)
     let sectorOpsMapRouteLayers = [];
     let sectorOpsLiveFlightPathLayers = {}; // NEW: To track multiple flight trails
@@ -1006,23 +1006,24 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
     }
 
 /**
- * --- [REWRITTEN & SIMPLIFIED] The main predictive animation loop.
- * This function's only job is to update the data of the existing map source.
+ * --- [NEW & PERFORMANC-OPTIMIZED] The throttled animation loop.
+ * This function's only job is to update the data of the existing map source
+ * at a controlled rate (e.g., 10-15 times per second).
  */
-function animationLoop(timestamp) {
+function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-    
-    // Safety check: if the source doesn't exist for some reason, stop the loop.
-    if (!source) {
-        animationFrameId = null;
+    // Exit if the source isn't ready or there's no data to animate
+    if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
         return;
     }
 
     const newFeatures = [];
     const ktsToKmPerMs = 1.852 / 3600000;
+    const timestamp = performance.now(); // Use high-resolution timestamp
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
+        // Predict position based on last known data
         const elapsedTimeMs = timestamp - flight.timestamp;
         const distanceKm = flight.speed * ktsToKmPerMs * elapsedTimeMs;
         const predictedPos = predictNewPosition(flight.lat, flight.lon, flight.heading, distanceKm);
@@ -1035,18 +1036,14 @@ function animationLoop(timestamp) {
             },
             properties: {
                 ...flight.properties,
-                heading: flight.heading
+                heading: flight.heading // Keep heading stable between API updates
             }
         });
     }
 
-    // Directly update the source data. No need to check for existence here.
+    // This is the key: setData() is now called at a controlled rate, not 60 times/sec
     source.setData({ type: 'FeatureCollection', features: newFeatures });
-
-    // Continue the loop for the next frame
-    animationFrameId = requestAnimationFrame(animationLoop);
 }
-
 
 function getAircraftCategory(aircraftName) {
     if (!aircraftName) return 'default';
@@ -3877,24 +3874,31 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // START: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
 
-    /**
-     * Starts the polling loop for live flights specifically for the Sector Ops map.
-     */
     function startSectorOpsLiveLoop() {
-        stopSectorOpsLiveLoop(); // Ensure no duplicate intervals are running
-        updateSectorOpsLiveFlights(); // Fetch immediately
-        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 30000); // Then update every 30 seconds
-    }
+    stopSectorOpsLiveLoop(); // Ensure no duplicate intervals are running
 
-    /**
-     * Stops the polling loop for Sector Ops live flights to save resources.
-     */
-    function stopSectorOpsLiveLoop() {
-        if (sectorOpsLiveFlightsInterval) {
-            clearInterval(sectorOpsLiveFlightsInterval);
-            sectorOpsLiveFlightsInterval = null;
-        }
+    // 1. Start the data fetching loop (infrequent)
+    updateSectorOpsLiveFlights(); // Fetch immediately
+    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 3000); // Your existing interval
+
+    // 2. Start the animation loop (frequent but throttled)
+    // 100ms = 10 frames per second. This is a great balance of smoothness and performance.
+    sectorOpsAnimationInterval = setInterval(animateFlightPositions, 100);
+}
+
+/**
+ * Stops all polling loops for Sector Ops to save resources.
+ */
+function stopSectorOpsLiveLoop() {
+    if (sectorOpsLiveFlightsInterval) {
+        clearInterval(sectorOpsLiveFlightsInterval);
+        sectorOpsLiveFlightsInterval = null;
     }
+    if (sectorOpsAnimationInterval) { // Add this part
+        clearInterval(sectorOpsAnimationInterval);
+        sectorOpsAnimationInterval = null;
+    }
+}
 
     /**
      * NEW / REFACTORED: Renders all airport markers based on current route and ATC data.
@@ -3962,7 +3966,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
     }
 
     // --- MODIFY THIS FUNCTION ---
-// --- REPLACE your existing updateSectorOpsLiveFlights function with this one ---
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -3970,6 +3973,11 @@ async function updateSectorOpsLiveFlights() {
 
     try {
         const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
+        // --- [FIX 1] --- Add a check to ensure the sessions response is valid
+        if (!sessionsRes.ok) {
+            console.warn('Sector Ops Map: Could not fetch server sessions. Skipping update.');
+            return; // Exit the function if we can't get session data
+        }
         const sessionsData = await sessionsRes.json();
         const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
 
@@ -3984,20 +3992,31 @@ async function updateSectorOpsLiveFlights() {
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
         
-        // Update ATC & NOTAMs (this logic is unchanged and correct)
-        const atcData = await atcRes.json();
-        activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
-        const notamsData = await notamsRes.json();
-        activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
+        // Update ATC & NOTAMs (this logic is fine)
+        if (atcRes.ok) {
+            const atcData = await atcRes.json();
+            activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
+        }
+        if (notamsRes.ok) {
+            const notamsData = await notamsRes.json();
+            activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
+        }
         renderAirportMarkers(); 
 
-        // --- [NEW LOGIC] Process flights by updating their live state ---
-        const flightsData = await flightsRes.json();
-        if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
-            console.warn('Sector Ops Map: Could not fetch live flights.');
-            return;
+        // --- [FIX 2] --- The most critical change: Check the flights response BEFORE updating the state
+        if (!flightsRes.ok) {
+            console.warn('Sector Ops Map: Failed to fetch live flights data. Holding last known positions.');
+            return; // Exit without clearing data if the fetch fails
         }
         
+        const flightsData = await flightsRes.json();
+        // Also check if the data format is what we expect
+        if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
+            console.warn('Sector Ops Map: Received invalid flights data. Holding last known positions.');
+            return; // Exit if the data is malformed
+        }
+        // --- [END OF FIXES] --- At this point, we know we have good, valid data ---
+
         const now = performance.now();
         const updatedFlightIds = new Set();
 
@@ -4007,14 +4026,12 @@ async function updateSectorOpsLiveFlights() {
             const flightId = flight.flightId;
             updatedFlightIds.add(flightId);
 
-            // Update or create the live data entry for this flight
             liveFlightData[flightId] = {
                 lat: flight.position.lat,
                 lon: flight.position.lon,
                 heading: flight.position.track_deg || 0,
                 speed: flight.position.gs_kt || 0,
                 timestamp: now,
-                // Also store the original properties for the info window click
                 properties: {
                     flightId: flight.flightId,
                     callsign: flight.callsign,
@@ -4030,19 +4047,15 @@ async function updateSectorOpsLiveFlights() {
             };
         });
 
-        // Clean up data for planes that are no longer being tracked
+        // Now that we've processed the good data, we can safely clean up old flights
         for (const flightId in liveFlightData) {
             if (!updatedFlightIds.has(flightId)) {
                 delete liveFlightData[flightId];
             }
         }
 
-        // Start the animation loop if it's not already running
-        if (!animationFrameId) {
-            animationFrameId = requestAnimationFrame(animationLoop);
-        }
-
     } catch (error) {
+        // A catch block ensures that any unexpected error won't crash the update loop
         console.error('Error updating Sector Ops live data:', error);
     }
 }
