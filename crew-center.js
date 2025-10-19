@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let activeAtcFacilities = []; // To store fetched ATC data
     let activeNotams = []; // To store fetched NOTAMs data
     let atcPopup = null; // To manage a single, shared popup instance
-    const ANIMATION_SMOOTHING_RATE = 1.5;
+    const ANIMATION_SMOOTHING_RATE = 1.2;
     // State for the airport info window
     let airportInfoWindow = null;
     let airportInfoWindowRecallBtn = null;
@@ -1007,7 +1007,7 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
         return (start + delta * progress + 360) % 360;
     }
 
-// --- [NEW] Physics-Based Animation Engine ---
+// --- [REVISED] Hybrid Physics-Based Animation Engine (Damped Model) ---
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
     if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
@@ -1015,7 +1015,6 @@ function animateFlightPositions() {
     }
 
     const newFeatures = [];
-    const ktsToKmPerSec = 1.852 / 3600; // Kilometers per second
     const timestamp = performance.now();
 
     for (const flightId in liveFlightData) {
@@ -1027,36 +1026,28 @@ function animateFlightPositions() {
         const deltaTime = (timestamp - lastTime) / 1000.0;
         flight.lastAnimationTimestamp = timestamp;
 
-        // --- 2. Smooth the Properties (The "Autopilot") ---
-        // Calculate an interpolation factor based on delta time.
+        // --- 2. Calculate Smoothing Factor ---
         // This makes the smoothing frame-rate independent.
         const interpProgress = Math.min(1.0, ANIMATION_SMOOTHING_RATE * deltaTime);
 
+        // --- 3. Smooth ALL Properties (The "Autopilot") ---
         // Smoothly move the *displayed* state toward the *target* (api) state.
         flight.displayHeading = interpolateHeading(flight.displayHeading, flight.apiHeading, interpProgress);
         flight.displaySpeed = lerp(flight.displaySpeed, flight.apiSpeed, interpProgress);
+        flight.displayLat = lerp(flight.displayLat, flight.apiLat, interpProgress);
+        flight.displayLon = lerp(flight.displayLon, flight.apiLon, interpProgress);
         
-        // --- 3. Calculate New Position (The "Physics") ---
-        // How far did we travel in this tiny time slice based on our *smoothed* speed?
-        const distanceKm = flight.displaySpeed * ktsToKmPerSec * deltaTime;
-
-        // Predict our new position based on our *last* position and our *smoothed* heading/distance.
-        const newPos = predictNewPosition(flight.displayLat, flight.displayLon, flight.displayHeading, distanceKm);
-        
-        // --- 4. Update the Flight's State for the Next Frame ---
-        flight.displayLat = newPos.lat;
-        flight.displayLon = newPos.lon;
-
-        // --- 5. Add to Map ---
+        // --- 4. Add to Map ---
+        // We no longer predict. We just draw the plane at its new, smoothed display position.
         newFeatures.push({
             type: 'Feature',
             geometry: {
                 type: 'Point',
-                coordinates: [newPos.lon, newPos.lat]
+                coordinates: [flight.displayLon, flight.displayLat] // Use the smoothed position
             },
             properties: {
                 ...flight.properties,
-                heading: flight.displayHeading // Use the smoothed heading for rotation
+                heading: flight.displayHeading // Use the smoothed heading
             }
         });
     }
