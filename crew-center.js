@@ -1006,12 +1006,7 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
         return (start + delta * progress + 360) % 360;
     }
 
-/**
- * --- [NEW & PERFORMANC-OPTIMIZED] The throttled animation loop.
- * This function's only job is to update the data of the existing map source
- * at a controlled rate (e.g., 10-15 times per second).
- */
-// --- [REWORKED FOR INTERPOLATION] ---
+// --- [REWORKED FOR INTERPOLATION - v2] ---
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
     // Exit if the source isn't ready or there's no data to animate
@@ -1020,25 +1015,25 @@ function animateFlightPositions() {
     }
 
     const newFeatures = [];
-    const timestamp = performance.now(); // The current render time
+    const renderTimestamp = performance.now(); // Get current render time
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
 
-        // 1. Find the time window (e.g., 3000ms)
-        const startTime = flight.prev.timestamp;
-        const endTime = flight.curr.timestamp;
-        const totalTime = endTime - startTime;
+        // 1. Get animation start time and duration
+        const startTime = flight.animStartTime;
+        const duration = flight.animDuration; // This is 3000ms
 
         // 2. Find our progress (a value from 0.0 to 1.0)
-        let progress = (timestamp - startTime) / totalTime;
+        // This calculates how far we are into the 3-second animation.
+        let progress = (renderTimestamp - startTime) / duration;
         
         // 3. Clamp progress between 0.0 and 1.0
-        // This ensures the plane stops smoothly at its last 'curr' position
-        // if we miss a data update, rather than extrapolating.
+        // This makes the plane animate smoothly to its final spot and then
+        // wait there until the next data update.
         progress = Math.max(0.0, Math.min(1.0, progress));
 
-        // 4. Interpolate all values
+        // 4. Interpolate all values using the 'prev' and 'curr' states
         const interpolatedLat = lerp(flight.prev.lat, flight.curr.lat, progress);
         const interpolatedLon = lerp(flight.prev.lon, flight.curr.lon, progress);
         const interpolatedHeading = interpolateHeading(flight.prev.heading, flight.curr.heading, progress);
@@ -1051,12 +1046,11 @@ function animateFlightPositions() {
             },
             properties: {
                 ...flight.properties,
-                heading: interpolatedHeading // Use the smoothly interpolated heading
+                heading: interpolatedHeading
             }
         });
     }
 
-    // This is the key: setData() is now called at a controlled rate
     source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
 
@@ -4027,7 +4021,7 @@ function stopSectorOpsLiveLoop() {
         });
     }
 
-    // --- [REWORKED FOR INTERPOLATION] ---
+    // --- [REWORKED FOR INTERPOLATION - v2] ---
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -4053,7 +4047,6 @@ async function updateSectorOpsLiveFlights() {
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
         
-        // Update ATC & NOTAMs
         if (atcRes.ok) {
             const atcData = await atcRes.json();
             activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
@@ -4084,13 +4077,14 @@ async function updateSectorOpsLiveFlights() {
             const flightId = flight.flightId;
             updatedFlightIds.add(flightId);
 
-            const newPos = {
+            // This object contains only the pure position/heading data
+            const newPosData = {
                 lat: flight.position.lat,
                 lon: flight.position.lon,
                 heading: flight.position.track_deg || 0,
-                timestamp: now
             };
 
+            // This object contains all other properties
             const newProperties = {
                 flightId: flight.flightId,
                 callsign: flight.callsign,
@@ -4104,22 +4098,22 @@ async function updateSectorOpsLiveFlights() {
                 category: getAircraftCategory(flight.aircraft?.aircraftName)
             };
 
-            // Check if it's a new flight
             if (!liveFlightData[flightId]) {
+                // NEW FLIGHT: Set 'prev' and 'curr' to the same position
+                // and start the animation clock.
                 liveFlightData[flightId] = {
-                    // Initialize 'prev' and 'curr' to the same data
-                    prev: {
-                        ...newPos,
-                        // Set the 'prev' timestamp to the past to start interpolation immediately
-                        timestamp: now - DATA_REFRESH_INTERVAL_MS 
-                    }, 
-                    curr: newPos,
+                    prev: newPosData,
+                    curr: newPosData,
+                    animStartTime: now,
+                    animDuration: DATA_REFRESH_INTERVAL_MS,
                     properties: newProperties
                 };
             } else {
-                // It's an existing flight, shift 'curr' to 'prev' and add new 'curr'
-                liveFlightData[flightId].prev = { ...liveFlightData[flightId].curr }; // Copy old 'curr'
-                liveFlightData[flightId].curr = newPos; // Set new 'curr'
+                // EXISTING FLIGHT: Move 'curr' to 'prev', set new 'curr',
+                // and reset the animation clock.
+                liveFlightData[flightId].prev = { ...liveFlightData[flightId].curr }; // Copy old data
+                liveFlightData[flightId].curr = newPosData; // Set new data
+                liveFlightData[flightId].animStartTime = now; // Reset animation start time
                 liveFlightData[flightId].properties = newProperties; // Update properties
             }
         });
