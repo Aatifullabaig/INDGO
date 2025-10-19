@@ -1008,14 +1008,9 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
 
 /**
  * --- [RE-ARCHITECTED] - The throttled animation loop.
- * This function's only job is to interpolate the aircraft's state
- * from "fromTimestamp" to "toTimestamp".
- *
- * If the current time is *past* "toTimestamp", it will
- * extrapolate (predict) the position forward based on the "to" state's
- * speed and heading until the next API packet provides a new "to" state.
- *
- * This SOLVES the "snap" and "spin" problem.
+ * This version uses a "damped spring" (lerp) model instead of "predict-then-correct".
+ * The icon's *current* position will smoothly chase its *target* position.
+ * This eliminates the "snap-back" jitter when new data arrives.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
@@ -1024,72 +1019,59 @@ function animateFlightPositions() {
     }
 
     const newFeatures = [];
-    const ktsToKmPerMs = 1.852 / 3600000;
     const now = performance.now();
+    
+    // This value controls the "springiness."
+    // It's tuned to catch up ~99% of the way to the new target
+    // within the 3-second data refresh interval.
+    // (1.0 - 0.15)^30 frames = ~0.009 (99.1% caught up)
+    const LERP_FACTOR = 0.15;
+    
+    // Set a timeout to remove "stale" aircraft
+    const STALE_TIMEOUT_MS = 30000; // 30 seconds
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
         
-        let currentLat, currentLon, currentHeading;
-
-        const totalDuration = flight.toTimestamp - flight.fromTimestamp;
-        const timeElapsed = now - flight.fromTimestamp;
-
-        // --- 1. INTERPOLATION PHASE ---
-        // Calculate progress, but don't let it go over 1.0 (100%)
-        let progress = 1.0;
-        if (totalDuration > 0) {
-            progress = Math.min(1.0, timeElapsed / totalDuration);
+        // --- 1. Check for stale data ---
+        if (now - flight.lastApiUpdate > STALE_TIMEOUT_MS) {
+            // This flight hasn't been seen in 30 seconds. Remove it.
+            delete liveFlightData[flightId];
+            continue;
         }
 
-        currentLat = lerp(flight.fromLat, flight.toLat, progress);
-        currentLon = lerp(flight.fromLon, flight.toLon, progress);
-        currentHeading = interpolateHeading(flight.fromHeading, flight.toHeading, progress);
-
-        // --- 2. EXTRAPOLATION (PREDICTION) PHASE ---
-        // If progress is 1.0, our interpolation is finished.
-        // We now extrapolate *past* the "to" position based on its vector
-        // until the next API packet arrives.
-        if (progress >= 1.0) {
-            const timeSinceTo = now - flight.toTimestamp;
-            const speedKts = flight.properties.speed;
-            const heading = flight.toHeading; // Use the last known *real* heading
-
-            if (speedKts > 1) {
-                // Calculate prediction distance
-                const distanceKm = speedKts * ktsToKmPerMs * timeSinceTo;
-                const predictedPos = predictNewPosition(
-                    flight.toLat,   // Base prediction from the *last known real* lat
-                    flight.toLon,   // Base prediction from the *last known real* lon
-                    heading,        // Base prediction from the *last known real* heading
-                    distanceKm
-                );
-                currentLat = predictedPos.lat;
-                currentLon = predictedPos.lon;
-            } else {
-                // Not moving, so just stay at the final "to" position
-                currentLat = flight.toLat;
-                currentLon = flight.toLon;
-            }
-            // Hold the last known heading
-            currentHeading = heading;
+        // --- 2. Animate (Spring) Current position towards Target position ---
+        
+        // Check if we are already (practically) at the target
+        const distToTarget = getDistanceKm(flight.currentLat, flight.currentLon, flight.targetLat, flight.targetLon);
+        
+        if (distToTarget > 0.01) { // Only animate if not at the target
+            flight.currentLat = lerp(flight.currentLat, flight.targetLat, LERP_FACTOR);
+            flight.currentLon = lerp(flight.currentLon, flight.targetLon, LERP_FACTOR);
+        } else {
+            // Snap to target if close enough
+            flight.currentLat = flight.targetLat;
+            flight.currentLon = flight.targetLon;
         }
-
-        // Add the calculated feature
+        
+        // Always animate heading smoothly
+        flight.currentHeading = interpolateHeading(flight.currentHeading, flight.targetHeading, LERP_FACTOR);
+        
+        // --- 3. Add the feature for rendering ---
         newFeatures.push({
             type: 'Feature',
             geometry: {
                 type: 'Point',
-                coordinates: [currentLon, currentLat]
+                coordinates: [flight.currentLon, flight.currentLat]
             },
             properties: {
                 ...flight.properties,
-                heading: currentHeading
+                heading: flight.currentHeading
             }
         });
     }
-
-    // This is the key: setData() is now called at a controlled rate, not 60 times/sec
+    
+    // Update the map source with all new positions
     source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
 
@@ -4061,14 +4043,11 @@ function stopSectorOpsLiveLoop() {
     }
 
 /**
- * --- [RE-ARCHITECTED AND FIXED] - Updates the state for the animation loop.
- *
- * This version includes a 'lastSeen' timestamp and a grace period
- * (STALE_THRESHOLD_MS) in the cleanup loop. This is the fix.
- *
- * This stops the "snap" by preserving the "from/to" data if a flight
- * temporarily disappears from the API. This is how we "save the current path"
- * and connect it to the "fresher one" when it returns.
+ * --- [RE-ARCHITECTED] - Updates the state for the animation loop.
+ * This version uses a simple "from/to" state machine. The animation loop's
+ * only job is to interpolate between the last known API state ("from") and
+ * the new API state ("to") over the duration between them.
+ * This eliminates the "predict-then-snap" problem entirely.
  */
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
@@ -4148,68 +4127,34 @@ async function updateSectorOpsLiveFlights() {
             const existingData = liveFlightData[flightId];
 
             if (existingData) {
-                // Flight exists. The old "to" state becomes the new "from" state.
-                // This is the "save the current path" part.
-                existingData.fromLat = existingData.toLat;
-                existingData.fromLon = existingData.toLon;
-                existingData.fromHeading = existingData.toHeading;
-                existingData.fromTimestamp = existingData.toTimestamp;
-
-                // The new API data becomes the new "to" state.
-                // This is the "fresher one will also be saved" part.
-                existingData.toLat = newLat;
-                existingData.toLon = newLon;
-                existingData.toHeading = newHeading;
-                existingData.toTimestamp = now;
+                // Flight exists. Just update its target destination.
+                existingData.targetLat = newLat;
+                existingData.targetLon = newLon;
+                existingData.targetHeading = newHeading;
                 existingData.properties = newProperties;
+                existingData.lastApiUpdate = now; // Keep track of when we last heard from it
                 
-                // --- [FIX #1] ---
-                // We MUST update the lastSeen timestamp so it doesn't get cleaned up.
-                existingData.lastSeen = now;
-
             } else {
-                // This is a new flight. Set "from" and "to" to the same state.
-                // It will not animate until the *next* packet arrives.
+                // This is a new flight. Set current and target to the same spot.
                 liveFlightData[flightId] = {
-                    fromLat: newLat,
-                    fromLon: newLon,
-                    fromHeading: newHeading,
-                    fromTimestamp: now,
-                    toLat: newLat,
-                    toLon: newLon,
-                    toHeading: newHeading,
-                    toTimestamp: now,
+                    currentLat: newLat,
+                    currentLon: newLon,
+                    currentHeading: newHeading,
+                    targetLat: newLat,
+                    targetLon: newLon,
+                    targetHeading: newHeading,
                     properties: newProperties,
-                    // --- [FIX #2] ---
-                    // Add the lastSeen timestamp for the new flight.
-                    lastSeen: now 
+                    lastApiUpdate: now
                 };
             }
         });
 
-        // --- [THIS IS THE FIXED PART] ---
-        // This new logic provides the grace period to prevent snapping.
-        // "Deleting the older ones" now means deleting flights that are *truly* gone
-        // (missing for 10+ seconds), not just ones that blipped.
-        const STALE_THRESHOLD_MS = 10000; // 10-second grace period
-
+        // Clean up old flights
         for (const flightId in liveFlightData) {
-            // Check if the flight was in the fresh packet.
-            if (updatedFlightIds.has(flightId)) {
-                // Yes, it was. Its `lastSeen` was already updated. Do nothing.
-                continue; 
-            }
-
-            // No, it was missing. Check if its grace period is over.
-            if (now - liveFlightData[flightId].lastSeen > STALE_THRESHOLD_MS) {
-                // It's been missing for 10 seconds. Now it's safe to delete.
+            if (!updatedFlightIds.has(flightId)) {
                 delete liveFlightData[flightId];
             }
-            // If it's been missing for *less* than 10 seconds, we do nothing.
-            // THIS IS WHAT PREVENTS THE SNAP.
-            // The animation loop will continue to extrapolate its position.
         }
-        // --- [END OF FIX] ---
 
     } catch (error) {
         console.error('Error updating Sector Ops live data:', error);
