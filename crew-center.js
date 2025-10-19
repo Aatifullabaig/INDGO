@@ -1027,7 +1027,7 @@ function animateFlightPositions() {
     const timestamp = performance.now(); // Use high-resolution timestamp
     
     // --- [MODIFICATION] --- Shortened duration for a "snappier" feel
-    const INTERP_DURATION_MS = 300.0; // Was 1000.0
+    const INTERP_DURATION_MS = DATA_REFRESH_INTERVAL_MS;
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
