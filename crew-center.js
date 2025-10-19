@@ -1011,6 +1011,7 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
  * This function's only job is to update the data of the existing map source
  * at a controlled rate (e.g., 10-15 times per second).
  */
+// --- [REWORKED FOR INTERPOLATION] ---
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
     // Exit if the source isn't ready or there's no data to animate
@@ -1019,30 +1020,43 @@ function animateFlightPositions() {
     }
 
     const newFeatures = [];
-    const ktsToKmPerMs = 1.852 / 3600000;
-    const timestamp = performance.now(); // Use high-resolution timestamp
+    const timestamp = performance.now(); // The current render time
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
-        // Predict position based on last known data
-        const elapsedTimeMs = timestamp - flight.timestamp;
-        const distanceKm = flight.speed * ktsToKmPerMs * elapsedTimeMs;
-        const predictedPos = predictNewPosition(flight.lat, flight.lon, flight.heading, distanceKm);
 
+        // 1. Find the time window (e.g., 3000ms)
+        const startTime = flight.prev.timestamp;
+        const endTime = flight.curr.timestamp;
+        const totalTime = endTime - startTime;
+
+        // 2. Find our progress (a value from 0.0 to 1.0)
+        let progress = (timestamp - startTime) / totalTime;
+        
+        // 3. Clamp progress between 0.0 and 1.0
+        // This ensures the plane stops smoothly at its last 'curr' position
+        // if we miss a data update, rather than extrapolating.
+        progress = Math.max(0.0, Math.min(1.0, progress));
+
+        // 4. Interpolate all values
+        const interpolatedLat = lerp(flight.prev.lat, flight.curr.lat, progress);
+        const interpolatedLon = lerp(flight.prev.lon, flight.curr.lon, progress);
+        const interpolatedHeading = interpolateHeading(flight.prev.heading, flight.curr.heading, progress);
+        
         newFeatures.push({
             type: 'Feature',
             geometry: {
                 type: 'Point',
-                coordinates: [predictedPos.lon, predictedPos.lat]
+                coordinates: [interpolatedLon, interpolatedLat]
             },
             properties: {
                 ...flight.properties,
-                heading: flight.heading // Keep heading stable between API updates
+                heading: interpolatedHeading // Use the smoothly interpolated heading
             }
         });
     }
 
-    // This is the key: setData() is now called at a controlled rate, not 60 times/sec
+    // This is the key: setData() is now called at a controlled rate
     source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
 
@@ -4013,7 +4027,7 @@ function stopSectorOpsLiveLoop() {
         });
     }
 
-    // --- MODIFY THIS FUNCTION ---
+    // --- [REWORKED FOR INTERPOLATION] ---
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -4021,10 +4035,9 @@ async function updateSectorOpsLiveFlights() {
 
     try {
         const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
-        // --- [FIX 1] --- Add a check to ensure the sessions response is valid
         if (!sessionsRes.ok) {
             console.warn('Sector Ops Map: Could not fetch server sessions. Skipping update.');
-            return; // Exit the function if we can't get session data
+            return;
         }
         const sessionsData = await sessionsRes.json();
         const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
@@ -4040,7 +4053,7 @@ async function updateSectorOpsLiveFlights() {
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
         
-        // Update ATC & NOTAMs (this logic is fine)
+        // Update ATC & NOTAMs
         if (atcRes.ok) {
             const atcData = await atcRes.json();
             activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
@@ -4051,19 +4064,16 @@ async function updateSectorOpsLiveFlights() {
         }
         renderAirportMarkers(); 
 
-        // --- [FIX 2] --- The most critical change: Check the flights response BEFORE updating the state
         if (!flightsRes.ok) {
             console.warn('Sector Ops Map: Failed to fetch live flights data. Holding last known positions.');
-            return; // Exit without clearing data if the fetch fails
+            return;
         }
         
         const flightsData = await flightsRes.json();
-        // Also check if the data format is what we expect
         if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
             console.warn('Sector Ops Map: Received invalid flights data. Holding last known positions.');
-            return; // Exit if the data is malformed
+            return;
         }
-        // --- [END OF FIXES] --- At this point, we know we have good, valid data ---
 
         const now = performance.now();
         const updatedFlightIds = new Set();
@@ -4074,28 +4084,47 @@ async function updateSectorOpsLiveFlights() {
             const flightId = flight.flightId;
             updatedFlightIds.add(flightId);
 
-            liveFlightData[flightId] = {
+            const newPos = {
                 lat: flight.position.lat,
                 lon: flight.position.lon,
                 heading: flight.position.track_deg || 0,
-                speed: flight.position.gs_kt || 0,
-                timestamp: now,
-                properties: {
-                    flightId: flight.flightId,
-                    callsign: flight.callsign,
-                    username: flight.username,
-                    altitude: flight.position.alt_ft,
-                    speed: flight.position.gs_kt,
-                    verticalSpeed: flight.position.vs_fpm || 0,
-                    position: JSON.stringify(flight.position),
-                    aircraft: JSON.stringify(flight.aircraft),
-                    userId: flight.userId,
-                    category: getAircraftCategory(flight.aircraft?.aircraftName)
-                }
+                timestamp: now
             };
+
+            const newProperties = {
+                flightId: flight.flightId,
+                callsign: flight.callsign,
+                username: flight.username,
+                altitude: flight.position.alt_ft,
+                speed: flight.position.gs_kt,
+                verticalSpeed: flight.position.vs_fpm || 0,
+                position: JSON.stringify(flight.position),
+                aircraft: JSON.stringify(flight.aircraft),
+                userId: flight.userId,
+                category: getAircraftCategory(flight.aircraft?.aircraftName)
+            };
+
+            // Check if it's a new flight
+            if (!liveFlightData[flightId]) {
+                liveFlightData[flightId] = {
+                    // Initialize 'prev' and 'curr' to the same data
+                    prev: {
+                        ...newPos,
+                        // Set the 'prev' timestamp to the past to start interpolation immediately
+                        timestamp: now - DATA_REFRESH_INTERVAL_MS 
+                    }, 
+                    curr: newPos,
+                    properties: newProperties
+                };
+            } else {
+                // It's an existing flight, shift 'curr' to 'prev' and add new 'curr'
+                liveFlightData[flightId].prev = { ...liveFlightData[flightId].curr }; // Copy old 'curr'
+                liveFlightData[flightId].curr = newPos; // Set new 'curr'
+                liveFlightData[flightId].properties = newProperties; // Update properties
+            }
         });
 
-        // Now that we've processed the good data, we can safely clean up old flights
+        // Clean up old flights
         for (const flightId in liveFlightData) {
             if (!updatedFlightIds.has(flightId)) {
                 delete liveFlightData[flightId];
@@ -4103,7 +4132,6 @@ async function updateSectorOpsLiveFlights() {
         }
 
     } catch (error) {
-        // A catch block ensures that any unexpected error won't crash the update loop
         console.error('Error updating Sector Ops live data:', error);
     }
 }
