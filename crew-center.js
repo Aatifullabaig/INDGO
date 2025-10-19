@@ -1052,7 +1052,13 @@ function animateFlightPositions() {
             const distanceKm = flight.apiSpeed * ktsToKmPerMs * elapsedTimeMs;
 
             // --- [REVISED PREDICTION LOGIC] ---
-            const turnRate = flight.apiTurnRate || 0;
+            
+            // --- [THIS IS THE FIX] ---
+            // Only calculate a heading change if the aircraft is actually moving.
+            // If speed is below 3 kts, force turnRate to 0 to stop the "spin".
+            const turnRate = (flight.apiSpeed > 3) ? (flight.apiTurnRate || 0) : 0;
+            // --- [END OF FIX] ---
+
             const headingChange = turnRate * elapsedTimeSec;
             
             // The final heading at the end of the prediction
@@ -4059,96 +4065,158 @@ function stopSectorOpsLiveLoop() {
         });
     }
 
-/**
- * --- [NEW & PERFORMANC-OPTIMIZED] The throttled animation loop.
- * This function's only job is to update the data of the existing map source
- * at a controlled rate (e.g., 10-15 times per second).
- * * --- [v3 - WITH TURN-RATE PREDICTION] ---
- * This version adds a 1-second interpolation (tweening) phase
- * when new API data arrives to create a smooth transition instead of a "snap".
- * It also predicts turns for smoother taxi/takeoff animations.
- */
-function animateFlightPositions() {
-    const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-    // Exit if the source isn't ready or there's no data to animate
-    if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
-        return;
-    }
+async function updateSectorOpsLiveFlights() {
+    if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
-    const newFeatures = [];
-    const ktsToKmPerMs = 1.852 / 3600000;
-    const timestamp = performance.now(); // Use high-resolution timestamp
-    
-    // --- [MODIFICATION] --- Shortened duration for a "snappier" feel
-    const INTERP_DURATION_MS = 300.0; // Was 1000.0
+    const LIVE_FLIGHTS_BACKEND = 'https://site--acars-backend--6dmjph8ltlhv.code.run';
 
-    for (const flightId in liveFlightData) {
-        const flight = liveFlightData[flightId];
-        
-        let currentLat, currentLon, currentHeading;
-        const interpTimeElapsed = timestamp - flight.interpStartTime;
+    try {
+        const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
+        // --- [FIX 1] --- Add a check to ensure the sessions response is valid
+        if (!sessionsRes.ok) {
+            console.warn('Sector Ops Map: Could not fetch server sessions. Skipping update.');
+            return; // Exit the function if we can't get session data
+        }
+        const sessionsData = await sessionsRes.json();
+        const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
 
-        if (interpTimeElapsed > 0 && interpTimeElapsed < INTERP_DURATION_MS) {
-            // --- 1. INTERPOLATION PHASE ---
-            // We are smoothly animating from the last position to the new API position.
-            const progress = interpTimeElapsed / INTERP_DURATION_MS; // A value from 0.0 to 1.0
-            currentLat = lerp(flight.fromLat, flight.apiLat, progress);
-            currentLon = lerp(flight.fromLon, flight.apiLon, progress);
-            currentHeading = interpolateHeading(flight.fromHeading, flight.apiHeading, progress);
-        
-        } else {
-            // --- 2. PREDICTION PHASE ---
-            // Interpolation is done, or this is a new plane.
-            // Predict position based on the *last known API data*.
-            const elapsedTimeMs = timestamp - flight.apiTimestamp;
-            const elapsedTimeSec = elapsedTimeMs / 1000.0;
-            const distanceKm = flight.apiSpeed * ktsToKmPerMs * elapsedTimeMs;
-
-            // --- [REVISED PREDICTION LOGIC] ---
-            
-            // --- [THIS IS THE FIX] ---
-            // Only calculate a heading change if the aircraft is actually moving.
-            // If speed is below 3 kts, force turnRate to 0 to stop the "spin".
-            const turnRate = (flight.apiSpeed > 3) ? (flight.apiTurnRate || 0) : 0;
-            // --- [END OF FIX] ---
-
-            const headingChange = turnRate * elapsedTimeSec;
-            
-            // The final heading at the end of the prediction
-            const predictedHeading = (flight.apiHeading + headingChange + 360) % 360;
-            
-            // For the position, we use the *average* heading during the prediction interval
-            // to approximate the curve.
-            const avgPredictedHeading = (flight.apiHeading + (headingChange / 2.0) + 360) % 360;
-
-            const predictedPos = predictNewPosition(flight.apiLat, flight.apiLon, avgPredictedHeading, distanceKm);
-            
-            currentLat = predictedPos.lat;
-            currentLon = predictedPos.lon;
-            currentHeading = predictedHeading; // Use the *final* predicted heading for the icon
-            // --- [END REVISED LOGIC] ---
+        if (!expertSession) {
+            console.warn('Sector Ops Map: Expert Server session not found.');
+            return;
         }
 
-        // Store the calculated position so the *next* API update can use it as a "from" point.
-        flight.displayLat = currentLat;
-        flight.displayLon = currentLon;
-        flight.displayHeading = currentHeading;
+        const [flightsRes, atcRes, notamsRes] = await Promise.all([
+            fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
+            fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
+            fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
+        ]);
+        
+        // Update ATC & NOTAMs (this logic is fine)
+        if (atcRes.ok) {
+            const atcData = await atcRes.json();
+            activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
+        }
+        if (notamsRes.ok) {
+            const notamsData = await notamsRes.json();
+            activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
+        }
+        renderAirportMarkers(); 
 
-        newFeatures.push({
-            type: 'Feature',
-            geometry: {
-                type: 'Point',
-                coordinates: [currentLon, currentLat]
-            },
-            properties: {
-                ...flight.properties,
-                heading: currentHeading
+        // --- [FIX 2] --- The most critical change: Check the flights response BEFORE updating the state
+        if (!flightsRes.ok) {
+            console.warn('Sector Ops Map: Failed to fetch live flights data. Holding last known positions.');
+            return; // Exit without clearing data if the fetch fails
+        }
+        
+        const flightsData = await flightsRes.json();
+        // Also check if the data format is what we expect
+        if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
+            console.warn('Sector Ops Map: Received invalid flights data. Holding last known positions.');
+            return; // Exit if the data is malformed
+        }
+        // --- [END OF FIXES] --- At this point, we know we have good, valid data ---
+
+        const now = performance.now();
+        const updatedFlightIds = new Set();
+
+        flightsData.flights.forEach(flight => {
+            if (!flight.position || flight.position.lat == null || flight.position.lon == null) return;
+            
+            const flightId = flight.flightId;
+            updatedFlightIds.add(flightId);
+
+            const existingData = liveFlightData[flightId];
+
+            // Extract new API data
+            const newApiLat = flight.position.lat;
+            const newApiLon = flight.position.lon;
+            const newApiHeading = flight.position.track_deg || 0;
+            const newApiSpeed = flight.position.gs_kt || 0;
+            const newProperties = {
+                flightId: flight.flightId,
+                callsign: flight.callsign,
+                username: flight.username,
+                altitude: flight.position.alt_ft,
+                speed: newApiSpeed,
+                verticalSpeed: flight.position.vs_fpm || 0,
+                position: JSON.stringify(flight.position),
+                aircraft: JSON.stringify(flight.aircraft),
+                userId: flight.userId,
+                category: getAircraftCategory(flight.aircraft?.aircraftName)
+            };
+
+            if (existingData) {
+                // --- [NEW LOGIC START] ---
+                // Calculate time delta since last API update
+                const timeDeltaMs = now - existingData.apiTimestamp;
+                let newApiTurnRate = 0; // Default to no turn
+
+                // --- [THIS IS THE FIX] ---
+                // Only calculate a turn rate if time delta is reasonable AND speed is high enough to be reliable.
+                if (timeDeltaMs > 100 && newApiSpeed > 3) { 
+                    // Use interpolateHeading to find the shortest path (e.g., 350° to 10° is +20°)
+                    let headingDelta = newApiHeading - existingData.apiHeading;
+                    if (headingDelta > 180) headingDelta -= 360;
+                    if (headingDelta < -180) headingDelta += 360;
+                    
+                    // Turn rate in degrees per second
+                    newApiTurnRate = headingDelta / (timeDeltaMs / 1000.0);
+                }
+                // --- [END OF FIX] ---
+
+                // This flight exists. Set up interpolation *from* its last *displayed* position.
+                existingData.fromLat = existingData.displayLat;
+                existingData.fromLon = existingData.displayLon;
+                existingData.fromHeading = existingData.displayHeading;
+                existingData.interpStartTime = now; // Start interpolating *now*
+
+                // Update the "target" (api) state
+                existingData.apiLat = newApiLat;
+                existingData.apiLon = newApiLon;
+                existingData.apiHeading = newApiHeading;
+                existingData.apiSpeed = newApiSpeed;
+                existingData.apiTimestamp = now; // This is the base time for *prediction*
+                existingData.properties = newProperties;
+                existingData.apiTurnRate = newApiTurnRate; // <-- [MODIFICATION] Store the turn rate
+
+            } else {
+                // This is a new flight.
+                liveFlightData[flightId] = {
+                    // API state
+                    apiLat: newApiLat,
+                    apiLon: newApiLon,
+                    apiHeading: newApiHeading,
+                    apiSpeed: newApiSpeed,
+                    apiTimestamp: now,
+                    apiTurnRate: 0, // <-- [MODIFICATION] New planes start with 0 turn rate
+
+                    // Display state
+                    displayLat: newApiLat, // display starts at api
+                    displayLon: newApiLon,
+                    displayHeading: newApiHeading,
+
+                    // "From" state for interpolation
+                    fromLat: newApiLat, // from starts at api
+                    fromLon: newApiLon,
+                    fromHeading: newApiHeading,
+                    
+                    interpStartTime: 0, // 0 = don't interpolate
+                    properties: newProperties
+                };
             }
         });
-    }
 
-    // This is the key: setData() is now called at a controlled rate, not 60 times/sec
-    source.setData({ type: 'FeatureCollection', features: newFeatures });
+        // Now that we've processed the good data, we can safely clean up old flights
+        for (const flightId in liveFlightData) {
+            if (!updatedFlightIds.has(flightId)) {
+                delete liveFlightData[flightId];
+            }
+        }
+
+    } catch (error) {
+        // A catch block ensures that any unexpected error won't crash the update loop
+        console.error('Error updating Sector Ops live data:', error);
+    }
 }
     // ====================================================================
     // END: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
