@@ -1041,16 +1041,14 @@ function animateFlightPositions() {
             currentHeading = interpolateHeading(flight.fromHeading, flight.apiHeading, progress);
         
         } else {
-            // --- 2. PREDICTION PHASE ---
-            // Interpolation is done, or this is a new plane.
-            // Predict position based on the *last known API data*.
-            const elapsedTimeMs = timestamp - flight.apiTimestamp;
-            const distanceKm = flight.apiSpeed * ktsToKmPerMs * elapsedTimeMs;
-            const predictedPos = predictNewPosition(flight.apiLat, flight.apiLon, flight.apiHeading, distanceKm);
-            
-            currentLat = predictedPos.lat;
-            currentLon = predictedPos.lon;
-            currentHeading = flight.apiHeading; // Heading prediction is complex, just hold it
+            // --- 2. "HOLD" PHASE ---
+            // Interpolation is done (or this is a new plane). Hold the aircraft at its 
+            // last known API position. The animation will wait here until the 
+            // next data packet arrives, at which point a new interpolation will begin.
+            // This completely removes the faulty "prediction" logic that causes skidding.
+            currentLat = flight.apiLat;
+            currentLon = flight.apiLon;
+            currentHeading = flight.apiHeading;
         }
 
         // Store the calculated position so the *next* API update can use it as a "from" point.
