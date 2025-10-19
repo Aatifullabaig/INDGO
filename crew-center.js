@@ -4059,7 +4059,6 @@ function stopSectorOpsLiveLoop() {
         });
     }
 
-// --- MODIFY THIS FUNCTION ---
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -4146,7 +4145,9 @@ async function updateSectorOpsLiveFlights() {
                 const timeDeltaMs = now - existingData.apiTimestamp;
                 let newApiTurnRate = 0; // Default to no turn
 
-                if (timeDeltaMs > 100) { // Only calculate if time delta is reasonable
+                // --- [THIS IS THE FIX] ---
+                // Only calculate a turn rate if time delta is reasonable AND speed is high enough to be reliable.
+                if (timeDeltaMs > 100 && newApiSpeed > 3) { 
                     // Use interpolateHeading to find the shortest path (e.g., 350° to 10° is +20°)
                     let headingDelta = newApiHeading - existingData.apiHeading;
                     if (headingDelta > 180) headingDelta -= 360;
@@ -4155,7 +4156,7 @@ async function updateSectorOpsLiveFlights() {
                     // Turn rate in degrees per second
                     newApiTurnRate = headingDelta / (timeDeltaMs / 1000.0);
                 }
-                // --- [NEW LOGIC END] ---
+                // --- [END OF FIX] ---
 
                 // This flight exists. Set up interpolation *from* its last *displayed* position.
                 existingData.fromLat = existingData.displayLat;
