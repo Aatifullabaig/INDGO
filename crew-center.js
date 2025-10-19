@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
     let runwaysData = {}; // NEW: To store runway data indexed by airport ICAO
     let liveFlightData = {}; // Key: flightId, Value: { lon, lat, heading, speed, timestamp }
-    const DATA_REFRESH_INTERVAL_MS = 3000; // Your current refresh interval
+    const DATA_REFRESH_INTERVAL_MS = 1500; // Your current refresh interval
 
     // --- Map-related State ---
     let liveFlightsMap = null;
@@ -1024,7 +1024,7 @@ function animateFlightPositions() {
     const newFeatures = [];
     const ktsToKmPerMs = 1.852 / 3600000;
     const timestamp = performance.now(); // Use high-resolution timestamp
-    const INTERP_DURATION_MS = 1000.0; // The 1.0 second "delay" you requested
+    const INTERP_DURATION_MS = DATA_REFRESH_INTERVAL_MS + 100.0;
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
@@ -3947,7 +3947,7 @@ function startSectorOpsLiveLoop() {
     // 1. Start the data fetching loop (infrequent)
     // This part is unchanged and continues to fetch new data every 1.5 seconds.
     updateSectorOpsLiveFlights(); // Fetch immediately
-    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 1500); 
+    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, DATA_REFRESH_INTERVAL_MS); 
 
     // 2. Start the new throttled animation loop
     // We reset the timestamp and call the loop *once* to kick it off.
