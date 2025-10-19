@@ -3945,9 +3945,9 @@ function startSectorOpsLiveLoop() {
     stopSectorOpsLiveLoop(); // Clear any old loops
 
     // 1. Start the data fetching loop (infrequent)
-    // This part is unchanged and continues to fetch new data every 3 seconds.
+    // This part is unchanged and continues to fetch new data every 1.5 seconds.
     updateSectorOpsLiveFlights(); // Fetch immediately
-    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 3000); 
+    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 1500); 
 
     // 2. Start the new throttled animation loop
     // We reset the timestamp and call the loop *once* to kick it off.
