@@ -1024,9 +1024,7 @@ function animateFlightPositions() {
     const newFeatures = [];
     const ktsToKmPerMs = 1.852 / 3600000;
     const timestamp = performance.now(); // Use high-resolution timestamp
-    
-    // ✅ MODIFICATION: Changed 1000.0 to 1500.0 to match the new 1.5s data interval.
-    const INTERP_DURATION_MS = 1500.0; // The 1.5 second "tween"
+    const INTERP_DURATION_MS = 1000.0; // The 1.0 second "delay" you requested
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
@@ -2835,7 +2833,7 @@ async function initializeSectorOpsMap(centerICAO) {
         return waypoints;
     }
 
-/**
+    /**
  * --- [REMODEL V4 - FULL SYNC WITH PATH DENSIFICATION] Handles aircraft clicks, data fetching, map plotting, and window population.
  */
 async function handleAircraftClick(flightProps, sessionId) {
@@ -2927,7 +2925,6 @@ async function handleAircraftClick(flightProps, sessionId) {
             sectorOpsMap.fitBounds(bounds, { padding: 80, maxZoom: 10, duration: 1000 });
         }
         
-        // ✅ MODIFICATION: Changed 3000 to 1500 to match the new 1.5s data interval.
         activePfdUpdateInterval = setInterval(async () => {
             try {
                 const freshDataRes = await fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}`);
@@ -2999,7 +2996,7 @@ if (flightPathState && pathSource && flightPathState.coordinates.length > 0) {
                 clearInterval(activePfdUpdateInterval);
                 activePfdUpdateInterval = null;
             }
-        }, 1500); // ✅ MODIFICATION: Changed 3000 to 1500.
+        }, 3000);
 
     } catch (error) {
         console.error("Error fetching or plotting aircraft details:", error);
@@ -3948,9 +3945,9 @@ function startSectorOpsLiveLoop() {
     stopSectorOpsLiveLoop(); // Clear any old loops
 
     // 1. Start the data fetching loop (infrequent)
-    // ✅ MODIFICATION: Changed 3000 to 1500 to match new backend data rate.
+    // This part is unchanged and continues to fetch new data every 3 seconds.
     updateSectorOpsLiveFlights(); // Fetch immediately
-    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 1500); 
+    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 3000); 
 
     // 2. Start the new throttled animation loop
     // We reset the timestamp and call the loop *once* to kick it off.
