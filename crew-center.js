@@ -1007,15 +1007,11 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
     }
 
 /**
- * --- [RE-ARCHITECTED] - The throttled animation loop.
- * This function's only job is to interpolate the aircraft's state
- * from "fromTimestamp" to "toTimestamp".
- *
- * If the current time is *past* "toTimestamp", it will
- * extrapolate (predict) the position forward based on the "to" state's
- * speed and heading until the next API packet provides a new "to" state.
- *
- * This SOLVES the "snap" and "spin" problem.
+ * --- [RE-ARCHITECTED v3] - The throttled animation loop.
+ * This version interpolates from "from" to "to" over a set duration.
+ * It stores its *last rendered position* back into the state object,
+ * so that when a new API packet arrives, the interpolation can
+ * start *from that exact rendered position*, eliminating all "snaps".
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
@@ -1024,8 +1020,12 @@ function animateFlightPositions() {
     }
 
     const newFeatures = [];
-    const ktsToKmPerMs = 1.852 / 3600000;
     const now = performance.now();
+    
+    // --- [NEW] Extrapolation constants ---
+    const ktsToKmPerMs = 1.852 / 3600000;
+    // How long to extrapolate for if no new data arrives (e.g., 10 seconds)
+    const MAX_EXTRAPOLATION_MS = 10000; 
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
@@ -1035,47 +1035,56 @@ function animateFlightPositions() {
         const totalDuration = flight.toTimestamp - flight.fromTimestamp;
         const timeElapsed = now - flight.fromTimestamp;
 
-        // --- 1. INTERPOLATION PHASE ---
-        // Calculate progress, but don't let it go over 1.0 (100%)
-        let progress = 1.0;
-        if (totalDuration > 0) {
-            progress = Math.min(1.0, timeElapsed / totalDuration);
-        }
+        if (timeElapsed < totalDuration) {
+            // --- 1. INTERPOLATION PHASE ---
+            // We are animating from the last rendered position to the new API target.
+            const progress = timeElapsed / totalDuration;
+            
+            currentLat = lerp(flight.fromLat, flight.toLat, progress);
+            currentLon = lerp(flight.fromLon, flight.toLon, progress);
+            currentHeading = interpolateHeading(flight.fromHeading, flight.toHeading, progress);
 
-        currentLat = lerp(flight.fromLat, flight.toLat, progress);
-        currentLon = lerp(flight.fromLon, flight.toLon, progress);
-        currentHeading = interpolateHeading(flight.fromHeading, flight.toHeading, progress);
-
-        // --- 2. EXTRAPOLATION (PREDICTION) PHASE ---
-        // If progress is 1.0, our interpolation is finished.
-        // We now extrapolate *past* the "to" position based on its vector
-        // until the next API packet arrives.
-        if (progress >= 1.0) {
+        } else {
+            // --- 2. EXTRAPOLATION PHASE ---
+            // We have reached our target ("to"). We now predict forward
+            // from that target until a new one arrives.
             const timeSinceTo = now - flight.toTimestamp;
-            const speedKts = flight.properties.speed;
-            const heading = flight.toHeading; // Use the last known *real* heading
-
-            if (speedKts > 1) {
-                // Calculate prediction distance
-                const distanceKm = speedKts * ktsToKmPerMs * timeSinceTo;
-                const predictedPos = predictNewPosition(
-                    flight.toLat,   // Base prediction from the *last known real* lat
-                    flight.toLon,   // Base prediction from the *last known real* lon
-                    heading,        // Base prediction from the *last known real* heading
-                    distanceKm
-                );
-                currentLat = predictedPos.lat;
-                currentLon = predictedPos.lon;
-            } else {
-                // Not moving, so just stay at the final "to" position
+            
+            // Stop extrapolating if data is too old
+            if (timeSinceTo > MAX_EXTRAPOLATION_MS) {
                 currentLat = flight.toLat;
                 currentLon = flight.toLon;
+                currentHeading = flight.toHeading;
+            } else {
+                const speedKts = flight.properties.speed;
+                const heading = flight.toHeading;
+
+                if (speedKts > 1) {
+                    const distanceKm = speedKts * ktsToKmPerMs * timeSinceTo;
+                    const predictedPos = predictNewPosition(
+                        flight.toLat,   // Predict from the last *real* position
+                        flight.toLon,
+                        heading,
+                        distanceKm
+                    );
+                    currentLat = predictedPos.lat;
+                    currentLon = predictedPos.lon;
+                } else {
+                    currentLat = flight.toLat;
+                    currentLon = flight.toLon;
+                }
+                currentHeading = heading;
             }
-            // Hold the last known heading
-            currentHeading = heading;
         }
 
-        // Add the calculated feature
+        // --- [CRITICAL FIX] ---
+        // Store the newly rendered position. This will become the "from"
+        // state when the *next* API packet arrives.
+        flight.currentRenderedLat = currentLat;
+        flight.currentRenderedLon = currentLon;
+        flight.currentRenderedHeading = currentHeading;
+        // --- [END FIX] ---
+
         newFeatures.push({
             type: 'Feature',
             geometry: {
@@ -1089,7 +1098,6 @@ function animateFlightPositions() {
         });
     }
 
-    // This is the key: setData() is now called at a controlled rate, not 60 times/sec
     source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
 
@@ -4061,11 +4069,13 @@ function stopSectorOpsLiveLoop() {
     }
 
 /**
- * --- [RE-ARCHITECTED] - Updates the state for the animation loop.
- * This version uses a simple "from/to" state machine. The animation loop's
- * only job is to interpolate between the last known API state ("from") and
- * the new API state ("to") over the duration between them.
- * This eliminates the "predict-then-snap" problem entirely.
+ * --- [RE-ARCHITECTED v3] - Updates the animation state.
+ * When new API data arrives, this function sets the "from" state
+ * to be the *last rendered position* (saved by animateFlightPositions)
+ * and the "to" state to be the new API data.
+ *
+ * It sets the animation duration to be the time until the *next*
+ * expected API packet.
  */
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
@@ -4117,6 +4127,8 @@ async function updateSectorOpsLiveFlights() {
 
         const now = performance.now();
         const updatedFlightIds = new Set();
+        // Get the refresh interval from the global state, default to 3000
+        const animationDuration = window.DATA_REFRESH_INTERVAL_MS || 3000;
 
         flightsData.flights.forEach(flight => {
             if (!flight.position || flight.position.lat == null || flight.position.lon == null) return;
@@ -4134,7 +4146,7 @@ async function updateSectorOpsLiveFlights() {
                 callsign: flight.callsign,
                 username: flight.username,
                 altitude: flight.position.alt_ft,
-                speed: newSpeed, // We store speed here for extrapolation
+                speed: newSpeed, // Store for extrapolation
                 verticalSpeed: flight.position.vs_fpm || 0,
                 position: JSON.stringify(flight.position),
                 aircraft: JSON.stringify(flight.aircraft),
@@ -4145,22 +4157,25 @@ async function updateSectorOpsLiveFlights() {
             const existingData = liveFlightData[flightId];
 
             if (existingData) {
-                // This flight exists. The old "to" state becomes the new "from" state.
-                existingData.fromLat = existingData.toLat;
-                existingData.fromLon = existingData.toLon;
-                existingData.fromHeading = existingData.toHeading;
-                existingData.fromTimestamp = existingData.toTimestamp;
+                // --- [CRITICAL FIX] ---
+                // "from" is wherever the plane was last *rendered*.
+                existingData.fromLat = existingData.currentRenderedLat;
+                existingData.fromLon = existingData.currentRenderedLon;
+                existingData.fromHeading = existingData.currentRenderedHeading;
+                existingData.fromTimestamp = now; // Animation starts *now*
 
-                // The new API data becomes the new "to" state.
+                // "to" is the new API data.
                 existingData.toLat = newLat;
                 existingData.toLon = newLon;
                 existingData.toHeading = newHeading;
-                existingData.toTimestamp = now;
+                // Animation ends at the time of the *next* expected packet.
+                existingData.toTimestamp = now + animationDuration; 
+                
                 existingData.properties = newProperties;
                 
             } else {
-                // This is a new flight. Set "from" and "to" to the same state.
-                // It will not animate until the *next* packet arrives.
+                // This is a new flight. Set all states to the current data.
+                // It will not animate, just appear.
                 liveFlightData[flightId] = {
                     fromLat: newLat,
                     fromLon: newLon,
@@ -4169,7 +4184,13 @@ async function updateSectorOpsLiveFlights() {
                     toLat: newLat,
                     toLon: newLon,
                     toHeading: newHeading,
-                    toTimestamp: now,
+                    toTimestamp: now + animationDuration,
+                    
+                    // Set initial rendered state
+                    currentRenderedLat: newLat,
+                    currentRenderedLon: newLon,
+                    currentRenderedHeading: newHeading,
+                    
                     properties: newProperties
                 };
             }
