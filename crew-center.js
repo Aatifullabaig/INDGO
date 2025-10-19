@@ -1010,9 +1010,10 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
  * --- [NEW & PERFORMANC-OPTIMIZED] The throttled animation loop.
  * This function's only job is to update the data of the existing map source
  * at a controlled rate (e.g., 10-15 times per second).
- * * --- [v2 - WITH INTERPOLATION] ---
+ * * --- [v3 - WITH TURN-RATE PREDICTION] ---
  * This version adds a 1-second interpolation (tweening) phase
  * when new API data arrives to create a smooth transition instead of a "snap".
+ * It also predicts turns for smoother taxi/takeoff animations.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
@@ -1024,7 +1025,9 @@ function animateFlightPositions() {
     const newFeatures = [];
     const ktsToKmPerMs = 1.852 / 3600000;
     const timestamp = performance.now(); // Use high-resolution timestamp
-    const INTERP_DURATION_MS = 1000.0; // The 1.0 second "delay" you requested
+    
+    // --- [MODIFICATION] --- Shortened duration for a "snappier" feel
+    const INTERP_DURATION_MS = 300.0; // Was 1000.0
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
@@ -1045,12 +1048,26 @@ function animateFlightPositions() {
             // Interpolation is done, or this is a new plane.
             // Predict position based on the *last known API data*.
             const elapsedTimeMs = timestamp - flight.apiTimestamp;
+            const elapsedTimeSec = elapsedTimeMs / 1000.0;
             const distanceKm = flight.apiSpeed * ktsToKmPerMs * elapsedTimeMs;
-            const predictedPos = predictNewPosition(flight.apiLat, flight.apiLon, flight.apiHeading, distanceKm);
+
+            // --- [REVISED PREDICTION LOGIC] ---
+            const turnRate = flight.apiTurnRate || 0;
+            const headingChange = turnRate * elapsedTimeSec;
+            
+            // The final heading at the end of the prediction
+            const predictedHeading = (flight.apiHeading + headingChange + 360) % 360;
+            
+            // For the position, we use the *average* heading during the prediction interval
+            // to approximate the curve.
+            const avgPredictedHeading = (flight.apiHeading + (headingChange / 2.0) + 360) % 360;
+
+            const predictedPos = predictNewPosition(flight.apiLat, flight.apiLon, avgPredictedHeading, distanceKm);
             
             currentLat = predictedPos.lat;
             currentLon = predictedPos.lon;
-            currentHeading = flight.apiHeading; // Heading prediction is complex, just hold it
+            currentHeading = predictedHeading; // Use the *final* predicted heading for the icon
+            // --- [END REVISED LOGIC] ---
         }
 
         // Store the calculated position so the *next* API update can use it as a "from" point.
@@ -4042,7 +4059,7 @@ function stopSectorOpsLiveLoop() {
         });
     }
 
-    // --- MODIFY THIS FUNCTION ---
+// --- MODIFY THIS FUNCTION ---
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -4124,6 +4141,22 @@ async function updateSectorOpsLiveFlights() {
             };
 
             if (existingData) {
+                // --- [NEW LOGIC START] ---
+                // Calculate time delta since last API update
+                const timeDeltaMs = now - existingData.apiTimestamp;
+                let newApiTurnRate = 0; // Default to no turn
+
+                if (timeDeltaMs > 100) { // Only calculate if time delta is reasonable
+                    // Use interpolateHeading to find the shortest path (e.g., 350° to 10° is +20°)
+                    let headingDelta = newApiHeading - existingData.apiHeading;
+                    if (headingDelta > 180) headingDelta -= 360;
+                    if (headingDelta < -180) headingDelta += 360;
+                    
+                    // Turn rate in degrees per second
+                    newApiTurnRate = headingDelta / (timeDeltaMs / 1000.0);
+                }
+                // --- [NEW LOGIC END] ---
+
                 // This flight exists. Set up interpolation *from* its last *displayed* position.
                 existingData.fromLat = existingData.displayLat;
                 existingData.fromLon = existingData.displayLon;
@@ -4137,8 +4170,10 @@ async function updateSectorOpsLiveFlights() {
                 existingData.apiSpeed = newApiSpeed;
                 existingData.apiTimestamp = now; // This is the base time for *prediction*
                 existingData.properties = newProperties;
+                existingData.apiTurnRate = newApiTurnRate; // <-- [MODIFICATION] Store the turn rate
+
             } else {
-                // This is a new flight. It should just appear, no interpolation.
+                // This is a new flight.
                 liveFlightData[flightId] = {
                     // API state
                     apiLat: newApiLat,
@@ -4146,6 +4181,7 @@ async function updateSectorOpsLiveFlights() {
                     apiHeading: newApiHeading,
                     apiSpeed: newApiSpeed,
                     apiTimestamp: now,
+                    apiTurnRate: 0, // <-- [MODIFICATION] New planes start with 0 turn rate
 
                     // Display state
                     displayLat: newApiLat, // display starts at api
