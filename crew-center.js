@@ -1008,9 +1008,10 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
 
 /**
  * --- [RE-ARCHITECTED] - The throttled animation loop.
- * This version uses a "damped spring" (lerp) model instead of "predict-then-correct".
- * The icon's *current* position will smoothly chase its *target* position.
- * This eliminates the "snap-back" jitter when new data arrives.
+ * This version uses a "damped spring" (lerp) model with new tuning
+ * to ensure continuous, smooth motion instead of a "snap-and-stop" animation.
+ * The marker will now constantly "chase" its target, never fully reaching it
+ * before a new target is supplied by the data feed.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
@@ -1021,11 +1022,12 @@ function animateFlightPositions() {
     const newFeatures = [];
     const now = performance.now();
     
-    // This value controls the "springiness."
-    // It's tuned to catch up ~99% of the way to the new target
-    // within the 3-second data refresh interval.
-    // (1.0 - 0.15)^30 frames = ~0.009 (99.1% caught up)
-    const LERP_FACTOR = 0.15;
+    // --- NEW TUNING ---
+    // These values control the "springiness." A smaller factor = smoother, slower chase.
+    // This is intentionally tuned to be "laggy" so the animation is continuous
+    // and never has time to "stop" at its target.
+    const POS_LERP_FACTOR = 0.04;  // Slower, smoother chase for position
+    const HEAD_LERP_FACTOR = 0.08; // Heading can update a bit faster
     
     // Set a timeout to remove "stale" aircraft
     const STALE_TIMEOUT_MS = 30000; // 30 seconds
@@ -1033,7 +1035,7 @@ function animateFlightPositions() {
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
         
-        // --- 1. Check for stale data ---
+        // --- 1. Check for stale data (Unchanged) ---
         if (now - flight.lastApiUpdate > STALE_TIMEOUT_MS) {
             // This flight hasn't been seen in 30 seconds. Remove it.
             delete liveFlightData[flightId];
@@ -1042,22 +1044,18 @@ function animateFlightPositions() {
 
         // --- 2. Animate (Spring) Current position towards Target position ---
         
-        // Check if we are already (practically) at the target
-        const distToTarget = getDistanceKm(flight.currentLat, flight.currentLon, flight.targetLat, flight.targetLon);
-        
-        if (distToTarget > 0.01) { // Only animate if not at the target
-            flight.currentLat = lerp(flight.currentLat, flight.targetLat, LERP_FACTOR);
-            flight.currentLon = lerp(flight.currentLon, flight.targetLon, LERP_FACTOR);
-        } else {
-            // Snap to target if close enough
-            flight.currentLat = flight.targetLat;
-            flight.currentLon = flight.targetLon;
-        }
+        // [THE FIX]
+        // We REMOVED the `if (distToTarget > 0.01)` block.
+        // The lerp now runs *every single frame*, regardless of how close it is.
+        // Because the LERP_FACTOR is small, it will always be "chasing" the target
+        // and will appear to be in continuous motion.
+        flight.currentLat = lerp(flight.currentLat, flight.targetLat, POS_LERP_FACTOR);
+        flight.currentLon = lerp(flight.currentLon, flight.targetLon, POS_LERP_FACTOR);
         
         // Always animate heading smoothly
-        flight.currentHeading = interpolateHeading(flight.currentHeading, flight.targetHeading, LERP_FACTOR);
+        flight.currentHeading = interpolateHeading(flight.currentHeading, flight.targetHeading, HEAD_LERP_FACTOR);
         
-        // --- 3. Add the feature for rendering ---
+        // --- 3. Add the feature for rendering (Unchanged) ---
         newFeatures.push({
             type: 'Feature',
             geometry: {
