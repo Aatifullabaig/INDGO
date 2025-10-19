@@ -1007,11 +1007,9 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
     }
 
 /**
- * --- [RE-ARCHITECTED] - The throttled animation loop.
- * This version uses a "damped spring" (lerp) model with new tuning
- * to ensure continuous, smooth motion instead of a "snap-and-stop" animation.
- * The marker will now constantly "chase" its target, never fully reaching it
- * before a new target is supplied by the data feed.
+ * --- [RE-ARCHITECTED V3] - The throttled animation loop.
+ * This version uses time-based linear interpolation for constant-speed
+ * movement between data packets.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
@@ -1022,12 +1020,9 @@ function animateFlightPositions() {
     const newFeatures = [];
     const now = performance.now();
     
-    // --- NEW TUNING ---
-    // These values control the "springiness." A smaller factor = smoother, slower chase.
-    // This is intentionally tuned to be "laggy" so the animation is continuous
-    // and never has time to "stop" at its target.
-    const POS_LERP_FACTOR = 0.04;  // Slower, smoother chase for position
-    const HEAD_LERP_FACTOR = 0.08; // Heading can update a bit faster
+    // --- [CRITICAL] This duration *must* match your DATA_REFRESH_INTERVAL_MS ---
+    // If you changed it to 1500, this will work.
+    const ANIMATION_DURATION = DATA_REFRESH_INTERVAL_MS; 
     
     // Set a timeout to remove "stale" aircraft
     const STALE_TIMEOUT_MS = 30000; // 30 seconds
@@ -1037,23 +1032,28 @@ function animateFlightPositions() {
         
         // --- 1. Check for stale data (Unchanged) ---
         if (now - flight.lastApiUpdate > STALE_TIMEOUT_MS) {
-            // This flight hasn't been seen in 30 seconds. Remove it.
             delete liveFlightData[flightId];
             continue;
         }
 
-        // --- 2. Animate (Spring) Current position towards Target position ---
+        // --- 2. [REHAULED] Animate with Time-based Linear Interpolation ---
         
-        // [THE FIX]
-        // We REMOVED the `if (distToTarget > 0.01)` block.
-        // The lerp now runs *every single frame*, regardless of how close it is.
-        // Because the LERP_FACTOR is small, it will always be "chasing" the target
-        // and will appear to be in continuous motion.
-        flight.currentLat = lerp(flight.currentLat, flight.targetLat, POS_LERP_FACTOR);
-        flight.currentLon = lerp(flight.currentLon, flight.targetLon, POS_LERP_FACTOR);
+        // Calculate how far into the animation we are (0.0 to 1.0)
+        const elapsed = now - flight.animationStartTime;
+        let progress = elapsed / ANIMATION_DURATION;
         
-        // Always animate heading smoothly
-        flight.currentHeading = interpolateHeading(flight.currentHeading, flight.targetHeading, HEAD_LERP_FACTOR);
+        // Clamp progress to a max of 1.0
+        // This makes the marker "wait" at its target until the next data packet arrives.
+        if (progress > 1.0 || progress < 0) { // progress < 0 can happen on first load
+            progress = 1.0;
+        }
+
+        // Use true linear interpolation from the *start* to the *target*
+        flight.currentLat = lerp(flight.animationStartLat, flight.targetLat, progress);
+        flight.currentLon = lerp(flight.animationStartLon, flight.targetLon, progress);
+        
+        // Interpolate heading the same way
+        flight.currentHeading = interpolateHeading(flight.animationStartHeading, flight.targetHeading, progress);
         
         // --- 3. Add the feature for rendering (Unchanged) ---
         newFeatures.push({
@@ -4040,11 +4040,9 @@ function stopSectorOpsLiveLoop() {
     }
 
 /**
- * --- [RE-ARCHITECTED] - Updates the state for the animation loop.
- * This version uses a simple "from/to" state machine. The animation loop's
- * only job is to interpolate between the last known API state ("from") and
- * the new API state ("to") over the duration between them.
- * This eliminates the "predict-then-snap" problem entirely.
+ * --- [RE-ARCHITECTED V3] - Updates the state for the animation loop.
+ * This version uses a time-based "from/to" state machine to ensure
+ * constant-speed animation.
  */
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
@@ -4113,7 +4111,7 @@ async function updateSectorOpsLiveFlights() {
                 callsign: flight.callsign,
                 username: flight.username,
                 altitude: flight.position.alt_ft,
-                speed: newSpeed, // We store speed here for extrapolation
+                speed: newSpeed, // We store speed here
                 verticalSpeed: flight.position.vs_fpm || 0,
                 position: JSON.stringify(flight.position),
                 aircraft: JSON.stringify(flight.aircraft),
@@ -4124,22 +4122,41 @@ async function updateSectorOpsLiveFlights() {
             const existingData = liveFlightData[flightId];
 
             if (existingData) {
-                // Flight exists. Just update its target destination.
+                // --- [CRITICAL CHANGE] ---
+                // Flight exists. Set the animation start state to its *current rendered* position.
+                existingData.animationStartLat = existingData.currentLat;
+                existingData.animationStartLon = existingData.currentLon;
+                existingData.animationStartHeading = existingData.currentHeading;
+                existingData.animationStartTime = now; // Record the animation start time
+
+                // Set the *new* target destination
                 existingData.targetLat = newLat;
                 existingData.targetLon = newLon;
                 existingData.targetHeading = newHeading;
+                
                 existingData.properties = newProperties;
-                existingData.lastApiUpdate = now; // Keep track of when we last heard from it
+                existingData.lastApiUpdate = now;
                 
             } else {
-                // This is a new flight. Set current and target to the same spot.
+                // --- [CRITICAL CHANGE] ---
+                // This is a new flight. Set all states to the same spot.
                 liveFlightData[flightId] = {
+                    // Animation start state
+                    animationStartLat: newLat,
+                    animationStartLon: newLon,
+                    animationStartHeading: newHeading,
+                    animationStartTime: now,
+                    
+                    // Current rendered state (will be updated by animation loop)
                     currentLat: newLat,
                     currentLon: newLon,
                     currentHeading: newHeading,
+
+                    // Target state
                     targetLat: newLat,
                     targetLon: newLon,
                     targetHeading: newHeading,
+                    
                     properties: newProperties,
                     lastApiUpdate: now
                 };
