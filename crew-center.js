@@ -1007,9 +1007,10 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
     }
 
 /**
- * --- [REVISED V5 - Heavy Lag Follower for Ultra-Smooth Display] ---
- * The follower is intentionally kept far behind the leader so it only sees
- * the smoothed-out path, never any jitter or corrections.
+ * --- [REVISED V4 - Increased Follower Lag] ---
+ * API Data → Smoothed Leader → Display Follower
+ * This version increases the follower's lag (decreases responsiveness)
+ * to prevent overshooting and backward corrections, as requested.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
@@ -1027,125 +1028,63 @@ function animateFlightPositions() {
         // Calculate how long it's been since we got fresh API data
         const timeSinceApiUpdate = now - flight.apiTimestamp;
         
-        // **STEP 1: Smart prediction logic for the leader**
-        let rawPredictedPos;
-        let rawPredictedHeading = flight.apiHeading;
+        // 1. Calculate the RAW predicted position from API data
+        const distanceKm = flight.apiSpeed * ktsToKmPerMs * timeSinceApiUpdate;
+        const rawPredictedPos = predictNewPosition(
+            flight.apiLat, 
+            flight.apiLon, 
+            flight.apiHeading, 
+            distanceKm
+        );
         
-        const isStationary = flight.apiSpeed < 5; // Less than 5 knots
-        const maxPredictionTime = 5000; // Don't predict more than 5 seconds ahead
-        const shouldPredict = !isStationary && timeSinceApiUpdate < maxPredictionTime;
-        
-        if (shouldPredict) {
-            const distanceKm = flight.apiSpeed * ktsToKmPerMs * timeSinceApiUpdate;
-            rawPredictedPos = predictNewPosition(
-                flight.apiLat, 
-                flight.apiLon, 
-                flight.apiHeading, 
-                distanceKm
-            );
-        } else {
-            rawPredictedPos = {
-                lat: flight.apiLat,
-                lon: flight.apiLon
-            };
-        }
-        
-        // **STEP 2: Initialize smoothed leader if needed**
+        // 2. Smooth the LEADER itself to prevent jitter from bad API data
+        // Initialize smoothed leader if it doesn't exist
         if (!flight.smoothedLeaderLat) {
             flight.smoothedLeaderLat = rawPredictedPos.lat;
             flight.smoothedLeaderLon = rawPredictedPos.lon;
             flight.smoothedLeaderHeading = flight.apiHeading;
         }
         
-        // **STEP 3: Detect if moving backward (correction needed)**
-        const distanceToNewPrediction = getDistanceKm(
-            flight.smoothedLeaderLat,
-            flight.smoothedLeaderLon,
-            rawPredictedPos.lat,
-            rawPredictedPos.lon
-        );
-        
-        const currentBearing = calculateBearing(
-            flight.smoothedLeaderLat,
-            flight.smoothedLeaderLon,
-            rawPredictedPos.lat,
-            rawPredictedPos.lon
-        );
-        const bearingDiff = Math.abs(normalizeBearing(currentBearing - flight.smoothedLeaderHeading));
-        const isMovingBackward = bearingDiff > 90 && bearingDiff < 270 && distanceToNewPrediction > 0.05;
-        
-        // **STEP 4: Update the leader position**
-        let leaderSmoothingFactor;
-        
-        if (isStationary) {
-            leaderSmoothingFactor = 0.08;
-        } else if (isMovingBackward) {
-            leaderSmoothingFactor = 0.6; // Fast correction
-        } else if (distanceToNewPrediction > 0.5) {
-            leaderSmoothingFactor = 0.35;
-        } else {
-            leaderSmoothingFactor = 0.2;
-        }
-        
+        // Apply STRONG smoothing to the leader (prevents jitter)
+        const leaderSmoothingFactor = 0.25; // This value remains the same
         flight.smoothedLeaderLat = lerp(flight.smoothedLeaderLat, rawPredictedPos.lat, leaderSmoothingFactor);
         flight.smoothedLeaderLon = lerp(flight.smoothedLeaderLon, rawPredictedPos.lon, leaderSmoothingFactor);
         flight.smoothedLeaderHeading = interpolateHeading(
             flight.smoothedLeaderHeading, 
-            rawPredictedHeading, 
-            leaderSmoothingFactor * 0.8
+            flight.apiHeading, 
+            leaderSmoothingFactor
         );
         
-        // **STEP 5: Calculate distance between follower and leader**
-        const distToLeader = getDistanceKm(
+        // 3. Calculate distance between follower and smoothed leader
+        const distToTarget = getDistanceKm(
             flight.displayLat, 
             flight.displayLon, 
             flight.smoothedLeaderLat, 
             flight.smoothedLeaderLon
         );
         
-        // **NEW: INTENTIONAL LAG - Keep follower further behind**
-        // The follower should maintain a "comfortable distance" behind the leader
-        // This distance acts as a buffer that absorbs all jitter
-        
-        const targetLagDistanceKm = isStationary ? 0.02 : 0.15; // 20m when stopped, 150m when moving
-        const currentLag = distToLeader;
-        
-        // **CRITICAL CHANGE**: Follower smoothing is now based on how far it is from
-        // the "ideal lag distance" rather than from the leader itself
+        // 4. *** MODIFICATION: Dynamic smoothing for the follower is now MUCH LOWER ***
+        // This makes the follower "lazier" and lag further behind,
+        // preventing it from overshooting the leader.
         let followerSmoothingFactor;
-        
-        if (isStationary) {
-            // When stationary, close the gap slowly
-            followerSmoothingFactor = 0.06;
-        } else if (currentLag < targetLagDistanceKm * 0.5) {
-            // Too close to leader - slow down dramatically (let leader pull away)
-            followerSmoothingFactor = 0.03;
-        } else if (currentLag < targetLagDistanceKm) {
-            // Within good range - very gentle following
-            followerSmoothingFactor = 0.08;
-        } else if (currentLag < targetLagDistanceKm * 2) {
-            // A bit far - normal smooth catch-up
-            followerSmoothingFactor = 0.12;
-        } else if (currentLag < targetLagDistanceKm * 4) {
-            // Getting far behind - speed up catch-up
-            followerSmoothingFactor = 0.20;
+        if (distToTarget > 1.0) {
+            followerSmoothingFactor = 0.10; // WAS 0.45. Reduced to prevent fast catch-up.
+        } else if (distToTarget > 0.3) {
+            followerSmoothingFactor = 0.08; // WAS 0.25. Slower medium speed.
         } else {
-            // Very far behind (e.g., after view switch) - fast catch-up
-            followerSmoothingFactor = 0.35;
+            followerSmoothingFactor = 0.05; // WAS 0.15. Very smooth, lazy following.
         }
         
-        // **STEP 6: Move the follower (with intentional lag)**
+        // 5. Move the follower towards the SMOOTHED leader
         flight.displayLat = lerp(flight.displayLat, flight.smoothedLeaderLat, followerSmoothingFactor);
         flight.displayLon = lerp(flight.displayLon, flight.smoothedLeaderLon, followerSmoothingFactor);
-        
-        // Heading follows even more slowly to prevent twitchy turns
         flight.displayHeading = interpolateHeading(
             flight.displayHeading, 
             flight.smoothedLeaderHeading, 
-            followerSmoothingFactor * 0.5 // Half the speed of position changes
+            followerSmoothingFactor
         );
 
-        // **STEP 7: Create the feature for the map**
+        // 6. Create the feature for the map
         newFeatures.push({
             type: 'Feature',
             geometry: {
