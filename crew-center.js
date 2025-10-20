@@ -1007,9 +1007,10 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
     }
 
 /**
- * --- [REVISED V3 - Triple-Layer Smoothing] ---
+ * --- [REVISED V4 - Increased Follower Lag] ---
  * API Data → Smoothed Leader → Display Follower
- * This prevents the leader from jittering while keeping smooth follower movement.
+ * This version increases the follower's lag (decreases responsiveness)
+ * to prevent overshooting and backward corrections, as requested.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
@@ -1036,7 +1037,7 @@ function animateFlightPositions() {
             distanceKm
         );
         
-        // 2. **NEW**: Smooth the LEADER itself to prevent jitter from bad API data
+        // 2. Smooth the LEADER itself to prevent jitter from bad API data
         // Initialize smoothed leader if it doesn't exist
         if (!flight.smoothedLeaderLat) {
             flight.smoothedLeaderLat = rawPredictedPos.lat;
@@ -1045,7 +1046,7 @@ function animateFlightPositions() {
         }
         
         // Apply STRONG smoothing to the leader (prevents jitter)
-        const leaderSmoothingFactor = 0.25; // Higher = more responsive, lower = smoother
+        const leaderSmoothingFactor = 0.25; // This value remains the same
         flight.smoothedLeaderLat = lerp(flight.smoothedLeaderLat, rawPredictedPos.lat, leaderSmoothingFactor);
         flight.smoothedLeaderLon = lerp(flight.smoothedLeaderLon, rawPredictedPos.lon, leaderSmoothingFactor);
         flight.smoothedLeaderHeading = interpolateHeading(
@@ -1062,15 +1063,16 @@ function animateFlightPositions() {
             flight.smoothedLeaderLon
         );
         
-        // 4. Dynamic smoothing for the follower based on distance
-        // If very far, catch up faster. If close, move smoothly.
+        // 4. *** MODIFICATION: Dynamic smoothing for the follower is now MUCH LOWER ***
+        // This makes the follower "lazier" and lag further behind,
+        // preventing it from overshooting the leader.
         let followerSmoothingFactor;
         if (distToTarget > 1.0) {
-            followerSmoothingFactor = 0.01; // Fast catch-up for large gaps
+            followerSmoothingFactor = 0.1; // WAS 0.45. Reduced to prevent fast catch-up.
         } else if (distToTarget > 0.3) {
-            followerSmoothingFactor = 0.3; // Medium speed
+            followerSmoothingFactor = 0.10; // WAS 0.25. Slower medium speed.
         } else {
-            followerSmoothingFactor = 0.2; // Smooth, close following
+            followerSmoothingFactor = 0.05; // WAS 0.15. Very smooth, lazy following.
         }
         
         // 5. Move the follower towards the SMOOTHED leader
