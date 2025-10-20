@@ -10,25 +10,27 @@ const ANIMATION_THROTTLE_MS = 100; // Update map 10x/sec
 // --- Math & Utility Helpers ---
 
 /**
- * Linearly interpolates between two values.
- * @param {number} start - The starting value.
- * @param {number} end - The ending value.
- * @param {number} progress - The interpolation factor (0.0 to 1.0).
- * @returns {number} The interpolated value.
- */
-function lerp(start, end, progress) {
-    return start * (1 - progress) + end * progress;
-}
+     * Linearly interpolates between two values.
+     * This now also supports extrapolation if progress > 1.0.
+     * @param {number} start - The starting value.
+     * @param {number} end - The ending value.
+     * @param {number} progress - The interpolation factor (0.0 to 1.0+).
+     * @returns {number} The interpolated value.
+     */
+    function lerp(start, end, progress) {
+        return start * (1 - progress) + end * progress;
+    }
 
-/**
- * Interpolates heading degrees along the shortest path (e.g., from 350° to 10°).
- */
-function interpolateHeading(start, end, progress) {
-    let delta = end - start;
-    if (delta > 180) delta -= 360;
-    if (delta < -180) delta += 360;
-    return (start + delta * progress + 360) % 360;
-}
+    /**
+     * Interpolates heading degrees along the shortest path (e.g., from 350° to 10°).
+     * This also supports extrapolation.
+     */
+    function interpolateHeading(start, end, progress) {
+        let delta = end - start;
+        if (delta > 180) delta -= 360;
+        if (delta < -180) delta += 360;
+        return (start + delta * progress + 360) % 360;
+    }
 
 /**
  * Calculates the distance between two coordinates in kilometers using the Haversine formula.
@@ -209,14 +211,12 @@ async function initializeSectorOpsMap(centerICAO) {
 }
 
 
-// --- Core Animation Logic ---
-
 /**
- * --- [RE-ARCHITECTED V4 - Interpolation Buffer] - The animation loop.
- * This version renders the aircraft 5 seconds in the past, interpolating
- * between its historical data points for perfectly smooth motion.
- *
- * This function replaces the original `animateFlightPositions` (Line 1157).
+ * --- [FINAL V5 - C/B/A Extrapolation] - The animation loop.
+ * This version interpolates from `packetC` (start) to `packetB` (end).
+ * By REMOVING the `progress` clamp at 1.0, the `lerp` function
+ * will automatically EXTRAPOLATE beyond packet B if a new packet is late,
+ * ensuring the animation never stops.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
@@ -225,86 +225,63 @@ function animateFlightPositions() {
     }
 
     const newFeatures = [];
+    const now = performance.now();
     
-    // 1. Define your delay and the current "render time"
-    const RENDER_DELAY_MS = 5000; // Your 5-second delay
-    const renderTime = performance.now() - RENDER_DELAY_MS;
+    // The *intended* duration of our animation window (C -> B)
+    const ANIMATION_DURATION = DATA_REFRESH_INTERVAL_MS; 
+    // The safety net: Remove aircraft if no data for 30 seconds
+    const STALE_TIMEOUT_MS = 30000; 
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
-        const history = flight.history;
-
-        // Skip if there's no data
-        if (!history || history.length === 0) {
+        
+        // --- 1. Check for stale data (Unchanged) ---
+        if (now - flight.lastApiUpdate > STALE_TIMEOUT_MS) {
+            delete liveFlightData[flightId];
             continue;
         }
 
-        let currentLat, currentLon, currentHeading;
+        // --- 2. [REHAULED] Animate from Packet C to Packet B (with Extrapolation) ---
+        
+        const { packetC, packetB, animationStartTime } = flight;
 
-        // 2. Find the two data points that surround our "renderTime"
-        let fromPoint = null;
-        let toPoint = null;
+        // How long has it been since this animation window started?
+        const elapsed = now - animationStartTime;
 
-        for (let i = history.length - 1; i >= 0; i--) {
-            if (history[i].time <= renderTime) {
-                fromPoint = history[i];
-                toPoint = history[i + 1]; // This will be 'undefined' if 'fromPoint' is the last point
-                break;
-            }
-        }
-
-        // 3. Determine the correct position based on our findings
-        if (fromPoint && toPoint) {
-            // --- CASE 1: IDEAL ---
-            // We are between two known points. Interpolate between them.
-            const timeRange = toPoint.time - fromPoint.time;
-            const timeProgress = renderTime - fromPoint.time;
-            
-            // Calculate progress (0.0 to 1.0) between these two points
-            let progress = (timeRange > 0) ? (timeProgress / timeRange) : 1.0;
-            progress = Math.max(0, Math.min(1, progress)); // Clamp progress
-            
-            currentLat = lerp(fromPoint.lat, toPoint.lat, progress);
-            currentLon = lerp(fromPoint.lon, toPoint.lon, progress);
-            currentHeading = interpolateHeading(fromPoint.hdg, toPoint.hdg, progress);
-
-        } else if (fromPoint && !toPoint) {
-            // --- CASE 2: "STALE" DATA ---
-            // Our renderTime is *after* the last point in history.
-            // This means data is > 5 seconds old. Just hold the last position.
-            currentLat = fromPoint.lat;
-            currentLon = fromPoint.lon;
-            currentHeading = fromPoint.hdg;
-
-        } else if (!fromPoint && history.length > 0) {
-            // --- CASE 3: "NEW" DATA ---
-            // Our renderTime is *before* the first point in history.
-            // This happens for the first 5 seconds a plane is tracked.
-            // Just show the first available (oldest) point.
-            const firstPoint = history[0];
-            currentLat = firstPoint.lat;
-            currentLon = firstPoint.lon;
-            currentHeading = firstPoint.hdg;
-        } else {
-            // Should be impossible to reach, but good to have a fallback
-            continue;
+        // Calculate progress.
+        let progress = 0;
+        if (ANIMATION_DURATION > 0) {
+            progress = elapsed / ANIMATION_DURATION;
         }
         
-        // 4. Add the feature for rendering
+        // --- [CRITICAL CHANGE] ---
+        // We NO LONGER clamp `progress` at 1.0.
+        // If `progress` is 1.1, `lerp(C, B, 1.1)` will return a point
+        // 10% *beyond* B, along the same C->B vector.
+        // This creates continuous, smooth extrapolation.
+        
+        if (progress < 0.0) progress = 0.0; // Still clamp at 0
+
+        // Interpolate (or extrapolate) between C and B
+        flight.currentLat = lerp(packetC.lat, packetB.lat, progress);
+        flight.currentLon = lerp(packetC.lon, packetB.lon, progress);
+        flight.currentHeading = interpolateHeading(packetC.heading, packetB.heading, progress);
+        
+        // --- 3. Add the feature for rendering (Unchanged) ---
         newFeatures.push({
             type: 'Feature',
             geometry: {
                 type: 'Point',
-                coordinates: [currentLon, currentLat]
+                coordinates: [flight.currentLon, flight.currentLat]
             },
             properties: {
-                ...flight.properties, // Use the *latest* properties for info window
-                heading: currentHeading
+                ...flight.properties,
+                heading: flight.currentHeading
             }
         });
     }
     
-    // 5. Update the map source with all new positions
+    // Update the map source with all new positions
     source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
 
@@ -330,11 +307,8 @@ function throttledAnimationLoop(timestamp) {
 
 
 /**
- * --- [RE-ARCHITECTED V4 - Interpolation Buffer] - Updates the state for the animation loop.
- * This version populates a history buffer for each flight instead of setting
- * "from/to" animation targets.
- *
- * This function replaces the original `updateSectorOpsLiveFlights` (Line 2744).
+ * --- [RE-ARCHITECTED V4 - C/B/A Triple-Packet Buffer] - Updates the state for the animation loop.
+ * This function populates the C-B-A buffer.
  */
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
@@ -342,7 +316,6 @@ async function updateSectorOpsLiveFlights() {
     const LIVE_FLIGHTS_BACKEND = 'https://site--acars-backend--6dmjph8ltlhv.code.run';
 
     try {
-        // --- 1. Fetch Session Data (Unchanged) ---
         const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
         if (!sessionsRes.ok) {
             console.warn('Sector Ops Map: Could not fetch server sessions. Skipping update.');
@@ -356,7 +329,7 @@ async function updateSectorOpsLiveFlights() {
             return;
         }
 
-        // --- 2. Fetch ATC/NOTAMs (Unchanged) ---
+        // Fetch ATC/NOTAMs (unchanged)
         const [atcRes, notamsRes] = await Promise.all([
             fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
@@ -372,7 +345,7 @@ async function updateSectorOpsLiveFlights() {
         }
         renderAirportMarkers(); 
 
-        // --- 3. Fetch Flights (Unchanged) ---
+        // Fetch Flights
         const flightsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`);
         if (!flightsRes.ok) {
             console.warn('Sector Ops Map: Failed to fetch live flights data. Holding last known positions.');
@@ -385,11 +358,8 @@ async function updateSectorOpsLiveFlights() {
             return;
         }
 
-        // --- 4. [MODIFIED] Process Flight Data into History Buffer ---
         const now = performance.now();
         const updatedFlightIds = new Set();
-        const STALE_HISTORY_MS = 60000; // Prune history older than 60 seconds
-        const pruneTime = now - STALE_HISTORY_MS;
 
         flightsData.flights.forEach(flight => {
             if (!flight.position || flight.position.lat == null || flight.position.lon == null) return;
@@ -397,19 +367,21 @@ async function updateSectorOpsLiveFlights() {
             const flightId = flight.flightId;
             updatedFlightIds.add(flightId);
 
-            // Get new data point
-            const newLat = flight.position.lat;
-            const newLon = flight.position.lon;
-            const newHeading = flight.position.track_deg || 0;
-            const newSpeed = flight.position.gs_kt || 0;
+            // --- [MODIFIED LOGIC] ---
+            // This is the new, freshest data (Packet A)
+            const packetA = {
+                lat: flight.position.lat,
+                lon: flight.position.lon,
+                heading: flight.position.track_deg || 0,
+                timestamp: now // The time this packet arrived
+            };
             
-            // Get latest properties for the info window
             const newProperties = {
                 flightId: flight.flightId,
                 callsign: flight.callsign,
                 username: flight.username,
                 altitude: flight.position.alt_ft,
-                speed: newSpeed,
+                speed: flight.position.gs_kt || 0,
                 verticalSpeed: flight.position.vs_fpm || 0,
                 position: JSON.stringify(flight.position),
                 aircraft: JSON.stringify(flight.aircraft),
@@ -418,29 +390,47 @@ async function updateSectorOpsLiveFlights() {
             };
 
             const existingData = liveFlightData[flightId];
-            const newHistoryPoint = { lat: newLat, lon: newLon, hdg: newHeading, time: now };
 
             if (existingData) {
-                // Flight exists: Push new data and prune old data
-                existingData.history.push(newHistoryPoint);
+                // --- [CRITICAL CHANGE] ---
+                // Shift the packet buffer:
+                // The old B becomes the new C (animation start)
+                existingData.packetC = { ...existingData.packetB };
+                
+                // The old A becomes the new B (animation end)
+                existingData.packetB = { ...existingData.packetA };
+
+                // The new packet becomes A (next animation's end)
+                existingData.packetA = packetA;
+                
+                // Set the start time for the *new* C -> B animation
+                existingData.animationStartTime = now;
+                
                 existingData.properties = newProperties;
                 existingData.lastApiUpdate = now;
                 
-                // Prune history
-                existingData.history = existingData.history.filter(p => p.time >= pruneTime);
-                
             } else {
-                // New flight: Create new entry with this first data point
+                // --- [CRITICAL CHANGE] ---
+                // This is a new flight. Set all packets to the same spot.
                 liveFlightData[flightId] = {
-                    history: [newHistoryPoint],
+                    packetA: packetA,
+                    packetB: packetA,
+                    packetC: packetA,
+                    
+                    animationStartTime: now,
+                    
+                    // Set 'current' state for the very first frame
+                    currentLat: packetA.lat,
+                    currentLon: packetA.lon,
+                    currentHeading: packetA.heading,
+                    
                     properties: newProperties,
                     lastApiUpdate: now
                 };
             }
         });
 
-        // --- 5. Clean up stale flights (Unchanged) ---
-        // This removes flights that are no longer in the API feed
+        // Clean up old flights
         for (const flightId in liveFlightData) {
             if (!updatedFlightIds.has(flightId)) {
                 delete liveFlightData[flightId];
