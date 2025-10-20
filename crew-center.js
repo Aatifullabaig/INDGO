@@ -2333,7 +2333,7 @@ function updatePfdDisplay(pfdData) {
     function startLiveLoop() {
         if (!liveFlightsInterval) {
             updateLiveFlights();
-            liveFlightsInterval = setInterval(updateLiveFlights, 1500);
+            liveFlightsInterval = setInterval(updateLiveFlights, 500);
         }
     }
 
