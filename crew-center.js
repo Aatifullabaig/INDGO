@@ -1006,100 +1006,6 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
         return (start + delta * progress + 360) % 360;
     }
 
-/**
- * --- [REVISED V4 - Increased Follower Lag] ---
- * API Data → Smoothed Leader → Display Follower
- * This version increases the follower's lag (decreases responsiveness)
- * to prevent overshooting and backward corrections, as requested.
- */
-function animateFlightPositions() {
-    const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-    if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
-        return;
-    }
-
-    const newFeatures = [];
-    const now = performance.now();
-    const ktsToKmPerMs = 1.852 / 3600000;
-
-    for (const flightId in liveFlightData) {
-        const flight = liveFlightData[flightId];
-        
-        // Calculate how long it's been since we got fresh API data
-        const timeSinceApiUpdate = now - flight.apiTimestamp;
-        
-        // 1. Calculate the RAW predicted position from API data
-        const distanceKm = flight.apiSpeed * ktsToKmPerMs * timeSinceApiUpdate;
-        const rawPredictedPos = predictNewPosition(
-            flight.apiLat, 
-            flight.apiLon, 
-            flight.apiHeading, 
-            distanceKm
-        );
-        
-        // 2. Smooth the LEADER itself to prevent jitter from bad API data
-        // Initialize smoothed leader if it doesn't exist
-        if (!flight.smoothedLeaderLat) {
-            flight.smoothedLeaderLat = rawPredictedPos.lat;
-            flight.smoothedLeaderLon = rawPredictedPos.lon;
-            flight.smoothedLeaderHeading = flight.apiHeading;
-        }
-        
-        // Apply STRONG smoothing to the leader (prevents jitter)
-        const leaderSmoothingFactor = 0.25; // This value remains the same
-        flight.smoothedLeaderLat = lerp(flight.smoothedLeaderLat, rawPredictedPos.lat, leaderSmoothingFactor);
-        flight.smoothedLeaderLon = lerp(flight.smoothedLeaderLon, rawPredictedPos.lon, leaderSmoothingFactor);
-        flight.smoothedLeaderHeading = interpolateHeading(
-            flight.smoothedLeaderHeading, 
-            flight.apiHeading, 
-            leaderSmoothingFactor
-        );
-        
-        // 3. Calculate distance between follower and smoothed leader
-        const distToTarget = getDistanceKm(
-            flight.displayLat, 
-            flight.displayLon, 
-            flight.smoothedLeaderLat, 
-            flight.smoothedLeaderLon
-        );
-        
-        // 4. *** MODIFICATION: Dynamic smoothing for the follower is now MUCH LOWER ***
-        // This makes the follower "lazier" and lag further behind,
-        // preventing it from overshooting the leader.
-        let followerSmoothingFactor;
-        if (distToTarget > 1.0) {
-            followerSmoothingFactor = 0.1; // WAS 0.45. Reduced to prevent fast catch-up.
-        } else if (distToTarget > 0.3) {
-            followerSmoothingFactor = 0.10; // WAS 0.25. Slower medium speed.
-        } else {
-            followerSmoothingFactor = 0.05; // WAS 0.15. Very smooth, lazy following.
-        }
-        
-        // 5. Move the follower towards the SMOOTHED leader
-        flight.displayLat = lerp(flight.displayLat, flight.smoothedLeaderLat, followerSmoothingFactor);
-        flight.displayLon = lerp(flight.displayLon, flight.smoothedLeaderLon, followerSmoothingFactor);
-        flight.displayHeading = interpolateHeading(
-            flight.displayHeading, 
-            flight.smoothedLeaderHeading, 
-            followerSmoothingFactor
-        );
-
-        // 6. Create the feature for the map
-        newFeatures.push({
-            type: 'Feature',
-            geometry: {
-                type: 'Point',
-                coordinates: [flight.displayLon, flight.displayLat]
-            },
-            properties: {
-                ...flight.properties,
-                heading: flight.displayHeading
-            }
-        });
-    }
-
-    source.setData({ type: 'FeatureCollection', features: newFeatures });
-}
 
 function getAircraftCategory(aircraftName) {
     if (!aircraftName) return 'default';
@@ -3970,16 +3876,11 @@ function throttledAnimationLoop(timestamp) {
 function startSectorOpsLiveLoop() {
     stopSectorOpsLiveLoop(); // Clear any old loops
 
-    // 1. Start the data fetching loop (infrequent)
-    // This part is unchanged and continues to fetch new data every 3 seconds.
+    // 1. Start the data fetching loop
     updateSectorOpsLiveFlights(); // Fetch immediately
     sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 500); 
 
-    // 2. Start the new throttled animation loop
-    // We reset the timestamp and call the loop *once* to kick it off.
-    // It will then loop itself using requestAnimationFrame.
-    lastAnimateTimestamp = 0;
-    animationFrameId = requestAnimationFrame(throttledAnimationLoop);
+    // 2. The animation loop has been removed.
 }
 
 
@@ -3993,14 +3894,7 @@ function stopSectorOpsLiveLoop() {
         sectorOpsLiveFlightsInterval = null;
     }
 
-    // 2. Clear the animation loop
-    // This is the crucial part that stops the requestAnimationFrame loop.
-    if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-        animationFrameId = null;
-    }
-    
-    // Note: The non-existent 'sectorOpsAnimationInterval' is removed.
+    // 2. The animation loop has been removed.
 }
 
     /**
@@ -4201,6 +4095,33 @@ async function updateSectorOpsLiveFlights() {
                 delete liveFlightData[flightId];
             }
         }
+
+        // --- [NEW CODE BLOCK] ---
+        // Directly update the map source with the latest API data.
+        // This replaces the entire animation loop.
+        const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+        if (source) {
+            const newFeatures = [];
+            for (const flightId in liveFlightData) {
+                const flight = liveFlightData[flightId];
+                newFeatures.push({
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Point',
+                        // Use the direct API position
+                        coordinates: [flight.apiLon, flight.apiLat] 
+                    },
+                    properties: {
+                        ...flight.properties,
+                        // Use the direct API heading
+                        heading: flight.apiHeading 
+                    }
+                });
+            }
+            // Set the map's data, which will cause the planes to "jump" to the new spots.
+            source.setData({ type: 'FeatureCollection', features: newFeatures });
+        }
+        // --- [END OF NEW CODE BLOCK] ---
 
     } catch (error) {
         console.error('Error updating Sector Ops live data:', error);
