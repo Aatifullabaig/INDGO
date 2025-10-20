@@ -1027,9 +1027,13 @@ function animateFlightPositions() {
     const newFeatures = [];
     const ktsToKmPerMs = 1.852 / 3600000;
     const timestamp = performance.now(); // Use high-resolution timestamp
-    // Smoothing factor for 10fps (100ms) animation throttle.
-    // A value of 0.4 means the icon moves 40% of the way to the leader each frame.
-    const smoothingFactor = 0.4; 
+    
+    // --- MODIFICATION ---
+    // Reduced from 0.4 to 0.15.
+    // A value of 0.15 means the icon moves 15% of the way to the leader each
+    // frame. This creates a much smoother, more damped "follow" effect
+    // and increases the visible "lag" as requested.
+    const smoothingFactor = 0.15; 
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
