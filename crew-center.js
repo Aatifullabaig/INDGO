@@ -953,127 +953,6 @@ async function fetchRunwaysData() {
         }
     }
 
-    /// --- Helper Functions ---
-
-/**
- * --- [NEW] Predicts a new coordinate based on a starting point, bearing, and distance.
- * This is the core of the extrapolation logic.
- * @param {number} lat - Starting latitude in degrees.
- * @param {number} lon - Starting longitude in degrees.
- * @param {number} bearing - Bearing in degrees (0-360).
- * @param {number} distanceKm - Distance to travel in kilometers.
- * @returns {{lat: number, lon: number}} The new predicted coordinates.
- */
-function predictNewPosition(lat, lon, bearing, distanceKm) {
-    const R = 6371; // Earth's radius in km
-    const toRad = (v) => v * Math.PI / 180;
-    const toDeg = (v) => v * 180 / Math.PI;
-
-    const latRad = toRad(lat);
-    const lonRad = toRad(lon);
-    const bearingRad = toRad(bearing);
-
-    const lat2Rad = Math.asin(Math.sin(latRad) * Math.cos(distanceKm / R) +
-                             Math.cos(latRad) * Math.sin(distanceKm / R) * Math.cos(bearingRad));
-
-    const lon2Rad = lonRad + Math.atan2(Math.sin(bearingRad) * Math.sin(distanceKm / R) * Math.cos(latRad),
-                                       Math.cos(distanceKm / R) - Math.sin(latRad) * Math.sin(lat2Rad));
-
-    return { lat: toDeg(lat2Rad), lon: toDeg(lon2Rad) };
-}
-
-/**
-     * Linearly interpolates a value.
-     */
-    /**
-     * Linearly interpolates between two values.
-     * @param {number} start - The starting value.
-     * @param {number} end - The ending value.
-     * @param {number} progress - The interpolation factor (0.0 to 1.0).
-     * @returns {number} The interpolated value.
-     */
-    function lerp(start, end, progress) {
-        return start * (1 - progress) + end * progress;
-    }
-
-    /**
-     * Interpolates heading degrees along the shortest path (e.g., from 350° to 10°).
-     */
-    function interpolateHeading(start, end, progress) {
-        let delta = end - start;
-        if (delta > 180) delta -= 360;
-        if (delta < -180) delta += 360;
-        return (start + delta * progress + 360) % 360;
-    }
-
-/**
- * --- [NEW & PERFORMANC-OPTIMIZED] The throttled animation loop.
- * This function's only job is to update the data of the existing map source
- * at a controlled rate (e.g., 10-15 times per second).
- * * --- [v2 - WITH INTERPOLATION] ---
- * This version adds a 1-second interpolation (tweening) phase
- * when new API data arrives to create a smooth transition instead of a "snap".
- */
-function animateFlightPositions() {
-    const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-    // Exit if the source isn't ready or there's no data to animate
-    if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
-        return;
-    }
-
-    const newFeatures = [];
-    const ktsToKmPerMs = 1.852 / 3600000;
-    const timestamp = performance.now(); // Use high-resolution timestamp
-    const INTERP_DURATION_MS = 500.0; // The 0.5 second "delay" you requested
-
-    for (const flightId in liveFlightData) {
-        const flight = liveFlightData[flightId];
-        
-        let currentLat, currentLon, currentHeading;
-        const interpTimeElapsed = timestamp - flight.interpStartTime;
-
-        if (interpTimeElapsed > 0 && interpTimeElapsed < INTERP_DURATION_MS) {
-            // --- 1. INTERPOLATION PHASE ---
-            // We are smoothly animating from the last position to the new API position.
-            const progress = interpTimeElapsed / INTERP_DURATION_MS; // A value from 0.0 to 1.0
-            currentLat = lerp(flight.fromLat, flight.apiLat, progress);
-            currentLon = lerp(flight.fromLon, flight.apiLon, progress);
-            currentHeading = interpolateHeading(flight.fromHeading, flight.apiHeading, progress);
-        
-        } else {
-            // --- 2. PREDICTION PHASE ---
-            // Interpolation is done, or this is a new plane.
-            // Predict position based on the *last known API data*.
-            const elapsedTimeMs = timestamp - flight.apiTimestamp;
-            const distanceKm = flight.apiSpeed * ktsToKmPerMs * elapsedTimeMs;
-            const predictedPos = predictNewPosition(flight.apiLat, flight.apiLon, flight.apiHeading, distanceKm);
-            
-            currentLat = predictedPos.lat;
-            currentLon = predictedPos.lon;
-            currentHeading = flight.apiHeading; // Heading prediction is complex, just hold it
-        }
-
-        // Store the calculated position so the *next* API update can use it as a "from" point.
-        flight.displayLat = currentLat;
-        flight.displayLon = currentLon;
-        flight.displayHeading = currentHeading;
-
-        newFeatures.push({
-            type: 'Feature',
-            geometry: {
-                type: 'Point',
-                coordinates: [currentLon, currentLat]
-            },
-            properties: {
-                ...flight.properties,
-                heading: currentHeading
-            }
-        });
-    }
-
-    // This is the key: setData() is now called at a controlled rate, not 60 times/sec
-    source.setData({ type: 'FeatureCollection', features: newFeatures });
-}
 
 function getAircraftCategory(aircraftName) {
     if (!aircraftName) return 'default';
@@ -3904,56 +3783,645 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // START: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
 
-// --- [NEW] 60fps Animation Loop ---
-    // This loop runs at the browser's native refresh rate (e.g., 60fps).
-    // The `animateFlightPositions` function itself contains all the smart
-    // interpolation and prediction logic, so we let it run on every frame.
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AIRCRAFT ANIMATION SYSTEM V3.0 - COMPLETE REWRITE
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * Core Principles:
+ * 1. Bezier curve interpolation for smooth, natural paths
+ * 2. Velocity-based animation (constant ground speed)
+ * 3. Predictive extrapolation with physics modeling
+ * 4. Separate state tracking for render vs. API data
+ * 5. Graceful degradation on data loss
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURATION & CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+const ANIMATION_CONFIG = {
+    // Timing
+    API_UPDATE_INTERVAL: 500,           // How often we fetch new data (ms)
+    INTERPOLATION_DURATION: 1000,       // Time to smoothly move to new position (ms)
+    FRAME_RATE: 60,                     // Target FPS for animation loop
     
-    function sectorOpsAnimationLoop() {
-        // 1. Run the animation logic (which will interpolate/predict).
-        animateFlightPositions();
+    // Physics
+    EARTH_RADIUS_KM: 6371,
+    KTS_TO_KM_PER_MS: 1.852 / 3600000, // Conversion factor
+    
+    // Smoothing
+    HEADING_SMOOTHING: 0.15,            // Lower = smoother turns (0-1)
+    POSITION_SMOOTHING: 0.20,           // Lower = smoother position changes
+    
+    // Prediction
+    MAX_PREDICTION_TIME_MS: 3000,       // Stop predicting after this time
+    PREDICTION_DECAY_START: 2000,       // When to start slowing prediction
+    
+    // Thresholds
+    MIN_SPEED_FOR_ANIMATION: 10,        // Don't animate below this speed (kts)
+    SIGNIFICANT_HEADING_CHANGE: 5,      // Degrees - triggers curve adjustment
+    STALE_DATA_THRESHOLD: 10000,        // Mark data as stale after this (ms)
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UTILITY FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Great circle distance calculation
+ */
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = ANIMATION_CONFIG.EARTH_RADIUS_KM;
+    const toRad = (deg) => deg * Math.PI / 180;
+    
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    
+    const a = Math.sin(dLat / 2) ** 2 +
+              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+              Math.sin(dLon / 2) ** 2;
+    
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+/**
+ * Calculate bearing between two points
+ */
+function calculateBearing(lat1, lon1, lat2, lon2) {
+    const toRad = (deg) => deg * Math.PI / 180;
+    const toDeg = (rad) => rad * 180 / Math.PI;
+    
+    const dLon = toRad(lon2 - lon1);
+    const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+    const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+              Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+    
+    return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+/**
+ * Move a point along a bearing
+ */
+function projectPoint(lat, lon, bearing, distanceKm) {
+    const R = ANIMATION_CONFIG.EARTH_RADIUS_KM;
+    const toRad = (deg) => deg * Math.PI / 180;
+    const toDeg = (rad) => rad * 180 / Math.PI;
+    
+    const latRad = toRad(lat);
+    const lonRad = toRad(lon);
+    const bearingRad = toRad(bearing);
+    
+    const newLatRad = Math.asin(
+        Math.sin(latRad) * Math.cos(distanceKm / R) +
+        Math.cos(latRad) * Math.sin(distanceKm / R) * Math.cos(bearingRad)
+    );
+    
+    const newLonRad = lonRad + Math.atan2(
+        Math.sin(bearingRad) * Math.sin(distanceKm / R) * Math.cos(latRad),
+        Math.cos(distanceKm / R) - Math.sin(latRad) * Math.sin(newLatRad)
+    );
+    
+    return {
+        lat: toDeg(newLatRad),
+        lon: toDeg(newLonRad)
+    };
+}
+
+/**
+ * Smooth angle interpolation (shortest path)
+ */
+function interpolateAngle(from, to, factor) {
+    let delta = to - from;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    return (from + delta * factor + 360) % 360;
+}
+
+/**
+ * Cubic Bezier interpolation for smooth curves
+ */
+function cubicBezier(t, p0, p1, p2, p3) {
+    const u = 1 - t;
+    return u * u * u * p0 +
+           3 * u * u * t * p1 +
+           3 * u * t * t * p2 +
+           t * t * t * p3;
+}
+
+/**
+ * Easing function for smooth acceleration/deceleration
+ */
+function easeInOutCubic(t) {
+    return t < 0.5
+        ? 4 * t * t * t
+        : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FLIGHT STATE MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+class FlightState {
+    constructor(initialData) {
+        // API State (ground truth from server)
+        this.api = {
+            lat: initialData.position.lat,
+            lon: initialData.position.lon,
+            heading: initialData.position.track_deg || 0,
+            speed: initialData.position.gs_kt || 0,
+            altitude: initialData.position.alt_ft || 0,
+            vs: initialData.position.vs_fpm || 0,
+            timestamp: performance.now()
+        };
         
-        // 2. Schedule the next frame.
-        animationFrameId = requestAnimationFrame(sectorOpsAnimationLoop);
+        // Display State (what we're currently showing)
+        this.display = { ...this.api };
+        
+        // Animation State
+        this.animation = {
+            isInterpolating: false,
+            startTime: 0,
+            duration: 0,
+            
+            // Bezier control points
+            startPos: { lat: this.api.lat, lon: this.api.lon },
+            endPos: { lat: this.api.lat, lon: this.api.lon },
+            control1: null,
+            control2: null,
+            
+            // Heading animation
+            startHeading: this.api.heading,
+            endHeading: this.api.heading,
+            
+            // Smoothed values (with exponential moving average)
+            smoothedHeading: this.api.heading,
+            smoothedSpeed: this.api.speed
+        };
+        
+        // Prediction State
+        this.prediction = {
+            isActive: false,
+            baseTime: 0,
+            basePos: { lat: this.api.lat, lon: this.api.lon },
+            velocity: { bearing: this.api.heading, speedKts: this.api.speed }
+        };
+        
+        // Metadata
+        this.properties = {
+            flightId: initialData.flightId,
+            callsign: initialData.callsign,
+            username: initialData.username,
+            category: getAircraftCategory(initialData.aircraft?.aircraftName),
+            aircraft: JSON.stringify(initialData.aircraft),
+            userId: initialData.userId,
+            position: JSON.stringify(initialData.position)
+        };
+        
+        this.lastUpdateTime = performance.now();
+        this.isStale = false;
     }
-
-
-    // --- [REPLACEMENT for startSectorOpsLiveLoop] ---
-    // This function is updated to use the new un-throttled animation loop.
-
-    function startSectorOpsLiveLoop() {
-        stopSectorOpsLiveLoop(); // Clear any old loops
-
-        // 1. Start the data fetching loop (this part is correct)
-        // This still only fetches data every 500ms.
-        updateSectorOpsLiveFlights(); // Fetch immediately
-        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 500); 
-
-        // 2. Start the new 60fps animation loop
-        // We call it once to kick it off, and it will loop itself.
-        animationFrameId = requestAnimationFrame(sectorOpsAnimationLoop);
+    
+    /**
+     * Update with fresh API data
+     */
+    updateFromAPI(newData) {
+        const now = performance.now();
+        
+        // Store old API state
+        const oldApi = { ...this.api };
+        
+        // Update API state
+        this.api = {
+            lat: newData.position.lat,
+            lon: newData.position.lon,
+            heading: newData.position.track_deg || 0,
+            speed: newData.position.gs_kt || 0,
+            altitude: newData.position.alt_ft || 0,
+            vs: newData.position.vs_fpm || 0,
+            timestamp: now
+        };
+        
+        // Update properties
+        this.properties.altitude = this.api.altitude;
+        this.properties.speed = this.api.speed;
+        this.properties.verticalSpeed = this.api.vs;
+        this.properties.position = JSON.stringify(newData.position);
+        
+        this.lastUpdateTime = now;
+        this.isStale = false;
+        
+        // Start interpolation if position changed significantly
+        const distanceKm = calculateDistance(
+            this.display.lat, this.display.lon,
+            this.api.lat, this.api.lon
+        );
+        
+        if (distanceKm > 0.1) { // More than 100 meters
+            this.startInterpolation(oldApi);
+        }
+        
+        // Update smoothed values
+        const alpha = ANIMATION_CONFIG.HEADING_SMOOTHING;
+        this.animation.smoothedHeading = interpolateAngle(
+            this.animation.smoothedHeading,
+            this.api.heading,
+            alpha
+        );
+        this.animation.smoothedSpeed = 
+            this.animation.smoothedSpeed * (1 - alpha) +
+            this.api.speed * alpha;
     }
+    
+    /**
+     * Initialize smooth interpolation to new position
+     */
+    startInterpolation(oldApi) {
+        const now = performance.now();
+        
+        this.animation.isInterpolating = true;
+        this.animation.startTime = now;
+        this.animation.duration = ANIMATION_CONFIG.INTERPOLATION_DURATION;
+        
+        // Set start and end positions
+        this.animation.startPos = { 
+            lat: this.display.lat, 
+            lon: this.display.lon 
+        };
+        this.animation.endPos = { 
+            lat: this.api.lat, 
+            lon: this.api.lon 
+        };
+        
+        // Calculate heading change
+        const headingDelta = Math.abs(
+            this.api.heading - oldApi.heading
+        ) % 360;
+        const isSignificantTurn = Math.min(headingDelta, 360 - headingDelta) > 
+            ANIMATION_CONFIG.SIGNIFICANT_HEADING_CHANGE;
+        
+        // Create Bezier control points for curved path
+        if (isSignificantTurn) {
+            const distance = calculateDistance(
+                this.animation.startPos.lat,
+                this.animation.startPos.lon,
+                this.animation.endPos.lat,
+                this.animation.endPos.lon
+            );
+            
+            // Control points along the turn
+            const cp1 = projectPoint(
+                this.animation.startPos.lat,
+                this.animation.startPos.lon,
+                this.display.heading,
+                distance * 0.33
+            );
+            
+            const cp2 = projectPoint(
+                this.animation.endPos.lat,
+                this.animation.endPos.lon,
+                this.api.heading + 180,
+                distance * 0.33
+            );
+            
+            this.animation.control1 = cp1;
+            this.animation.control2 = cp2;
+        } else {
+            // Straight line - control points on the line
+            this.animation.control1 = {
+                lat: this.animation.startPos.lat * 0.66 + this.animation.endPos.lat * 0.34,
+                lon: this.animation.startPos.lon * 0.66 + this.animation.endPos.lon * 0.34
+            };
+            this.animation.control2 = {
+                lat: this.animation.startPos.lat * 0.34 + this.animation.endPos.lat * 0.66,
+                lon: this.animation.startPos.lon * 0.34 + this.animation.endPos.lon * 0.66
+            };
+        }
+        
+        // Set heading animation
+        this.animation.startHeading = this.display.heading;
+        this.animation.endHeading = this.api.heading;
+        
+        // Stop any active prediction
+        this.prediction.isActive = false;
+    }
+    
+    /**
+     * Update display state for current frame
+     */
+    updateFrame(now) {
+        const timeSinceUpdate = now - this.lastUpdateTime;
+        
+        // Check if data is stale
+        if (timeSinceUpdate > ANIMATION_CONFIG.STALE_DATA_THRESHOLD) {
+            this.isStale = true;
+            // Gradually slow down if stale
+            this.animation.smoothedSpeed *= 0.98;
+            if (this.animation.smoothedSpeed < 5) {
+                return; // Stop animating
+            }
+        }
+        
+        // PHASE 1: Interpolation (moving to new API position)
+        if (this.animation.isInterpolating) {
+            const elapsed = now - this.animation.startTime;
+            const progress = Math.min(1, elapsed / this.animation.duration);
+            const easedProgress = easeInOutCubic(progress);
+            
+            // Bezier curve interpolation for position
+            this.display.lat = cubicBezier(
+                easedProgress,
+                this.animation.startPos.lat,
+                this.animation.control1.lat,
+                this.animation.control2.lat,
+                this.animation.endPos.lat
+            );
+            
+            this.display.lon = cubicBezier(
+                easedProgress,
+                this.animation.startPos.lon,
+                this.animation.control1.lon,
+                this.animation.control2.lon,
+                this.animation.endPos.lon
+            );
+            
+            // Smooth heading interpolation
+            this.display.heading = interpolateAngle(
+                this.animation.startHeading,
+                this.animation.endHeading,
+                easedProgress
+            );
+            
+            // Interpolation complete?
+            if (progress >= 1) {
+                this.animation.isInterpolating = false;
+                this.display.lat = this.api.lat;
+                this.display.lon = this.api.lon;
+                this.display.heading = this.api.heading;
+                
+                // Start prediction phase
+                this.startPrediction(now);
+            }
+        }
+        // PHASE 2: Prediction (extrapolating beyond last known position)
+        else if (this.prediction.isActive) {
+            const predictionTime = now - this.prediction.baseTime;
+            
+            if (predictionTime > ANIMATION_CONFIG.MAX_PREDICTION_TIME_MS) {
+                this.prediction.isActive = false;
+                return;
+            }
+            
+            // Calculate decay factor (slow down as prediction ages)
+            let speedMultiplier = 1.0;
+            if (predictionTime > ANIMATION_CONFIG.PREDICTION_DECAY_START) {
+                const decayProgress = 
+                    (predictionTime - ANIMATION_CONFIG.PREDICTION_DECAY_START) /
+                    (ANIMATION_CONFIG.MAX_PREDICTION_TIME_MS - ANIMATION_CONFIG.PREDICTION_DECAY_START);
+                speedMultiplier = 1.0 - (decayProgress * 0.5); // Slow to 50%
+            }
+            
+            // Predict position based on velocity
+            const effectiveSpeed = this.animation.smoothedSpeed * speedMultiplier;
+            
+            if (effectiveSpeed > ANIMATION_CONFIG.MIN_SPEED_FOR_ANIMATION) {
+                const distanceKm = effectiveSpeed * 
+                    ANIMATION_CONFIG.KTS_TO_KM_PER_MS * 
+                    predictionTime;
+                
+                const predicted = projectPoint(
+                    this.prediction.basePos.lat,
+                    this.prediction.basePos.lon,
+                    this.animation.smoothedHeading,
+                    distanceKm
+                );
+                
+                // Smooth the position update
+                const posSmooth = ANIMATION_CONFIG.POSITION_SMOOTHING;
+                this.display.lat = this.display.lat * (1 - posSmooth) + predicted.lat * posSmooth;
+                this.display.lon = this.display.lon * (1 - posSmooth) + predicted.lon * posSmooth;
+                this.display.heading = this.animation.smoothedHeading;
+            }
+        }
+    }
+    
+    /**
+     * Start prediction phase after interpolation completes
+     */
+    startPrediction(now) {
+        if (this.api.speed < ANIMATION_CONFIG.MIN_SPEED_FOR_ANIMATION) {
+            return;
+        }
+        
+        this.prediction.isActive = true;
+        this.prediction.baseTime = now;
+        this.prediction.basePos = {
+            lat: this.display.lat,
+            lon: this.display.lon
+        };
+        this.prediction.velocity = {
+            bearing: this.animation.smoothedHeading,
+            speedKts: this.animation.smoothedSpeed
+        };
+    }
+    
+    /**
+     * Get current GeoJSON feature
+     */
+    toFeature() {
+        return {
+            type: 'Feature',
+            geometry: {
+                type: 'Point',
+                coordinates: [this.display.lon, this.display.lat]
+            },
+            properties: {
+                ...this.properties,
+                heading: this.display.heading,
+                isStale: this.isStale
+            }
+        };
+    }
+}
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ANIMATION MANAGER
+// ═══════════════════════════════════════════════════════════════════════════
 
-// --- [REPLACEMENT for stopSectorOpsLiveLoop] ---
-// This function is updated to stop the new animation loop.
+class FlightAnimationManager {
+    constructor() {
+        this.flights = new Map(); // flightId -> FlightState
+        this.animationFrameId = null;
+        this.dataFetchInterval = null;
+        this.lastFrameTime = 0;
+        this.isRunning = false;
+    }
+    
+    /**
+     * Start the animation system
+     */
+    start() {
+        if (this.isRunning) return;
+        
+        this.isRunning = true;
+        this.lastFrameTime = performance.now();
+        
+        // Start data fetching
+        this.fetchData();
+        this.dataFetchInterval = setInterval(
+            () => this.fetchData(),
+            ANIMATION_CONFIG.API_UPDATE_INTERVAL
+        );
+        
+        // Start animation loop
+        this.animate();
+    }
+    
+    /**
+     * Stop the animation system
+     */
+    stop() {
+        this.isRunning = false;
+        
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+        
+        if (this.dataFetchInterval) {
+            clearInterval(this.dataFetchInterval);
+            this.dataFetchInterval = null;
+        }
+    }
+    
+    /**
+     * Main animation loop (runs at 60fps)
+     */
+    animate() {
+        if (!this.isRunning) return;
+        
+        const now = performance.now();
+        const deltaTime = now - this.lastFrameTime;
+        
+        // Update all flight states
+        for (const flight of this.flights.values()) {
+            flight.updateFrame(now);
+        }
+        
+        // Update map
+        this.updateMap();
+        
+        this.lastFrameTime = now;
+        this.animationFrameId = requestAnimationFrame(() => this.animate());
+    }
+    
+    /**
+     * Fetch fresh data from API
+     */
+    async fetchData() {
+        if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
+        
+        try {
+            const sessionsRes = await fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions');
+            if (!sessionsRes.ok) return;
+            
+            const sessionsData = await sessionsRes.json();
+            const expertSession = sessionsData.sessions.find(s => 
+                s.name.toLowerCase().includes('expert')
+            );
+            
+            if (!expertSession) return;
+            
+            const flightsRes = await fetch(
+                `https://site--acars-backend--6dmjph8ltlhv.code.run/flights/${expertSession.id}`
+            );
+            
+            if (!flightsRes.ok) return;
+            
+            const flightsData = await flightsRes.json();
+            if (!flightsData.ok || !Array.isArray(flightsData.flights)) return;
+            
+            const updatedFlightIds = new Set();
+            
+            // Update or create flight states
+            for (const flightData of flightsData.flights) {
+                if (!flightData.position || 
+                    flightData.position.lat == null || 
+                    flightData.position.lon == null) {
+                    continue;
+                }
+                
+                const flightId = flightData.flightId;
+                updatedFlightIds.add(flightId);
+                
+                if (this.flights.has(flightId)) {
+                    // Update existing flight
+                    this.flights.get(flightId).updateFromAPI(flightData);
+                } else {
+                    // Create new flight
+                    this.flights.set(flightId, new FlightState(flightData));
+                }
+            }
+            
+            // Remove flights that are no longer in the data
+            for (const flightId of this.flights.keys()) {
+                if (!updatedFlightIds.has(flightId)) {
+                    this.flights.delete(flightId);
+                }
+            }
+            
+        } catch (error) {
+            console.error('Error fetching flight data:', error);
+        }
+    }
+    
+    /**
+     * Update the map with current positions
+     */
+    updateMap() {
+        if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
+        
+        const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+        if (!source) return;
+        
+        const features = Array.from(this.flights.values()).map(flight => 
+            flight.toFeature()
+        );
+        
+        source.setData({
+            type: 'FeatureCollection',
+            features: features
+        });
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTEGRATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Global instance
+let flightAnimationManager = null;
+
+/**
+ * Replace the existing animation functions with this new system
+ */
+function startSectorOpsLiveLoop() {
+    stopSectorOpsLiveLoop();
+    
+    if (!flightAnimationManager) {
+        flightAnimationManager = new FlightAnimationManager();
+    }
+    
+    flightAnimationManager.start();
+}
 
 function stopSectorOpsLiveLoop() {
-    // 1. Clear the data-fetching interval
-    if (sectorOpsLiveFlightsInterval) {
-        clearInterval(sectorOpsLiveFlightsInterval);
-        sectorOpsLiveFlightsInterval = null;
+    if (flightAnimationManager) {
+        flightAnimationManager.stop();
     }
-
-    // 2. Clear the animation loop
-    // This is the crucial part that stops the requestAnimationFrame loop.
-    if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-        animationFrameId = null;
-    }
-    
-    // Note: The non-existent 'sectorOpsAnimationInterval' is removed.
 }
+
 
     /**
      * NEW / REFACTORED: Renders all airport markers based on current route and ATC data.
@@ -4020,139 +4488,6 @@ function stopSectorOpsLiveLoop() {
         });
     }
 
-    // --- MODIFY THIS FUNCTION ---
-async function updateSectorOpsLiveFlights() {
-    if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
-
-    const LIVE_FLIGHTS_BACKEND = 'https://site--acars-backend--6dmjph8ltlhv.code.run';
-
-    try {
-        const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
-        // --- [FIX 1] --- Add a check to ensure the sessions response is valid
-        if (!sessionsRes.ok) {
-            console.warn('Sector Ops Map: Could not fetch server sessions. Skipping update.');
-            return; // Exit the function if we can't get session data
-        }
-        const sessionsData = await sessionsRes.json();
-        const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
-
-        if (!expertSession) {
-            console.warn('Sector Ops Map: Expert Server session not found.');
-            return;
-        }
-
-        const [flightsRes, atcRes, notamsRes] = await Promise.all([
-            fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
-            fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
-            fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
-        ]);
-        
-        // Update ATC & NOTAMs (this logic is fine)
-        if (atcRes.ok) {
-            const atcData = await atcRes.json();
-            activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
-        }
-        if (notamsRes.ok) {
-            const notamsData = await notamsRes.json();
-            activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
-        }
-        renderAirportMarkers(); 
-
-        // --- [FIX 2] --- The most critical change: Check the flights response BEFORE updating the state
-        if (!flightsRes.ok) {
-            console.warn('Sector Ops Map: Failed to fetch live flights data. Holding last known positions.');
-            return; // Exit without clearing data if the fetch fails
-        }
-        
-        const flightsData = await flightsRes.json();
-        // Also check if the data format is what we expect
-        if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
-            console.warn('Sector Ops Map: Received invalid flights data. Holding last known positions.');
-            return; // Exit if the data is malformed
-        }
-        // --- [END OF FIXES] --- At this point, we know we have good, valid data ---
-
-        const now = performance.now();
-        const updatedFlightIds = new Set();
-
-        flightsData.flights.forEach(flight => {
-            if (!flight.position || flight.position.lat == null || flight.position.lon == null) return;
-            
-            const flightId = flight.flightId;
-            updatedFlightIds.add(flightId);
-
-            const existingData = liveFlightData[flightId];
-
-            // Extract new API data
-            const newApiLat = flight.position.lat;
-            const newApiLon = flight.position.lon;
-            const newApiHeading = flight.position.track_deg || 0;
-            const newApiSpeed = flight.position.gs_kt || 0;
-            const newProperties = {
-                flightId: flight.flightId,
-                callsign: flight.callsign,
-                username: flight.username,
-                altitude: flight.position.alt_ft,
-                speed: newApiSpeed,
-                verticalSpeed: flight.position.vs_fpm || 0,
-                position: JSON.stringify(flight.position),
-                aircraft: JSON.stringify(flight.aircraft),
-                userId: flight.userId,
-                category: getAircraftCategory(flight.aircraft?.aircraftName)
-            };
-
-            if (existingData) {
-                // This flight exists. Set up interpolation *from* its last *displayed* position.
-                existingData.fromLat = existingData.displayLat;
-                existingData.fromLon = existingData.displayLon;
-                existingData.fromHeading = existingData.displayHeading;
-                existingData.interpStartTime = now; // Start interpolating *now*
-
-                // Update the "target" (api) state
-                existingData.apiLat = newApiLat;
-                existingData.apiLon = newApiLon;
-                existingData.apiHeading = newApiHeading;
-                existingData.apiSpeed = newApiSpeed;
-                existingData.apiTimestamp = now; // This is the base time for *prediction*
-                existingData.properties = newProperties;
-            } else {
-                // This is a new flight. It should just appear, no interpolation.
-                liveFlightData[flightId] = {
-                    // API state
-                    apiLat: newApiLat,
-                    apiLon: newApiLon,
-                    apiHeading: newApiHeading,
-                    apiSpeed: newApiSpeed,
-                    apiTimestamp: now,
-
-                    // Display state
-                    displayLat: newApiLat, // display starts at api
-                    displayLon: newApiLon,
-                    displayHeading: newApiHeading,
-
-                    // "From" state for interpolation
-                    fromLat: newApiLat, // from starts at api
-                    fromLon: newApiLon,
-                    fromHeading: newApiHeading,
-                    
-                    interpStartTime: 0, // 0 = don't interpolate
-                    properties: newProperties
-                };
-            }
-        });
-
-        // Now that we've processed the good data, we can safely clean up old flights
-        for (const flightId in liveFlightData) {
-            if (!updatedFlightIds.has(flightId)) {
-                delete liveFlightData[flightId];
-            }
-        }
-
-    } catch (error) {
-        // A catch block ensures that any unexpected error won't crash the update loop
-        console.error('Error updating Sector Ops live data:', error);
-    }
-}
     // ====================================================================
     // END: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
