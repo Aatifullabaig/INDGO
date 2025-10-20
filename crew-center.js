@@ -1007,52 +1007,82 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
     }
 
 /**
- * --- [REVISED - "Follow the Leader" Model] ---
- * This function's only job is to update the data of the existing map source
- * at a controlled rate (e.g., 10-15 times per second).
- *
- * This version uses a "chase" algorithm:
- * 1. A "leader" point is calculated (our best guess of the plane's real-time position).
- * 2. The "follower" (the visible icon) smoothly `lerp`s towards that leader.
- * This eliminates the "jerk" that occurred when transitioning between
- * the old interpolation and prediction phases.
+ * --- [REVISED V3 - Triple-Layer Smoothing] ---
+ * API Data → Smoothed Leader → Display Follower
+ * This prevents the leader from jittering while keeping smooth follower movement.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-    // Exit if the source isn't ready or there's no data to animate
     if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
         return;
     }
 
     const newFeatures = [];
+    const now = performance.now();
     const ktsToKmPerMs = 1.852 / 3600000;
-    const timestamp = performance.now(); // Use high-resolution timestamp
-    
-    // --- MODIFICATION ---
-    // Reduced from 0.4 to 0.15.
-    // A value of 0.15 means the icon moves 15% of the way to the leader each
-    // frame. This creates a much smoother, more damped "follow" effect
-    // and increases the visible "lag" as requested.
-    const smoothingFactor = 0.15; 
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
         
-        // 1. Calculate the "Leader" position (best guess of real-time location)
-        // This is the point the icon will try to "chase".
-        const elapsedTimeMs = timestamp - flight.apiTimestamp;
-        const distanceKm = flight.apiSpeed * ktsToKmPerMs * elapsedTimeMs;
-        const targetPos = predictNewPosition(flight.apiLat, flight.apiLon, flight.apiHeading, distanceKm);
-        const targetHeading = flight.apiHeading; // Heading prediction is complex, just chase the last known API heading
+        // Calculate how long it's been since we got fresh API data
+        const timeSinceApiUpdate = now - flight.apiTimestamp;
+        
+        // 1. Calculate the RAW predicted position from API data
+        const distanceKm = flight.apiSpeed * ktsToKmPerMs * timeSinceApiUpdate;
+        const rawPredictedPos = predictNewPosition(
+            flight.apiLat, 
+            flight.apiLon, 
+            flight.apiHeading, 
+            distanceKm
+        );
+        
+        // 2. **NEW**: Smooth the LEADER itself to prevent jitter from bad API data
+        // Initialize smoothed leader if it doesn't exist
+        if (!flight.smoothedLeaderLat) {
+            flight.smoothedLeaderLat = rawPredictedPos.lat;
+            flight.smoothedLeaderLon = rawPredictedPos.lon;
+            flight.smoothedLeaderHeading = flight.apiHeading;
+        }
+        
+        // Apply STRONG smoothing to the leader (prevents jitter)
+        const leaderSmoothingFactor = 0.25; // Higher = more responsive, lower = smoother
+        flight.smoothedLeaderLat = lerp(flight.smoothedLeaderLat, rawPredictedPos.lat, leaderSmoothingFactor);
+        flight.smoothedLeaderLon = lerp(flight.smoothedLeaderLon, rawPredictedPos.lon, leaderSmoothingFactor);
+        flight.smoothedLeaderHeading = interpolateHeading(
+            flight.smoothedLeaderHeading, 
+            flight.apiHeading, 
+            leaderSmoothingFactor
+        );
+        
+        // 3. Calculate distance between follower and smoothed leader
+        const distToTarget = getDistanceKm(
+            flight.displayLat, 
+            flight.displayLon, 
+            flight.smoothedLeaderLat, 
+            flight.smoothedLeaderLon
+        );
+        
+        // 4. Dynamic smoothing for the follower based on distance
+        // If very far, catch up faster. If close, move smoothly.
+        let followerSmoothingFactor;
+        if (distToTarget > 1.0) {
+            followerSmoothingFactor = 0.45; // Fast catch-up for large gaps
+        } else if (distToTarget > 0.3) {
+            followerSmoothingFactor = 0.25; // Medium speed
+        } else {
+            followerSmoothingFactor = 0.15; // Smooth, close following
+        }
+        
+        // 5. Move the follower towards the SMOOTHED leader
+        flight.displayLat = lerp(flight.displayLat, flight.smoothedLeaderLat, followerSmoothingFactor);
+        flight.displayLon = lerp(flight.displayLon, flight.smoothedLeaderLon, followerSmoothingFactor);
+        flight.displayHeading = interpolateHeading(
+            flight.displayHeading, 
+            flight.smoothedLeaderHeading, 
+            followerSmoothingFactor
+        );
 
-        // 2. Calculate the "Follower" (icon) position by smoothly chasing the leader
-        // We use lerp (linear interpolation) to move the icon a *fraction* of the
-        // way to the leader each frame. This creates the smooth, damped "follow" effect.
-        flight.displayLat = lerp(flight.displayLat, targetPos.lat, smoothingFactor);
-        flight.displayLon = lerp(flight.displayLon, targetPos.lon, smoothingFactor);
-        flight.displayHeading = interpolateHeading(flight.displayHeading, targetHeading, smoothingFactor);
-
-        // 3. Create the feature for the map using the follower's smoothed position
+        // 6. Create the feature for the map
         newFeatures.push({
             type: 'Feature',
             geometry: {
@@ -1066,7 +1096,6 @@ function animateFlightPositions() {
         });
     }
 
-    // This is the key: setData() is now called at a controlled rate
     source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
 
@@ -4037,7 +4066,6 @@ function stopSectorOpsLiveLoop() {
         });
     }
 
-// --- MODIFY THIS FUNCTION ---
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -4045,10 +4073,9 @@ async function updateSectorOpsLiveFlights() {
 
     try {
         const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
-        // --- [FIX 1] --- Add a check to ensure the sessions response is valid
         if (!sessionsRes.ok) {
             console.warn('Sector Ops Map: Could not fetch server sessions. Skipping update.');
-            return; // Exit the function if we can't get session data
+            return;
         }
         const sessionsData = await sessionsRes.json();
         const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
@@ -4064,7 +4091,6 @@ async function updateSectorOpsLiveFlights() {
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
         
-        // Update ATC & NOTAMs (this logic is fine)
         if (atcRes.ok) {
             const atcData = await atcRes.json();
             activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
@@ -4075,19 +4101,16 @@ async function updateSectorOpsLiveFlights() {
         }
         renderAirportMarkers(); 
 
-        // --- [FIX 2] --- The most critical change: Check the flights response BEFORE updating the state
         if (!flightsRes.ok) {
             console.warn('Sector Ops Map: Failed to fetch live flights data. Holding last known positions.');
-            return; // Exit without clearing data if the fetch fails
+            return;
         }
         
         const flightsData = await flightsRes.json();
-        // Also check if the data format is what we expect
         if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
             console.warn('Sector Ops Map: Received invalid flights data. Holding last known positions.');
-            return; // Exit if the data is malformed
+            return;
         }
-        // --- [END OF FIXES] --- At this point, we know we have good, valid data ---
 
         const now = performance.now();
         const updatedFlightIds = new Set();
@@ -4098,13 +4121,11 @@ async function updateSectorOpsLiveFlights() {
             const flightId = flight.flightId;
             updatedFlightIds.add(flightId);
 
-            const existingData = liveFlightData[flightId];
-
-            // Extract new API data
             const newApiLat = flight.position.lat;
             const newApiLon = flight.position.lon;
             const newApiHeading = flight.position.track_deg || 0;
             const newApiSpeed = flight.position.gs_kt || 0;
+            
             const newProperties = {
                 flightId: flight.flightId,
                 callsign: flight.callsign,
@@ -4118,31 +4139,51 @@ async function updateSectorOpsLiveFlights() {
                 category: getAircraftCategory(flight.aircraft?.aircraftName)
             };
 
+            const existingData = liveFlightData[flightId];
+
             if (existingData) {
-                // --- [MODIFIED] ---
-                // This flight exists. Just update its "target" (api) state.
-                // The animation loop will handle smoothing the icon's movement.
-                // All "from..." and "interpStartTime" properties are now obsolete.
-                existingData.apiLat = newApiLat;
-                existingData.apiLon = newApiLon;
-                existingData.apiHeading = newApiHeading;
-                existingData.apiSpeed = newApiSpeed;
-                existingData.apiTimestamp = now; // This is the base time for *prediction*
-                existingData.properties = newProperties;
+                // **IMPORTANT**: Only update API data if the new position is reasonable
+                // This prevents wild jumps from bad data
+                const distanceFromLast = getDistanceKm(
+                    existingData.apiLat,
+                    existingData.apiLon,
+                    newApiLat,
+                    newApiLon
+                );
+                
+                const timeSinceLastUpdate = (now - existingData.apiTimestamp) / 1000; // seconds
+                const expectedMaxDistance = (existingData.apiSpeed * 1.852 / 3600) * timeSinceLastUpdate * 1.5; // 50% buffer
+                
+                // Only update if the jump seems reasonable
+                if (distanceFromLast < expectedMaxDistance || distanceFromLast < 1) { // or less than 1km
+                    existingData.apiLat = newApiLat;
+                    existingData.apiLon = newApiLon;
+                    existingData.apiHeading = newApiHeading;
+                    existingData.apiSpeed = newApiSpeed;
+                    existingData.apiTimestamp = now;
+                    existingData.properties = newProperties;
+                } else {
+                    // Bad data point detected - just update timestamp and properties but keep old position
+                    console.warn(`Rejecting bad position data for ${flightId}: jumped ${distanceFromLast.toFixed(2)}km`);
+                    existingData.apiTimestamp = now;
+                    existingData.properties = newProperties;
+                }
             } else {
-                // --- [MODIFIED] ---
-                // This is a new flight.
-                // Initialize its "api" (target) state and "display" (icon) state
-                // to the same starting position.
+                // New flight - initialize all states to the same position
                 liveFlightData[flightId] = {
-                    // API state (the "leader's" target)
+                    // API state
                     apiLat: newApiLat,
                     apiLon: newApiLon,
                     apiHeading: newApiHeading,
                     apiSpeed: newApiSpeed,
                     apiTimestamp: now,
-
-                    // Display state (the "follower" icon)
+                    
+                    // Smoothed leader state (initialized to API position)
+                    smoothedLeaderLat: newApiLat,
+                    smoothedLeaderLon: newApiLon,
+                    smoothedLeaderHeading: newApiHeading,
+                    
+                    // Display follower state (initialized to API position)
                     displayLat: newApiLat,
                     displayLon: newApiLon,
                     displayHeading: newApiHeading,
@@ -4152,7 +4193,7 @@ async function updateSectorOpsLiveFlights() {
             }
         });
 
-        // Now that we've processed the good data, we can safely clean up old flights
+        // Clean up old flights
         for (const flightId in liveFlightData) {
             if (!updatedFlightIds.has(flightId)) {
                 delete liveFlightData[flightId];
@@ -4160,7 +4201,6 @@ async function updateSectorOpsLiveFlights() {
         }
 
     } catch (error) {
-        // A catch block ensures that any unexpected error won't crash the update loop
         console.error('Error updating Sector Ops live data:', error);
     }
 }
