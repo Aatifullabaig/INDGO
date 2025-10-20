@@ -1024,7 +1024,7 @@ function animateFlightPositions() {
     const newFeatures = [];
     const ktsToKmPerMs = 1.852 / 3600000;
     const timestamp = performance.now(); // Use high-resolution timestamp
-    const INTERP_DURATION_MS = 1000.0; // The 1.0 second "delay" you requested
+    const INTERP_DURATION_MS = 500.0; // The 0.5 second "delay" you requested
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
