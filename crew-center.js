@@ -3904,57 +3904,35 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // START: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
 
-    // --- [NEW] Throttled Animation Loop ---
-// This function will be our new animation "engine."
-// It runs at the browser's native refresh rate (e.g., 60fps)
-// but *throttles* the expensive `animateFlightPositions` call to our
-// desired interval (100ms).
-
-let lastAnimateTimestamp = 0; // Timestamp of the last *logic* update
-const ANIMATION_THROTTLE_MS = 100; // 100ms = 10 updates per second
-
-function throttledAnimationLoop(timestamp) {
-    // 1. Schedule the next frame immediately.
-    // This creates a continuous, efficient loop that's synced with the browser.
-    animationFrameId = requestAnimationFrame(throttledAnimationLoop);
-
-    // 2. Calculate time elapsed since the last *logic* update.
-    const elapsed = timestamp - lastAnimateTimestamp;
-
-    // 3. Check if we've waited long enough (100ms) to run our logic.
-    if (elapsed > ANIMATION_THROTTLE_MS) {
-        // We have. Update the timestamp to "reset" the timer.
-        // We use (timestamp - (elapsed % ANIMATION_THROTTLE_MS)) to stay
-        // in sync, preventing slow drift over time.
-        lastAnimateTimestamp = timestamp - (elapsed % ANIMATION_THROTTLE_MS);
-
-        // 4. Run our *actual* animation logic.
-        // This is the original function that calls source.setData()
-        animateFlightPositions();
-    }
+// --- [NEW] 60fps Animation Loop ---
+    // This loop runs at the browser's native refresh rate (e.g., 60fps).
+    // The `animateFlightPositions` function itself contains all the smart
+    // interpolation and prediction logic, so we let it run on every frame.
     
-    // If elapsed <= 100ms, this function does nothing, effectively
-    // "skipping" the expensive logic for this frame and keeping the browser fast.
-}
+    function sectorOpsAnimationLoop() {
+        // 1. Run the animation logic (which will interpolate/predict).
+        animateFlightPositions();
+        
+        // 2. Schedule the next frame.
+        animationFrameId = requestAnimationFrame(sectorOpsAnimationLoop);
+    }
 
 
-// --- [REPLACEMENT for startSectorOpsLiveLoop] ---
-// This function is updated to use the new animation loop.
+    // --- [REPLACEMENT for startSectorOpsLiveLoop] ---
+    // This function is updated to use the new un-throttled animation loop.
 
-function startSectorOpsLiveLoop() {
-    stopSectorOpsLiveLoop(); // Clear any old loops
+    function startSectorOpsLiveLoop() {
+        stopSectorOpsLiveLoop(); // Clear any old loops
 
-    // 1. Start the data fetching loop (infrequent)
-    // This part is unchanged and continues to fetch new data every 3 seconds.
-    updateSectorOpsLiveFlights(); // Fetch immediately
-    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 500); 
+        // 1. Start the data fetching loop (this part is correct)
+        // This still only fetches data every 500ms.
+        updateSectorOpsLiveFlights(); // Fetch immediately
+        sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 500); 
 
-    // 2. Start the new throttled animation loop
-    // We reset the timestamp and call the loop *once* to kick it off.
-    // It will then loop itself using requestAnimationFrame.
-    lastAnimateTimestamp = 0;
-    animationFrameId = requestAnimationFrame(throttledAnimationLoop);
-}
+        // 2. Start the new 60fps animation loop
+        // We call it once to kick it off, and it will loop itself.
+        animationFrameId = requestAnimationFrame(sectorOpsAnimationLoop);
+    }
 
 
 // --- [REPLACEMENT for stopSectorOpsLiveLoop] ---
