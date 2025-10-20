@@ -1006,6 +1006,74 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
         return (start + delta * progress + 360) % 360;
     }
 
+/**
+ * --- [NEW & PERFORMANC-OPTIMIZED] The throttled animation loop.
+ * This function's only job is to update the data of the existing map source
+ * at a controlled rate (e.g., 10-15 times per second).
+ * * --- [v2 - WITH INTERPOLATION] ---
+ * This version adds a 1-second interpolation (tweening) phase
+ * when new API data arrives to create a smooth transition instead of a "snap".
+ */
+function animateFlightPositions() {
+    const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+    // Exit if the source isn't ready or there's no data to animate
+    if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
+        return;
+    }
+
+    const newFeatures = [];
+    const ktsToKmPerMs = 1.852 / 3600000;
+    const timestamp = performance.now(); // Use high-resolution timestamp
+    const INTERP_DURATION_MS = 1000.0; // The 1.0 second "delay" you requested
+
+    for (const flightId in liveFlightData) {
+        const flight = liveFlightData[flightId];
+        
+        let currentLat, currentLon, currentHeading;
+        const interpTimeElapsed = timestamp - flight.interpStartTime;
+
+        if (interpTimeElapsed > 0 && interpTimeElapsed < INTERP_DURATION_MS) {
+            // --- 1. INTERPOLATION PHASE ---
+            // We are smoothly animating from the last position to the new API position.
+            const progress = interpTimeElapsed / INTERP_DURATION_MS; // A value from 0.0 to 1.0
+            currentLat = lerp(flight.fromLat, flight.apiLat, progress);
+            currentLon = lerp(flight.fromLon, flight.apiLon, progress);
+            currentHeading = interpolateHeading(flight.fromHeading, flight.apiHeading, progress);
+        
+        } else {
+            // --- 2. PREDICTION PHASE ---
+            // Interpolation is done, or this is a new plane.
+            // Predict position based on the *last known API data*.
+            const elapsedTimeMs = timestamp - flight.apiTimestamp;
+            const distanceKm = flight.apiSpeed * ktsToKmPerMs * elapsedTimeMs;
+            const predictedPos = predictNewPosition(flight.apiLat, flight.apiLon, flight.apiHeading, distanceKm);
+            
+            currentLat = predictedPos.lat;
+            currentLon = predictedPos.lon;
+            currentHeading = flight.apiHeading; // Heading prediction is complex, just hold it
+        }
+
+        // Store the calculated position so the *next* API update can use it as a "from" point.
+        flight.displayLat = currentLat;
+        flight.displayLon = currentLon;
+        flight.displayHeading = currentHeading;
+
+        newFeatures.push({
+            type: 'Feature',
+            geometry: {
+                type: 'Point',
+                coordinates: [currentLon, currentLat]
+            },
+            properties: {
+                ...flight.properties,
+                heading: currentHeading
+            }
+        });
+    }
+
+    // This is the key: setData() is now called at a controlled rate, not 60 times/sec
+    source.setData({ type: 'FeatureCollection', features: newFeatures });
+}
 
 function getAircraftCategory(aircraftName) {
     if (!aircraftName) return 'default';
@@ -3876,11 +3944,16 @@ function throttledAnimationLoop(timestamp) {
 function startSectorOpsLiveLoop() {
     stopSectorOpsLiveLoop(); // Clear any old loops
 
-    // 1. Start the data fetching loop
+    // 1. Start the data fetching loop (infrequent)
+    // This part is unchanged and continues to fetch new data every 3 seconds.
     updateSectorOpsLiveFlights(); // Fetch immediately
     sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 500); 
 
-    // 2. The animation loop has been removed.
+    // 2. Start the new throttled animation loop
+    // We reset the timestamp and call the loop *once* to kick it off.
+    // It will then loop itself using requestAnimationFrame.
+    lastAnimateTimestamp = 0;
+    animationFrameId = requestAnimationFrame(throttledAnimationLoop);
 }
 
 
@@ -3894,7 +3967,14 @@ function stopSectorOpsLiveLoop() {
         sectorOpsLiveFlightsInterval = null;
     }
 
-    // 2. The animation loop has been removed.
+    // 2. Clear the animation loop
+    // This is the crucial part that stops the requestAnimationFrame loop.
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+    }
+    
+    // Note: The non-existent 'sectorOpsAnimationInterval' is removed.
 }
 
     /**
@@ -3962,6 +4042,7 @@ function stopSectorOpsLiveLoop() {
         });
     }
 
+    // --- MODIFY THIS FUNCTION ---
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
@@ -3969,9 +4050,10 @@ async function updateSectorOpsLiveFlights() {
 
     try {
         const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
+        // --- [FIX 1] --- Add a check to ensure the sessions response is valid
         if (!sessionsRes.ok) {
             console.warn('Sector Ops Map: Could not fetch server sessions. Skipping update.');
-            return;
+            return; // Exit the function if we can't get session data
         }
         const sessionsData = await sessionsRes.json();
         const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
@@ -3987,6 +4069,7 @@ async function updateSectorOpsLiveFlights() {
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
         
+        // Update ATC & NOTAMs (this logic is fine)
         if (atcRes.ok) {
             const atcData = await atcRes.json();
             activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
@@ -3997,16 +4080,19 @@ async function updateSectorOpsLiveFlights() {
         }
         renderAirportMarkers(); 
 
+        // --- [FIX 2] --- The most critical change: Check the flights response BEFORE updating the state
         if (!flightsRes.ok) {
             console.warn('Sector Ops Map: Failed to fetch live flights data. Holding last known positions.');
-            return;
+            return; // Exit without clearing data if the fetch fails
         }
         
         const flightsData = await flightsRes.json();
+        // Also check if the data format is what we expect
         if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
             console.warn('Sector Ops Map: Received invalid flights data. Holding last known positions.');
-            return;
+            return; // Exit if the data is malformed
         }
+        // --- [END OF FIXES] --- At this point, we know we have good, valid data ---
 
         const now = performance.now();
         const updatedFlightIds = new Set();
@@ -4017,11 +4103,13 @@ async function updateSectorOpsLiveFlights() {
             const flightId = flight.flightId;
             updatedFlightIds.add(flightId);
 
+            const existingData = liveFlightData[flightId];
+
+            // Extract new API data
             const newApiLat = flight.position.lat;
             const newApiLon = flight.position.lon;
             const newApiHeading = flight.position.track_deg || 0;
             const newApiSpeed = flight.position.gs_kt || 0;
-            
             const newProperties = {
                 flightId: flight.flightId,
                 callsign: flight.callsign,
@@ -4035,37 +4123,22 @@ async function updateSectorOpsLiveFlights() {
                 category: getAircraftCategory(flight.aircraft?.aircraftName)
             };
 
-            const existingData = liveFlightData[flightId];
-
             if (existingData) {
-                // **IMPORTANT**: Only update API data if the new position is reasonable
-                // This prevents wild jumps from bad data
-                const distanceFromLast = getDistanceKm(
-                    existingData.apiLat,
-                    existingData.apiLon,
-                    newApiLat,
-                    newApiLon
-                );
-                
-                const timeSinceLastUpdate = (now - existingData.apiTimestamp) / 1000; // seconds
-                const expectedMaxDistance = (existingData.apiSpeed * 1.852 / 3600) * timeSinceLastUpdate * 1.5; // 50% buffer
-                
-                // Only update if the jump seems reasonable
-                if (distanceFromLast < expectedMaxDistance || distanceFromLast < 1) { // or less than 1km
-                    existingData.apiLat = newApiLat;
-                    existingData.apiLon = newApiLon;
-                    existingData.apiHeading = newApiHeading;
-                    existingData.apiSpeed = newApiSpeed;
-                    existingData.apiTimestamp = now;
-                    existingData.properties = newProperties;
-                } else {
-                    // Bad data point detected - just update timestamp and properties but keep old position
-                    console.warn(`Rejecting bad position data for ${flightId}: jumped ${distanceFromLast.toFixed(2)}km`);
-                    existingData.apiTimestamp = now;
-                    existingData.properties = newProperties;
-                }
+                // This flight exists. Set up interpolation *from* its last *displayed* position.
+                existingData.fromLat = existingData.displayLat;
+                existingData.fromLon = existingData.displayLon;
+                existingData.fromHeading = existingData.displayHeading;
+                existingData.interpStartTime = now; // Start interpolating *now*
+
+                // Update the "target" (api) state
+                existingData.apiLat = newApiLat;
+                existingData.apiLon = newApiLon;
+                existingData.apiHeading = newApiHeading;
+                existingData.apiSpeed = newApiSpeed;
+                existingData.apiTimestamp = now; // This is the base time for *prediction*
+                existingData.properties = newProperties;
             } else {
-                // New flight - initialize all states to the same position
+                // This is a new flight. It should just appear, no interpolation.
                 liveFlightData[flightId] = {
                     // API state
                     apiLat: newApiLat,
@@ -4073,57 +4146,32 @@ async function updateSectorOpsLiveFlights() {
                     apiHeading: newApiHeading,
                     apiSpeed: newApiSpeed,
                     apiTimestamp: now,
-                    
-                    // Smoothed leader state (initialized to API position)
-                    smoothedLeaderLat: newApiLat,
-                    smoothedLeaderLon: newApiLon,
-                    smoothedLeaderHeading: newApiHeading,
-                    
-                    // Display follower state (initialized to API position)
-                    displayLat: newApiLat,
+
+                    // Display state
+                    displayLat: newApiLat, // display starts at api
                     displayLon: newApiLon,
                     displayHeading: newApiHeading,
+
+                    // "From" state for interpolation
+                    fromLat: newApiLat, // from starts at api
+                    fromLon: newApiLon,
+                    fromHeading: newApiHeading,
                     
+                    interpStartTime: 0, // 0 = don't interpolate
                     properties: newProperties
                 };
             }
         });
 
-        // Clean up old flights
+        // Now that we've processed the good data, we can safely clean up old flights
         for (const flightId in liveFlightData) {
             if (!updatedFlightIds.has(flightId)) {
                 delete liveFlightData[flightId];
             }
         }
 
-        // --- [NEW CODE BLOCK] ---
-        // Directly update the map source with the latest API data.
-        // This replaces the entire animation loop.
-        const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-        if (source) {
-            const newFeatures = [];
-            for (const flightId in liveFlightData) {
-                const flight = liveFlightData[flightId];
-                newFeatures.push({
-                    type: 'Feature',
-                    geometry: {
-                        type: 'Point',
-                        // Use the direct API position
-                        coordinates: [flight.apiLon, flight.apiLat] 
-                    },
-                    properties: {
-                        ...flight.properties,
-                        // Use the direct API heading
-                        heading: flight.apiHeading 
-                    }
-                });
-            }
-            // Set the map's data, which will cause the planes to "jump" to the new spots.
-            source.setData({ type: 'FeatureCollection', features: newFeatures });
-        }
-        // --- [END OF NEW CODE BLOCK] ---
-
     } catch (error) {
+        // A catch block ensures that any unexpected error won't crash the update loop
         console.error('Error updating Sector Ops live data:', error);
     }
 }
