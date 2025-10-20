@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
     let runwaysData = {}; // NEW: To store runway data indexed by airport ICAO
     let liveFlightData = {}; // Key: flightId, Value: { lon, lat, heading, speed, timestamp }
-    const DATA_REFRESH_INTERVAL_MS = 1500; // Your current refresh interval
+    const DATA_REFRESH_INTERVAL_MS = 3000; // Your current refresh interval
 
     // --- Map-related State ---
     let liveFlightsMap = null;
@@ -96,7 +96,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let activeAtcFacilities = []; // To store fetched ATC data
     let activeNotams = []; // To store fetched NOTAMs data
     let atcPopup = null; // To manage a single, shared popup instance
-    const ANIMATION_DELAY_MS = 15000;
     // State for the airport info window
     let airportInfoWindow = null;
     let airportInfoWindowRecallBtn = null;
@@ -1008,118 +1007,62 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
     }
 
 /**
- * --- [RE-ARCHITECTED V4 - 15-Second Delay] - The throttled animation loop.
- * This version uses time-based linear interpolation between data packets
- * to render flight positions with a fixed 15-second delay.
+ * --- [REVISED - "Follow the Leader" Model] ---
+ * This function's only job is to update the data of the existing map source
+ * at a controlled rate (e.g., 10-15 times per second).
+ *
+ * This version uses a "chase" algorithm:
+ * 1. A "leader" point is calculated (our best guess of the plane's real-time position).
+ * 2. The "follower" (the visible icon) smoothly `lerp`s towards that leader.
+ * This eliminates the "jerk" that occurred when transitioning between
+ * the old interpolation and prediction phases.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+    // Exit if the source isn't ready or there's no data to animate
     if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
         return;
     }
 
     const newFeatures = [];
-    const now = performance.now();
-    
-    // --- Get constants ---
-    const PACKET_DURATION_MS = DATA_REFRESH_INTERVAL_MS; // e.g., 1500
-    const STALE_TIMEOUT_MS = 30000; // 30 seconds
-
-    // --- [NEW] Calculate the time we *want* to be rendering ---
-    // This is 15 seconds *before* the current moment.
-    const targetRenderTime = now - ANIMATION_DELAY_MS;
+    const ktsToKmPerMs = 1.852 / 3600000;
+    const timestamp = performance.now(); // Use high-resolution timestamp
+    // Smoothing factor for 10fps (100ms) animation throttle.
+    // A value of 0.4 means the icon moves 40% of the way to the leader each frame.
+    const smoothingFactor = 0.4; 
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
         
-        // --- 1. Check for stale data (API updates stopped) ---
-        if (now - flight.lastApiUpdate > STALE_TIMEOUT_MS) {
-            delete liveFlightData[flightId];
-            continue;
-        }
+        // 1. Calculate the "Leader" position (best guess of real-time location)
+        // This is the point the icon will try to "chase".
+        const elapsedTimeMs = timestamp - flight.apiTimestamp;
+        const distanceKm = flight.apiSpeed * ktsToKmPerMs * elapsedTimeMs;
+        const targetPos = predictNewPosition(flight.apiLat, flight.apiLon, flight.apiHeading, distanceKm);
+        const targetHeading = flight.apiHeading; // Heading prediction is complex, just chase the last known API heading
 
-        // --- 2. [NEW] Prune old packets ---
-        // Prune packets that are *older* than our "from" packet.
-        // We keep at least 2 packets in the queue to animate *between*.
-        while (flight.packetQueue.length > 2 && flight.packetQueue[1].apiTimestamp < targetRenderTime) {
-            flight.packetQueue.shift(); // Discard the old "from" packet
-        }
-        
-        if (flight.packetQueue.length === 0) {
-            // This shouldn't happen if stale check works, but as a safeguard.
-            continue; 
-        }
+        // 2. Calculate the "Follower" (icon) position by smoothly chasing the leader
+        // We use lerp (linear interpolation) to move the icon a *fraction* of the
+        // way to the leader each frame. This creates the smooth, damped "follow" effect.
+        flight.displayLat = lerp(flight.displayLat, targetPos.lat, smoothingFactor);
+        flight.displayLon = lerp(flight.displayLon, targetPos.lon, smoothingFactor);
+        flight.displayHeading = interpolateHeading(flight.displayHeading, targetHeading, smoothingFactor);
 
-        // --- 3. [NEW] Check for Buffering ---
-        // Check if our *target render time* is still *before* our very first data packet.
-        const firstPacketTime = flight.packetQueue[0].apiTimestamp;
-        if (targetRenderTime < firstPacketTime) {
-            // We are still buffering (15s have not passed since first packet).
-            // Just display the first packet's data, unmoving.
-            flight.currentLat = flight.packetQueue[0].lat;
-            flight.currentLon = flight.packetQueue[0].lon;
-            flight.currentHeading = flight.packetQueue[0].heading;
-            flight.properties = flight.packetQueue[0].properties;
-        } 
-        // --- 4. [NEW] Check for End-of-Stream ---
-        // We are *past* the buffering stage, but we only have *one* packet left.
-        else if (flight.packetQueue.length === 1) {
-            // This means the data stream *ended*, and we have played all animations.
-            // Hold the position of the very last packet.
-            flight.currentLat = flight.packetQueue[0].lat;
-            flight.currentLon = flight.packetQueue[0].lon;
-            flight.currentHeading = flight.packetQueue[0].heading;
-            flight.properties = flight.packetQueue[0].properties;
-        }
-        // --- 5. [NEW] Standard Animation ---
-        // We are past buffering and have at least two packets (a "from" and a "to").
-        else {
-            const animFrom = flight.packetQueue[0];
-            const animTo = flight.packetQueue[1];
-
-            // Calculate the *actual* duration between these two packets
-            const segmentDuration = animTo.apiTimestamp - animFrom.apiTimestamp;
-
-            if (segmentDuration <= 0) {
-                // Bad data (e.g., two packets with same timestamp). Hold "from" position.
-                flight.currentLat = animFrom.lat;
-                flight.currentLon = animFrom.lon;
-                flight.currentHeading = animFrom.heading;
-                flight.properties = animFrom.properties;
-            } else {
-                // Calculate how far we are *into* this segment
-                const segmentElapsed = targetRenderTime - animFrom.apiTimestamp;
-                let progress = segmentElapsed / segmentDuration;
-                
-                // Clamp progress to ensure we don't extrapolate past "to"
-                if (progress > 1.0) progress = 1.0;
-                if (progress < 0) progress = 0;
-
-                // Interpolate all values
-                flight.currentLat = lerp(animFrom.lat, animTo.lat, progress);
-                flight.currentLon = lerp(animFrom.lon, animTo.lon, progress);
-                flight.currentHeading = interpolateHeading(animFrom.heading, animTo.heading, progress);
-                
-                // Use the properties from the *start* of the segment
-                flight.properties = animFrom.properties;
-            }
-        }
-        
-        // --- 6. Add the feature for rendering (Unchanged) ---
+        // 3. Create the feature for the map using the follower's smoothed position
         newFeatures.push({
             type: 'Feature',
             geometry: {
                 type: 'Point',
-                coordinates: [flight.currentLon, flight.currentLat]
+                coordinates: [flight.displayLon, flight.displayLat]
             },
             properties: {
                 ...flight.properties,
-                heading: flight.currentHeading
+                heading: flight.displayHeading
             }
         });
     }
-    
-    // Update the map source with all new positions
+
+    // This is the key: setData() is now called at a controlled rate
     source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
 
@@ -2355,7 +2298,7 @@ function updatePfdDisplay(pfdData) {
     function startLiveLoop() {
         if (!liveFlightsInterval) {
             updateLiveFlights();
-            liveFlightsInterval = setInterval(updateLiveFlights, DATA_REFRESH_INTERVAL_MS);
+            liveFlightsInterval = setInterval(updateLiveFlights, 3000);
         }
     }
 
@@ -3032,6 +2975,7 @@ if (flightPathState && pathSource && flightPathState.coordinates.length > 0) {
         }
     });
 }
+// --- END OF FIX ---
                     // --- END OF FIX ---
 
                 } else {
@@ -3994,7 +3938,7 @@ function startSectorOpsLiveLoop() {
     // 1. Start the data fetching loop (infrequent)
     // This part is unchanged and continues to fetch new data every 3 seconds.
     updateSectorOpsLiveFlights(); // Fetch immediately
-    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, DATA_REFRESH_INTERVAL_MS); 
+    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 3000); 
 
     // 2. Start the new throttled animation loop
     // We reset the timestamp and call the loop *once* to kick it off.
@@ -4089,22 +4033,18 @@ function stopSectorOpsLiveLoop() {
         });
     }
 
-/**
- * --- [RE-ARCHITECTED V4 - 15-Second Delay] - "Producer"
- * Fetches live data and adds new position packets to each flight's queue.
- * The animation loop ("consumer") will process this queue.
- */
+// --- MODIFY THIS FUNCTION ---
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
     const LIVE_FLIGHTS_BACKEND = 'https://site--acars-backend--6dmjph8ltlhv.code.run';
 
     try {
-        // --- 1. Fetch Session ID ---
         const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
+        // --- [FIX 1] --- Add a check to ensure the sessions response is valid
         if (!sessionsRes.ok) {
             console.warn('Sector Ops Map: Could not fetch server sessions. Skipping update.');
-            return;
+            return; // Exit the function if we can't get session data
         }
         const sessionsData = await sessionsRes.json();
         const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
@@ -4114,12 +4054,13 @@ async function updateSectorOpsLiveFlights() {
             return;
         }
 
-        // --- 2. Fetch ATC/NOTAMs (Unchanged) ---
-        const [atcRes, notamsRes] = await Promise.all([
+        const [flightsRes, atcRes, notamsRes] = await Promise.all([
+            fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
         
+        // Update ATC & NOTAMs (this logic is fine)
         if (atcRes.ok) {
             const atcData = await atcRes.json();
             activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
@@ -4128,22 +4069,22 @@ async function updateSectorOpsLiveFlights() {
             const notamsData = await notamsRes.json();
             activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
         }
-        renderAirportMarkers(); // Update ATC markers
+        renderAirportMarkers(); 
 
-        // --- 3. Fetch Flights ---
-        const flightsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`);
+        // --- [FIX 2] --- The most critical change: Check the flights response BEFORE updating the state
         if (!flightsRes.ok) {
             console.warn('Sector Ops Map: Failed to fetch live flights data. Holding last known positions.');
-            return;
+            return; // Exit without clearing data if the fetch fails
         }
         
         const flightsData = await flightsRes.json();
+        // Also check if the data format is what we expect
         if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
             console.warn('Sector Ops Map: Received invalid flights data. Holding last known positions.');
-            return;
+            return; // Exit if the data is malformed
         }
+        // --- [END OF FIXES] --- At this point, we know we have good, valid data ---
 
-        // --- 4. [NEW] Process Packets into Queues ---
         const now = performance.now();
         const updatedFlightIds = new Set();
 
@@ -4153,63 +4094,69 @@ async function updateSectorOpsLiveFlights() {
             const flightId = flight.flightId;
             updatedFlightIds.add(flightId);
 
-            // --- Create the new properties object ---
+            const existingData = liveFlightData[flightId];
+
+            // Extract new API data
+            const newApiLat = flight.position.lat;
+            const newApiLon = flight.position.lon;
+            const newApiHeading = flight.position.track_deg || 0;
+            const newApiSpeed = flight.position.gs_kt || 0;
             const newProperties = {
                 flightId: flight.flightId,
                 callsign: flight.callsign,
                 username: flight.username,
                 altitude: flight.position.alt_ft,
-                speed: flight.position.gs_kt || 0,
+                speed: newApiSpeed,
                 verticalSpeed: flight.position.vs_fpm || 0,
                 position: JSON.stringify(flight.position),
                 aircraft: JSON.stringify(flight.aircraft),
                 userId: flight.userId,
                 category: getAircraftCategory(flight.aircraft?.aircraftName)
             };
-            
-            // --- Create the new data packet ---
-            const newPacket = {
-                lat: flight.position.lat,
-                lon: flight.position.lon,
-                heading: flight.position.track_deg || 0,
-                apiTimestamp: now, // The time we *received* this data
-                properties: newProperties
-            };
-
-            const existingData = liveFlightData[flightId];
 
             if (existingData) {
-                // Flight exists: push the new packet to its queue
-                existingData.packetQueue.push(newPacket);
-                existingData.lastApiUpdate = now;
+                // --- [MODIFIED] ---
+                // This flight exists. Just update its "target" (api) state.
+                // The animation loop will handle smoothing the icon's movement.
+                // All "from..." and "interpStartTime" properties are now obsolete.
+                existingData.apiLat = newApiLat;
+                existingData.apiLon = newApiLon;
+                existingData.apiHeading = newApiHeading;
+                existingData.apiSpeed = newApiSpeed;
+                existingData.apiTimestamp = now; // This is the base time for *prediction*
+                existingData.properties = newProperties;
             } else {
-                // New flight: create its entry in liveFlightData
+                // --- [MODIFIED] ---
+                // This is a new flight.
+                // Initialize its "api" (target) state and "display" (icon) state
+                // to the same starting position.
                 liveFlightData[flightId] = {
-                    packetQueue: [newPacket], // Initialize queue with the first packet
+                    // API state (the "leader's" target)
+                    apiLat: newApiLat,
+                    apiLon: newApiLon,
+                    apiHeading: newApiHeading,
+                    apiSpeed: newApiSpeed,
+                    apiTimestamp: now,
+
+                    // Display state (the "follower" icon)
+                    displayLat: newApiLat,
+                    displayLon: newApiLon,
+                    displayHeading: newApiHeading,
                     
-                    // Set current state to this first packet (for buffering display)
-                    currentLat: newPacket.lat,
-                    currentLon: newPacket.lon,
-                    currentHeading: newPacket.heading,
-                    properties: newPacket.properties,
-                    
-                    lastApiUpdate: now
+                    properties: newProperties
                 };
             }
         });
 
-        // --- 5. Clean up old flights (Unchanged) ---
+        // Now that we've processed the good data, we can safely clean up old flights
         for (const flightId in liveFlightData) {
             if (!updatedFlightIds.has(flightId)) {
-                // Don't delete immediately, let the stale check in animateFlightPositions handle it.
-                // This prevents a race condition.
-                // Instead, we just *don't* update lastApiUpdate.
-                // The stale check in animateFlightPositions will see (now - lastApiUpdate > 30s)
-                // and *then* remove it. This is safer.
+                delete liveFlightData[flightId];
             }
         }
 
     } catch (error) {
+        // A catch block ensures that any unexpected error won't crash the update loop
         console.error('Error updating Sector Ops live data:', error);
     }
 }
