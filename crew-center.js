@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let airportAndAtcMarkers = {}; // Holds all airport markers (blue dots and red ATC dots)
     let sectorOpsMapRouteLayers = [];
     let sectorOpsLiveFlightPathLayers = {}; // NEW: To track multiple flight trails
-    let sectorOpsLiveFlightsInterval = null;
+    let sectorOpsLiveFlightsTimeoutId = null;
     let activeAtcFacilities = []; // To store fetched ATC data
     let activeNotams = []; // To store fetched NOTAMs data
     let atcPopup = null; // To manage a single, shared popup instance
@@ -3841,32 +3841,42 @@ function throttledAnimationLoop(timestamp) {
 
 
 // --- [REPLACEMENT for startSectorOpsLiveLoop] ---
-// This function is updated to use the new animation loop.
+// This function is updated to use the new animation loop and a recursive setTimeout
+// to prevent request stacking.
 
 function startSectorOpsLiveLoop() {
     stopSectorOpsLiveLoop(); // Clear any old loops
 
-    // 1. Start the data fetching loop (infrequent)
-    // This part is unchanged and continues to fetch new data every 3 seconds.
-    updateSectorOpsLiveFlights(); // Fetch immediately
-    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 500); 
+    // 1. Start the data fetching loop (using recursive setTimeout)
+    // We create a new function to manage the recursive loop
+    const runLiveUpdate = async () => {
+        try {
+            await updateSectorOpsLiveFlights(); // Wait for the fetch to complete
+        } catch (error) {
+            console.error("Error during live update cycle:", error);
+        } finally {
+            // Whether it succeeded or failed, schedule the next one.
+            // This guarantees we don't stack requests.
+            sectorOpsLiveFlightsTimeoutId = setTimeout(runLiveUpdate, DATA_REFRESH_INTERVAL_MS);
+        }
+    };
+    
+    runLiveUpdate(); // Start the loop immediately
 
-    // 2. Start the new throttled animation loop
-    // We reset the timestamp and call the loop *once* to kick it off.
-    // It will then loop itself using requestAnimationFrame.
+    // 2. Start the new throttled animation loop (this part is unchanged)
     lastAnimateTimestamp = 0;
     animationFrameId = requestAnimationFrame(throttledAnimationLoop);
 }
 
 
 // --- [REPLACEMENT for stopSectorOpsLiveLoop] ---
-// This function is updated to stop the new animation loop.
+// This function is updated to stop the new timeout and animation loop.
 
 function stopSectorOpsLiveLoop() {
-    // 1. Clear the data-fetching interval
-    if (sectorOpsLiveFlightsInterval) {
-        clearInterval(sectorOpsLiveFlightsInterval);
-        sectorOpsLiveFlightsInterval = null;
+    // 1. Clear the data-fetching timeout
+    if (sectorOpsLiveFlightsTimeoutId) {
+        clearTimeout(sectorOpsLiveFlightsTimeoutId);
+        sectorOpsLiveFlightsTimeoutId = null;
     }
 
     // 2. Clear the animation loop
@@ -3875,8 +3885,6 @@ function stopSectorOpsLiveLoop() {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
     }
-    
-    // Note: The non-existent 'sectorOpsAnimationInterval' is removed.
 }
 
     /**
