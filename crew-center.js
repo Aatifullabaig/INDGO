@@ -3807,148 +3807,73 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // ==========================================================
 
 // ====================================================================
-// START: AIRCRAFT ANIMATION SYSTEM V3.1 (Interpolation-Only)
+// START: AIRCRAFT ANIMATION SYSTEM V3.0 (FR24-style)
 // ====================================================================
 
-/**
- * ═══════════════════════════════════════════════════════════════════════════
- * AIRCRAFT ANIMATION SYSTEM V3.1 - REWRITE (Interpolation-Only)
- * ═══════════════════════════════════════════════════════════════════════════
- * * Core Principles:
- * 1. Bezier curve interpolation for smooth, natural paths during turns.
- * 2. 60fps render loop (`requestAnimationFrame`) separate from the data fetch interval.
- * 3. Animates *between* the last two known data points (previous -> current).
- * 4. This eliminates all prediction, extrapolation, and "drag-back" jitter.
- */
+// ====================================================================
+// START: REFINED ANIMATION CONFIG & FLIGHT STATE
+// (Implements Overlap, Smoothing, Dynamic Duration, & Velocity Controls)
+// ====================================================================
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CONFIGURATION & CONSTANTS
+// REFINED CONFIGURATION & CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════
 
 const ANIMATION_CONFIG = {
     // Timing
-    API_UPDATE_INTERVAL_MS: 500,        // How often we fetch new data (ms)
-    // INTERPOLATION_DURATION_MS: 500,     // No longer needed, duration is dynamic
+    API_UPDATE_INTERVAL_MS: 500,
+    // *** IDEA 1: Overlap animation. Base duration is > API interval. ***
+    INTERPOLATION_DURATION_MS: 750,     // Base duration
     
     // Physics
     EARTH_RADIUS_KM: 6371,
-    KTS_TO_KM_PER_MS: 1.852 / 3600000, // Conversion factor
+    KTS_TO_KM_PER_MS: 1.852 / 3600000,
     
     // Smoothing (0-1, lower = smoother)
-    HEADING_SMOOTHING_ALPHA: 0.15,      // For smoothing turns
-    SPEED_SMOOTHING_ALPHA: 0.20,        // For smoothing speed changes
+    HEADING_SMOOTHING_ALPHA: 0.15,
+    SPEED_SMOOTHING_ALPHA: 0.20,
+    
+    // Prediction
+    MAX_PREDICTION_TIME_MS: 3000,
+    PREDICTION_DECAY_START_MS: 1000,
     
     // Thresholds
-    MIN_SPEED_FOR_ANIMATION_KTS: 10,    // Don't animate below this speed
-    SIGNIFICANT_HEADING_CHANGE_DEG: 5,  // Triggers curve adjustment
-    STALE_DATA_THRESHOLD_MS: 10000,     // Mark data as stale after this
+    MIN_SPEED_FOR_ANIMATION_KTS: 10,
+    STALE_DATA_THRESHOLD_MS: 10000,
+
+    // *** IDEA 3 & 4: New parameters for dynamic logic ***
+    // Fraction of the animation duration to project control points
+    BEZIER_TIME_FRACTION: 0.33, 
+
+    // Parameters for Dynamic Duration
+    DYNAMIC_DURATION_MODIFIERS: {
+        LOW_SPEED_KTS: 50,          // Below this speed...
+        LOW_SPEED_MOD: 2.0,         // ...multiply duration by 2.0 (e.g., 1500ms)
+        TURN_DEGREE_THRESHOLD: 15,  // Above this turn angle...
+        TURN_MOD: 1.5,              // ...multiply duration by 1.5 (e.g., 1125ms)
+        HIGH_SPEED_KTS: 400,        // Above this speed...
+        HIGH_SPEED_MOD: 0.8         // ...multiply duration by 0.8 (e.g., 600ms)
+    }
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// UTILITY FUNCTIONS (Unchanged)
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Great circle distance calculation
- */
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = ANIMATION_CONFIG.EARTH_RADIUS_KM;
-    const toRad = (deg) => deg * Math.PI / 180;
-    
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    
-    const a = Math.sin(dLat / 2) ** 2 +
-              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-              Math.sin(dLon / 2) ** 2;
-    
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-}
-
-/**
- * Move a point along a bearing
- */
-function projectPoint(lat, lon, bearing, distanceKm) {
-    const R = ANIMATION_CONFIG.EARTH_RADIUS_KM;
-    const toRad = (deg) => deg * Math.PI / 180;
-    const toDeg = (rad) => rad * 180 / Math.PI;
-    
-    const latRad = toRad(lat);
-    const lonRad = toRad(lon);
-    const bearingRad = toRad(bearing);
-    
-    const newLatRad = Math.asin(
-        Math.sin(latRad) * Math.cos(distanceKm / R) +
-        Math.cos(latRad) * Math.sin(distanceKm / R) * Math.cos(bearingRad)
-    );
-    
-    const newLonRad = lonRad + Math.atan2(
-        Math.sin(bearingRad) * Math.sin(distanceKm / R) * Math.cos(latRad),
-        Math.cos(distanceKm / R) - Math.sin(latRad) * Math.sin(newLatRad)
-    );
-    
-    return {
-        lat: toDeg(newLatRad),
-        lon: toDeg(newLonRad)
-    };
-}
-
-/**
- * Smooth angle interpolation (shortest path)
- */
-function interpolateAngle(from, to, factor) {
-    let delta = to - from;
-    if (delta > 180) delta -= 360;
-    if (delta < -180) delta += 360;
-    return (from + delta * factor + 360) % 360;
-}
-
-/**
- * Cubic Bezier interpolation for smooth curves
- */
-function cubicBezier(t, p0, p1, p2, p3) {
-    const u = 1 - t;
-    return u * u * u * p0 +
-           3 * u * u * t * p1 +
-           3 * u * t * t * p2 +
-           t * t * t * p3;
-}
-
-/**
- * Easing function for smooth acceleration/deceleration
- */
-function easeInOutCubic(t) {
-    return t < 0.5
-        ? 4 * t * t * t
-        : 1 - Math.pow(-2 * t + 2, 3) / 2;
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
-// FLIGHT STATE MANAGEMENT (FIXED LOGIC)
+// REFINED FLIGHT STATE MANAGEMENT
 // ═══════════════════════════════════════════════════════════════════════════
 
 class FlightState {
     constructor(initialData) {
-        const now = performance.now();
-        
-        // --- [FIX] Store current and previous API states ---
-        this.currentApi = {
+        // API State (ground truth from server)
+        this.api = {
             lat: initialData.position.lat,
             lon: initialData.position.lon,
             heading: initialData.position.track_deg || 0,
             speed: initialData.position.gs_kt || 0,
-            timestamp: now
-        };
-        
-        // Fake a "previous" point to start the animation
-        this.previousApi = {
-            ...this.currentApi,
-            timestamp: now - ANIMATION_CONFIG.API_UPDATE_INTERVAL_MS // Assume it came from one interval ago
+            timestamp: performance.now()
         };
         
         // Display State (what we're currently showing)
-        this.display = { ...this.currentApi };
+        this.display = { ...this.api };
         
         // Animation State
         this.animation = {
@@ -3956,19 +3881,24 @@ class FlightState {
             startTime: 0,
             duration: 0,
             
-            // Bezier control points
-            startPos: { lat: this.currentApi.lat, lon: this.currentApi.lon },
-            endPos: { lat: this.currentApi.lat, lon: this.currentApi.lon },
+            startPos: { lat: this.api.lat, lon: this.api.lon },
+            endPos: { lat: this.api.lat, lon: this.api.lon },
             control1: null,
             control2: null,
             
-            // Heading animation
-            startHeading: this.currentApi.heading,
-            endHeading: this.currentApi.heading,
+            startHeading: this.api.heading,
+            endHeading: this.api.heading,
             
             // Smoothed values (with exponential moving average)
-            smoothedHeading: this.currentApi.heading,
-            smoothedSpeed: this.currentApi.speed
+            smoothedHeading: this.api.heading,
+            smoothedSpeed: this.api.speed
+        };
+        
+        // Prediction State
+        this.prediction = {
+            isActive: false,
+            baseTime: 0,
+            lastFrameTime: 0,
         };
         
         // Metadata
@@ -3982,24 +3912,18 @@ class FlightState {
             position: JSON.stringify(initialData.position)
         };
         
-        this.lastUpdateTime = now;
+        this.lastUpdateTime = performance.now();
         this.isStale = false;
-
-        // Start animating immediately
-        this.startInterpolation();
     }
     
     /**
-     * --- [FIX] Update with fresh API data ---
+     * Update with fresh API data
      */
     updateFromAPI(newData) {
         const now = performance.now();
         
-        // --- [FIX] Shift current state to previous state ---
-        this.previousApi = this.currentApi;
-        
-        // --- [FIX] New data becomes the current state ---
-        this.currentApi = {
+        // 1. Update API state
+        this.api = {
             lat: newData.position.lat,
             lon: newData.position.lon,
             heading: newData.position.track_deg || 0,
@@ -4007,103 +3931,119 @@ class FlightState {
             timestamp: now
         };
         
-        // Update properties
+        // 2. Update properties
         this.properties.position = JSON.stringify(newData.position);
-        
         this.lastUpdateTime = now;
         this.isStale = false;
         
-        // Start interpolation to the new "current" state
-        this.startInterpolation();
-        
-        // Update smoothed values (Exponential Moving Average)
+        // *** IDEA 2: Update smoothed values *BEFORE* starting interpolation ***
         const alphaH = ANIMATION_CONFIG.HEADING_SMOOTHING_ALPHA;
         this.animation.smoothedHeading = interpolateAngle(
             this.animation.smoothedHeading,
-            this.currentApi.heading,
+            this.api.heading, // Use raw API data as input to the EMA
             alphaH
         );
         
         const alphaS = ANIMATION_CONFIG.SPEED_SMOOTHING_ALPHA;
         this.animation.smoothedSpeed = 
             this.animation.smoothedSpeed * (1 - alphaS) +
-            this.currentApi.speed * alphaS;
+            this.api.speed * alphaS;
+
+        // 3. Start interpolation (which will now use the new smoothed values)
+        this.startInterpolation();
     }
     
     /**
-     * --- [FIX] Initialize smooth interpolation from PREVIOUS to CURRENT position ---
+     * Initialize smooth interpolation to new position
      */
     startInterpolation() {
         const now = performance.now();
         
         this.animation.isInterpolating = true;
         this.animation.startTime = now;
+
+        // --- *** IDEA 3: Dynamic Animation Duration *** ---
+        const DYN = ANIMATION_CONFIG.DYNAMIC_DURATION_MODIFIERS;
+        const baseDuration = ANIMATION_CONFIG.INTERPOLATION_DURATION_MS;
+        const speedKts = this.animation.smoothedSpeed;
         
-        // --- [FIX] Duration is the *actual* time between the two API packets ---
-        this.animation.duration = this.currentApi.timestamp - this.previousApi.timestamp;
-        
-        // --- [FIX] Set start and end positions from API data ---
+        // Calculate heading change to the *new smoothed target*
+        let headingDelta = Math.abs(this.animation.smoothedHeading - this.display.heading) % 360;
+        if (headingDelta > 180) headingDelta = 360 - headingDelta;
+
+        let durationModifier = 1.0;
+        if (speedKts < DYN.LOW_SPEED_KTS) {
+            durationModifier = DYN.LOW_SPEED_MOD; // Lengthen for slow speeds
+        } else if (headingDelta > DYN.TURN_DEGREE_THRESHOLD) {
+            durationModifier = DYN.TURN_MOD; // Lengthen for sharp turns
+        } else if (speedKts > DYN.HIGH_SPEED_KTS) {
+            durationModifier = DYN.HIGH_SPEED_MOD; // Shorten for high speeds
+        }
+
+        this.animation.duration = baseDuration * durationModifier;
+        // --- *** END DYNAMIC DURATION *** ---
+
+        // Set start/end positions
         this.animation.startPos = { 
-            lat: this.previousApi.lat, 
-            lon: this.previousApi.lon 
+            lat: this.display.lat, 
+            lon: this.display.lon 
         };
         this.animation.endPos = { 
-            lat: this.currentApi.lat, 
-            lon: this.currentApi.lon 
+            lat: this.api.lat, // Target raw API position
+            lon: this.api.lon 
         };
         
-        // Create Bezier control points for curved path
-        const distance = calculateDistance(
-            this.animation.startPos.lat,
-            this.animation.startPos.lon,
-            this.animation.endPos.lat,
-            this.animation.endPos.lon
-        );
-
-        // Project control points along the old and new headings
-        const controlDist = distance * 0.33; // 1/3 of the way
+        // --- *** IDEA 4: Velocity-Based Control Points *** ---
+        // Calculate control distance based on speed and new dynamic duration
+        const timeFraction = ANIMATION_CONFIG.BEZIER_TIME_FRACTION;
+        const controlDist = (this.animation.smoothedSpeed * ANIMATION_CONFIG.KTS_TO_KM_PER_MS) * (this.animation.duration * timeFraction);
 
         this.animation.control1 = projectPoint(
             this.animation.startPos.lat,
             this.animation.startPos.lon,
-            this.previousApi.heading, // Use previous heading
+            this.display.heading, // Project from current display heading
             controlDist
         );
         
+        // --- *** IDEA 2: Use Smoothed Heading for Target *** ---
         this.animation.control2 = projectPoint(
             this.animation.endPos.lat,
             this.animation.endPos.lon,
-            this.currentApi.heading + 180, // Project backwards from the new API target
+            this.animation.smoothedHeading + 180, // Project backwards from *smoothed* target
             controlDist
         );
         
-        // --- [FIX] Set heading animation from previous to current ---
-        this.animation.startHeading = this.previousApi.heading;
-        this.animation.endHeading = this.currentApi.heading;
+        // Set heading animation
+        this.animation.startHeading = this.display.heading;
+        this.animation.endHeading = this.animation.smoothedHeading; // Target *smoothed* heading
+        // --- *** END SMOOTHED TARGET / VELOCITY CONTROLS *** ---
+        
+        // Stop any active prediction
+        this.prediction.isActive = false;
     }
     
     /**
-     * --- [FIX] Update display state for current frame (called 60fps) ---
+     * Update display state for current frame (called 60fps)
+     * (This function requires NO CHANGES, as it just executes the
+     * animation parameters set by startInterpolation)
      */
     updateFrame(now) {
         const timeSinceUpdate = now - this.lastUpdateTime;
         
-        // Check if data is stale
         if (timeSinceUpdate > ANIMATION_CONFIG.STALE_DATA_THRESHOLD_MS) {
             this.isStale = true;
-            // Plane will just stop at its last interpolated position.
-            return; 
+            this.animation.smoothedSpeed *= 0.98; 
+            if (this.animation.smoothedSpeed < 5) {
+                return;
+            }
         }
         
-        // PHASE 1: Interpolation (moving from previous to current API position)
+        // PHASE 1: Interpolation
         if (this.animation.isInterpolating) {
             const elapsed = now - this.animation.startTime;
-            
-            // --- [FIX] Progress is clamped between 0 and 1. No extrapolation. ---
-            const progress = Math.max(0, Math.min(1, elapsed / this.animation.duration));
+            const progress = Math.min(1, elapsed / this.animation.duration);
             const easedProgress = easeInOutCubic(progress);
             
-            // Bezier curve interpolation for position
             this.display.lat = cubicBezier(
                 easedProgress,
                 this.animation.startPos.lat,
@@ -4120,23 +4060,81 @@ class FlightState {
                 this.animation.endPos.lon
             );
             
-            // Smooth heading interpolation
             this.display.heading = interpolateAngle(
                 this.animation.startHeading,
-                this.animation.endHeading,
+                this.animation.endHeading, // This now correctly targets the smoothed heading
                 easedProgress
             );
             
-            // --- [FIX] Removed all prediction logic ---
-            // The plane simply waits at progress = 1.0 until the next
-            // data packet arrives and startInterpolation() is called again.
+            if (progress >= 1) {
+                this.animation.isInterpolating = false;
+                this.display.lat = this.api.lat;
+                this.display.lon = this.api.lon;
+                this.display.heading = this.animation.endHeading;
+                
+                this.startPrediction(now);
+            }
+        }
+        // PHASE 2: Prediction
+        else if (this.prediction.isActive) {
+            const predictionTime = now - this.prediction.baseTime;
+            
+            if (predictionTime > ANIMATION_CONFIG.MAX_PREDICTION_TIME_MS) {
+                this.prediction.isActive = false;
+                return;
+            }
+            
+            let speedMultiplier = 1.0;
+            if (predictionTime > ANIMATION_CONFIG.PREDICTION_DECAY_START_MS) {
+                const decayProgress = 
+                    (predictionTime - ANIMATION_CONFIG.PREDICTION_DECAY_START_MS) /
+                    (ANIMATION_CONFIG.MAX_PREDICTION_TIME_MS - ANIMATION_CONFIG.PREDICTION_DECAY_START_MS);
+                speedMultiplier = 1.0 - (decayProgress * 0.5);
+            }
+            
+            const effectiveSpeed = this.animation.smoothedSpeed * speedMultiplier;
+            
+            if (effectiveSpeed > ANIMATION_CONFIG.MIN_SPEED_FOR_ANIMATION_KTS) {
+                const frameDeltaTime = now - this.prediction.lastFrameTime;
+                if (frameDeltaTime <= 0) return;
+
+                const distanceKm = effectiveSpeed * ANIMATION_CONFIG.KTS_TO_KM_PER_MS * frameDeltaTime;
+                
+                const predicted = projectPoint(
+                    this.display.lat,
+                    this.display.lon,
+                    this.animation.smoothedHeading, // Prediction correctly uses smoothed heading
+                    distanceKm
+                );
+                
+                this.display.lat = predicted.lat;
+                this.display.lon = predicted.lon;
+                this.display.heading = this.animation.smoothedHeading;
+            }
+        }
+        this.prediction.lastFrameTime = now;
+    }
+    
+    /**
+     * Start prediction phase (fallback for data latency)
+     * (This function requires NO CHANGES)
+     */
+    startPrediction(now) {
+        if (this.api.speed < ANIMATION_CONFIG.MIN_SPEED_FOR_ANIMATION_KTS) {
+            this.prediction.isActive = false;
+            return;
+        }
+        
+        if (!this.prediction.isActive) {
+            this.prediction.isActive = true;
+            this.prediction.baseTime = now;
+            this.prediction.lastFrameTime = now;
         }
     }
-
-    // --- [FIX] Removed startPrediction() function ---
     
     /**
      * Get current GeoJSON feature
+     * (This function requires NO CHANGES)
      */
     toFeature() {
         return {
@@ -4154,8 +4152,9 @@ class FlightState {
     }
 }
 
+
 // ═══════════════════════════════════════════════════════════════════════════
-// ANIMATION MANAGER (Unchanged, but now drives the new FlightState)
+// ANIMATION MANAGER
 // ═══════════════════════════════════════════════════════════════════════════
 
 class FlightAnimationManager {
@@ -4232,7 +4231,7 @@ class FlightAnimationManager {
         if (!this.map || !this.map.isStyleLoaded()) return;
         
         try {
-            const sessionsRes = await fetch('https.site--acars-backend--6dmjph8ltlhv.code.run/if-sessions');
+            const sessionsRes = await fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions');
             if (!sessionsRes.ok) return;
             
             const sessionsData = await sessionsRes.json();
@@ -4305,11 +4304,11 @@ class FlightAnimationManager {
     }
 }
 
-// Global instance (unchanged)
+// Global instance
 let flightAnimationManager = null;
 
 // ====================================================================
-// END: AIRCRAFT ANIMATION SYSTEM V3.1
+// END: AIRCRAFT ANIMATION SYSTEM V3.0
 // ====================================================================
 
 /**
