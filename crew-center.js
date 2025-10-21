@@ -935,24 +935,47 @@ async function fetchRunwaysData() {
 }
 
 
-    // --- Fetch Routes from Backend ---
-    async function fetchRoutes(params = {}) {
-        try {
-            const query = new URLSearchParams(params).toString();
-            const res = await fetch(`${API_BASE_URL}/api/routes${query ? `?${query}` : ''}`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                }
-            });
-            if (!res.ok) throw new Error('Failed to fetch routes.');
-            return await res.json();
-        } catch (err) {
-            console.error('Error fetching routes:', err);
-            showNotification('Could not load routes from server.', 'error');
-            return [];
-        }
+/**
+ * --- [MODIFIED] The animation loop.
+ * This function's only job is to update the data of the existing map source
+ * with the *last known API coordinates*, without any interpolation or prediction.
+ */
+function animateFlightPositions() {
+    const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+    // Exit if the source isn't ready or there's no data to animate
+    if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
+        return;
     }
 
+    const newFeatures = [];
+
+    for (const flightId in liveFlightData) {
+        const flight = liveFlightData[flightId];
+        
+        // --- MODIFICATION ---
+        // Directly use the last known API position. No interpolation, no prediction.
+        const currentLat = flight.apiLat;
+        const currentLon = flight.apiLon;
+        const currentHeading = flight.apiHeading;
+        // --- END OF MODIFICATION ---
+
+        newFeatures.push({
+            type: 'Feature',
+            geometry: {
+                type: 'Point',
+                coordinates: [currentLon, currentLat]
+            },
+            properties: {
+                ...flight.properties,
+                heading: currentHeading
+            }
+        });
+    }
+
+    // This is the key: setData() is now called at a controlled rate,
+    // but it's only setting the last-received API data.
+    source.setData({ type: 'FeatureCollection', features: newFeatures });
+}
 
 function getAircraftCategory(aircraftName) {
     if (!aircraftName) return 'default';
@@ -2510,18 +2533,14 @@ function updatePfdDisplay(pfdData) {
         }
     }
 
-// --- [REPLACED FUNCTION] ---
+    // --- MODIFY THIS FUNCTION ---
+// --- MODIFY THIS FUNCTION ---
 async function initializeSectorOpsMap(centerICAO) {
     if (!MAPBOX_ACCESS_TOKEN) {
         document.getElementById('sector-ops-map-fullscreen').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
         return;
     }
-    if (sectorOpsMap) {
-        // Stop any existing animation manager before removing the map
-        stopSectorOpsLiveLoop(); 
-        flightAnimationManager = null;
-        sectorOpsMap.remove();
-    }
+    if (sectorOpsMap) sectorOpsMap.remove();
 
     const centerCoords = airportsData[centerICAO] ? [airportsData[centerICAO].lon, airportsData[centerICAO].lat] : [77.2, 28.6];
 
@@ -2532,9 +2551,6 @@ async function initializeSectorOpsMap(centerICAO) {
         zoom: 4.5,
         interactive: true
     });
-
-    // Initialize the new animation manager with this map instance
-    flightAnimationManager = new FlightAnimationManager(sectorOpsMap);
 
     return new Promise(resolve => {
         sectorOpsMap.on('load', () => {
@@ -2581,39 +2597,19 @@ async function initializeSectorOpsMap(centerICAO) {
                         type: 'symbol',
                         source: 'sector-ops-live-flights-source',
                         layout: {
-                            'icon-image': ['match', ['get', 'category'],
-                                'jumbo', 'icon-jumbo',
-                                'widebody', 'icon-widebody',
-                                'narrowbody', 'icon-narrowbody',
-                                'regional', 'icon-regional',
-                                'private', 'icon-private',
-                                'fighter', 'icon-fighter',
-                                'icon-default' // Default fallback
-                            ],
+                            'icon-image': ['match', ['get', 'category'], 'jumbo', 'icon-jumbo', 'widebody', 'icon-widebody', 'narrowbody', 'icon-narrowbody', 'regional', 'icon-regional', 'private', 'icon-private', 'fighter', 'icon-fighter', 'icon-default'],
                             'icon-size': 0.08,
                             'icon-rotate': ['get', 'heading'],
                             'icon-rotation-alignment': 'map',
                             'icon-allow-overlap': true,
-                            'icon-ignore-placement': true,
-                            'icon-opacity': [
-                                'case',
-                                ['boolean', ['get', 'isStale'], false],
-                                0.5, // 50% opacity if stale
-                                1.0  // 100% opacity if not
-                            ]
+                            'icon-ignore-placement': true
                         }
                     });
 
                     // Set up the click/hover event listeners ONCE
                     sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
                         const props = e.features[0].properties;
-                        // Re-hydrate the objects from their JSON string properties
-                        const flightProps = { 
-                            ...props, 
-                            position: JSON.parse(props.position), 
-                            aircraft: JSON.parse(props.aircraft) 
-                        };
-                        
+                        const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
                         fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions').then(res => res.json()).then(data => {
                             const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
                             if (expertSession) {
@@ -2844,7 +2840,19 @@ async function handleAircraftClick(flightProps, sessionId) {
                     updatePfdDisplay(updatedFlight.position);
                     updateAircraftInfoWindow(updatedFlight, plan);
                     
+                    // --- Logic to update the aircraft's icon on the map (Unchanged) ---
+                    const iconSource = sectorOpsMap.getSource('sector-ops-live-flights-source');
+                    if (iconSource && iconSource._data) {
+                        const currentData = iconSource._data;
+                        const featureToUpdate = currentData.features.find(f => f.properties.flightId === flightProps.flightId);
+                        if (featureToUpdate) {
+                            featureToUpdate.geometry.coordinates = [updatedFlight.position.lon, updatedFlight.position.lat];
+                            featureToUpdate.properties.heading = updatedFlight.position.track_deg || 0;
+                            iconSource.setData(currentData);
+                        }
+                    }
                     
+                    // --- FIX: Logic to update the flown path using the stored array ---
                     // --- FIX: Logic to update and smooth the flown path in real-time ---
 const flightPathState = sectorOpsLiveFlightPathLayers[flightProps.flightId];
 const pathSource = flightPathState ? sectorOpsMap.getSource(flightPathState.flown) : null;
@@ -3794,555 +3802,81 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // END: SECTOR OPS / ROUTE EXPLORER LOGIC
     // ==========================================================
 
-// ====================================================================
-// START: AIRCRAFT ANIMATION SYSTEM V3.0 (FR24-style)
-// ====================================================================
+    // ====================================================================
+    // START: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
+    // ====================================================================
 
-// ====================================================================
-// START: REFINED ANIMATION CONFIG & FLIGHT STATE
-// (Implements Overlap, Smoothing, Dynamic Duration, & Velocity Controls)
-// ====================================================================
+    // --- [NEW] Throttled Animation Loop ---
+// This function will be our new animation "engine."
+// It runs at the browser's native refresh rate (e.g., 60fps)
+// but *throttles* the expensive `animateFlightPositions` call to our
+// desired interval (100ms).
 
-// ═══════════════════════════════════════════════════════════════════════════
-// REFINED CONFIGURATION & CONSTANTS
-// ═══════════════════════════════════════════════════════════════════════════
+let lastAnimateTimestamp = 0; // Timestamp of the last *logic* update
+const ANIMATION_THROTTLE_MS = 100; // 100ms = 10 updates per second
 
-const ANIMATION_CONFIG = {
-    // Timing
-    API_UPDATE_INTERVAL_MS: 500,
-    // *** IDEA 1: Overlap animation. Base duration is > API interval. ***
-    INTERPOLATION_DURATION_MS: 750,     // Base duration
-    
-    // Physics
-    EARTH_RADIUS_KM: 6371,
-    KTS_TO_KM_PER_MS: 1.852 / 3600000,
-    
-    // Smoothing (0-1, lower = smoother)
-    HEADING_SMOOTHING_ALPHA: 0.15,
-    SPEED_SMOOTHING_ALPHA: 0.20,
-    
-    // Prediction
-    MAX_PREDICTION_TIME_MS: 3000,
-    PREDICTION_DECAY_START_MS: 1000,
-    
-    // Thresholds
-    MIN_SPEED_FOR_ANIMATION_KTS: 10,
-    STALE_DATA_THRESHOLD_MS: 10000,
+function throttledAnimationLoop(timestamp) {
+    // 1. Schedule the next frame immediately.
+    // This creates a continuous, efficient loop that's synced with the browser.
+    animationFrameId = requestAnimationFrame(throttledAnimationLoop);
 
-    // *** IDEA 3 & 4: New parameters for dynamic logic ***
-    // Fraction of the animation duration to project control points
-    BEZIER_TIME_FRACTION: 0.33, 
+    // 2. Calculate time elapsed since the last *logic* update.
+    const elapsed = timestamp - lastAnimateTimestamp;
 
-    // Parameters for Dynamic Duration
-    DYNAMIC_DURATION_MODIFIERS: {
-        LOW_SPEED_KTS: 50,          // Below this speed...
-        LOW_SPEED_MOD: 2.0,         // ...multiply duration by 2.0 (e.g., 1500ms)
-        TURN_DEGREE_THRESHOLD: 15,  // Above this turn angle...
-        TURN_MOD: 1.5,              // ...multiply duration by 1.5 (e.g., 1125ms)
-        HIGH_SPEED_KTS: 400,        // Above this speed...
-        HIGH_SPEED_MOD: 0.8         // ...multiply duration by 0.8 (e.g., 600ms)
-    }
-};
+    // 3. Check if we've waited long enough (100ms) to run our logic.
+    if (elapsed > ANIMATION_THROTTLE_MS) {
+        // We have. Update the timestamp to "reset" the timer.
+        // We use (timestamp - (elapsed % ANIMATION_THROTTLE_MS)) to stay
+        // in sync, preventing slow drift over time.
+        lastAnimateTimestamp = timestamp - (elapsed % ANIMATION_THROTTLE_MS);
 
-
-// ═══════════════════════════════════════════════════════════════════════════
-// REFINED FLIGHT STATE MANAGEMENT
-// ═══════════════════════════════════════════════════════════════════════════
-
-class FlightState {
-    constructor(initialData) {
-        // API State (ground truth from server)
-        this.api = {
-            lat: initialData.position.lat,
-            lon: initialData.position.lon,
-            heading: initialData.position.track_deg || 0,
-            speed: initialData.position.gs_kt || 0,
-            timestamp: performance.now()
-        };
-        
-        // Display State (what we're currently showing)
-        this.display = { ...this.api };
-        
-        // Animation State
-        this.animation = {
-            isInterpolating: false,
-            startTime: 0,
-            duration: 0,
-            
-            startPos: { lat: this.api.lat, lon: this.api.lon },
-            endPos: { lat: this.api.lat, lon: this.api.lon },
-            control1: null,
-            control2: null,
-            
-            startHeading: this.api.heading,
-            endHeading: this.api.heading,
-            
-            // Smoothed values (with exponential moving average)
-            smoothedHeading: this.api.heading,
-            smoothedSpeed: this.api.speed
-        };
-        
-        // Prediction State
-        this.prediction = {
-            isActive: false,
-            baseTime: 0,
-            lastFrameTime: 0,
-        };
-        
-        // Metadata
-        this.properties = {
-            flightId: initialData.flightId,
-            callsign: initialData.callsign,
-            username: initialData.username,
-            category: getAircraftCategory(initialData.aircraft?.aircraftName),
-            aircraft: JSON.stringify(initialData.aircraft),
-            userId: initialData.userId,
-            position: JSON.stringify(initialData.position)
-        };
-        
-        this.lastUpdateTime = performance.now();
-        this.isStale = false;
+        // 4. Run our *actual* animation logic.
+        // This is the original function that calls source.setData()
+        animateFlightPositions();
     }
     
-    /**
-     * Update with fresh API data
-     */
-    updateFromAPI(newData) {
-        const now = performance.now();
-        
-        // 1. Update API state
-        this.api = {
-            lat: newData.position.lat,
-            lon: newData.position.lon,
-            heading: newData.position.track_deg || 0,
-            speed: newData.position.gs_kt || 0,
-            timestamp: now
-        };
-        
-        // 2. Update properties
-        this.properties.position = JSON.stringify(newData.position);
-        this.lastUpdateTime = now;
-        this.isStale = false;
-        
-        // *** IDEA 2: Update smoothed values *BEFORE* starting interpolation ***
-        const alphaH = ANIMATION_CONFIG.HEADING_SMOOTHING_ALPHA;
-        this.animation.smoothedHeading = interpolateAngle(
-            this.animation.smoothedHeading,
-            this.api.heading, // Use raw API data as input to the EMA
-            alphaH
-        );
-        
-        const alphaS = ANIMATION_CONFIG.SPEED_SMOOTHING_ALPHA;
-        this.animation.smoothedSpeed = 
-            this.animation.smoothedSpeed * (1 - alphaS) +
-            this.api.speed * alphaS;
-
-        // 3. Start interpolation (which will now use the new smoothed values)
-        this.startInterpolation();
-    }
-    
-    /**
-     * Initialize smooth interpolation to new position
-     */
-    startInterpolation() {
-        const now = performance.now();
-        
-        this.animation.isInterpolating = true;
-        this.animation.startTime = now;
-
-        // --- *** IDEA 3: Dynamic Animation Duration *** ---
-        const DYN = ANIMATION_CONFIG.DYNAMIC_DURATION_MODIFIERS;
-        const baseDuration = ANIMATION_CONFIG.INTERPOLATION_DURATION_MS;
-        const speedKts = this.animation.smoothedSpeed;
-        
-        // Calculate heading change to the *new smoothed target*
-        let headingDelta = Math.abs(this.animation.smoothedHeading - this.display.heading) % 360;
-        if (headingDelta > 180) headingDelta = 360 - headingDelta;
-
-        let durationModifier = 1.0;
-        if (speedKts < DYN.LOW_SPEED_KTS) {
-            durationModifier = DYN.LOW_SPEED_MOD; // Lengthen for slow speeds
-        } else if (headingDelta > DYN.TURN_DEGREE_THRESHOLD) {
-            durationModifier = DYN.TURN_MOD; // Lengthen for sharp turns
-        } else if (speedKts > DYN.HIGH_SPEED_KTS) {
-            durationModifier = DYN.HIGH_SPEED_MOD; // Shorten for high speeds
-        }
-
-        this.animation.duration = baseDuration * durationModifier;
-        // --- *** END DYNAMIC DURATION *** ---
-
-        // Set start/end positions
-        this.animation.startPos = { 
-            lat: this.display.lat, 
-            lon: this.display.lon 
-        };
-        this.animation.endPos = { 
-            lat: this.api.lat, // Target raw API position
-            lon: this.api.lon 
-        };
-        
-        // --- *** IDEA 4: Velocity-Based Control Points *** ---
-        // Calculate control distance based on speed and new dynamic duration
-        const timeFraction = ANIMATION_CONFIG.BEZIER_TIME_FRACTION;
-        const controlDist = (this.animation.smoothedSpeed * ANIMATION_CONFIG.KTS_TO_KM_PER_MS) * (this.animation.duration * timeFraction);
-
-        this.animation.control1 = projectPoint(
-            this.animation.startPos.lat,
-            this.animation.startPos.lon,
-            this.display.heading, // Project from current display heading
-            controlDist
-        );
-        
-        // --- *** IDEA 2: Use Smoothed Heading for Target *** ---
-        this.animation.control2 = projectPoint(
-            this.animation.endPos.lat,
-            this.animation.endPos.lon,
-            this.animation.smoothedHeading + 180, // Project backwards from *smoothed* target
-            controlDist
-        );
-        
-        // Set heading animation
-        this.animation.startHeading = this.display.heading;
-        this.animation.endHeading = this.animation.smoothedHeading; // Target *smoothed* heading
-        // --- *** END SMOOTHED TARGET / VELOCITY CONTROLS *** ---
-        
-        // Stop any active prediction
-        this.prediction.isActive = false;
-    }
-    
-    /**
-     * Update display state for current frame (called 60fps)
-     * (This function requires NO CHANGES, as it just executes the
-     * animation parameters set by startInterpolation)
-     */
-    updateFrame(now) {
-        const timeSinceUpdate = now - this.lastUpdateTime;
-        
-        if (timeSinceUpdate > ANIMATION_CONFIG.STALE_DATA_THRESHOLD_MS) {
-            this.isStale = true;
-            this.animation.smoothedSpeed *= 0.98; 
-            if (this.animation.smoothedSpeed < 5) {
-                return;
-            }
-        }
-        
-        // PHASE 1: Interpolation
-        if (this.animation.isInterpolating) {
-            const elapsed = now - this.animation.startTime;
-            const progress = Math.min(1, elapsed / this.animation.duration);
-            const easedProgress = easeInOutCubic(progress);
-            
-            this.display.lat = cubicBezier(
-                easedProgress,
-                this.animation.startPos.lat,
-                this.animation.control1.lat,
-                this.animation.control2.lat,
-                this.animation.endPos.lat
-            );
-            
-            this.display.lon = cubicBezier(
-                easedProgress,
-                this.animation.startPos.lon,
-                this.animation.control1.lon,
-                this.animation.control2.lon,
-                this.animation.endPos.lon
-            );
-            
-            this.display.heading = interpolateAngle(
-                this.animation.startHeading,
-                this.animation.endHeading, // This now correctly targets the smoothed heading
-                easedProgress
-            );
-            
-            if (progress >= 1) {
-                this.animation.isInterpolating = false;
-                this.display.lat = this.api.lat;
-                this.display.lon = this.api.lon;
-                this.display.heading = this.animation.endHeading;
-                
-                this.startPrediction(now);
-            }
-        }
-        // PHASE 2: Prediction
-        else if (this.prediction.isActive) {
-            const predictionTime = now - this.prediction.baseTime;
-            
-            if (predictionTime > ANIMATION_CONFIG.MAX_PREDICTION_TIME_MS) {
-                this.prediction.isActive = false;
-                return;
-            }
-            
-            let speedMultiplier = 1.0;
-            if (predictionTime > ANIMATION_CONFIG.PREDICTION_DECAY_START_MS) {
-                const decayProgress = 
-                    (predictionTime - ANIMATION_CONFIG.PREDICTION_DECAY_START_MS) /
-                    (ANIMATION_CONFIG.MAX_PREDICTION_TIME_MS - ANIMATION_CONFIG.PREDICTION_DECAY_START_MS);
-                speedMultiplier = 1.0 - (decayProgress * 0.5);
-            }
-            
-            const effectiveSpeed = this.animation.smoothedSpeed * speedMultiplier;
-            
-            if (effectiveSpeed > ANIMATION_CONFIG.MIN_SPEED_FOR_ANIMATION_KTS) {
-                const frameDeltaTime = now - this.prediction.lastFrameTime;
-                if (frameDeltaTime <= 0) return;
-
-                const distanceKm = effectiveSpeed * ANIMATION_CONFIG.KTS_TO_KM_PER_MS * frameDeltaTime;
-                
-                const predicted = projectPoint(
-                    this.display.lat,
-                    this.display.lon,
-                    this.animation.smoothedHeading, // Prediction correctly uses smoothed heading
-                    distanceKm
-                );
-                
-                this.display.lat = predicted.lat;
-                this.display.lon = predicted.lon;
-                this.display.heading = this.animation.smoothedHeading;
-            }
-        }
-        this.prediction.lastFrameTime = now;
-    }
-    
-    /**
-     * Start prediction phase (fallback for data latency)
-     * (This function requires NO CHANGES)
-     */
-    startPrediction(now) {
-        if (this.api.speed < ANIMATION_CONFIG.MIN_SPEED_FOR_ANIMATION_KTS) {
-            this.prediction.isActive = false;
-            return;
-        }
-        
-        if (!this.prediction.isActive) {
-            this.prediction.isActive = true;
-            this.prediction.baseTime = now;
-            this.prediction.lastFrameTime = now;
-        }
-    }
-    
-    /**
-     * Get current GeoJSON feature
-     * (This function requires NO CHANGES)
-     */
-    toFeature() {
-        return {
-            type: 'Feature',
-            geometry: {
-                type: 'Point',
-                coordinates: [this.display.lon, this.display.lat]
-            },
-            properties: {
-                ...this.properties,
-                heading: this.display.heading,
-                isStale: this.isStale
-            }
-        };
-    }
+    // If elapsed <= 100ms, this function does nothing, effectively
+    // "skipping" the expensive logic for this frame and keeping the browser fast.
 }
 
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ANIMATION MANAGER
-// ═══════════════════════════════════════════════════════════════════════════
+// --- [REPLACEMENT for startSectorOpsLiveLoop] ---
+// This function is updated to use the new animation loop.
 
-class FlightAnimationManager {
-    constructor(map) {
-        this.map = map;
-        this.flights = new Map(); // flightId -> FlightState
-        this.animationFrameId = null;
-        this.dataFetchInterval = null;
-        this.lastFrameTime = 0;
-        this.isRunning = false;
-    }
-    
-    /**
-     * Start the animation system
-     */
-    start() {
-        if (this.isRunning) return;
-        
-        this.isRunning = true;
-        this.lastFrameTime = performance.now();
-        
-        // Start data fetching
-        this.fetchData();
-        this.dataFetchInterval = setInterval(
-            () => this.fetchData(),
-            ANIMATION_CONFIG.API_UPDATE_INTERVAL_MS // Use config value
-        );
-        
-        // Start animation loop
-        this.animate();
-    }
-    
-    /**
-     * Stop the animation system
-     */
-    stop() {
-        this.isRunning = false;
-        
-        if (this.animationFrameId) {
-            cancelAnimationFrame(this.animationFrameId);
-            this.animationFrameId = null;
-        }
-        
-        if (this.dataFetchInterval) {
-            clearInterval(this.dataFetchInterval);
-            this.dataFetchInterval = null;
-        }
-    }
-    
-    /**
-     * Main animation loop (runs at 60fps)
-     */
-    animate() {
-        if (!this.isRunning) return;
-        
-        const now = performance.now();
-        
-        // Update all flight states
-        for (const flight of this.flights.values()) {
-            flight.updateFrame(now);
-        }
-        
-        // Update map
-        this.updateMap();
-        
-        this.lastFrameTime = now;
-        this.animationFrameId = requestAnimationFrame(() => this.animate());
-    }
-    
-    /**
-     * Fetch fresh data from API
-     */
-    async fetchData() {
-        if (!this.map || !this.map.isStyleLoaded()) return;
-        
-        try {
-            const sessionsRes = await fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions');
-            if (!sessionsRes.ok) return;
-            
-            const sessionsData = await sessionsRes.json();
-            const expertSession = sessionsData.sessions.find(s => 
-                s.name.toLowerCase().includes('expert')
-            );
-            
-            if (!expertSession) return;
-            
-            const flightsRes = await fetch(
-                `${LIVE_FLIGHTS_API_URL}/${expertSession.id}` // Use global LIVE_FLIGHTS_API_URL
-            );
-            
-            if (!flightsRes.ok) return;
-            
-            const flightsData = await flightsRes.json();
-            if (!flightsData.ok || !Array.isArray(flightsData.flights)) return;
-            
-            const updatedFlightIds = new Set();
-            
-            // Update or create flight states
-            for (const flightData of flightsData.flights) {
-                if (!flightData.position || 
-                    flightData.position.lat == null || 
-                    flightData.position.lon == null) {
-                    continue;
-                }
-                
-                const flightId = flightData.flightId;
-                updatedFlightIds.add(flightId);
-                
-                if (this.flights.has(flightId)) {
-                    // Update existing flight
-                    this.flights.get(flightId).updateFromAPI(flightData);
-                } else {
-                    // Create new flight
-                    this.flights.set(flightId, new FlightState(flightData));
-                }
-            }
-            
-            // Remove flights that are no longer in the data
-            for (const flightId of this.flights.keys()) {
-                if (!updatedFlightIds.has(flightId)) {
-                    this.flights.delete(flightId);
-                }
-            }
-            
-        } catch (error) {
-            console.error('Error fetching flight data:', error);
-        }
-    }
-    
-    /**
-     * Update the map with current positions
-     */
-    updateMap() {
-        if (!this.map || !this.map.isStyleLoaded()) return;
-        
-        const source = this.map.getSource('sector-ops-live-flights-source');
-        if (!source) return;
-        
-        const features = Array.from(this.flights.values()).map(flight => 
-            flight.toFeature()
-        );
-        
-        source.setData({
-            type: 'FeatureCollection',
-            features: features
-        });
-    }
-}
-
-// Global instance
-let flightAnimationManager = null;
-
-// ====================================================================
-// END: AIRCRAFT ANIMATION SYSTEM V3.0
-// ====================================================================
-
-/**
- * Starts the new Flight Animation Manager and other live data loops.
- */
 function startSectorOpsLiveLoop() {
-    // Stop any previous loops
-    stopSectorOpsLiveLoop();
+    stopSectorOpsLiveLoop(); // Clear any old loops
 
-    // Start the flight animation manager
-    if (flightAnimationManager) {
-        flightAnimationManager.start();
-    } else {
-        console.error("FlightAnimationManager not initialized. Map may not show aircraft.");
-    }
+    // 1. Start the data fetching loop (infrequent)
+    // This part is unchanged and continues to fetch new data every 3 seconds.
+    updateSectorOpsLiveFlights(); // Fetch immediately
+    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 500); 
 
-    // Start the loops for ATC and NOTAMs
-    // (These can remain on their own simple interval)
-    fetchAndRenderAtc();
-    fetchAndRenderNotams();
-    sectorOpsLiveFlightsInterval = setInterval(() => {
-        fetchAndRenderAtc();
-        fetchAndRenderNotams();
-    }, 30000); // 30 seconds is fine for ATC/NOTAMs
+    // 2. Start the new throttled animation loop
+    // We reset the timestamp and call the loop *once* to kick it off.
+    // It will then loop itself using requestAnimationFrame.
+    lastAnimateTimestamp = 0;
+    animationFrameId = requestAnimationFrame(throttledAnimationLoop);
 }
 
-/**
- * Stops the new Flight Animation Manager and other live data loops.
- */
-function stopSectorOpsLiveLoop() {
-    // Stop the flight animation manager
-    if (flightAnimationManager) {
-        flightAnimationManager.stop();
-    }
 
-    // Stop the ATC/NOTAM interval
+// --- [REPLACEMENT for stopSectorOpsLiveLoop] ---
+// This function is updated to stop the new animation loop.
+
+function stopSectorOpsLiveLoop() {
+    // 1. Clear the data-fetching interval
     if (sectorOpsLiveFlightsInterval) {
         clearInterval(sectorOpsLiveFlightsInterval);
         sectorOpsLiveFlightsInterval = null;
     }
 
-    // Stop the old (now unused) animation frame
-    if (sectorOpsAnimationInterval) {
-        cancelAnimationFrame(sectorOpsAnimationInterval);
-        sectorOpsAnimationInterval = null;
+    // 2. Clear the animation loop
+    // This is the crucial part that stops the requestAnimationFrame loop.
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
     }
+    
+    // Note: The non-existent 'sectorOpsAnimationInterval' is removed.
 }
 
     /**
@@ -4410,6 +3944,143 @@ function stopSectorOpsLiveLoop() {
         });
     }
 
+    // --- MODIFY THIS FUNCTION ---
+async function updateSectorOpsLiveFlights() {
+    if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
+
+    const LIVE_FLIGHTS_BACKEND = 'https://site--acars-backend--6dmjph8ltlhv.code.run';
+
+    try {
+        const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
+        // --- [FIX 1] --- Add a check to ensure the sessions response is valid
+        if (!sessionsRes.ok) {
+            console.warn('Sector Ops Map: Could not fetch server sessions. Skipping update.');
+            return; // Exit the function if we can't get session data
+        }
+        const sessionsData = await sessionsRes.json();
+        const expertSession = sessionsData.sessions.find(s => s.name.toLowerCase().includes('expert'));
+
+        if (!expertSession) {
+            console.warn('Sector Ops Map: Expert Server session not found.');
+            return;
+        }
+
+        const [flightsRes, atcRes, notamsRes] = await Promise.all([
+            fetch(`${LIVE_FLIGHTS_BACKEND}/flights/${expertSession.id}`),
+            fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
+            fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
+        ]);
+        
+        // Update ATC & NOTAMs (this logic is fine)
+        if (atcRes.ok) {
+            const atcData = await atcRes.json();
+            activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
+        }
+        if (notamsRes.ok) {
+            const notamsData = await notamsRes.json();
+            activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
+        }
+        renderAirportMarkers(); 
+
+        // --- [FIX 2] --- The most critical change: Check the flights response BEFORE updating the state
+        if (!flightsRes.ok) {
+            console.warn('Sector Ops Map: Failed to fetch live flights data. Holding last known positions.');
+            return; // Exit without clearing data if the fetch fails
+        }
+        
+        const flightsData = await flightsRes.json();
+        // Also check if the data format is what we expect
+        if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
+            console.warn('Sector Ops Map: Received invalid flights data. Holding last known positions.');
+            return; // Exit if the data is malformed
+        }
+        // --- [END OF FIXES] --- At this point, we know we have good, valid data ---
+
+        const now = performance.now();
+        const updatedFlightIds = new Set();
+
+        flightsData.flights.forEach(flight => {
+            if (!flight.position || flight.position.lat == null || flight.position.lon == null) return;
+            
+            const flightId = flight.flightId;
+            updatedFlightIds.add(flightId);
+
+            const existingData = liveFlightData[flightId];
+
+            // Extract new API data
+            const newApiLat = flight.position.lat;
+            const newApiLon = flight.position.lon;
+            const newApiHeading = flight.position.track_deg || 0;
+            const newApiSpeed = flight.position.gs_kt || 0;
+            const newProperties = {
+                flightId: flight.flightId,
+                callsign: flight.callsign,
+                username: flight.username,
+                altitude: flight.position.alt_ft,
+                speed: newApiSpeed,
+                verticalSpeed: flight.position.vs_fpm || 0,
+                position: JSON.stringify(flight.position),
+                aircraft: JSON.stringify(flight.aircraft),
+                userId: flight.userId,
+                category: getAircraftCategory(flight.aircraft?.aircraftName)
+            };
+
+            if (existingData) {
+                // This flight exists. 
+                
+                // --- START OF MODIFICATION ---
+                // We no longer need to set up 'from' values or start time for interpolation
+                // existingData.fromLat = existingData.displayLat;
+                // existingData.fromLon = existingData.displayLon;
+                // existingData.fromHeading = existingData.displayHeading;
+                // existingData.interpStartTime = now;
+                // --- END OF MODIFICATION ---
+
+                // Update the "target" (api) state
+                existingData.apiLat = newApiLat;
+                existingData.apiLon = newApiLon;
+                existingData.apiHeading = newApiHeading;
+                existingData.apiSpeed = newApiSpeed;
+                existingData.apiTimestamp = now; // This is the base time for *prediction*
+                existingData.properties = newProperties;
+            } else {
+                // This is a new flight. It should just appear, no interpolation.
+                liveFlightData[flightId] = {
+                    // API state
+                    apiLat: newApiLat,
+                    apiLon: newApiLon,
+                    apiHeading: newApiHeading,
+                    apiSpeed: newApiSpeed,
+                    apiTimestamp: now,
+
+                    // --- START OF MODIFICATION ---
+                    // All these properties were for interpolation/prediction and can be removed
+                    // displayLat: newApiLat,
+                    // displayLon: newApiLon,
+                    // displayHeading: newApiHeading,
+                    // fromLat: newApiLat,
+                    // fromLon: newApiLon,
+                    // fromHeading: newApiHeading,
+                    // interpStartTime: 0,
+                    // --- END OF MODIFICATION ---
+                    
+                    properties: newProperties
+                };
+            }
+        });
+
+        // Now that we've processed the good data, we can safely clean up old flights
+        for (const flightId in liveFlightData) {
+            if (!updatedFlightIds.has(flightId)) {
+                delete liveFlightData[flightId];
+            }
+        }
+
+    } catch (error) {
+        // A catch block ensures that any unexpected error won't crash the update loop
+        console.error('Error updating Sector Ops live data:', error);
+    }
+}
     // ====================================================================
     // END: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
