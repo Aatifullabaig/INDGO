@@ -961,8 +961,8 @@ function animateFlightPositions() {
         const elapsed = now - flight.startTimestamp;
         const duration = flight.interpolationDuration;
         
-        // Calculate the interpolation fraction (from 0.0 to 1.0)
-        let fraction = Math.min(1.0, elapsed / duration);
+
+        let fraction = elapsed / duration;
         
         let currentLat, currentLon, currentHeading;
 
@@ -4134,8 +4134,7 @@ function processLiveFlightData(flights) {
                 
                 // Estimate the duration of the interpolation
                 // Use the time since the last packet, or a 5-second default
-                const duration = (now - existingData.lastPacketTime) || 5000;
-                existingData.interpolationDuration = Math.max(500, Math.min(duration, 10000)); // Clamp duration between 0.5s and 10s
+                existingData.interpolationDuration = DATA_REFRESH_INTERVAL_MS; // 3000ms
                 existingData.lastPacketTime = now;
             }
             // Always update properties
