@@ -940,7 +940,8 @@ async function fetchRunwaysData() {
 /**
  * --- [MODIFIED] The animation loop.
  * This function's only job is to update the data of the existing map source
- * with the *last known API coordinates*, without any interpolation or prediction.
+ * by calculating an interpolated position *between* the last known API
+ * coordinates and the new target coordinates.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
@@ -949,17 +950,50 @@ function animateFlightPositions() {
         return;
     }
 
+    const now = performance.now();
     const newFeatures = [];
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
         
-        // --- MODIFICATION ---
-        // Directly use the last known API position. No interpolation, no prediction.
-        const currentLat = flight.apiLat;
-        const currentLon = flight.apiLon;
-        const currentHeading = flight.apiHeading;
-        // --- END OF MODIFICATION ---
+        // --- [NEW] INTERPOLATION LOGIC ---
+        const elapsed = now - flight.startTimestamp;
+        const duration = flight.interpolationDuration;
+        
+        // Calculate the interpolation fraction (from 0.0 to 1.0)
+        let fraction = Math.min(1.0, elapsed / duration);
+        
+        let currentLat, currentLon, currentHeading;
+
+        if (fraction < 1.0 && duration > 0) {
+            // We are in the middle of interpolating
+            const intermediate = getIntermediatePoint(
+                flight.startLat, flight.startLon,
+                flight.targetLat, flight.targetLon,
+                fraction
+            );
+            currentLat = intermediate.lat;
+            currentLon = intermediate.lon;
+
+            // Also interpolate the heading
+            let headingDiff = flight.targetHeading - flight.startHeading;
+            // Handle the "unwrap" (e.g., 350deg -> 10deg)
+            if (headingDiff > 180)  headingDiff -= 360;
+            if (headingDiff < -180) headingDiff += 360;
+            currentHeading = (flight.startHeading + (headingDiff * fraction) + 360) % 360;
+            
+        } else {
+            // Interpolation is finished, snap to the target
+            currentLat = flight.targetLat;
+            currentLon = flight.targetLon;
+            currentHeading = flight.targetHeading;
+        }
+
+        // Store the last displayed position for the next interpolation cycle
+        flight.displayLat = currentLat;
+        flight.displayLon = currentLon;
+        flight.displayHeading = currentHeading;
+        // --- END OF NEW LOGIC ---
 
         newFeatures.push({
             type: 'Feature',
@@ -974,8 +1008,8 @@ function animateFlightPositions() {
         });
     }
 
-    // This is the key: setData() is now called at a controlled rate,
-    // but it's only setting the last-received API data.
+    // This is the key: setData() is now called at 60fps
+    // with smoothly interpolated data.
     source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
 
@@ -3812,28 +3846,17 @@ function updateAircraftInfoWindow(baseProps, plan) {
 let lastAnimateTimestamp = 0; // Timestamp of the last *logic* update
 const ANIMATION_THROTTLE_MS = 100; // 100ms = 10 updates per second
 
+// --- [MODIFIED] This loop now runs at 60fps (no throttle) ---
+// This function will be our animation "engine."
+// It runs at the browser's native refresh rate (e.g., 60fps)
+// to run our interpolation logic on every frame.
 function throttledAnimationLoop(timestamp) {
     // 1. Schedule the next frame immediately.
     // This creates a continuous, efficient loop that's synced with the browser.
     animationFrameId = requestAnimationFrame(throttledAnimationLoop);
 
-    // 2. Calculate time elapsed since the last *logic* update.
-    const elapsed = timestamp - lastAnimateTimestamp;
-
-    // 3. Check if we've waited long enough (100ms) to run our logic.
-    if (elapsed > ANIMATION_THROTTLE_MS) {
-        // We have. Update the timestamp to "reset" the timer.
-        // We use (timestamp - (elapsed % ANIMATION_THROTTLE_MS)) to stay
-        // in sync, preventing slow drift over time.
-        lastAnimateTimestamp = timestamp - (elapsed % ANIMATION_THROTTLE_MS);
-
-        // 4. Run our *actual* animation logic.
-        // This is the original function that calls source.setData()
-        animateFlightPositions();
-    }
-    
-    // If elapsed <= 100ms, this function does nothing, effectively
-    // "skipping" the expensive logic for this frame and keeping the browser fast.
+    // 2. Run our *actual* animation logic on every frame.
+    animateFlightPositions();
 }
 
 
@@ -3945,7 +3968,8 @@ function connectSocketIO() {
 
 /**
  * --- [NEW] Processes live flight data received from WebSockets.
- * This logic was extracted from the old updateSectorOpsLiveFlights function.
+ * This version is modified to store "start" and "target" states
+ * for smooth 60fps interpolation.
  */
 function processLiveFlightData(flights) {
     if (!Array.isArray(flights)) {
@@ -3983,23 +4007,50 @@ function processLiveFlightData(flights) {
         };
 
         if (existingData) {
-            // This flight exists.
-            // Update the "target" (api) state
-            existingData.apiLat = newApiLat;
-            existingData.apiLon = newApiLon;
-            existingData.apiHeading = newApiHeading;
-            existingData.apiSpeed = newApiSpeed;
-            existingData.apiTimestamp = now; // This is the base time for *prediction*
+            // Flight exists. Check if data is truly new.
+            if (existingData.targetLat !== newApiLat || existingData.targetLon !== newApiLon) {
+                
+                // The *current* target becomes the *new* starting point
+                existingData.startLat = existingData.displayLat || existingData.targetLat;
+                existingData.startLon = existingData.displayLon || existingData.targetLon;
+                existingData.startHeading = existingData.displayHeading || existingData.targetHeading;
+                existingData.startTimestamp = now; // Start the interpolation from *now*
+
+                // Set the "target" of our interpolation to the new data
+                existingData.targetLat = newApiLat;
+                existingData.targetLon = newApiLon;
+                existingData.targetHeading = newApiHeading;
+                
+                // Estimate the duration of the interpolation
+                // Use the time since the last packet, or a 5-second default
+                const duration = (now - existingData.lastPacketTime) || 5000;
+                existingData.interpolationDuration = Math.max(500, Math.min(duration, 10000)); // Clamp duration between 0.5s and 10s
+                existingData.lastPacketTime = now;
+            }
+            // Always update properties
             existingData.properties = newProperties;
+            
         } else {
-            // This is a new flight. It should just appear, no interpolation.
+            // This is a new flight. Set start and target to the same values.
             liveFlightData[flightId] = {
-                // API state
-                apiLat: newApiLat,
-                apiLon: newApiLon,
-                apiHeading: newApiHeading,
-                apiSpeed: newApiSpeed,
-                apiTimestamp: now,
+                // Target state
+                targetLat: newApiLat,
+                targetLon: newApiLon,
+                targetHeading: newApiHeading,
+                
+                // Start state (same as target for new flights)
+                startLat: newApiLat,
+                startLon: newApiLon,
+                startHeading: newApiHeading,
+                startTimestamp: now,
+                
+                // Display state
+                displayLat: newApiLat,
+                displayLon: newApiLon,
+                displayHeading: newApiHeading,
+
+                interpolationDuration: 1000, // Default duration for new flights
+                lastPacketTime: now,
                 
                 properties: newProperties
             };
