@@ -112,6 +112,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- NEW: To cache flight data when switching to stats view ---
     let cachedFlightDataForStatsView = { flightProps: null, plan: null };
     let animationFrameId = null;
+    const ANIMATION_SMOOTHING_SPEED = 1.5;
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -939,77 +940,75 @@ async function fetchRunwaysData() {
 
 /**
  * --- [MODIFIED] The animation loop.
- * This function's only job is to update the data of the existing map source
- * by calculating an interpolated position *between* the last known API
- * coordinates and the new target coordinates.
+ * This function now runs every frame and smoothly "chases" the
+ * target packet (A) using exponential smoothing (damping).
+ * It will never "catch" the target, but will slow down as it
+ * gets closer, resulting in a continuous, non-stop animation.
+ * @param {number} deltaTimeInSeconds - The time since the last frame.
  */
-function animateFlightPositions() {
+function animateFlightPositions(deltaTimeInSeconds) {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-    // Exit if the source isn't ready or there's no data to animate
-    if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
+    if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0 || !deltaTimeInSeconds || deltaTimeInSeconds <= 0) {
         return;
     }
 
-    const now = performance.now();
+    // Calculate the blending factor for this frame.
+    // This is framerate-independent, so it's stable.
+    const blend = 1.0 - Math.exp(-ANIMATION_SMOOTHING_SPEED * deltaTimeInSeconds);
+
     const newFeatures = [];
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
         
-        // --- [NEW] INTERPOLATION LOGIC ---
-        const elapsed = now - flight.startTimestamp;
-        const duration = flight.interpolationDuration;
+        // --- [NEW] SMOOTHING/DAMPING LOGIC ---
         
-        // Calculate the interpolation fraction (from 0.0 to 1.0)
-        let fraction = Math.min(1.0, elapsed / duration);
+        // 1. Get the current animated position (where it was last frame)
+        const currentLat = flight.displayLat;
+        const currentLon = flight.displayLon;
+        const currentHeading = flight.displayHeading;
+
+        // 2. Get the target position (Packet A)
+        const targetLat = flight.targetLat;
+        const targetLon = flight.targetLon;
+        let targetHeading = flight.targetHeading;
+
+        // 3. Calculate the new *animated* position
+        // We move `blend` percent *from* the current position *to* the target.
+        const newPos = getIntermediatePoint(
+            currentLat, currentLon,
+            targetLat, targetLon,
+            blend
+        );
+
+        // 4. Handle Heading (Unwrap and Lerp)
+        let headingDiff = targetHeading - currentHeading;
+        if (headingDiff > 180)  headingDiff -= 360;
+        if (headingDiff < -180) headingDiff += 360;
         
-        let currentLat, currentLon, currentHeading;
+        // Linearly interpolate (lerp) the heading
+        const newHeading = (currentHeading + (headingDiff * blend) + 360) % 360;
 
-        if (fraction < 1.0 && duration > 0) {
-            // We are in the middle of interpolating
-            const intermediate = getIntermediatePoint(
-                flight.startLat, flight.startLon,
-                flight.targetLat, flight.targetLon,
-                fraction
-            );
-            currentLat = intermediate.lat;
-            currentLon = intermediate.lon;
-
-            // Also interpolate the heading
-            let headingDiff = flight.targetHeading - flight.startHeading;
-            // Handle the "unwrap" (e.g., 350deg -> 10deg)
-            if (headingDiff > 180)  headingDiff -= 360;
-            if (headingDiff < -180) headingDiff += 360;
-            currentHeading = (flight.startHeading + (headingDiff * fraction) + 360) % 360;
-            
-        } else {
-            // Interpolation is finished, snap to the target
-            currentLat = flight.targetLat;
-            currentLon = flight.targetLon;
-            currentHeading = flight.targetHeading;
-        }
-
-        // Store the last displayed position for the next interpolation cycle
-        flight.displayLat = currentLat;
-        flight.displayLon = currentLon;
-        flight.displayHeading = currentHeading;
+        // 5. Store the new animated position back into the state
+        // This becomes the "currentLat" for the *next* frame.
+        flight.displayLat = newPos.lat;
+        flight.displayLon = newPos.lon;
+        flight.displayHeading = newHeading;
         // --- END OF NEW LOGIC ---
 
         newFeatures.push({
             type: 'Feature',
             geometry: {
                 type: 'Point',
-                coordinates: [currentLon, currentLat]
+                coordinates: [newPos.lon, newPos.lat]
             },
             properties: {
                 ...flight.properties,
-                heading: currentHeading
+                heading: newHeading
             }
         });
     }
 
-    // This is the key: setData() is now called at 60fps
-    // with smoothly interpolated data.
     source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
 
@@ -3837,26 +3836,25 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // START: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
 
-    // --- [NEW] Throttled Animation Loop ---
-// This function will be our new animation "engine."
-// It runs at the browser's native refresh rate (e.g., 60fps)
-// but *throttles* the expensive `animateFlightPositions` call to our
-// desired interval (100ms).
 
-let lastAnimateTimestamp = 0; // Timestamp of the last *logic* update
-const ANIMATION_THROTTLE_MS = 100; // 100ms = 10 updates per second
 
-// --- [MODIFIED] This loop now runs at 60fps (no throttle) ---
 // This function will be our animation "engine."
 // It runs at the browser's native refresh rate (e.g., 60fps)
 // to run our interpolation logic on every frame.
 function throttledAnimationLoop(timestamp) {
     // 1. Schedule the next frame immediately.
-    // This creates a continuous, efficient loop that's synced with the browser.
     animationFrameId = requestAnimationFrame(throttledAnimationLoop);
 
-    // 2. Run our *actual* animation logic on every frame.
-    animateFlightPositions();
+    // 2. Calculate deltaTime (time since last frame in seconds)
+    if (lastAnimateTimestamp === 0) {
+        lastAnimateTimestamp = timestamp; // Initialize on first frame
+        return; // Skip first frame to get a valid deltaTime
+    }
+    const deltaTimeInSeconds = (timestamp - lastAnimateTimestamp) / 1000.0;
+    lastAnimateTimestamp = timestamp;
+
+    // 3. Run our *actual* animation logic, passing in the delta.
+    animateFlightPositions(deltaTimeInSeconds);
 }
 
 
@@ -3968,8 +3966,9 @@ function connectSocketIO() {
 
 /**
  * --- [NEW] Processes live flight data received from WebSockets.
- * This version is modified to store "start" and "target" states
- * for smooth 60fps interpolation.
+ * This version implements "smoothing" / "damping" logic.
+ * It simply updates the 'target' position (Packet A). The animation loop
+ * will then smoothly "chase" this target on every frame.
  */
 function processLiveFlightData(flights) {
     if (!Array.isArray(flights)) {
@@ -3977,7 +3976,6 @@ function processLiveFlightData(flights) {
         return;
     }
 
-    const now = performance.now();
     const updatedFlightIds = new Set();
 
     flights.forEach(flight => {
@@ -3988,7 +3986,7 @@ function processLiveFlightData(flights) {
 
         const existingData = liveFlightData[flightId];
 
-        // Extract new API data
+        // Extract new API data (The "Target" - Packet A)
         const newApiLat = flight.position.lat;
         const newApiLon = flight.position.lon;
         const newApiHeading = flight.position.track_deg || 0;
@@ -4007,57 +4005,33 @@ function processLiveFlightData(flights) {
         };
 
         if (existingData) {
-            // Flight exists. Check if data is truly new.
-            if (existingData.targetLat !== newApiLat || existingData.targetLon !== newApiLon) {
-                
-                // The *current* target becomes the *new* starting point
-                existingData.startLat = existingData.displayLat || existingData.targetLat;
-                existingData.startLon = existingData.displayLon || existingData.targetLon;
-                existingData.startHeading = existingData.displayHeading || existingData.targetHeading;
-                existingData.startTimestamp = now; // Start the interpolation from *now*
-
-                // Set the "target" of our interpolation to the new data
-                existingData.targetLat = newApiLat;
-                existingData.targetLon = newApiLon;
-                existingData.targetHeading = newApiHeading;
-                
-                // Estimate the duration of the interpolation
-                // Use the time since the last packet, or a 5-second default
-                const duration = (now - existingData.lastPacketTime) || 5000;
-                existingData.interpolationDuration = Math.max(500, Math.min(duration, 10000)); // Clamp duration between 0.5s and 10s
-                existingData.lastPacketTime = now;
-            }
-            // Always update properties
+            // Flight exists. Just update the target.
+            // The animation loop handles the "from" position.
+            existingData.targetLat = newApiLat;
+            existingData.targetLon = newApiLon;
+            existingData.targetHeading = newApiHeading;
             existingData.properties = newProperties;
             
         } else {
-            // This is a new flight. Set start and target to the same values.
+            // This is a new flight. Set *both* display and target
+            // to the same initial position so it appears instantly.
             liveFlightData[flightId] = {
                 // Target state
                 targetLat: newApiLat,
                 targetLon: newApiLon,
                 targetHeading: newApiHeading,
                 
-                // Start state (same as target for new flights)
-                startLat: newApiLat,
-                startLon: newApiLon,
-                startHeading: newApiHeading,
-                startTimestamp: now,
-                
-                // Display state
+                // Display state (current animated position)
                 displayLat: newApiLat,
                 displayLon: newApiLon,
                 displayHeading: newApiHeading,
-
-                interpolationDuration: 1000, // Default duration for new flights
-                lastPacketTime: now,
                 
                 properties: newProperties
             };
         }
     });
 
-    // Now that we've processed the good data, we can safely clean up old flights
+    // Clean up old flights
     for (const flightId in liveFlightData) {
         if (!updatedFlightIds.has(flightId)) {
             delete liveFlightData[flightId];
