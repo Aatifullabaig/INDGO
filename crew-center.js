@@ -132,6 +132,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let cachedFlightDataForStatsView = { flightProps: null, plan: null };
     let animationFrameId = null;
     let lastFrameTime = 0;
+    const MIN_MOVEMENT_NM = 0.005; // NEW: Min distance (NM) to be considered "moving". Prevents spinning at gates.
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -4061,13 +4062,13 @@ function connectSocketIO() {
 }
 
 /**
- * --- [REWRITE: Predictive Sensor Fusion "Brain"]
- * This function runs *infrequently* (when WebSocket data arrives). Its job is to:
- * 1. Calculate the *true* velocity vector (speed/track) by comparing the new
- * API position to the *previous* API position.
- * 2. Calculate the *true* rates of change (turn rate, acceleration) that just occurred.
- * 3. Calculate the *residual positional error* (drift) of the 60fps simulation.
- * 4. Feed these new `target...` rates and the `posErrorVector` to the 60fps "Muscle" loop.
+ * --- [REWRITE V2.2: Added Speed-Based Trust Factor]
+ * This function is the "Brain".
+ * 1. It checks for a "Stationary" case (fixes spinning at gate).
+ * 2. It now adds a "trustFactor" based on speed.
+ * - Slow-moving (taxiing) planes have their turn rate dampened,
+ * which filters out positional jitter (fixes spinning while taxiing).
+ * - Fast-moving (flying) planes trust the new heading 100%.
  */
 function processLiveFlightData(flights) {
     if (!Array.isArray(flights)) {
@@ -4105,27 +4106,48 @@ function processLiveFlightData(flights) {
         };
 
         if (existingData) {
-            // --- 2. Calculate "Ground Truth" Vector ---
+            // --- 2. Calculate Time & Distance Delta ---
             const deltaTimeSec = (now - existingData.lastApiTime) / 1000;
+            const realDistanceNm = getDistanceNM(existingData.lastApiLat, existingData.lastApiLon, apiLat, apiLon);
 
-            // Only update if time has passed and position has changed
-            if (deltaTimeSec > 0.1 && (existingData.lastApiLat !== apiLat || existingData.lastApiLon !== apiLon)) {
+            // Only update if time has passed
+            if (deltaTimeSec > 0.1) {
                 
-                const realDistanceNm = getDistanceNM(existingData.lastApiLat, existingData.lastApiLon, apiLat, apiLon);
-                const realSpeedKts = realDistanceNm / (deltaTimeSec / 3600);
-                const realTrackDeg = getBearing(existingData.lastApiLat, existingData.lastApiLon, apiLat, apiLon);
+                // --- 3. [STATIONARY CHECK] ---
+                if (realDistanceNm < MIN_MOVEMENT_NM) {
+                    // --- PLANE IS STATIONARY ---
+                    // Force simulation to stop. This prevents spinning.
+                    existingData.targetTurnRate = 0;
+                    // LERP acceleration to 0, but hard-set the final speed
+                    existingData.targetAcceleration = (0 - existingData.displaySpeed) / (deltaTimeSec + 1); // Gently brake to 0
+                    existingData.displaySpeed = 0; // Hard set speed to 0
+                } else {
+                    // --- [MOVING CHECK] ---
+                    // Calculate "Ground Truth" vector and rates
+                    const realSpeedKts = realDistanceNm / (deltaTimeSec / 3600);
+                    const realTrackDeg = getBearing(existingData.lastApiLat, existingData.lastApiLon, apiLat, apiLon);
 
-                // --- 3. Calculate "Ground Truth" Rates of Change ---
-                // We compare the "real" vector against the *current simulation*
-                const headingDiff = normalizeAngle(realTrackDeg - existingData.displayHeading);
-                const speedDiff = realSpeedKts - existingData.displaySpeed;
+                    const headingDiff = normalizeAngle(realTrackDeg - existingData.displayHeading);
+                    const speedDiff = realSpeedKts - existingData.displaySpeed;
 
-                // Set new targets for the 60fps simulation
-                existingData.targetTurnRate = headingDiff / deltaTimeSec; // deg/sec
-                existingData.targetAcceleration = speedDiff / deltaTimeSec; // kts/sec
+                    const realTurnRate = headingDiff / deltaTimeSec; // deg/sec
+                    const realAcceleration = speedDiff / deltaTimeSec; // kts/sec
+
+                    // --- [NEW TRUST FACTOR LOGIC] ---
+                    // We need to trust the new vector. How much?
+                    // We'll ramp up to full trust by 20 kts (fast taxi).
+                    // This smooths out all low-speed jitter.
+                    const trustFactor = Math.min(1.0, realSpeedKts / 20.0);
+
+                    // Instead of *setting* the target, we *LERP* the target
+                    // based on our trust.
+                    existingData.targetTurnRate = lerp(existingData.simTurnRate, realTurnRate, trustFactor);
+                    existingData.targetAcceleration = lerp(existingData.simAcceleration, realAcceleration, trustFactor);
+                }
 
                 // --- 4. Calculate Residual Positional Error ---
-                // This accounts for any "drift" the 60fps sim had since the last packet
+                // This correction is always applied, even when stationary,
+                // to "nudge" the plane to its exact parking spot.
                 existingData.posErrorVector.lat = apiLat - existingData.displayLat;
                 existingData.posErrorVector.lon = apiLon - existingData.displayLon;
 
