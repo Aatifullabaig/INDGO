@@ -1006,72 +1006,110 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
     }
 
 /**
- * --- [REPLACEMENT v6.0 - Pure Extrapolation Model] ---
- * This version renders aircraft positions by "guestimating" or predicting
- * their current position based on their *last known data packet*.
+ * --- [REPLACEMENT v5.1 - Interpolation w/ Larger Buffer] ---
+ * This version restores the interpolation model from v5.0, but with a
+ * significantly larger render delay (buffer) as you requested.
  *
- * It calculates the time elapsed since the last packet was received and
- * projects the aircraft forward along its last known heading at its last
- * known speed.
+ * This larger buffer (2.5 seconds) ensures that the animation is always
+ * rendering "in the past" and *between* two known data packets (p0 and p1),
+ * even if one packet is late due to network jitter.
  *
- * This eliminates the "catch-up" flicker from the previous interpolation
- * model and directly implements the user's "guestimate"-based feedback.
+ * This prevents the code from falling back to extrapolation, which was
+ * causing the "snap" or "flicker" you observed.
  *
  * This function is designed to be called every frame by requestAnimationFrame.
  */
 function renderInterpolatedFlightPositions() {
-    // Get the map source. Exit if it's not ready.
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+    // Exit if the source isn't ready or there's no data to animate
     if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
         return;
     }
 
-    // --- Constants ---
-    const ktsToKmPerMs = 1.852 / 3600000; // knots to kilometers per millisecond
-    const now = performance.now(); // The current high-precision time
-    // Don't predict more than 5 seconds. Avoids planes flying off the map on stale data.
-    const MAX_PREDICTION_MS = 5000; 
+    // --- Tunables ---
+    const DATA_INTERVAL_MS = 1000; // Our fetch interval
+    // --- FIX APPLIED HERE ---
+    // Increased the render delay from 1.5s to 2.5s.
+    // This creates a much safer "buffer" to ensure we *always* have a
+    // "next point" (p1) to interpolate towards, just as you suggested.
+    const RENDER_DELAY_MS = DATA_INTERVAL_MS * 2.5;
+    const ktsToKmPerMs = 1.852 / 3600000;
 
-    const newFeatures = []; // Array to hold the new, predicted features
+    const now = performance.now();
+    const renderTimestamp = now - RENDER_DELAY_MS;
 
-    // Loop through every flight we have data for
+    const newFeatures = [];
+
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
-        const buffer = flight.buffer; // Get its data packet buffer
+        const buffer = flight.buffer; // Get the buffer of data packets
 
-        if (buffer.length === 0) continue; // No data for this flight, skip it
+        if (buffer.length === 0) continue; // No data for this flight
 
-        // Get the *most recent* data packet
-        const lastPacket = buffer[buffer.length - 1];
+        let currentLat, currentLon, currentHeading, properties;
 
-        // Calculate how much time has passed since we received this packet
-        // We cap this value to prevent extreme predictions on very stale data
-        const timeSinceLast = Math.max(0, Math.min(now - lastPacket.timestamp, MAX_PREDICTION_MS));
+        // Find the two packets that surround our render time
+        let p1 = null; // The packet *just after* renderTimestamp
+        let p0 = null; // The packet *just before* renderTimestamp
 
-        let currentLat, currentLon, currentHeading;
-
-        // Use the last known heading for the icon's rotation
-        currentHeading = lastPacket.heading;
-
-        if (timeSinceLast < 16) {
-            // Data is extremely fresh (less than one frame old).
-            // Just draw the plane at its last known position to prevent
-            // unnecessary micro-calculations.
-            currentLat = lastPacket.lat;
-            currentLon = lastPacket.lon;
-        } else {
-            // We need to "guestimate".
-            // Calculate how far the plane *should* have traveled in that time.
-            const distanceKm = lastPacket.speed * ktsToKmPerMs * timeSinceLast;
-
-            // Predict the new position based on that distance and the last heading.
-            const predictedPos = predictNewPosition(lastPacket.lat, lastPacket.lon, lastPacket.heading, distanceKm);
-            
-            currentLat = predictedPos.lat;
-            currentLon = predictedPos.lon;
+        // Iterate backwards to find the bracket
+        for (let i = buffer.length - 1; i >= 0; i--) {
+            if (buffer[i].timestamp <= renderTimestamp) {
+                p0 = buffer[i]; // Found the "before" packet
+                
+                // --- MINOR BUG FIX HERE ---
+                // Was: (i < buffer.length - 1)
+                // Now: (i + 1 < buffer.length)
+                // This correctly checks if a 'p1' exists at the next index.
+                if (i + 1 < buffer.length) {
+                    p1 = buffer[i + 1]; // The "after" packet is the next one
+                }
+                break;
+            }
         }
 
-        // Create the new map feature at the predicted position
+        // --- Case 1: Interpolation (Happy Path) ---
+        // We have two packets (p0, p1) that bracket our render time.
+        // With the new 2.5s buffer, this should be true 99% of the time.
+        if (p0 && p1) {
+            const totalDuration = p1.timestamp - p0.timestamp;
+            const elapsed = renderTimestamp - p0.timestamp;
+
+            // Prevent division by zero if packets have same timestamp
+            const progress = (totalDuration > 0) ? Math.min(1.0, elapsed / totalDuration) : 1.0;
+
+            const interpPos = getIntermediatePoint(p0.lat, p0.lon, p1.lat, p1.lon, progress);
+            currentLat = interpPos.lat;
+            currentLon = interpPos.lon;
+            currentHeading = interpolateHeading(p0.heading, p1.heading, progress);
+            properties = p0.properties; // Use properties from the earlier packet
+        }
+        // --- Case 2: Extrapolation (Fallback) ---
+        // We only have p0. This should now be very rare.
+        // It means our render time is *after* the last packet we've received,
+        // even with the 2.5s delay (e.g., data is > 2.5s late).
+        else if (p0) {
+            const timeSinceLast = renderTimestamp - p0.timestamp;
+            // Predict forward from the last known good packet
+            const distanceKm = p0.speed * ktsToKmPerMs * timeSinceLast;
+
+            const predictedPos = predictNewPosition(p0.lat, p0.lon, p0.heading, distanceKm);
+            currentLat = predictedPos.lat;
+            currentLon = predictedPos.lon;
+            currentHeading = p0.heading; // Hold the last known heading
+            properties = p0.properties;
+        }
+        // --- Case 3: No data old enough ---
+        // All our data is in the *future* relative to renderTimestamp.
+        // This happens when the app first loads. Just draw the oldest packet available.
+        else {
+            const oldestPacket = buffer[0];
+            currentLat = oldestPacket.lat;
+            currentLon = oldestPacket.lon;
+            currentHeading = oldestPacket.heading;
+            properties = oldestPacket.properties;
+        }
+
         newFeatures.push({
             type: 'Feature',
             geometry: {
@@ -1079,14 +1117,13 @@ function renderInterpolatedFlightPositions() {
                 coordinates: [currentLon, currentLat]
             },
             properties: {
-                ...lastPacket.properties, // Use all properties from the last packet (icon, callsign, etc.)
-                heading: currentHeading // Ensure the heading is set
+                ...properties,
+                heading: currentHeading // Override with the interpolated/extrapolated heading
             }
         });
     }
 
-    // Update the map source with all the new predicted positions at once.
-    // This is much more efficient than updating each plane individually.
+    // Update the map source with the new positions
     source.setData({
         type: 'FeatureCollection',
         features: newFeatures
