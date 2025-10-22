@@ -109,6 +109,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- NEW: To cache flight data when switching to stats view ---
     let cachedFlightDataForStatsView = { flightProps: null, plan: null };
     let animationFrameId = null;
+    let animationDebugElement = null;
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -127,7 +128,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     
-    // --- [REHAULED] Helper to inject custom CSS for new features ---
+
+// --- [REHAULED] Helper to inject custom CSS for new features ---
 function injectCustomStyles() {
     const styleId = 'sector-ops-custom-styles';
     if (document.getElementById(styleId)) return;
@@ -684,6 +686,26 @@ function injectCustomStyles() {
         }
         .back-to-pfd-btn:hover { background: #00a8ff; color: #fff; }
 
+        /* --- [NEW] Animation Debugger --- */
+        .animation-debugger {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 12px;
+            margin-top: 0;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.8rem;
+            color: #00ff00; /* Classic debug green */
+            white-space: pre; /* Preserve line breaks */
+            overflow-x: auto;
+            line-height: 1.5;
+        }
+        .animation-debugger .label { color: #9fa8da; }
+        .animation-debugger .value { color: #f0f0f0; }
+        .animation-debugger .mode-interp { color: #00f0ff; }
+        .animation-debugger .mode-extrap { color: #ff9900; }
+        .animation-debugger .mode-oldest { color: #ff4d4d; }
 
         /* --- Toolbar Recall Buttons --- */
         #airport-recall-btn, #aircraft-recall-btn {
@@ -1005,18 +1027,13 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
         return (start + delta * progress + 360) % 360;
     }
 
+// [REPLACE THIS FUNCTION]
 /**
- * --- [REPLACEMENT v5.1 - Interpolation w/ Larger Buffer] ---
- * This version restores the interpolation model from v5.0, but with a
- * significantly larger render delay (buffer) as you requested.
- *
- * This larger buffer (2.5 seconds) ensures that the animation is always
- * rendering "in the past" and *between* two known data packets (p0 and p1),
- * even if one packet is late due to network jitter.
- *
- * This prevents the code from falling back to extrapolation, which was
- * causing the "snap" or "flicker" you observed.
- *
+ * --- [REPLACEMENT v5.1 - Interpolation, Extrapolation & Debugger] ---
+ * This version renders aircraft positions by interpolating between the two
+ * most recent data packets, rendering them slightly in the past to ensure
+ * smoothness. It falls back to extrapolation if data is stale.
+ * It also populates a debug UI element if one is cached.
  * This function is designed to be called every frame by requestAnimationFrame.
  */
 function renderInterpolatedFlightPositions() {
@@ -1028,17 +1045,20 @@ function renderInterpolatedFlightPositions() {
 
     // --- Tunables ---
     const DATA_INTERVAL_MS = 1000; // Our fetch interval
-    // --- FIX APPLIED HERE ---
-    // Increased the render delay from 1.5s to 2.5s.
-    // This creates a much safer "buffer" to ensure we *always* have a
-    // "next point" (p1) to interpolate towards, just as you suggested.
-    const RENDER_DELAY_MS = DATA_INTERVAL_MS * 2.5;
+    // Render 1.5x the data interval in the past.
+    // This gives a 500ms buffer for network jitter.
+    const RENDER_DELAY_MS = DATA_INTERVAL_MS * 1.5;
     const ktsToKmPerMs = 1.852 / 3600000;
 
     const now = performance.now();
     const renderTimestamp = now - RENDER_DELAY_MS;
 
     const newFeatures = [];
+
+    // --- [NEW] Debugger State ---
+    let debugHTML = '';
+    const isDebugging = (animationDebugElement !== null && currentFlightInWindow !== null);
+    // --- [END NEW] ---
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
@@ -1048,6 +1068,14 @@ function renderInterpolatedFlightPositions() {
 
         let currentLat, currentLon, currentHeading, properties;
 
+        // --- [NEW] Debug variables for this specific flight ---
+        let debugMode = 'UNKNOWN';
+        let debugP0Time = 'N/A';
+        let debugP1Time = 'N/A';
+        let debugProgress = 'N/A';
+        let debugTimeSinceLast = 'N/A';
+        // --- [END NEW] ---
+
         // Find the two packets that surround our render time
         let p1 = null; // The packet *just after* renderTimestamp
         let p0 = null; // The packet *just before* renderTimestamp
@@ -1056,12 +1084,7 @@ function renderInterpolatedFlightPositions() {
         for (let i = buffer.length - 1; i >= 0; i--) {
             if (buffer[i].timestamp <= renderTimestamp) {
                 p0 = buffer[i]; // Found the "before" packet
-                
-                // --- MINOR BUG FIX HERE ---
-                // Was: (i < buffer.length - 1)
-                // Now: (i + 1 < buffer.length)
-                // This correctly checks if a 'p1' exists at the next index.
-                if (i + 1 < buffer.length) {
+                if (i < buffer.length - 1) {
                     p1 = buffer[i + 1]; // The "after" packet is the next one
                 }
                 break;
@@ -1070,8 +1093,8 @@ function renderInterpolatedFlightPositions() {
 
         // --- Case 1: Interpolation (Happy Path) ---
         // We have two packets (p0, p1) that bracket our render time.
-        // With the new 2.5s buffer, this should be true 99% of the time.
         if (p0 && p1) {
+            debugMode = '<span class="mode-interp">INTERPOLATING</span>'; // NEW
             const totalDuration = p1.timestamp - p0.timestamp;
             const elapsed = renderTimestamp - p0.timestamp;
 
@@ -1083,12 +1106,19 @@ function renderInterpolatedFlightPositions() {
             currentLon = interpPos.lon;
             currentHeading = interpolateHeading(p0.heading, p1.heading, progress);
             properties = p0.properties; // Use properties from the earlier packet
+
+            // --- [NEW] ---
+            debugP0Time = p0.timestamp.toFixed(0);
+            debugP1Time = p1.timestamp.toFixed(0);
+            debugProgress = progress.toFixed(3);
+            // --- [END NEW] ---
+
         }
-        // --- Case 2: Extrapolation (Fallback) ---
-        // We only have p0. This should now be very rare.
-        // It means our render time is *after* the last packet we've received,
-        // even with the 2.5s delay (e.g., data is > 2.5s late).
+        // --- Case 2: Extrapolation ---
+        // We only have p0, meaning our render time is *after* the last packet we've received.
+        // This happens if data is late or we're just starting.
         else if (p0) {
+            debugMode = '<span class="mode-extrap">EXTRAPOLATING</span>'; // NEW
             const timeSinceLast = renderTimestamp - p0.timestamp;
             // Predict forward from the last known good packet
             const distanceKm = p0.speed * ktsToKmPerMs * timeSinceLast;
@@ -1098,16 +1128,26 @@ function renderInterpolatedFlightPositions() {
             currentLon = predictedPos.lon;
             currentHeading = p0.heading; // Hold the last known heading
             properties = p0.properties;
+
+            // --- [NEW] ---
+            debugP0Time = p0.timestamp.toFixed(0);
+            debugTimeSinceLast = timeSinceLast.toFixed(0) + ' ms';
+            // --- [END NEW] ---
         }
         // --- Case 3: No data old enough ---
         // All our data is in the *future* relative to renderTimestamp.
         // This happens when the app first loads. Just draw the oldest packet available.
         else {
+            debugMode = '<span class="mode-oldest">USING_OLDEST</span>'; // NEW
             const oldestPacket = buffer[0];
             currentLat = oldestPacket.lat;
             currentLon = oldestPacket.lon;
             currentHeading = oldestPacket.heading;
             properties = oldestPacket.properties;
+
+            // --- [NEW] ---
+            debugP1Time = oldestPacket.timestamp.toFixed(0);
+            // --- [END NEW] ---
         }
 
         newFeatures.push({
@@ -1121,7 +1161,42 @@ function renderInterpolatedFlightPositions() {
                 heading: currentHeading // Override with the interpolated/extrapolated heading
             }
         });
+
+        // --- [NEW] Update Debugger UI if this is the selected flight ---
+        if (isDebugging && flightId === currentFlightInWindow) {
+            const newestPacket = buffer[buffer.length - 1];
+            const staleness = now - newestPacket.timestamp;
+            
+            debugHTML = `
+<span class="label">Now:</span> <span class="value">${now.toFixed(0)}</span>
+<span class="label">Render Target:</span> <span class="value">${renderTimestamp.toFixed(0)}</span>
+<span class="label">Staleness:</span> <span class="value">${staleness.toFixed(0)} ms</span>
+<span class="label">Buffer:</span> <span class="value">${buffer.length} packets</span>
+-------------------------
+<span class="label">Mode:</span> ${debugMode}
+<span class="label">p0 (Before):</span> <span class="value">${debugP0Time}</span>
+<span class="label">p1 (After):</span> <span class="value">${debugP1Time}</span>
+<span class="label">Interp Progress:</span> <span class="value">${debugProgress}</span>
+<span class="label">Extrap Time:</span> <span class="value">${debugTimeSinceLast}</span>
+-------------------------
+<span class="label">Out Heading:</span> <span class="value">${currentHeading.toFixed(2)}°</span>
+<span class="label">Out Coords:</span> <span class="value">${currentLat.toFixed(4)}, ${currentLon.toFixed(4)}</span>
+            `;
+        }
+        // --- [END NEW] ---
     }
+
+    // --- [NEW] Set the innerHTML of the cached debug element ---
+    if (isDebugging) {
+        // Check if element still exists, just in case
+        if (animationDebugElement) {
+            animationDebugElement.innerHTML = debugHTML;
+        } else {
+            // If it's gone, clear the flag to stop trying
+            isDebugging = false; 
+        }
+    }
+    // --- [END NEW] ---
 
     // Update the map source with the new positions
     source.setData({
@@ -2515,6 +2590,7 @@ function updatePfdDisplay(pfdData) {
         airportInfoWindow.dataset.eventsAttached = 'true';
     }
     
+    // [REPLACE THIS FUNCTION]
     // --- [MODIFIED] Event listener setup using Event Delegation ---
     function setupAircraftWindowEvents() {
         if (!aircraftInfoWindow || aircraftInfoWindow.dataset.eventsAttached === 'true') return;
@@ -2534,6 +2610,10 @@ function updatePfdDisplay(pfdData) {
                 activePfdUpdateInterval = null;
                 currentFlightInWindow = null;
                 cachedFlightDataForStatsView = { flightProps: null, plan: null };
+
+                // --- [NEW] Clear the debugger cache ---
+                animationDebugElement = null;
+                // --- [END NEW] ---
             }
     
             if (hideBtn) {
@@ -3059,6 +3139,7 @@ if (flightPathState && pathSource && flightPathState.coordinates.length > 0) {
     }
 }
 
+   // [REPLACE THIS FUNCTION]
     /**
      * --- [REDESIGNED & UPDATED] Generates the "Unified Flight Display" with image overlay and aircraft type.
      */
@@ -3252,10 +3333,17 @@ if (flightPathState && pathSource && flightPathState.coordinates.length > 0) {
                          <div class="readout-box"><div class="label">ETE</div><div class="value" id="footer-ete">--:--</div></div>
                     </div>
                 </div>
-            </div>
+                
+                <div id="animation-debugger-content" class="animation-debugger"></div>
+                </div>
         `;
         
         createPfdDisplay();
+
+        // --- [NEW] Cache the debug element ---
+        animationDebugElement = document.getElementById('animation-debugger-content');
+        // --- [END NEW] ---
+        
         updatePfdDisplay(baseProps.position);
         updateAircraftInfoWindow(baseProps, plan);
         
