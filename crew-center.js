@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
     let runwaysData = {}; // NEW: To store runway data indexed by airport ICAO
     let liveFlightData = {}; // Key: flightId, Value: { positionBuffer: [], currentAnimation: null, lastRenderedPosition: {}, properties: {} }
-    const DATA_REFRESH_INTERVAL_MS = 500; // Your current refresh interval
+    const DATA_REFRESH_INTERVAL_MS = 3000; // Your current refresh interval
 
     // --- Map-related State ---
     let liveFlightsMap = null;
@@ -938,10 +938,14 @@ async function fetchRunwaysData() {
 
 
 /**
- * --- [MODIFIED] The animation loop.
- * 1. Culls flights that are "stale" (haven't been seen in 30s).
- * 2. Animates non-stale flights using a distance-based fraction
- * that accounts for acceleration, making the speed realistic.
+ * --- [FIXED v4] The animation loop.
+ * 1. Staleness check is REMOVED to prevent "blinking" planes.
+ * 2. Animation logic is FIXED to animate from the last rendered position
+ * to the next point in the buffer, fixing the "teleport" bug.
+ * 3. Physics-based interpolation is REPLACED with simple linear (t_frac)
+ * interpolation to fix the "unrealistic acceleration" during the zip.
+ * 4. Animation `duration` is SET to 3000ms to match the *actual*
+ * 3-second backend data refresh interval, fixing the "zip-and-wait" bug.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
@@ -951,37 +955,46 @@ function animateFlightPositions() {
 
     const now = performance.now();
     const newFeatures = [];
-    const STALE_TIMEOUT_MS = 30000; // 30 seconds
+    // const STALE_TIMEOUT_MS = 30000; // [FIX 1] This is removed to prevent disappearing
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
 
-        // --- 1. ADDED: STALENESS CHECK ---
-        // If a flight hasn't been seen in 30s, delete it and skip.
+        // --- 1. [FIX 1] STALENESS CHECK REMOVED ---
+        /*
         if (now - flight.lastSeen > STALE_TIMEOUT_MS) {
             delete liveFlightData[flightId];
             continue;
         }
+        */
 
         let currentLat, currentLon, currentHeading;
 
-        // --- 2. Check if an animation is finished or needs to start ---
+        // --- 2. [FIX 2] Check if an animation is finished or needs to start ---
         if (!flight.currentAnimation) {
-            if (flight.positionBuffer.length >= 2) {
-                const startPoint = flight.positionBuffer.shift();
-                const endPoint = flight.positionBuffer[0];
-                const duration = (endPoint.timestamp - startPoint.timestamp);
+            // We only need one new point to animate *to*.
+            if (flight.positionBuffer.length >= 1) { 
+                
+                // Always start from where the plane was last seen.
+                const startPoint = flight.lastRenderedPosition; 
+                
+                // Consume the new target point from the buffer.
+                const endPoint = flight.positionBuffer.shift(); 
+                
+                // --- 3. [FIX 4] DURATION IS NOW 3 SECONDS ---
+                // This is the core fix for the "fighter jet snap" / "zip-and-wait".
+                // We use the 3000ms (3-second) backend update interval.
+                const duration = 3000; 
 
                 if (duration > 0) {
                     flight.currentAnimation = {
                         start: startPoint,
                         end: endPoint,
                         startTime: now,
-                        duration: duration
+                        duration: duration // This is now 3000
                     };
-                    flight.lastRenderedPosition = startPoint;
                 } else {
-                    flight.lastRenderedPosition = startPoint;
+                    flight.lastRenderedPosition = endPoint;
                 }
             }
         }
@@ -991,37 +1004,18 @@ function animateFlightPositions() {
             const anim = flight.currentAnimation;
             const elapsed = now - anim.startTime;
             
-            // --- [MODIFIED] REALISTIC SPEED CALCULATION ---
-            
-            // This is the fraction of *time* that has passed
+            // --- 4. [FIX 3] SIMPLIFIED LINEAR SPEED CALCULATION ---
+            // This is the simple fraction of *time* that has passed (e.g., 0.5 = 50% time)
             const t_frac = Math.min(1.0, elapsed / anim.duration);
-
-            let fraction; // This will be the *distance* fraction we pass to the map
-
-            const v0 = anim.start.gs; // Speed at start
-            const v1 = anim.end.gs;   // Speed at end
-            const v_avg = (v0 + v1) / 2;
-
-            if (t_frac === 1.0) {
-                fraction = 1.0;
-            } else if (v_avg === 0) {
-                // Not moving, stay at the start
-                fraction = 0.0;
-            } else {
-                // This formula converts the time fraction into a distance fraction
-                // assuming constant acceleration.
-                // d(t) = v0*t + 0.5*a*t^2
-                // D_total = T * (v0 + v1) / 2
-                fraction = (2 * t_frac * (v0 + 0.5 * t_frac * (v1 - v0))) / (v0 + v1);
-                fraction = Math.max(0.0, Math.min(1.0, fraction)); // Clamp it
-            }
+            
+            // The old physics-based 'fraction' variable is gone.
             
             // --- END OF SPEED MODIFICATION ---
 
             const intermediate = getIntermediatePoint(
                 anim.start.lat, anim.start.lon,
                 anim.end.lat, anim.end.lon,
-                fraction // <-- Use the new distance-based fraction
+                t_frac // <-- Use the simple time fraction for linear speed
             );
             currentLat = intermediate.lat;
             currentLon = intermediate.lon;
@@ -1030,21 +1024,32 @@ function animateFlightPositions() {
             let headingDiff = anim.end.heading - anim.start.heading;
             if (headingDiff > 180)  headingDiff -= 360;
             if (headingDiff < -180) headingDiff += 360;
-            currentHeading = (anim.start.heading + (headingDiff * t_frac) + 360) % 360; // Heading still interpolates by *time*
+            currentHeading = (anim.start.heading + (headingDiff * t_frac) + 360) % 360;
             
-            // Also interpolate ground speed for the state
+            // Interpolate ground speed for the state
+            const v0 = anim.start.gs;
+            const v1 = anim.end.gs;
             const currentGS = v0 + (v1 - v0) * t_frac;
             
-            flight.lastRenderedPosition = { lat: currentLat, lon: currentLon, heading: currentHeading, gs: currentGS };
+            // This is the *only* place lastRenderedPosition should be updated
+            flight.lastRenderedPosition = { 
+                lat: currentLat, 
+                lon: currentLon, 
+                heading: currentHeading, 
+                gs: currentGS, 
+                // This timestamp update is critical for the *next* animation
+                // We use the *animation's* start time plus elapsed
+                timestamp: now 
+            };
 
             if (t_frac === 1.0) {
-                flight.currentAnimation = null;
+                flight.currentAnimation = null; // Animation is done
             }
 
         } else {
             // --- 4. No animation running (stale or not enough data) ---
             // Just display the last known position. This makes the plane
-            // "park" at its last target, satisfying the "don't disappear" rule.
+            // "park" at its last target instead of disappearing.
             const lastPos = flight.lastRenderedPosition;
             currentLat = lastPos.lat;
             currentLon = lastPos.lon;
