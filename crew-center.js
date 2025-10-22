@@ -3850,11 +3850,18 @@ function throttledAnimationLoop(timestamp) {
         lastAnimateTimestamp = timestamp; // Initialize on first frame
         return; // Skip first frame to get a valid deltaTime
     }
-    const deltaTimeInSeconds = (timestamp - lastAnimateTimestamp) / 1000.0;
-    lastAnimateTimestamp = timestamp;
 
-    // 3. Run our *actual* animation logic, passing in the delta.
+    // --- [THE FIX IS HERE] ---
+    
+    // 3. Calculate delta based on the *previous* frame's timestamp
+    const deltaTimeInSeconds = (timestamp - lastAnimateTimestamp) / 1000.0;
+
+    // 4. Run our *actual* animation logic, passing in the valid delta.
     animateFlightPositions(deltaTimeInSeconds);
+
+    // 5. NOW, store the current timestamp to be used for the *next* frame's calculation.
+    lastAnimateTimestamp = timestamp;
+    // --- [END OF FIX] ---
 }
 
 
