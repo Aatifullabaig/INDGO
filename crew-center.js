@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
     let runwaysData = {}; // NEW: To store runway data indexed by airport ICAO
     let liveFlightData = {}; // Key: flightId, Value: { lon, lat, heading, speed, timestamp }
-    const DATA_REFRESH_INTERVAL_MS = 3000; // Your current refresh interval
+    const DATA_REFRESH_INTERVAL_MS = 1000; // Your current refresh interval
 
     // --- Map-related State ---
     let liveFlightsMap = null;
@@ -1007,12 +1007,11 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
     }
 
 /**
- * --- [REPLACEMENT v3.0 - TIME-BASED INTERPOLATION] ---
- * This version interpolates between the last two known API packets ('from' and 'to')
- * using a time-based progress. It uses the correct spherical interpolation
- * (`getIntermediatePoint`) to match the trail logic and seamlessly
- * transitions to prediction (`predictNewPosition`) when the animation time
- * passes the last known packet's timestamp.
+ * --- [REPLACEMENT v4.0 - SMOOTHED GLIDE ANIMATION] ---
+ * This version "glides" the icon from its last rendered position to the
+ * new API position over a fixed duration (SMOOTHING_DURATION_MS).
+ * This eliminates the "snap" when new data arrives. After the glide,
+ * it seamlessly switches to prediction mode.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
@@ -1024,44 +1023,36 @@ function animateFlightPositions() {
     const newFeatures = [];
     const ktsToKmPerMs = 1.852 / 3600000;
     const timestamp = performance.now(); // Current render time
-    const MIN_INTERP_INTERVAL = 100; // Min interval (ms) to attempt interpolation
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
         
         let currentLat, currentLon, currentHeading;
-        
-        // Time between the last two API packets (e.g., ~3000ms)
-        const timeBetweenPackets = flight.toTimestamp - flight.fromTimestamp;
-        // Time elapsed since the 'from' packet
-        const timeSinceFromPacket = timestamp - flight.fromTimestamp;
 
-        if (timeBetweenPackets > MIN_INTERP_INTERVAL && timeSinceFromPacket < timeBetweenPackets) {
-            // --- 1. INTERPOLATION PHASE ---
-            // We are chronologically *between* the 'from' and 'to' packets.
-            // Use spherical interpolation for the correct path over the globe.
+        if (timestamp < flight.glideEndTime) {
+            // --- 1. GLIDE/TWEENING PHASE ---
+            // We are smoothly animating from the last-rendered pos ('from')
+            // to the new API pos ('to').
             
-            // Progress from 0.0 to 1.0
-            const progress = timeSinceFromPacket / timeBetweenPackets;
+            const glideDuration = flight.glideEndTime - flight.glideStartTime;
+            const elapsed = timestamp - flight.glideStartTime;
             
-            // Use the *correct* spherical interpolation function
+            // Ensure progress is 0 if duration is 0, and clamp to max 1.0
+            const progress = (glideDuration > 0) ? Math.min(1.0, elapsed / glideDuration) : 1.0;
+            
             const interpPos = getIntermediatePoint(flight.fromLat, flight.fromLon, flight.toLat, flight.toLon, progress);
             currentLat = interpPos.lat;
             currentLon = interpPos.lon;
-            
-            // Use the existing heading interpolation
             currentHeading = interpolateHeading(flight.fromHeading, flight.toHeading, progress);
         
         } else {
             // --- 2. PREDICTION PHASE ---
-            // We are *past* the most recent packet ('toTimestamp').
-            // This happens if (timeBetweenPackets <= 100ms) or (timeSinceFromPacket >= timeBetweenPackets).
-            // Predict position based on the *last known API data* (the 'to' state).
+            // The glide is finished. Predict position based on the *last known API data*
+            // (the 'to' state).
             
-            const elapsedTimeMs = timestamp - flight.toTimestamp; // Time since the *last* packet
+            const elapsedTimeMs = timestamp - flight.glideEndTime; // Time since the glide *finished*
             const distanceKm = flight.apiSpeed * ktsToKmPerMs * elapsedTimeMs;
             
-            // Use the spherical prediction function
             const predictedPos = predictNewPosition(flight.toLat, flight.toLon, flight.toHeading, distanceKm);
             
             currentLat = predictedPos.lat;
@@ -1069,8 +1060,12 @@ function animateFlightPositions() {
             currentHeading = flight.toHeading; // Hold the last known heading
         }
 
-        // We no longer need to store 'displayLat/Lon'
-        // The position is calculated fresh in every animation frame.
+        // --- CRITICAL STEP ---
+        // Store this frame's rendered position so the *next* API packet
+        // can use it as a starting point.
+        flight.renderLat = currentLat;
+        flight.renderLon = currentLon;
+        flight.renderHeading = currentHeading;
 
         newFeatures.push({
             type: 'Feature',
@@ -1085,8 +1080,7 @@ function animateFlightPositions() {
         });
     }
 
-    // This is the key: setData() is now called at a controlled rate,
-    // but with much more accurate, time-synced data.
+    // Update the map source with the smoothed positions
     source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
 
@@ -3962,7 +3956,7 @@ function startSectorOpsLiveLoop() {
     // 1. Start the data fetching loop (infrequent)
     // This part is unchanged and continues to fetch new data every 3 seconds.
     updateSectorOpsLiveFlights(); // Fetch immediately
-    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 3000); 
+    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 1000); 
 
     // 2. Start the new throttled animation loop
     // We reset the timestamp and call the loop *once* to kick it off.
@@ -4057,11 +4051,13 @@ function stopSectorOpsLiveLoop() {
         });
     }
 
-// --- [REPLACEMENT] Fetches live data and updates the 'from'/'to' state for interpolation ---
+// --- [REPLACEMENT] Fetches live data and sets up the 'glide' animation state ---
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
     const LIVE_FLIGHTS_BACKEND = 'https://site--acars-backend--6dmjph8ltlhv.code.run';
+    // --- FIX: Matched smoothing duration to the new 1-second (1000ms) data interval ---
+    const SMOOTHING_DURATION_MS = 1000; // Was 2000
 
     try {
         const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
@@ -4137,34 +4133,41 @@ async function updateSectorOpsLiveFlights() {
 
             if (existingData) {
                 // --- This is the key logic change ---
-                // The old 'to' state becomes the new 'from' state
-                existingData.fromLat = existingData.toLat;
-                existingData.fromLon = existingData.toLon;
-                existingData.fromHeading = existingData.toHeading;
-                existingData.fromTimestamp = existingData.toTimestamp;
+                // Set 'from' to the *last rendered position*
+                existingData.fromLat = existingData.renderLat;
+                existingData.fromLon = existingData.renderLon;
+                existingData.fromHeading = existingData.renderHeading;
 
-                // Update the 'to' state with the new packet
+                // Set 'to' to the new API packet
                 existingData.toLat = newApiLat;
                 existingData.toLon = newApiLon;
                 existingData.toHeading = newApiHeading;
-                existingData.toTimestamp = now; // This is the 'to' timestamp
-                existingData.apiSpeed = newApiSpeed; // Speed for prediction
+                
+                // Set the glide animation timestamps
+                existingData.glideStartTime = now;
+                existingData.glideEndTime = now + SMOOTHING_DURATION_MS;
+
+                // Update speed and properties for prediction *after* the glide
+                existingData.apiSpeed = newApiSpeed;
                 existingData.properties = newProperties;
 
             } else {
-                // This is a new flight. Set 'from' and 'to' to the same state.
+                // This is a new flight. Set everything to the same state.
                 liveFlightData[flightId] = {
-                    // 'From' state
+                    // 'From', 'To', and 'Render' all start at the same spot
                     fromLat: newApiLat,
                     fromLon: newApiLon,
                     fromHeading: newApiHeading,
-                    fromTimestamp: now,
-
-                    // 'To' state
                     toLat: newApiLat,
                     toLon: newApiLon,
                     toHeading: newApiHeading,
-                    toTimestamp: now,
+                    renderLat: newApiLat,
+                    renderLon: newApiLon,
+                    renderHeading: newApiHeading,
+                    
+                    // No glide needed, so set times to 'now'
+                    glideStartTime: now,
+                    glideEndTime: now,
                     
                     apiSpeed: newApiSpeed,
                     properties: newProperties
