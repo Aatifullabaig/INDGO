@@ -4024,7 +4024,7 @@ function processLiveFlightData(flights) {
                 // Estimate the duration of the interpolation
                 // Use the time since the last packet, or a 5-second default
                 const duration = (now - existingData.lastPacketTime) || 5000;
-                existingData.interpolationDuration = Math.max(500, Math.min(duration, 10000)); // Clamp duration between 0.5s and 10s
+                existingData.interpolationDuration = Math.max(200, Math.min(duration, 10000)); // Clamp duration
                 existingData.lastPacketTime = now;
             }
             // Always update properties
