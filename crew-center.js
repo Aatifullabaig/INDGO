@@ -938,66 +938,90 @@ async function fetchRunwaysData() {
 
 
 /**
- * --- [MODIFIED] The animation loop.
+ * --- [REPLACED] The animation loop.
  * This function's only job is to update the data of the existing map source
  * by calculating an interpolated position *between* the last known API
- * coordinates and the new target coordinates.
+ * coordinates and the new target coordinates, using the correct math
+ * (Linear for Ground, Great-Circle for Air).
  */
 function animateFlightPositions() {
-  const source = sectorOpsMap && sectorOpsMap.getSource && sectorOpsMap.getSource('sector-ops-live-flights-source');
-  if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
-    return;
-  }
-
-  const now = performance.now();
-  const newFeatures = [];
-
-  for (const flightId in liveFlightData) {
-    const flight = liveFlightData[flightId];
-    const elapsed = now - (flight.startTimestamp || now);
-    let duration = flight.interpolationDuration || 500;
-    if (duration < 50) duration = 500;
-    let fraction = Math.min(1.0, elapsed / duration);
-
-    let currentLat, currentLon, currentHeading;
-    if (fraction < 1.0 && duration > 0) {
-      const intermediate = getIntermediatePoint(
-        flight.startLat, flight.startLon,
-        flight.targetLat, flight.targetLon,
-        fraction
-      );
-      currentLat = intermediate.lat;
-      currentLon = intermediate.lon;
-
-      let headingDiff = (flight.targetHeading || 0) - (flight.startHeading || 0);
-      if (headingDiff > 180) headingDiff -= 360;
-      if (headingDiff < -180) headingDiff += 360;
-      currentHeading = (flight.startHeading + headingDiff * fraction + 360) % 360;
-    } else {
-      currentLat = flight.targetLat;
-      currentLon = flight.targetLon;
-      currentHeading = flight.targetHeading || 0;
+    const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+    // Exit if the source isn't ready or there's no data to animate
+    if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
+        return;
     }
 
-    // Store display state
-    flight.displayLat = currentLat;
-    flight.displayLon = currentLon;
-    flight.displayHeading = currentHeading;
+    const now = performance.now();
+    const newFeatures = [];
 
-    newFeatures.push({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [currentLon, currentLat] },
-      properties: {
-        ...flight.properties,
-        heading: currentHeading
-      }
-    });
-  }
+    for (const flightId in liveFlightData) {
+        const flight = liveFlightData[flightId];
+        
+        // --- [MODIFIED] INTERPOLATION LOGIC ---
+        const elapsed = now - flight.startTimestamp;
+        const duration = flight.interpolationDuration;
+        
+        // Calculate the interpolation fraction (from 0.0 to 1.0)
+        let fraction = Math.min(1.0, elapsed / duration);
+        
+        let currentLat, currentLon, currentHeading;
 
-  // update source at 60fps
-  source.setData({ type: 'FeatureCollection', features: newFeatures });
+        if (fraction < 1.0 && duration > 0) {
+            
+            // --- [NEW] State-Based Interpolation ---
+            if (flight.animationState === 'ON_GROUND') {
+                // Use Linear Interpolation (LERP) for straight-line ground movement
+                currentLat = flight.startLat + (flight.targetLat - flight.startLat) * fraction;
+                currentLon = flight.startLon + (flight.targetLon - flight.startLon) * fraction;
+            } else {
+                // Use Great-Circle Interpolation (SLERP) for "in air" movement
+                const intermediate = getIntermediatePoint(
+                    flight.startLat, flight.startLon,
+                    flight.targetLat, flight.targetLon,
+                    fraction
+                );
+                currentLat = intermediate.lat;
+                currentLon = intermediate.lon;
+            }
+            // --- [END] State-Based Interpolation ---
+
+            // Also interpolate the heading (this logic is unchanged)
+            let headingDiff = flight.targetHeading - flight.startHeading;
+            // Handle the "unwrap" (e.g., 350deg -> 10deg)
+            if (headingDiff > 180)  headingDiff -= 360;
+            if (headingDiff < -180) headingDiff += 360;
+            currentHeading = (flight.startHeading + (headingDiff * fraction) + 360) % 360;
+            
+        } else {
+            // Interpolation is finished, snap to the target
+            currentLat = flight.targetLat;
+            currentLon = flight.targetLon;
+            currentHeading = flight.targetHeading;
+        }
+
+        // Store the last displayed position for the next interpolation cycle
+        flight.displayLat = currentLat;
+        flight.displayLon = currentLon;
+        flight.displayHeading = currentHeading;
+        // --- END OF MODIFIED LOGIC ---
+
+        newFeatures.push({
+            type: 'Feature',
+            geometry: {
+                type: 'Point',
+                coordinates: [currentLon, currentLat]
+            },
+            properties: {
+                ...flight.properties,
+                heading: currentHeading
+            }
+        });
+    }
+
+    // This is the key: setData() is now called at 60fps
+    // with smoothly interpolated data using the correct method.
+    source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
-
 
 function getAircraftCategory(aircraftName) {
     if (!aircraftName) return 'default';
@@ -1117,6 +1141,105 @@ function densifyRoute(coordinates, numPoints = 20) {
 
     return densified;
 }
+
+// --- [NEW] State Detection "Brain" Loop ---
+
+    let stateUpdateInterval = null;
+
+    /**
+     * Finds the closest airport to a point, within a search radius.
+     * This is the "heavy" calculation that we run on a slow timer.
+     * @param {number} lat - Aircraft latitude
+     * @param {number} lon - Aircraft longitude
+     * @param {number} maxDistanceNM - The maximum search radius in nautical miles.
+     * @returns {{icao: string, distanceNM: number}|null} - The nearest airport or null.
+     */
+    function findNearestAirport(lat, lon, maxDistanceNM = 5) {
+        let nearestIcao = null;
+        let minDistanceKm = maxDistanceNM * 1.852; // Convert max dist to km
+
+        // Iterate over all known airports
+        for (const icao in airportsData) {
+            const airport = airportsData[icao];
+            if (airport.lat == null || airport.lon == null) continue;
+
+            const distanceKm = getDistanceKm(lat, lon, airport.lat, airport.lon);
+
+            if (distanceKm < minDistanceKm) {
+                minDistanceKm = distanceKm;
+                nearestIcao = icao;
+            }
+        }
+        
+        if (nearestIcao) {
+            return { icao: nearestIcao, distanceNM: minDistanceKm / 1.852 };
+        }
+        return null; // No airport found within the search radius
+    }
+
+    /**
+     * The "Brain" loop. Runs slowly (e.g., every 2 seconds) to update the
+     * animation state for all visible aircraft.
+     */
+    function updateAnimationStates() {
+        if (Object.keys(liveFlightData).length === 0 || Object.keys(airportsData).length === 0) return;
+
+        // --- Configuration Thresholds ---
+        // An aircraft is "ON_GROUND" if it is:
+        // 1. Slower than 40 kts AND
+        // 2. Within 2.5 NM of an airport center.
+        const GROUND_SPEED_THRESHOLD = 40; // kts
+        const GROUND_PROXIMITY_NM = 2.5;   // Nautical Miles
+
+        for (const flightId in liveFlightData) {
+            const flight = liveFlightData[flightId];
+            
+            // Get the latest known data for the check
+            const gs = flight.properties.speed;
+            const pos = { lat: flight.displayLat, lon: flight.displayLon };
+
+            // --- PERFORMANCE OPTIMIZATION ---
+            // If the plane is fast, it's definitely in the air. Don't do expensive checks.
+            if (gs > GROUND_SPEED_THRESHOLD) {
+                flight.animationState = 'IN_AIR';
+                continue; // Move to the next flight
+            }
+
+            // --- HEAVY CALCULATION (for slow planes only) ---
+            // The plane is slow. Check if it's near an airport.
+            const nearestAirport = findNearestAirport(pos.lat, pos.lon, GROUND_PROXIMITY_NM);
+            
+            if (nearestAirport) {
+                // It's slow AND close to an airport.
+                flight.animationState = 'ON_GROUND';
+            } else {
+                // It's slow, but not near an airport (e.g., helicopter, slow prop).
+                flight.animationState = 'IN_AIR';
+            }
+        }
+    }
+
+    /**
+     * Starts the "Brain" loop.
+     */
+    function startStateUpdateLoop() {
+        if (stateUpdateInterval) clearInterval(stateUpdateInterval);
+        
+        // Run this loop every 2 seconds. The lag is acceptable.
+        stateUpdateInterval = setInterval(updateAnimationStates, 2000);
+        console.log("Animation 'Brain' loop started (2s interval).");
+    }
+
+    /**
+     * Stops the "Brain" loop.
+     */
+    function stopStateUpdateLoop() {
+        if (stateUpdateInterval) {
+            clearInterval(stateUpdateInterval);
+            stateUpdateInterval = null;
+            console.log("Animation 'Brain' loop stopped.");
+        }
+    }
 
 
     /**
@@ -3902,6 +4025,8 @@ function stopSectorOpsLiveLoop() {
         socket = null;
         console.log('[Socket.IO] Disconnected.');
     }
+
+    stopStateUpdateLoop();
 }
 
 /**
@@ -4010,7 +4135,7 @@ function processLiveFlightData(flights) {
                 // Estimate the duration of the interpolation
                 // Use the time since the last packet, or a 5-second default
                 const duration = (now - existingData.lastPacketTime) || 5000;
-                existingData.interpolationDuration = Math.max(200, Math.min(duration, 10000)); // Clamp duration
+                existingData.interpolationDuration = Math.max(500, Math.min(duration, 10000)); // Clamp duration between 0.5s and 10s
                 existingData.lastPacketTime = now;
             }
             // Always update properties
@@ -4038,7 +4163,11 @@ function processLiveFlightData(flights) {
                 interpolationDuration: 1000, // Default duration for new flights
                 lastPacketTime: now,
                 
-                properties: newProperties
+                properties: newProperties,
+
+                // --- [NEW PROPERTY] ---
+                // Default to 'IN_AIR'. The "Brain" loop will correct this.
+                animationState: 'IN_AIR' 
             };
         }
     });
@@ -5342,6 +5471,8 @@ async function initializeApp() {
         fetchAirportsData(),
         fetchRunwaysData()
     ]);
+
+    startStateUpdateLoop();
 
     await fetchPilotData();
 
