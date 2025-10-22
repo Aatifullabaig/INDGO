@@ -944,74 +944,60 @@ async function fetchRunwaysData() {
  * coordinates and the new target coordinates.
  */
 function animateFlightPositions() {
-    const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-    // Exit if the source isn't ready or there's no data to animate
-    if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
-        return;
+  const source = sectorOpsMap && sectorOpsMap.getSource && sectorOpsMap.getSource('sector-ops-live-flights-source');
+  if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
+    return;
+  }
+
+  const now = performance.now();
+  const newFeatures = [];
+
+  for (const flightId in liveFlightData) {
+    const flight = liveFlightData[flightId];
+    const elapsed = now - (flight.startTimestamp || now);
+    let duration = flight.interpolationDuration || 500;
+    if (duration < 50) duration = 500;
+    let fraction = Math.min(1.0, elapsed / duration);
+
+    let currentLat, currentLon, currentHeading;
+    if (fraction < 1.0 && duration > 0) {
+      const intermediate = getIntermediatePoint(
+        flight.startLat, flight.startLon,
+        flight.targetLat, flight.targetLon,
+        fraction
+      );
+      currentLat = intermediate.lat;
+      currentLon = intermediate.lon;
+
+      let headingDiff = (flight.targetHeading || 0) - (flight.startHeading || 0);
+      if (headingDiff > 180) headingDiff -= 360;
+      if (headingDiff < -180) headingDiff += 360;
+      currentHeading = (flight.startHeading + headingDiff * fraction + 360) % 360;
+    } else {
+      currentLat = flight.targetLat;
+      currentLon = flight.targetLon;
+      currentHeading = flight.targetHeading || 0;
     }
 
-    const now = performance.now();
-    const newFeatures = [];
+    // Store display state
+    flight.displayLat = currentLat;
+    flight.displayLon = currentLon;
+    flight.displayHeading = currentHeading;
 
-    for (const flightId in liveFlightData) {
-        const flight = liveFlightData[flightId];
-        
-        // --- [NEW] INTERPOLATION LOGIC ---
-        const elapsed = now - flight.startTimestamp;
-        const duration = flight.interpolationDuration;
-        
-        // Calculate the interpolation fraction (from 0.0 to 1.0)
-        let fraction = Math.min(1.0, elapsed / duration);
-        
-        let currentLat, currentLon, currentHeading;
+    newFeatures.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [currentLon, currentLat] },
+      properties: {
+        ...flight.properties,
+        heading: currentHeading
+      }
+    });
+  }
 
-        if (fraction < 1.0 && duration > 0) {
-            // We are in the middle of interpolating
-            const intermediate = getIntermediatePoint(
-                flight.startLat, flight.startLon,
-                flight.targetLat, flight.targetLon,
-                fraction
-            );
-            currentLat = intermediate.lat;
-            currentLon = intermediate.lon;
-
-            // Also interpolate the heading
-            let headingDiff = flight.targetHeading - flight.startHeading;
-            // Handle the "unwrap" (e.g., 350deg -> 10deg)
-            if (headingDiff > 180)  headingDiff -= 360;
-            if (headingDiff < -180) headingDiff += 360;
-            currentHeading = (flight.startHeading + (headingDiff * fraction) + 360) % 360;
-            
-        } else {
-            // Interpolation is finished, snap to the target
-            currentLat = flight.targetLat;
-            currentLon = flight.targetLon;
-            currentHeading = flight.targetHeading;
-        }
-
-        // Store the last displayed position for the next interpolation cycle
-        flight.displayLat = currentLat;
-        flight.displayLon = currentLon;
-        flight.displayHeading = currentHeading;
-        // --- END OF NEW LOGIC ---
-
-        newFeatures.push({
-            type: 'Feature',
-            geometry: {
-                type: 'Point',
-                coordinates: [currentLon, currentLat]
-            },
-            properties: {
-                ...flight.properties,
-                heading: currentHeading
-            }
-        });
-    }
-
-    // This is the key: setData() is now called at 60fps
-    // with smoothly interpolated data.
-    source.setData({ type: 'FeatureCollection', features: newFeatures });
+  // update source at 60fps
+  source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
+
 
 function getAircraftCategory(aircraftName) {
     if (!aircraftName) return 'default';
