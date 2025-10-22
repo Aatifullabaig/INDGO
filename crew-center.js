@@ -82,12 +82,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     let airportsData = {};
     let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
     let runwaysData = {}; // NEW: To store runway data indexed by airport ICAO
-    let liveFlightData = {}; // Key: flightId, Value: { lon, lat, heading, speed, timestamp }
+    /**
+     * NEW: State for predictive animation.
+     * Key: flightId
+     * Value: {
+     * // --- 60fps Simulation State (what the user sees)
+     * displayLat, displayLon, displayHeading, displaySpeed,
+     * simTurnRate, simAcceleration,
+     *
+     * // --- "Ground Truth" (from last API packet)
+     * lastApiTime, lastApiLat, lastApiLon,
+     *
+     * // --- "Target" State (what the sim is moving toward)
+     * targetTurnRate, targetAcceleration,
+     * posErrorVector: { lat, lon }, // For correcting minor drift
+     *
+     * // --- Static Properties
+     * properties: { ... }
+     * }
+     */
+    let liveFlightData = {};
     const DATA_REFRESH_INTERVAL_MS = 3000; // Your current refresh interval
-
-    // --- [NEW] Buffer Configuration ---
-    const BUFFER_DELAY_MS = 8000; // 8 seconds. This is our "video delay".
-    const BUFFER_MAX_AGE_MS = 60000; // 1 minute. Prune data older than this.
 
     // --- Map-related State ---
     let liveFlightsMap = null;
@@ -116,6 +131,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- NEW: To cache flight data when switching to stats view ---
     let cachedFlightDataForStatsView = { flightProps: null, plan: null };
     let animationFrameId = null;
+    let lastFrameTime = 0;
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -942,11 +958,12 @@ async function fetchRunwaysData() {
 
 
 /**
- * --- [REWRITTEN FOR BUFFERING] ---
- * This function's only job is to render the map state for
- * a time in the past (now - BUFFER_DELAY_MS).
- * It finds the two historical data points surrounding that time
- * and interpolates between them for a perfectly smooth, true path.
+ * --- [REWRITE: Predictive Simulation "Muscle"]
+ * This function runs at 60fps. Its only job is to:
+ * 1. Run a continuous physics simulation based on `simTurnRate` and `simAcceleration`.
+ * 2. Smoothly LERP the `sim...` rates toward the `target...` rates (set by the "Brain").
+ * 3. Gently apply (and decay) the `posErrorVector` to stay "on the rails."
+ * 4. Handle the "backup plan" (stale data) by setting `target...` rates to 0.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
@@ -954,90 +971,76 @@ function animateFlightPositions() {
         return;
     }
 
+    // --- 1. Calculate 60fps Frame Delta ---
     const now = performance.now();
-    const displayTime = now - BUFFER_DELAY_MS; // This is the key
-    const pruneTime = now - BUFFER_MAX_AGE_MS; // For culling old data
+    const frameDeltaTimeSec = (now - lastFrameTime) / 1000;
+    lastFrameTime = now;
+
+    // Avoid a "jump" if the tab was inactive for a long time
+    if (frameDeltaTimeSec > 0.5) {
+        return; 
+    }
+
     const newFeatures = [];
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
-        const buffer = flight.buffer;
 
-        // 1. Prune very old data from the buffer to save memory
-        while (buffer.length > 2 && buffer[1].timestamp < pruneTime) {
-            buffer.shift();
+        // --- 2. Check for Stale Data (The "Backup Plan") ---
+        const timeSinceUpdate = (now - flight.lastApiTime) / 1000;
+        let currentTargetTurnRate = flight.targetTurnRate;
+        let currentTargetAcceleration = flight.targetAcceleration;
+
+        if (timeSinceUpdate > (STALE_DATA_MS / 1000)) {
+            // Data is stale. We are "flying blind."
+            // Enter dead reckoning mode: stop turning, maintain speed, stop correcting.
+            currentTargetTurnRate = 0;
+            currentTargetAcceleration = 0;
+            flight.posErrorVector = { lat: 0, lon: 0 };
         }
 
-        // 2. Find the two data points that surround our displayTime
-        if (buffer.length < 2) continue; // Not enough data to interpolate
+        // --- 3. Smooth the Simulation Parameters (LERP/Spring) ---
+        flight.simTurnRate = lerp(flight.simTurnRate, currentTargetTurnRate, LERP_FACTOR);
+        flight.simAcceleration = lerp(flight.simAcceleration, currentTargetAcceleration, LERP_FACTOR);
 
-        let p1 = null; // The point *before* or *at* displayTime
-        let p2 = null; // The point *after* displayTime
+        // --- 4. Apply Dead Reckoning Simulation (Run Physics) ---
+        flight.displaySpeed += flight.simAcceleration * frameDeltaTimeSec;
+        if (flight.displaySpeed < 0) flight.displaySpeed = 0; // Can't go backwards
 
-        // Find the last point *before* or *at* the displayTime
-        // We search backwards for efficiency
-        for (let i = buffer.length - 1; i >= 0; i--) {
-            if (buffer[i].timestamp <= displayTime) {
-                p1 = buffer[i];
-                if (i < buffer.length - 1) {
-                    p2 = buffer[i + 1];
-                }
-                break;
-            }
-        }
+        flight.displayHeading = normalizeAngle(flight.displayHeading + flight.simTurnRate * frameDeltaTimeSec);
         
-        // 3. Handle edge cases
-        // All data is in the future (plane just spawned), so don't show it yet
-        if (p1 === null) continue; 
+        const distanceNm = flight.displaySpeed * (frameDeltaTimeSec / 3600);
+        const simPos = calculateNewPosition(flight.displayLat, flight.displayLon, flight.displayHeading, distanceNm);
 
-        let currentLat, currentLon, currentHeading;
+        // --- 5. Apply *Residual* Error Correction ---
+        // Nudge the plane 5% of the way back toward the "ground truth" API track
+        const correctionLat = flight.posErrorVector.lat * ERROR_CORRECTION_FACTOR;
+        const correctionLon = flight.posErrorVector.lon * ERROR_CORRECTION_FACTOR;
+        
+        flight.displayLat = simPos.lat + correctionLat;
+        flight.displayLon = simPos.lon + correctionLon;
 
-        if (p2 === null) {
-            // Buffer underrun: We are past the last known point.
-            // (e.g., data is > 8s late). Hold the last position.
-            currentLat = p1.lat;
-            currentLon = p1.lon;
-            currentHeading = p1.heading;
-        } else {
-            // 4. We are between two points. Interpolate.
-            const segmentDuration = p2.timestamp - p1.timestamp;
-            const elapsedInSegment = displayTime - p1.timestamp;
-            
-            // This fraction is 100% accurate and always between 0.0 and 1.0
-            const fraction = (segmentDuration > 0) ? Math.min(1.0, elapsedInSegment / segmentDuration) : 0;
-            
-            const intermediate = getIntermediatePoint(p1.lat, p1.lon, p2.lat, p2.lon, fraction);
-            currentLat = intermediate.lat;
-            currentLon = intermediate.lon;
+        // --- 6. Decay the Error ---
+        // Since we applied 5% of the error, we remove that 5% from the vector
+        flight.posErrorVector.lat *= (1.0 - ERROR_CORRECTION_FACTOR);
+        flight.posErrorVector.lon *= (1.0 - ERROR_CORRECTION_FACTOR);
 
-            // Interpolate heading (handling the 360-degree unwrap)
-            let headingDiff = p2.heading - p1.heading;
-            if (headingDiff > 180)  headingDiff -= 360;
-            if (headingDiff < -180) headingDiff += 360;
-            currentHeading = (p1.heading + (headingDiff * fraction) + 360) % 360;
-        }
-
-        // Store this for other functions (like PFD)
-        flight.displayLat = currentLat;
-        flight.displayLon = currentLon;
-        flight.displayHeading = currentHeading;
-
-        // 5. Add the feature to be rendered
+        // --- 7. Push to Map ---
         newFeatures.push({
             type: 'Feature',
             geometry: {
                 type: 'Point',
-                coordinates: [currentLon, currentLat]
+                coordinates: [flight.displayLon, flight.displayLat]
             },
             properties: {
                 ...flight.properties,
-                heading: currentHeading
+                heading: flight.displayHeading
             }
         });
     }
 
     // This is the key: setData() is now called at 60fps
-    // with smoothly interpolated *historical* data.
+    // with smoothly simulated data.
     source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
 
@@ -1126,6 +1129,74 @@ function getIntermediatePoint(lat1, lon1, lat2, lon2, fraction) {
 
     return { lat: latI, lon: lonI };
 }
+
+// --- NEW: Math & Physics Helpers for Predictive Animation ---
+
+const LERP_FACTOR = 0.1; // How fast to smooth to new rates (0.0 - 1.0). A smaller value is smoother.
+const ERROR_CORRECTION_FACTOR = 0.05; // How fast to correct positional drift (0.0 - 1.0).
+const STALE_DATA_MS = 5000; // After 5s of no data, enter "backup" (dead reckoning) mode.
+
+/**
+ * Helper: Linear Interpolation (smooths a value toward a target).
+ * @param {number} a - The current value.
+ * @param {number} b - The target value.
+ * @param {number} t - The interpolation factor (e.g., 0.1 for 10% of the way).
+ * @returns {number} The new, interpolated value.
+ */
+const lerp = (a, b, t) => a + (b - a) * t;
+
+/**
+ * Helper: Wraps an angle to the -180 to +180 degree range.
+ * This is crucial for calculating the shortest turn direction.
+ * @param {number} angle - The input angle.
+ * @returns {number} The wrapped angle.
+ */
+const normalizeAngle = (angle) => ((angle + 540) % 360) - 180;
+
+/**
+ * Helper: Get distance between two coordinates in Nautical Miles.
+ */
+const getDistanceNM = (lat1, lon1, lat2, lon2) => getDistanceKm(lat1, lon1, lat2, lon2) / 1.852;
+
+/**
+ * Helper: Get the initial bearing (in degrees) from point 1 to point 2.
+ */
+function getBearing(lat1, lon1, lat2, lon2) {
+    const toRad = (v) => v * Math.PI / 180;
+    const toDeg = (v) => v * 180 / Math.PI;
+    const lat1Rad = toRad(lat1);
+    const lon1Rad = toRad(lon1);
+    const lat2Rad = toRad(lat2);
+    const lon2Rad = toRad(lon2);
+    
+    const dLon = lon2Rad - lon1Rad;
+    const y = Math.sin(dLon) * Math.cos(lat2Rad);
+    const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) -
+              Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+    let brng = toDeg(Math.atan2(y, x));
+    return (brng + 360) % 360;
+}
+
+/**
+ * Helper: Calculate a new lat/lon given a starting point, bearing, and distance.
+ */
+function calculateNewPosition(lat, lon, bearing, distanceNm) {
+    const toRad = (v) => v * Math.PI / 180;
+    const toDeg = (v) => v * 180 / Math.PI;
+    const R = 6371 / 1.852; // Earth's radius in NM
+    const d = distanceNm / R; // Angular distance in radians
+    const brng = toRad(bearing);
+    const lat1 = toRad(lat);
+    const lon1 = toRad(lon);
+
+    const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) +
+                           Math.cos(lat1) * Math.sin(d) * Math.cos(brng));
+    const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(d) * Math.cos(lat1),
+                                  Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+    
+    return { lat: toDeg(lat2), lon: toDeg(lon2) };
+}
+
 
 /**
  * Densifies a route by adding intermediate points between each coordinate pair.
@@ -3865,32 +3936,12 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // START: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
 
-    // --- [NEW] Throttled Animation Loop ---
-// This function will be our new animation "engine."
-// It runs at the browser's native refresh rate (e.g., 60fps)
-// but *throttles* the expensive `animateFlightPositions` call to our
-// desired interval (100ms).
 
-let lastAnimateTimestamp = 0; // Timestamp of the last *logic* update
-const ANIMATION_THROTTLE_MS = 100; // 100ms = 10 updates per second
-
-// --- [MODIFIED] This loop now runs at 60fps (no throttle) ---
-// This function will be our animation "engine."
-// It runs at the browser's native refresh rate (e.g., 60fps)
-// to run our interpolation logic on every frame.
-function throttledAnimationLoop(timestamp) {
-    // 1. Schedule the next frame immediately.
-    // This creates a continuous, efficient loop that's synced with the browser.
-    animationFrameId = requestAnimationFrame(throttledAnimationLoop);
-
-    // 2. Run our *actual* animation logic on every frame.
-    animateFlightPositions();
-}
-
-
-// --- [MODIFIED FOR WEBSOCKETS] ---
-// This function is updated to use the new animation loop and a recursive setTimeout
-// to prevent request stacking. It also now initiates the WebSocket connection.
+/**
+ * --- [MODIFIED FOR 60FPS]
+ * This function is updated to use a true 60fps requestAnimationFrame loop
+ * and initiates the WebSocket connection.
+ */
 function startSectorOpsLiveLoop() {
     stopSectorOpsLiveLoop(); // Clear any old loops
 
@@ -3903,7 +3954,6 @@ function startSectorOpsLiveLoop() {
             console.error("Error during live ATC/NOTAM update cycle:", error);
         } finally {
             // Schedule the next poll for ATC/NOTAMs
-            // This continues to use your original 3000ms interval.
             sectorOpsLiveFlightsTimeoutId = setTimeout(runLiveUpdate, DATA_REFRESH_INTERVAL_MS);
         }
     };
@@ -3914,16 +3964,31 @@ function startSectorOpsLiveLoop() {
     // Start the WebSocket connection for live flights.
     connectSocketIO();
 
-    // 3. Start the new throttled animation loop (this part is unchanged)
-    // This loop just renders what's in `liveFlightData`
-    lastAnimateTimestamp = 0;
-    animationFrameId = requestAnimationFrame(throttledAnimationLoop);
+    // 3. --- [MODIFIED] ---
+    // Start the new 60fps animation loop
+    if (animationFrameId) cancelAnimationFrame(animationFrameId); // Clear just in case
+    lastFrameTime = performance.now(); // Initialize frame timer
+    animationFrameId = requestAnimationFrame(animationLoop);
 }
 
+/**
+ * --- [NEW] Renamed from throttledAnimationLoop.
+ * This is the browser's 60fps "ticker" that drives the animation.
+ */
+function animationLoop(timestamp) {
+    // 1. Schedule the next frame immediately.
+    // This creates a continuous, efficient loop.
+    animationFrameId = requestAnimationFrame(animationLoop);
 
-// --- [MODIFIED FOR WEBSOCKETS] ---
-// This function is updated to stop the timeout, animation loop,
-// and also disconnect the WebSocket.
+    // 2. Run our *actual* animation logic on every frame.
+    animateFlightPositions();
+}
+
+/**
+ * --- [MODIFIED FOR 60FPS & WEBSOCKETS] ---
+ * This function is updated to stop the timeout, 60fps animation loop,
+ * and also disconnect the WebSocket.
+ */
 function stopSectorOpsLiveLoop() {
     // 1. Clear the data-fetching timeout for ATC/NOTAMs
     if (sectorOpsLiveFlightsTimeoutId) {
@@ -3931,7 +3996,8 @@ function stopSectorOpsLiveLoop() {
         sectorOpsLiveFlightsTimeoutId = null;
     }
 
-    // 2. Clear the animation loop
+    // 2. --- [MODIFIED] ---
+    // Clear the 60fps animation loop
     if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
@@ -3978,7 +4044,7 @@ function connectSocketIO() {
     socket.on('all_flights_update', (data) => {
         // We only care about flights; the animation loop handles the rendering
         if (data && data.flights) {
-            processLiveFlightData(data.flights, performance.now());
+            processLiveFlightData(data.flights);
         }
     });
 
@@ -3995,16 +4061,21 @@ function connectSocketIO() {
 }
 
 /**
- * --- [REWRITTEN FOR BUFFERING] ---
- * This function no longer calculates interpolation. It simply records
- * timestamped data points into a buffer for each flight.
+ * --- [REWRITE: Predictive Sensor Fusion "Brain"]
+ * This function runs *infrequently* (when WebSocket data arrives). Its job is to:
+ * 1. Calculate the *true* velocity vector (speed/track) by comparing the new
+ * API position to the *previous* API position.
+ * 2. Calculate the *true* rates of change (turn rate, acceleration) that just occurred.
+ * 3. Calculate the *residual positional error* (drift) of the 60fps simulation.
+ * 4. Feed these new `target...` rates and the `posErrorVector` to the 60fps "Muscle" loop.
  */
-function processLiveFlightData(flights, now) {
+function processLiveFlightData(flights) {
     if (!Array.isArray(flights)) {
         console.warn('Socket.IO: Received invalid flights data.');
         return;
     }
 
+    const now = performance.now();
     const updatedFlightIds = new Set();
 
     flights.forEach(flight => {
@@ -4013,16 +4084,19 @@ function processLiveFlightData(flights, now) {
         const flightId = flight.flightId;
         updatedFlightIds.add(flightId);
 
-        // Extract new API data
-        const newApiLat = flight.position.lat;
-        const newApiLon = flight.position.lon;
-        const newApiHeading = flight.position.track_deg || 0;
+        const existingData = liveFlightData[flightId];
+
+        // --- 1. Extract new API data ---
+        const apiLat = flight.position.lat;
+        const apiLon = flight.position.lon;
+        const apiHeading = flight.position.track_deg || 0;
+        const apiSpeed = flight.position.gs_kt || 0;
         const newProperties = {
             flightId: flight.flightId,
             callsign: flight.callsign,
             username: flight.username,
             altitude: flight.position.alt_ft,
-            speed: flight.position.gs_kt || 0,
+            speed: apiSpeed,
             verticalSpeed: flight.position.vs_fpm || 0,
             position: JSON.stringify(flight.position),
             aircraft: JSON.stringify(flight.aircraft),
@@ -4030,31 +4104,65 @@ function processLiveFlightData(flights, now) {
             category: getAircraftCategory(flight.aircraft?.aircraftName)
         };
 
-        // Get or create the flight's data object
-        if (!liveFlightData[flightId]) {
+        if (existingData) {
+            // --- 2. Calculate "Ground Truth" Vector ---
+            const deltaTimeSec = (now - existingData.lastApiTime) / 1000;
+
+            // Only update if time has passed and position has changed
+            if (deltaTimeSec > 0.1 && (existingData.lastApiLat !== apiLat || existingData.lastApiLon !== apiLon)) {
+                
+                const realDistanceNm = getDistanceNM(existingData.lastApiLat, existingData.lastApiLon, apiLat, apiLon);
+                const realSpeedKts = realDistanceNm / (deltaTimeSec / 3600);
+                const realTrackDeg = getBearing(existingData.lastApiLat, existingData.lastApiLon, apiLat, apiLon);
+
+                // --- 3. Calculate "Ground Truth" Rates of Change ---
+                // We compare the "real" vector against the *current simulation*
+                const headingDiff = normalizeAngle(realTrackDeg - existingData.displayHeading);
+                const speedDiff = realSpeedKts - existingData.displaySpeed;
+
+                // Set new targets for the 60fps simulation
+                existingData.targetTurnRate = headingDiff / deltaTimeSec; // deg/sec
+                existingData.targetAcceleration = speedDiff / deltaTimeSec; // kts/sec
+
+                // --- 4. Calculate Residual Positional Error ---
+                // This accounts for any "drift" the 60fps sim had since the last packet
+                existingData.posErrorVector.lat = apiLat - existingData.displayLat;
+                existingData.posErrorVector.lon = apiLon - existingData.displayLon;
+
+                // --- 5. Update "Last" values ---
+                existingData.lastApiTime = now;
+                existingData.lastApiLat = apiLat;
+                existingData.lastApiLon = apiLon;
+            }
+            // Always update properties
+            existingData.properties = newProperties;
+            
+        } else {
+            // --- This is a NEW flight. Initialize its state. ---
             liveFlightData[flightId] = {
-                buffer: [],
-                properties: {}
+                // Set current display and "last" API to the same thing
+                displayLat: apiLat,
+                displayLon: apiLon,
+                displayHeading: apiHeading,
+                displaySpeed: apiSpeed,
+                lastApiLat: apiLat,
+                lastApiLon: apiLon,
+                lastApiTime: now,
+                
+                // Initialize simulation rates to 0
+                simTurnRate: 0,
+                simAcceleration: 0,
+                targetTurnRate: 0,
+                targetAcceleration: 0,
+                posErrorVector: { lat: 0, lon: 0 },
+                
+                // Set static properties
+                properties: newProperties
             };
         }
-        const existingData = liveFlightData[flightId];
-
-        // Create the new data point to record
-        const dataPoint = {
-            timestamp: now,
-            lat: newApiLat,
-            lon: newApiLon,
-            heading: newApiHeading
-        };
-
-        // Add the new point to the end of the buffer
-        existingData.buffer.push(dataPoint);
-
-        // Always update the latest properties
-        existingData.properties = newProperties;
     });
 
-    // Clean up any flights that have disappeared
+    // --- Cleanup: Remove aircraft that are no longer in the API feed ---
     for (const flightId in liveFlightData) {
         if (!updatedFlightIds.has(flightId)) {
             delete liveFlightData[flightId];
