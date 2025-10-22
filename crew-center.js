@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let airportsData = {};
     let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
     let runwaysData = {}; // NEW: To store runway data indexed by airport ICAO
-    let liveFlightData = {}; // Key: flightId, Value: { positionBuffer: [], currentAnimation: null, lastRenderedPosition: {}, properties: {} }
+    let liveFlightData = {}; // Key: flightId, Value: { lon, lat, heading, speed, timestamp }
     const DATA_REFRESH_INTERVAL_MS = 3000; // Your current refresh interval
 
     // --- Map-related State ---
@@ -938,125 +938,63 @@ async function fetchRunwaysData() {
 
 
 /**
- * --- [FIXED v4] The animation loop.
- * 1. Staleness check is REMOVED to prevent "blinking" planes.
- * 2. Animation logic is FIXED to animate from the last rendered position
- * to the next point in the buffer, fixing the "teleport" bug.
- * 3. Physics-based interpolation is REPLACED with simple linear (t_frac)
- * interpolation to fix the "unrealistic acceleration" during the zip.
- * 4. Animation `duration` is SET to 3000ms to match the *actual*
- * 3-second backend data refresh interval, fixing the "zip-and-wait" bug.
+ * --- [MODIFIED] The animation loop.
+ * This function's only job is to update the data of the existing map source
+ * by calculating an interpolated position *between* the last known API
+ * coordinates and the new target coordinates.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+    // Exit if the source isn't ready or there's no data to animate
     if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
         return;
     }
 
     const now = performance.now();
     const newFeatures = [];
-    // const STALE_TIMEOUT_MS = 30000; // [FIX 1] This is removed to prevent disappearing
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
-
-        // --- 1. [FIX 1] STALENESS CHECK REMOVED ---
-        /*
-        if (now - flight.lastSeen > STALE_TIMEOUT_MS) {
-            delete liveFlightData[flightId];
-            continue;
-        }
-        */
-
+        
+        // --- [NEW] INTERPOLATION LOGIC ---
+        const elapsed = now - flight.startTimestamp;
+        const duration = flight.interpolationDuration;
+        
+        // Calculate the interpolation fraction (from 0.0 to 1.0)
+        let fraction = Math.min(1.0, elapsed / duration);
+        
         let currentLat, currentLon, currentHeading;
 
-        // --- 2. [FIX 2] Check if an animation is finished or needs to start ---
-        if (!flight.currentAnimation) {
-            // We only need one new point to animate *to*.
-            if (flight.positionBuffer.length >= 1) { 
-                
-                // Always start from where the plane was last seen.
-                const startPoint = flight.lastRenderedPosition; 
-                
-                // Consume the new target point from the buffer.
-                const endPoint = flight.positionBuffer.shift(); 
-                
-                // --- 3. [FIX 4] DURATION IS NOW 3 SECONDS ---
-                // This is the core fix for the "fighter jet snap" / "zip-and-wait".
-                // We use the 3000ms (3-second) backend update interval.
-                const duration = 3000; 
-
-                if (duration > 0) {
-                    flight.currentAnimation = {
-                        start: startPoint,
-                        end: endPoint,
-                        startTime: now,
-                        duration: duration // This is now 3000
-                    };
-                } else {
-                    flight.lastRenderedPosition = endPoint;
-                }
-            }
-        }
-
-        // --- 3. Run the current animation (if it exists) ---
-        if (flight.currentAnimation) {
-            const anim = flight.currentAnimation;
-            const elapsed = now - anim.startTime;
-            
-            // --- 4. [FIX 3] SIMPLIFIED LINEAR SPEED CALCULATION ---
-            // This is the simple fraction of *time* that has passed (e.g., 0.5 = 50% time)
-            const t_frac = Math.min(1.0, elapsed / anim.duration);
-            
-            // The old physics-based 'fraction' variable is gone.
-            
-            // --- END OF SPEED MODIFICATION ---
-
+        if (fraction < 1.0 && duration > 0) {
+            // We are in the middle of interpolating
             const intermediate = getIntermediatePoint(
-                anim.start.lat, anim.start.lon,
-                anim.end.lat, anim.end.lon,
-                t_frac // <-- Use the simple time fraction for linear speed
+                flight.startLat, flight.startLon,
+                flight.targetLat, flight.targetLon,
+                fraction
             );
             currentLat = intermediate.lat;
             currentLon = intermediate.lon;
 
-            // Interpolate heading (same as before)
-            let headingDiff = anim.end.heading - anim.start.heading;
+            // Also interpolate the heading
+            let headingDiff = flight.targetHeading - flight.startHeading;
+            // Handle the "unwrap" (e.g., 350deg -> 10deg)
             if (headingDiff > 180)  headingDiff -= 360;
             if (headingDiff < -180) headingDiff += 360;
-            currentHeading = (anim.start.heading + (headingDiff * t_frac) + 360) % 360;
+            currentHeading = (flight.startHeading + (headingDiff * fraction) + 360) % 360;
             
-            // Interpolate ground speed for the state
-            const v0 = anim.start.gs;
-            const v1 = anim.end.gs;
-            const currentGS = v0 + (v1 - v0) * t_frac;
-            
-            // This is the *only* place lastRenderedPosition should be updated
-            flight.lastRenderedPosition = { 
-                lat: currentLat, 
-                lon: currentLon, 
-                heading: currentHeading, 
-                gs: currentGS, 
-                // This timestamp update is critical for the *next* animation
-                // We use the *animation's* start time plus elapsed
-                timestamp: now 
-            };
-
-            if (t_frac === 1.0) {
-                flight.currentAnimation = null; // Animation is done
-            }
-
         } else {
-            // --- 4. No animation running (stale or not enough data) ---
-            // Just display the last known position. This makes the plane
-            // "park" at its last target instead of disappearing.
-            const lastPos = flight.lastRenderedPosition;
-            currentLat = lastPos.lat;
-            currentLon = lastPos.lon;
-            currentHeading = lastPos.heading;
+            // Interpolation is finished, snap to the target
+            currentLat = flight.targetLat;
+            currentLon = flight.targetLon;
+            currentHeading = flight.targetHeading;
         }
 
-        // --- 5. Add the calculated position to the map ---
+        // Store the last displayed position for the next interpolation cycle
+        flight.displayLat = currentLat;
+        flight.displayLon = currentLon;
+        flight.displayHeading = currentHeading;
+        // --- END OF NEW LOGIC ---
+
         newFeatures.push({
             type: 'Feature',
             geometry: {
@@ -1070,7 +1008,8 @@ function animateFlightPositions() {
         });
     }
 
-    // Update the map source with all calculated features
+    // This is the key: setData() is now called at 60fps
+    // with smoothly interpolated data.
     source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
 
@@ -2306,7 +2245,7 @@ function updatePfdDisplay(pfdData) {
     function startLiveLoop() {
         if (!liveFlightsInterval) {
             updateLiveFlights();
-            liveFlightsInterval = setInterval(updateLiveFlights, 500);
+            liveFlightsInterval = setInterval(updateLiveFlights, 3000);
         }
     }
 
@@ -3936,7 +3875,7 @@ function startSectorOpsLiveLoop() {
             console.error("Error during live ATC/NOTAM update cycle:", error);
         } finally {
             // Schedule the next poll for ATC/NOTAMs
-            // This continues to use your original 500ms interval.
+            // This continues to use your original 3000ms interval.
             sectorOpsLiveFlightsTimeoutId = setTimeout(runLiveUpdate, DATA_REFRESH_INTERVAL_MS);
         }
     };
@@ -4028,9 +3967,9 @@ function connectSocketIO() {
 }
 
 /**
- * --- [MODIFIED] Processes live flight data received from WebSockets.
- * This version adds new data (including ground speed) to a buffer
- * and tracks the lastSeen timestamp to prevent disappearing.
+ * --- [NEW] Processes live flight data received from WebSockets.
+ * This version is modified to store "start" and "target" states
+ * for smooth 60fps interpolation.
  */
 function processLiveFlightData(flights) {
     if (!Array.isArray(flights)) {
@@ -4047,21 +3986,19 @@ function processLiveFlightData(flights) {
         const flightId = flight.flightId;
         updatedFlightIds.add(flightId);
 
-        // This is the new data point
-        const newPacket = {
-            lat: flight.position.lat,
-            lon: flight.position.lon,
-            heading: flight.position.track_deg || 0,
-            gs: flight.position.gs_kt || 0, // <-- ADDED GROUND SPEED
-            timestamp: now
-        };
+        const existingData = liveFlightData[flightId];
 
+        // Extract new API data
+        const newApiLat = flight.position.lat;
+        const newApiLon = flight.position.lon;
+        const newApiHeading = flight.position.track_deg || 0;
+        const newApiSpeed = flight.position.gs_kt || 0;
         const newProperties = {
             flightId: flight.flightId,
             callsign: flight.callsign,
             username: flight.username,
             altitude: flight.position.alt_ft,
-            speed: newPacket.gs, // Use the new GS
+            speed: newApiSpeed,
             verticalSpeed: flight.position.vs_fpm || 0,
             position: JSON.stringify(flight.position),
             aircraft: JSON.stringify(flight.aircraft),
@@ -4069,33 +4006,63 @@ function processLiveFlightData(flights) {
             category: getAircraftCategory(flight.aircraft?.aircraftName)
         };
 
-        let existingData = liveFlightData[flightId];
-
         if (existingData) {
-            // Flight exists. Add the new packet to its buffer.
-            existingData.positionBuffer.push(newPacket);
-            
-            // Keep the buffer from growing too large
-            if (existingData.positionBuffer.length > 10) {
-                existingData.positionBuffer.shift();
+            // Flight exists. Check if data is truly new.
+            if (existingData.targetLat !== newApiLat || existingData.targetLon !== newApiLon) {
+                
+                // The *current* target becomes the *new* starting point
+                existingData.startLat = existingData.displayLat || existingData.targetLat;
+                existingData.startLon = existingData.displayLon || existingData.targetLon;
+                existingData.startHeading = existingData.displayHeading || existingData.targetHeading;
+                existingData.startTimestamp = now; // Start the interpolation from *now*
+
+                // Set the "target" of our interpolation to the new data
+                existingData.targetLat = newApiLat;
+                existingData.targetLon = newApiLon;
+                existingData.targetHeading = newApiHeading;
+                
+                // Estimate the duration of the interpolation
+                // Use the time since the last packet, or a 5-second default
+                const duration = (now - existingData.lastPacketTime) || 5000;
+                existingData.interpolationDuration = Math.max(500, Math.min(duration, 10000)); // Clamp duration between 0.5s and 10s
+                existingData.lastPacketTime = now;
             }
-            
+            // Always update properties
             existingData.properties = newProperties;
-            existingData.lastSeen = now; // <-- UPDATE LASTSEEN
             
         } else {
-            // This is a new flight. Create its state.
+            // This is a new flight. Set start and target to the same values.
             liveFlightData[flightId] = {
-                positionBuffer: [newPacket],
-                currentAnimation: null,
-                lastRenderedPosition: { ...newPacket }, // Use the full packet
-                properties: newProperties,
-                lastSeen: now // <-- SET INITIAL LASTSEEN
+                // Target state
+                targetLat: newApiLat,
+                targetLon: newApiLon,
+                targetHeading: newApiHeading,
+                
+                // Start state (same as target for new flights)
+                startLat: newApiLat,
+                startLon: newApiLon,
+                startHeading: newApiHeading,
+                startTimestamp: now,
+                
+                // Display state
+                displayLat: newApiLat,
+                displayLon: newApiLon,
+                displayHeading: newApiHeading,
+
+                interpolationDuration: 1000, // Default duration for new flights
+                lastPacketTime: now,
+                
+                properties: newProperties
             };
         }
     });
 
-    // --- The old cleanup loop is GONE from here ---
+    // Now that we've processed the good data, we can safely clean up old flights
+    for (const flightId in liveFlightData) {
+        if (!updatedFlightIds.has(flightId)) {
+            delete liveFlightData[flightId];
+        }
+    }
 }
 
     /**
