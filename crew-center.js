@@ -329,20 +329,24 @@ function injectCustomStyles() {
         }
         .overview-col-left h3 {
             margin: 0;
-            font-size: 2rem;
-            font-weight: 700;
-            letter-spacing: 1px;
+            /* --- [MODIFIED] --- */
+            font-size: 1.7rem; 
+            font-weight: 600; /* Was 700 */
+            letter-spacing: 0px; /* Was 1px */
             text-shadow: 0 2px 5px rgba(0,0,0,0.5);
         }
         .overview-col-left p {
             margin: 0;
-            font-size: 0.9rem;
-            color: #e0e0e0;
+            /* --- [MODIFIED] --- */
+            font-size: 0.85rem; /* Was 0.9rem */
+            color: #c5cae9; /* Was #e0e0e0 */
             font-weight: 500;
             text-shadow: 0 1px 3px rgba(0,0,0,0.5);
         }
         .overview-col-right {
             text-align: right;
+            /* --- [MODIFIED] --- */
+            display: none; /* Hide the top-right ICAOs */
         }
         .overview-col-right .route-icao {
             font-size: 1.5rem;
@@ -453,11 +457,12 @@ function injectCustomStyles() {
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
         }
         .flight-phase-indicator .fa-solid { font-size: 0.8rem; }
-        .phase-climb { background: rgba(34, 139, 34, 0.7); box-shadow: 0 0 10px rgba(34, 139, 34, 0.7); }
-        .phase-cruise { background: rgba(0, 119, 255, 0.7); box-shadow: 0 0 10px rgba(0, 119, 255, 0.7); }
-        .phase-descent { background: rgba(255, 140, 0, 0.7); box-shadow: 0 0 10px rgba(255, 140, 0, 0.7); }
-        .phase-approach { background: rgba(138, 43, 226, 0.7); box-shadow: 0 0 10px rgba(138, 43, 226, 0.7); }
-        .phase-enroute { background: rgba(100, 110, 130, 0.7); box-shadow: 0 0 10px rgba(100, 110, 130, 0.7); }
+        /* --- [MODIFIED] --- Opacity increased from 0.7 to 0.9 --- */
+        .phase-climb { background: rgba(34, 139, 34, 0.9); box-shadow: 0 0 10px rgba(34, 139, 34, 0.7); }
+        .phase-cruise { background: rgba(0, 119, 255, 0.9); box-shadow: 0 0 10px rgba(0, 119, 255, 0.7); }
+        .phase-descent { background: rgba(255, 140, 0, 0.9); box-shadow: 0 0 10px rgba(255, 140, 0, 0.7); }
+        .phase-approach { background: rgba(138, 43, 226, 0.9); box-shadow: 0 0 10px rgba(138, 43, 226, 0.7); }
+        .phase-enroute { background: rgba(100, 110, 130, 0.9); box-shadow: 0 0 10px rgba(100, 110, 130, 0.7); }
 
         /* 3. Main Content (PFD + Grids) */
         .unified-display-main-content {
