@@ -88,6 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let pilotMarkers = {};
     let liveFlightsInterval = null;
     let sectorOpsMap = null;
+    let sectorOpsAnimationInterval = null; // Add this new variable
     let airportAndAtcMarkers = {}; // Holds all airport markers (blue dots and red ATC dots)
     let sectorOpsMapRouteLayers = [];
     let sectorOpsLiveFlightPathLayers = {}; // NEW: To track multiple flight trails
@@ -109,7 +110,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- NEW: To cache flight data when switching to stats view ---
     let cachedFlightDataForStatsView = { flightProps: null, plan: null };
     let animationFrameId = null;
-    let animationDebugElement = null;
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -128,8 +128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     
-
-// --- [REHAULED] Helper to inject custom CSS for new features ---
+    // --- [REHAULED] Helper to inject custom CSS for new features ---
 function injectCustomStyles() {
     const styleId = 'sector-ops-custom-styles';
     if (document.getElementById(styleId)) return;
@@ -686,26 +685,6 @@ function injectCustomStyles() {
         }
         .back-to-pfd-btn:hover { background: #00a8ff; color: #fff; }
 
-        /* --- [NEW] Animation Debugger --- */
-        .animation-debugger {
-            background: rgba(0, 0, 0, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            padding: 12px;
-            margin: 12px;
-            margin-top: 0;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 0.8rem;
-            color: #00ff00; /* Classic debug green */
-            white-space: pre; /* Preserve line breaks */
-            overflow-x: auto;
-            line-height: 1.5;
-        }
-        .animation-debugger .label { color: #9fa8da; }
-        .animation-debugger .value { color: #f0f0f0; }
-        .animation-debugger .mode-interp { color: #00f0ff; }
-        .animation-debugger .mode-extrap { color: #ff9900; }
-        .animation-debugger .mode-oldest { color: #ff4d4d; }
 
         /* --- Toolbar Recall Buttons --- */
         #airport-recall-btn, #aircraft-recall-btn {
@@ -1004,205 +983,67 @@ function predictNewPosition(lat, lon, bearing, distanceKm) {
 }
 
 /**
-     * Linearly interpolates a value.
-     */
-    /**
-     * Linearly interpolates between two values.
-     * @param {number} start - The starting value.
-     * @param {number} end - The ending value.
-     * @param {number} progress - The interpolation factor (0.0 to 1.0).
-     * @returns {number} The interpolated value.
-     */
-    function lerp(start, end, progress) {
-        return start * (1 - progress) + end * progress;
-    }
-
-    /**
-     * Interpolates heading degrees along the shortest path (e.g., from 350° to 10°).
-     */
-    function interpolateHeading(start, end, progress) {
-        let delta = end - start;
-        if (delta > 180) delta -= 360;
-        if (delta < -180) delta += 360;
-        return (start + delta * progress + 360) % 360;
-    }
-
-// [REPLACE THIS FUNCTION]
-/**
- * --- [REPLACEMENT v5.1 - Interpolation, Extrapolation & Debugger] ---
- * This version renders aircraft positions by interpolating between the two
- * most recent data packets, rendering them slightly in the past to ensure
- * smoothness. It falls back to extrapolation if data is stale.
- * It also populates a debug UI element if one is cached.
- * This function is designed to be called every frame by requestAnimationFrame.
+ * --- [NEW] Animation loop running at the browser's refresh rate (e.g., 60fps).
+ * This continuously calls the animateFlightPositions function to create
+ * smooth, predictive movement.
  */
-function renderInterpolatedFlightPositions() {
+function runAnimationLoop() {
+    // 1. Run the animation logic for the current frame
+    animateFlightPositions();
+    
+    // 2. Schedule this function to run again on the next available frame
+    animationFrameId = requestAnimationFrame(runAnimationLoop);
+}
+
+
+/**
+ * --- [REPLACEMENT v5.0 - FR24-Style Extrapolation] ---
+ * This function runs on every animation frame (~60fps).
+ * It predicts the aircraft's *current* position by extrapolating from the
+ * *last known API data* (lat, lon, speed, heading, timestamp).
+ * This creates continuous, smooth motion.
+ */
+function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-    // Exit if the source isn't ready or there's no data to animate
+    // Exit if the source isn't ready or there's no data
     if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
         return;
     }
 
-    // --- Tunables ---
-    const DATA_INTERVAL_MS = 1000; // Our fetch interval
-    // Render 1.5x the data interval in the past.
-    // This gives a 500ms buffer for network jitter.
-    const RENDER_DELAY_MS = DATA_INTERVAL_MS * 1.5;
-    const ktsToKmPerMs = 1.852 / 3600000;
-
-    const now = performance.now();
-    const renderTimestamp = now - RENDER_DELAY_MS;
-
     const newFeatures = [];
-
-    // --- [NEW] Debugger State ---
-    let debugHTML = '';
-    const isDebugging = (animationDebugElement !== null && currentFlightInWindow !== null);
-    // --- [END NEW] ---
+    const ktsToKmPerMs = 1.852 / 3600000;
+    const renderTimestamp = performance.now(); // The time for this specific frame
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
-        const buffer = flight.buffer; // Get the buffer of data packets
-
-        if (buffer.length === 0) continue; // No data for this flight
-
-        let currentLat, currentLon, currentHeading, properties;
-
-        // --- [NEW] Debug variables for this specific flight ---
-        let debugMode = 'UNKNOWN';
-        let debugP0Time = 'N/A';
-        let debugP1Time = 'N/A';
-        let debugProgress = 'N/A';
-        let debugTimeSinceLast = 'N/A';
-        // --- [END NEW] ---
-
-        // Find the two packets that surround our render time
-        let p1 = null; // The packet *just after* renderTimestamp
-        let p0 = null; // The packet *just before* renderTimestamp
-
-        // Iterate backwards to find the bracket
-        for (let i = buffer.length - 1; i >= 0; i--) {
-            if (buffer[i].timestamp <= renderTimestamp) {
-                p0 = buffer[i]; // Found the "before" packet
-                if (i < buffer.length - 1) {
-                    p1 = buffer[i + 1]; // The "after" packet is the next one
-                }
-                break;
-            }
-        }
-
-        // --- Case 1: Interpolation (Happy Path) ---
-        // We have two packets (p0, p1) that bracket our render time.
-        if (p0 && p1) {
-            debugMode = '<span class="mode-interp">INTERPOLATING</span>'; // NEW
-            const totalDuration = p1.timestamp - p0.timestamp;
-            const elapsed = renderTimestamp - p0.timestamp;
-
-            // Prevent division by zero if packets have same timestamp
-            const progress = (totalDuration > 0) ? Math.min(1.0, elapsed / totalDuration) : 1.0;
-
-            const interpPos = getIntermediatePoint(p0.lat, p0.lon, p1.lat, p1.lon, progress);
-            currentLat = interpPos.lat;
-            currentLon = interpPos.lon;
-            currentHeading = interpolateHeading(p0.heading, p1.heading, progress);
-            properties = p0.properties; // Use properties from the earlier packet
-
-            // --- [NEW] ---
-            debugP0Time = p0.timestamp.toFixed(0);
-            debugP1Time = p1.timestamp.toFixed(0);
-            debugProgress = progress.toFixed(3);
-            // --- [END NEW] ---
-
-        }
-        // --- Case 2: Extrapolation ---
-        // We only have p0, meaning our render time is *after* the last packet we've received.
-        // This happens if data is late or we're just starting.
-        else if (p0) {
-            debugMode = '<span class="mode-extrap">EXTRAPOLATING</span>'; // NEW
-            const timeSinceLast = renderTimestamp - p0.timestamp;
-            // Predict forward from the last known good packet
-            const distanceKm = p0.speed * ktsToKmPerMs * timeSinceLast;
-
-            const predictedPos = predictNewPosition(p0.lat, p0.lon, p0.heading, distanceKm);
-            currentLat = predictedPos.lat;
-            currentLon = predictedPos.lon;
-            currentHeading = p0.heading; // Hold the last known heading
-            properties = p0.properties;
-
-            // --- [NEW] ---
-            debugP0Time = p0.timestamp.toFixed(0);
-            debugTimeSinceLast = timeSinceLast.toFixed(0) + ' ms';
-            // --- [END NEW] ---
-        }
-        // --- Case 3: No data old enough ---
-        // All our data is in the *future* relative to renderTimestamp.
-        // This happens when the app first loads. Just draw the oldest packet available.
-        else {
-            debugMode = '<span class="mode-oldest">USING_OLDEST</span>'; // NEW
-            const oldestPacket = buffer[0];
-            currentLat = oldestPacket.lat;
-            currentLon = oldestPacket.lon;
-            currentHeading = oldestPacket.heading;
-            properties = oldestPacket.properties;
-
-            // --- [NEW] ---
-            debugP1Time = oldestPacket.timestamp.toFixed(0);
-            // --- [END NEW] ---
-        }
+        
+        // Calculate how much time has passed since we got the last data packet
+        const elapsedTimeMs = Math.max(0, renderTimestamp - flight.apiTimestamp);
+        
+        // Predict the distance traveled in that time
+        const distanceKm = flight.apiSpeed * ktsToKmPerMs * elapsedTimeMs;
+        
+        // Calculate the new position based on the last known data
+        const predictedPos = predictNewPosition(flight.apiLat, flight.apiLon, flight.apiHeading, distanceKm);
+        
+        // The heading remains the last known heading
+        const currentHeading = flight.apiHeading;
 
         newFeatures.push({
             type: 'Feature',
             geometry: {
                 type: 'Point',
-                coordinates: [currentLon, currentLat]
+                coordinates: [predictedPos.lon, predictedPos.lat]
             },
             properties: {
-                ...properties,
-                heading: currentHeading // Override with the interpolated/extrapolated heading
+                ...flight.properties,
+                heading: currentHeading // Update the icon's rotation
             }
         });
-
-        // --- [NEW] Update Debugger UI if this is the selected flight ---
-        if (isDebugging && flightId === currentFlightInWindow) {
-            const newestPacket = buffer[buffer.length - 1];
-            const staleness = now - newestPacket.timestamp;
-            
-            debugHTML = `
-<span class="label">Now:</span> <span class="value">${now.toFixed(0)}</span>
-<span class="label">Render Target:</span> <span class="value">${renderTimestamp.toFixed(0)}</span>
-<span class="label">Staleness:</span> <span class="value">${staleness.toFixed(0)} ms</span>
-<span class="label">Buffer:</span> <span class="value">${buffer.length} packets</span>
--------------------------
-<span class="label">Mode:</span> ${debugMode}
-<span class="label">p0 (Before):</span> <span class="value">${debugP0Time}</span>
-<span class="label">p1 (After):</span> <span class="value">${debugP1Time}</span>
-<span class="label">Interp Progress:</span> <span class="value">${debugProgress}</span>
-<span class="label">Extrap Time:</span> <span class="value">${debugTimeSinceLast}</span>
--------------------------
-<span class="label">Out Heading:</span> <span class="value">${currentHeading.toFixed(2)}°</span>
-<span class="label">Out Coords:</span> <span class="value">${currentLat.toFixed(4)}, ${currentLon.toFixed(4)}</span>
-            `;
-        }
-        // --- [END NEW] ---
     }
 
-    // --- [NEW] Set the innerHTML of the cached debug element ---
-    if (isDebugging) {
-        // Check if element still exists, just in case
-        if (animationDebugElement) {
-            animationDebugElement.innerHTML = debugHTML;
-        } else {
-            // If it's gone, clear the flag to stop trying
-            isDebugging = false; 
-        }
-    }
-    // --- [END NEW] ---
-
-    // Update the map source with the new positions
-    source.setData({
-        type: 'FeatureCollection',
-        features: newFeatures
-    });
+    // Update the map source with all predicted positions
+    source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
 
 function getAircraftCategory(aircraftName) {
@@ -2590,7 +2431,6 @@ function updatePfdDisplay(pfdData) {
         airportInfoWindow.dataset.eventsAttached = 'true';
     }
     
-    // [REPLACE THIS FUNCTION]
     // --- [MODIFIED] Event listener setup using Event Delegation ---
     function setupAircraftWindowEvents() {
         if (!aircraftInfoWindow || aircraftInfoWindow.dataset.eventsAttached === 'true') return;
@@ -2610,10 +2450,6 @@ function updatePfdDisplay(pfdData) {
                 activePfdUpdateInterval = null;
                 currentFlightInWindow = null;
                 cachedFlightDataForStatsView = { flightProps: null, plan: null };
-
-                // --- [NEW] Clear the debugger cache ---
-                animationDebugElement = null;
-                // --- [END NEW] ---
             }
     
             if (hideBtn) {
@@ -3139,7 +2975,6 @@ if (flightPathState && pathSource && flightPathState.coordinates.length > 0) {
     }
 }
 
-   // [REPLACE THIS FUNCTION]
     /**
      * --- [REDESIGNED & UPDATED] Generates the "Unified Flight Display" with image overlay and aircraft type.
      */
@@ -3333,17 +3168,10 @@ if (flightPathState && pathSource && flightPathState.coordinates.length > 0) {
                          <div class="readout-box"><div class="label">ETE</div><div class="value" id="footer-ete">--:--</div></div>
                     </div>
                 </div>
-                
-                <div id="animation-debugger-content" class="animation-debugger"></div>
-                </div>
+            </div>
         `;
         
         createPfdDisplay();
-
-        // --- [NEW] Cache the debug element ---
-        animationDebugElement = document.getElementById('animation-debugger-content');
-        // --- [END NEW] ---
-        
         updatePfdDisplay(baseProps.position);
         updateAircraftInfoWindow(baseProps, plan);
         
@@ -4047,59 +3875,31 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // START: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
 
-    // --- [NEW] Throttled Animation Loop ---
-// This function will be our new animation "engine."
-// It runs at the browser's native refresh rate (e.g., 60fps)
-// but *throttles* the expensive `animateFlightPositions` call to our
-// desired interval (100ms).
 
-let lastAnimateTimestamp = 0; // Timestamp of the last *logic* update
-const ANIMATION_THROTTLE_MS = 100; // 100ms = 10 updates per second
 
-function throttledAnimationLoop(timestamp) {
-    // 1. Schedule the next frame immediately.
-    // This creates a continuous, efficient loop that's synced with the browser.
-    animationFrameId = requestAnimationFrame(throttledAnimationLoop);
 
-    // 2. Calculate time elapsed since the last *logic* update.
-    const elapsed = timestamp - lastAnimateTimestamp;
-
-    // 3. Check if we've waited long enough (100ms) to run our logic.
-    if (elapsed > ANIMATION_THROTTLE_MS) {
-        // We have. Update the timestamp to "reset" the timer.
-        // We use (timestamp - (elapsed % ANIMATION_THROTTLE_MS)) to stay
-        // in sync, preventing slow drift over time.
-        lastAnimateTimestamp = timestamp - (elapsed % ANIMATION_THROTTLE_MS);
-
-        // 4. Run our *actual* animation logic.
-        // This is the original function that calls source.setData()
-        animateFlightPositions();
-    }
-    
-    // If elapsed <= 100ms, this function does nothing, effectively
-    // "skipping" the expensive logic for this frame and keeping the browser fast.
-}
-
+// --- [REPLACEMENT for startSectorOpsLiveLoop] ---
+// This function now starts two independent loops:
+// 1. A data-fetching loop (setInterval) to get new API data.
+// 2. A 60fps animation loop (requestAnimationFrame) for smooth visuals.
 
 function startSectorOpsLiveLoop() {
     stopSectorOpsLiveLoop(); // Clear any old loops
 
     // 1. Start the data fetching loop (infrequent)
-    // This part is unchanged and continues to fetch new data every 1 second.
+    // This fetches new data every 1 second.
     updateSectorOpsLiveFlights(); // Fetch immediately
-    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 1000);
+    sectorOpsLiveFlightsInterval = setInterval(updateSectorOpsLiveFlights, 1000); 
 
-    // 2. Start the new, continuous animation loop
-    // This function will loop itself using requestAnimationFrame.
-    function animationLoop() {
-        renderInterpolatedFlightPositions();
-        // Schedule the next frame
-        animationFrameId = requestAnimationFrame(animationLoop);
-    }
-    
-    animationLoop(); // Kick off the animation loop
+    // 2. Start the new 60fps animation loop
+    // We call this *once* to kick it off.
+    // It will then loop itself using requestAnimationFrame.
+    animationFrameId = requestAnimationFrame(runAnimationLoop);
 }
 
+
+// --- [REPLACEMENT for stopSectorOpsLiveLoop] ---
+// This function now stops both the data and animation loops.
 
 function stopSectorOpsLiveLoop() {
     // 1. Clear the data-fetching interval
@@ -4108,8 +3908,7 @@ function stopSectorOpsLiveLoop() {
         sectorOpsLiveFlightsInterval = null;
     }
 
-    // 2. Clear the animation loop
-    // This is the crucial part that stops the requestAnimationFrame loop.
+    // 2. Clear the 60fps animation loop
     if (animationFrameId) {
         cancelAnimationFrame(animationFrameId);
         animationFrameId = null;
@@ -4181,14 +3980,12 @@ function stopSectorOpsLiveLoop() {
         });
     }
 
-// --- [REPLACEMENT] Fetches live data and populates the interpolation buffer ---
+// --- [REPLACEMENT] Fetches live data and updates the "last known truth" for the extrapolation engine ---
 async function updateSectorOpsLiveFlights() {
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
     const LIVE_FLIGHTS_BACKEND = 'https://site--acars-backend--6dmjph8ltlhv.code.run';
-    const MAX_BUFFER_SIZE = 5; // Store up to 5 historical packets per flight
-    const STALE_FLIGHT_MS = 30000; // Remove flights with no data for 30s
-
+    
     try {
         const sessionsRes = await fetch(`${LIVE_FLIGHTS_BACKEND}/if-sessions`);
         if (!sessionsRes.ok) {
@@ -4208,8 +4005,8 @@ async function updateSectorOpsLiveFlights() {
             fetch(`${LIVE_FLIGHTS_BACKEND}/atc/${expertSession.id}`),
             fetch(`${LIVE_FLIGHTS_BACKEND}/notams/${expertSession.id}`)
         ]);
-
-        // Update ATC & NOTAMs
+        
+        // Update ATC & NOTAMs (unchanged)
         if (atcRes.ok) {
             const atcData = await atcRes.json();
             activeAtcFacilities = (atcData.ok && Array.isArray(atcData.atc)) ? atcData.atc : [];
@@ -4218,86 +4015,80 @@ async function updateSectorOpsLiveFlights() {
             const notamsData = await notamsRes.json();
             activeNotams = (notamsData.ok && Array.isArray(notamsData.notams)) ? notamsData.notams : [];
         }
-        renderAirportMarkers(); // Refresh airport dots (unchanged)
+        renderAirportMarkers(); 
 
         // Process flights
         if (!flightsRes.ok) {
             console.warn('Sector Ops Map: Failed to fetch live flights data. Holding last known positions.');
             return;
         }
-
+        
         const flightsData = await flightsRes.json();
         if (!flightsData.ok || !Array.isArray(flightsData.flights)) {
             console.warn('Sector Ops Map: Received invalid flights data. Holding last known positions.');
             return;
         }
 
-        const now = performance.now(); // Timestamp the arrival of this data batch
+        // This is the timestamp when we *received* the data, which we use as
+        // the basis for our "last known truth" prediction.
+        const dataReceptionTimestamp = performance.now();
         const updatedFlightIds = new Set();
 
         flightsData.flights.forEach(flight => {
             if (!flight.position || flight.position.lat == null || flight.position.lon == null) return;
-
+            
             const flightId = flight.flightId;
             updatedFlightIds.add(flightId);
 
-            // --- This is the new logic ---
-            
-            // 1. Get or create the flight data object
-            if (!liveFlightData[flightId]) {
-                liveFlightData[flightId] = {
-                    buffer: [] // Initialize with an empty buffer
-                };
-            }
-            const flightState = liveFlightData[flightId];
+            const existingData = liveFlightData[flightId];
 
-            // 2. Create the new data packet
-            const newPacket = {
-                timestamp: now, // Use the high-precision performance.now()
-                lat: flight.position.lat,
-                lon: flight.position.lon,
-                heading: flight.position.track_deg || 0,
-                speed: flight.position.gs_kt || 0,
-                // Store all other properties needed for the map icon & popup
-                properties: {
-                    flightId: flight.flightId,
-                    callsign: flight.callsign,
-                    username: flight.username,
-                    altitude: flight.position.alt_ft,
-                    speed: flight.position.gs_kt || 0,
-                    verticalSpeed: flight.position.vs_fpm || 0,
-                    position: JSON.stringify(flight.position),
-                    aircraft: JSON.stringify(flight.aircraft),
-                    userId: flight.userId,
-                    category: getAircraftCategory(flight.aircraft?.aircraftName)
-                }
+            // --- This is the new "last known truth" ---
+            const newApiLat = flight.position.lat;
+            const newApiLon = flight.position.lon;
+            const newApiHeading = flight.position.track_deg || 0;
+            const newApiSpeed = flight.position.gs_kt || 0;
+            const newProperties = {
+                flightId: flight.flightId,
+                callsign: flight.callsign,
+                username: flight.username,
+                altitude: flight.position.alt_ft,
+                speed: newApiSpeed,
+                verticalSpeed: flight.position.vs_fpm || 0,
+                position: JSON.stringify(flight.position),
+                aircraft: JSON.stringify(flight.aircraft),
+                userId: flight.userId,
+                category: getAircraftCategory(flight.aircraft?.aircraftName)
             };
-            
-            // 3. Add the new packet to the buffer
-            flightState.buffer.push(newPacket);
+            // --- End of new data ---
 
-            // 4. Keep the buffer from growing indefinitely
-            while (flightState.buffer.length > MAX_BUFFER_SIZE) {
-                flightState.buffer.shift(); // Remove the oldest packet
+            if (existingData) {
+                // --- Data Update Logic ---
+                // Just update the last known state. The animation loop will handle the rest.
+                existingData.apiLat = newApiLat;
+                existingData.apiLon = newApiLon;
+                existingData.apiHeading = newApiHeading;
+                existingData.apiSpeed = newApiSpeed;
+                existingData.apiTimestamp = dataReceptionTimestamp; // CRITICAL: Update the timestamp
+                existingData.properties = newProperties;
+                
+            } else {
+                // --- New Flight Logic ---
+                // This is a new flight. Set its initial state.
+                liveFlightData[flightId] = {
+                    apiLat: newApiLat,
+                    apiLon: newApiLon,
+                    apiHeading: newApiHeading,
+                    apiSpeed: newApiSpeed,
+                    apiTimestamp: dataReceptionTimestamp, // CRITICAL: Set the initial timestamp
+                    properties: newProperties
+                };
             }
         });
 
-        // --- Clean up old/stale flights ---
+        // Clean up old flights
         for (const flightId in liveFlightData) {
-            // This is a flight we've seen before, but it's *not* in the current API packet.
             if (!updatedFlightIds.has(flightId)) {
-                const flightState = liveFlightData[flightId];
-                if (flightState.buffer.length > 0) {
-                    // Check how old its *last* packet is
-                    const lastPacketTime = flightState.buffer[flightState.buffer.length - 1].timestamp;
-                    if (now - lastPacketTime > STALE_FLIGHT_MS) {
-                        // Data is too old, remove the flight
-                        delete liveFlightData[flightId];
-                    }
-                } else {
-                    // Flight has no data, remove it
-                    delete liveFlightData[flightId];
-                }
+                delete liveFlightData[flightId];
             }
         }
 
