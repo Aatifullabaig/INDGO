@@ -486,7 +486,8 @@ function injectCustomStyles() {
             width: 100%;
             height: auto;
             max-width: 350px;
-            aspect-ratio: 787 / 695;
+            /* --- MODIFIED: New aspect ratio based on cropped height --- */
+            aspect-ratio: 787 / 635; 
             background-color: #1a1a1a;
             font-family: monospace, sans-serif;
             color: white;
@@ -526,73 +527,60 @@ function injectCustomStyles() {
         .aircraft-type-de-havilland { border-left: 4px solid #6f42c1; }
         .aircraft-type-unknown { border-left: 4px solid #6c757d; }
 
-        /* 5. New Data Grids (Right Column) */
-        .details-grid-container {
+        /* --- [START] NEW STYLES FOR REDESIGN --- */
+        /* 5. New Live Data Panel (Right Column) */
+        .live-data-panel {
             display: flex;
             flex-direction: column;
             gap: 16px;
-            min-width: 0;
+            padding: 10px; /* Add some padding */
+            background: rgba(10, 12, 26, 0.5); /* Give it a subtle bg */
+            border-radius: 12px;
+            min-width: 0; /* Fix for flexbox grid blowout */
         }
-        .details-grid-container h4 {
-            margin: 0;
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #9fa8da;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            padding-bottom: 8px;
-        }
-        
-        .details-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px 16px;
-        }
-        .detail-item {
+        .live-data-item {
             display: flex;
             flex-direction: column;
-            gap: 2px;
+            align-items: flex-start;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            border-left: 3px solid #00a8ff;
         }
-        .detail-label {
+        .live-data-item .data-label {
             font-size: 0.7rem;
             color: #c5cae9;
             text-transform: uppercase;
+            margin-bottom: 4px;
         }
-        .detail-value {
-            font-size: 0.95rem;
+        .live-data-item .data-value {
+            font-size: 1.5rem;
             color: #fff;
-            font-weight: 500;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
             /* For text overflow */
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        .live-data-item .data-value .unit {
+            font-size: 0.8rem;
+            color: #9fa8da;
+            margin-left: 4px;
+            font-family: 'Segoe UI', sans-serif;
+            font-weight: 400;
+        }
+        .live-data-item .data-value .fa-solid {
+            font-size: 0.9rem;
+            margin-right: 6px;
+            color: #00a8ff;
+            font-family: "Font Awesome 6 Free"; /* Ensure icon font is used */
+        }
+        .live-data-item .data-value-ete {
+            font-size: 1.7rem; /* Make ETE slightly bigger */
+        }
+        /* --- [END] NEW STYLES FOR REDESIGN --- */
 
-        .live-telemetry-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 10px;
-        }
-        /* Re-style readout-box to fit grid */
-        .readout-box {
-            background: rgba(10, 12, 26, 0.6);
-            padding: 10px; border-radius: 8px; text-align: center;
-        }
-        .readout-box .label {
-            font-size: 0.7rem; text-transform: uppercase; color: #c5cae9;
-            margin-bottom: 4px;
-        }
-        .readout-box .value {
-            font-size: 1.3rem; font-weight: 600; color: #fff;
-            font-family: 'Courier New', monospace;
-            line-height: 1.1;
-        }
-        .readout-box .value .unit { font-size: 0.8rem; color: #9fa8da; margin-left: 2px;}
-        .readout-box .value .fa-solid { font-size: 0.8rem; margin-right: 4px; color: #00a8ff; }
-        /* Specific adjustments for smaller grid */
-        .live-telemetry-grid .readout-box .value { font-size: 1.1rem; }
-        .live-telemetry-grid .readout-box .label { font-size: 0.65rem; }
 
         /* 6. Pilot Stats Button */
         .pilot-stats-toggle-btn {
@@ -733,6 +721,7 @@ function injectCustomStyles() {
             border-bottom: 1px solid rgba(255,255,255,0.05);
         }
         .detail-item.stats-item:last-child, .detail-item.stats-item:nth-last-child(2) { border-bottom: none; }
+        /* --- MODIFIED: Need to redefine detail-label/value as they were removed --- */
         .detail-label { color: #c5cae9; }
         .detail-value { color: #fff; font-weight: 600; }
         .back-to-flight-btn { /* Changed from back-to-pfd-btn */
@@ -962,12 +951,7 @@ function injectCustomStyles() {
                 max-width: 400px;
                 margin: 0 auto;
             }
-            .details-grid, .live-telemetry-grid {
-                grid-template-columns: 1fr 1fr; /* 2 columns for details on mobile */
-            }
-            .live-telemetry-grid {
-                grid-template-columns: 1fr 1fr 1fr; /* 3 columns for telemetry is fine */
-            }
+            /* --- [REMOVED] Mobile grid styles for deleted elements --- */
         }
     `;
 
@@ -3074,7 +3058,7 @@ async function handleAircraftClick(flightProps, sessionId) {
     }
 }
 
-    /**
+/**
      * --- [REDESIGNED & UPDATED] Generates the "Unified Flight Display" with image overlay and aircraft type.
      */
     function populateAircraftInfoWindow(baseProps, plan) {
@@ -3140,7 +3124,7 @@ async function handleAircraftClick(flightProps, sessionId) {
                     <div class="unified-display-main">
                         <div class="pfd-main-panel">
                             <div id="pfd-container">
-                                <svg width="787" height="695" viewBox="0 0 787 695" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <svg width="787" height="635" viewBox="0 30 787 665" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <g id="PFD" clip-path="url(#clip0_1_2890)">
                                     <g id="attitude_group">
                                         <rect id="Sky" x="-186" y="-222" width="1121" height="532" fill="#0596FF"/>
@@ -3263,48 +3247,25 @@ async function handleAircraftClick(flightProps, sessionId) {
                             </div>
                         </div>
 
-                        <div class="details-grid-container">
-                            <h4>Aircraft Details</h4>
-                            <div class="details-grid">
-                                <div class="detail-item">
-                                    <span class="detail-label">Airline</span>
-                                    <span class="detail-value" id="ac-detail-airline" title="${airlineName}">${airlineName}</span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">Model</span>
-                                    <span class="detail-value" id="ac-detail-model">---</span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">Registration</span>
-                                    <span class="detail-value" id="ac-detail-reg">---</span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">Engine</span>
-                                    <span class="detail-value" id="ac-detail-engine">---</span>
-                                </div>
+                        <div class="live-data-panel">
+                            <div class="live-data-item">
+                                <span class="data-label">Ground Speed</span>
+                                <span class="data-value" id="ac-gs">---<span class="unit">kts</span></span>
                             </div>
-
-                            <h4>Live Telemetry</h4>
-                            <div class="live-telemetry-grid">
-                                <div class="readout-box">
-                                    <div class="label">Ground Speed</div>
-                                    <div class="value" id="ac-gs">---<span class="unit">kts</span></div>
-                                </div>
-                                <div class="readout-box">
-                                    <div class="label">Vertical Speed</div>
-                                    <div class="value" id="ac-vs">---<span class="unit">fpm</span></div>
-                                </div>
-                                <div class="readout-box">
-                                    <div class="label">Dist. to Dest.</div>
-                                    <div class="value" id="ac-dist">---<span class="unit">NM</span></div>
-                                </div>
+                            <div class="live-data-item">
+                                <span class="data-label">Vertical Speed</span>
+                                <span class="data-value" id="ac-vs">---<span class="unit">fpm</span></span>
                             </div>
-                            <div class="readout-box">
-                                <div class="label">ETE to Dest.</div>
-                                <div class="value" id="ac-ete" style="font-size: 1.3rem;">--:--</div>
+                            <div class="live-data-item">
+                                <span class="data-label">Dist. to Dest.</span>
+                                <span class="data-value" id="ac-dist">---<span class="unit">NM</span></span>
+                            </div>
+                            <div class="live-data-item">
+                                <span class="data-label">ETE to Dest.</span>
+                                <span class="data-value data-value-ete" id="ac-ete">--:--</span>
                             </div>
                         </div>
-                    </div>
+                        </div>
 
                     <button class="pilot-stats-toggle-btn" data-user-id="${baseProps.userId}" data-username="${baseProps.username || 'N/A'}">
                         <i class="fa-solid fa-chart-simple"></i>
