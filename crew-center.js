@@ -487,7 +487,9 @@ function injectCustomStyles() {
         .pfd-main-panel {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            /* --- [MODIFIED] --- */
+            /* gap: 12px; (Removed) */
+            justify-content: center; /* Center the PFD vertically */
             min-width: 0;
         }
 
@@ -499,7 +501,8 @@ function injectCustomStyles() {
             border-radius: 12px;
             overflow: hidden;
             min-width: 0;
-            flex-grow: 1;
+            /* --- [MODIFIED] --- */
+            /* flex-grow: 1; (Removed) */
         }
         #pfd-container svg {
             width: 100%;
@@ -518,41 +521,20 @@ function injectCustomStyles() {
             transition: transform 0.5s ease-out;
         }
 
-        /* Aircraft Type Readout (Unchanged) */
+        /* Aircraft Type Readout (REMOVED) */
         #aircraft-type-readout {
-            background: rgba(10, 12, 26, 0.6);
-            padding: 10px; border-radius: 8px; text-align: center;
+           display: none; /* This is no longer used */
         }
-        #aircraft-type-readout .label {
-            font-size: 0.7rem; text-transform: uppercase; color: #c5cae9;
-            margin-bottom: 4px;
-        }
-        #aircraft-type-readout .value {
-            font-size: 1.05rem;
-            font-family: 'Segoe UI', sans-serif;
-            font-weight: 500;
-            color: #fff;
-            padding: 4px 0;
-            line-height: 1.2;
-        }
-        #aircraft-type-readout .fa-solid {
-            color: #9fa8da;
-        }
-        .aircraft-type-airbus { border-left: 4px solid #00a8ff; }
-        .aircraft-type-boeing { border-left: 4px solid #ffc107; }
-        .aircraft-type-bombardier { border-left: 4px solid #dc3545; }
-        .aircraft-type-embraer { border-left: 4px solid #28a745; }
-        .aircraft-type-mcdonnell-douglas { border-left: 4px solid #ff8c00; }
-        .aircraft-type-de-havilland { border-left: 4px solid #6f42c1; }
-        .aircraft-type-unknown { border-left: 4px solid #6c757d; }
 
-        /* --- [START] NEW STYLES FOR REDESIGN --- */
+        /* --- [START] MODIFIED STYLES FOR REDESIGN --- */
         /* 5. New Live Data Panel (Right Column) */
         .live-data-panel {
             display: flex;
             flex-direction: column;
-            gap: 16px;
-            padding: 10px; /* Add some padding */
+            /* --- [MODIFIED] --- */
+            justify-content: space-around; /* Distribute items vertically */
+            /* gap: 16px; (Removed) */
+            /* padding: 10px; (Removed) */
             background: rgba(10, 12, 26, 0.5); /* Give it a subtle bg */
             border-radius: 12px;
             min-width: 0; /* Fix for flexbox grid blowout */
@@ -560,11 +542,12 @@ function injectCustomStyles() {
         .live-data-item {
             display: flex;
             flex-direction: column;
-            align-items: flex-start;
-            padding: 8px 12px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
-            border-left: 3px solid #00a8ff;
+            /* --- [MODIFIED] --- */
+            align-items: center; /* Center the text */
+            padding: 0; /* Was 8px 12px */
+            /* background: rgba(0, 0, 0, 0.2); (Removed) */
+            /* border-radius: 8px; (Removed) */
+            /* border-left: 3px solid #00a8ff; (Removed) */
         }
         .live-data-item .data-label {
             font-size: 0.7rem;
@@ -598,7 +581,7 @@ function injectCustomStyles() {
         .live-data-item .data-value-ete {
             font-size: 1.7rem; /* Make ETE slightly bigger */
         }
-        /* --- [END] NEW STYLES FOR REDESIGN --- */
+        /* --- [END] MODIFIED STYLES FOR REDESIGN --- */
 
 
         /* 6. Pilot Stats Button */
@@ -3260,17 +3243,11 @@ function populateAircraftInfoWindow(baseProps, plan) {
                             </defs>
                             </svg>
                         </div>
-                        <div class="readout-box" id="aircraft-type-readout">
-                            <div class="label"><i class="fa-solid fa-plane-circle-check"></i> Aircraft Type</div>
-                            <div class="value" id="ac-type-value">---</div>
+                        
                         </div>
-                    </div>
 
                     <div class="live-data-panel">
-                        <div class="live-data-item">
-                            <span class="data-label">Ground Speed</span>
-                            <span class="data-value" id="ac-gs">---<span class="unit">kts</span></span>
-                        </div>
+                        
                         <div class="live-data-item">
                             <span class="data-label">Vertical Speed</span>
                             <span class="data-value" id="ac-vs">---<span class="unit">fpm</span></span>
@@ -3302,16 +3279,7 @@ function populateAircraftInfoWindow(baseProps, plan) {
     updatePfdDisplay(baseProps.position);
     updateAircraftInfoWindow(baseProps, plan);
     
-    // --- [NEW] Logic to populate the aircraft type box ---
-    const aircraftTypeReadout = document.getElementById('aircraft-type-readout');
-    const aircraftTypeValue = document.getElementById('ac-type-value');
-    
-    if (aircraftTypeReadout && aircraftTypeValue) {
-        aircraftTypeValue.textContent = aircraftName;
-        const manufacturerClass = getAircraftManufacturerClass(aircraftName);
-        // Add the new class without removing the base 'readout-box' class
-        aircraftTypeReadout.classList.add(manufacturerClass);
-    }
+    // --- [REMOVED] Logic to populate the aircraft type box ---
 }
 
     // --- [NEW - CORRECTED] Renders the creative Pilot Stats view inside the info window ---
