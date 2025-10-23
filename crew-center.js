@@ -82,8 +82,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let airportsData = {};
     let ALL_AVAILABLE_ROUTES = []; // State variable to hold all routes for filtering
     let runwaysData = {}; // NEW: To store runway data indexed by airport ICAO
-    let liveFlightData = {}; // Key: flightId, Value: { lon, lat, heading, speed, timestamp }
-    const DATA_REFRESH_INTERVAL_MS = 3000; // Your current refresh interval
+    let currentMapFeatures = {}; // Key: flightId, Value: GeoJSON Feature
+    const DATA_REFRESH_INTERVAL_MS = 50000; // Your current refresh interval
     const ACARS_SOCKET_URL = 'https://site--acars-backend--6dmjph8ltlhv.code.run'; // <-- NEW: For WebSocket
 
     // --- Map-related State ---
@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let lastPfdState = { track_deg: 0, timestamp: 0, roll_deg: 0 };
     // --- NEW: To cache flight data when switching to stats view ---
     let cachedFlightDataForStatsView = { flightProps: null, plan: null };
-    let animationFrameId = null;
+
 
 
     // --- Helper: Fetch Mapbox Token from Netlify Function ---
@@ -959,140 +959,6 @@ async function fetchRunwaysData() {
 
     /// --- Helper Functions ---
 
-/**
- * --- [NEW] Predicts a new coordinate based on a starting point, bearing, and distance.
- * This is the core of the extrapolation logic.
- * @param {number} lat - Starting latitude in degrees.
- * @param {number} lon - Starting longitude in degrees.
- * @param {number} bearing - Bearing in degrees (0-360).
- * @param {number} distanceKm - Distance to travel in kilometers.
- * @returns {{lat: number, lon: number}} The new predicted coordinates.
- */
-function predictNewPosition(lat, lon, bearing, distanceKm) {
-    const R = 6371; // Earth's radius in km
-    const toRad = (v) => v * Math.PI / 180;
-    const toDeg = (v) => v * 180 / Math.PI;
-
-    const latRad = toRad(lat);
-    const lonRad = toRad(lon);
-    const bearingRad = toRad(bearing);
-
-    const lat2Rad = Math.asin(Math.sin(latRad) * Math.cos(distanceKm / R) +
-                             Math.cos(latRad) * Math.sin(distanceKm / R) * Math.cos(bearingRad));
-
-    const lon2Rad = lonRad + Math.atan2(Math.sin(bearingRad) * Math.sin(distanceKm / R) * Math.cos(latRad),
-                                       Math.cos(distanceKm / R) - Math.sin(latRad) * Math.sin(lat2Rad));
-
-    return { lat: toDeg(lat2Rad), lon: toDeg(lon2Rad) };
-}
-
-/**
-     * Linearly interpolates a value.
-     */
-    /**
-     * Linearly interpolates between two values.
-     * @param {number} start - The starting value.
-     * @param {number} end - The ending value.
-     * @param {number} progress - The interpolation factor (0.0 to 1.0).
-     * @returns {number} The interpolated value.
-     */
-    function lerp(start, end, progress) {
-        return start * (1 - progress) + end * progress;
-    }
-
-    /**
-     * Interpolates heading degrees along the shortest path (e.g., from 350° to 10°).
-     */
-    function interpolateHeading(start, end, progress) {
-        let delta = end - start;
-        if (delta > 180) delta -= 360;
-        if (delta < -180) delta += 360;
-        return (start + delta * progress + 360) % 360;
-    }
-
-/**
- * --- [REPLACEMENT v3.0 - TIME-BASED INTERPOLATION] ---
- * This version interpolates between the last two known API packets ('from' and 'to')
- * using a time-based progress. It uses the correct spherical interpolation
- * (`getIntermediatePoint`) to match the trail logic and seamlessly
- * transitions to prediction (`predictNewPosition`) when the animation time
- * passes the last known packet's timestamp.
- */
-function animateFlightPositions() {
-    const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-    // Exit if the source isn't ready or there's no data to animate
-    if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
-        return;
-    }
-
-    const newFeatures = [];
-    const ktsToKmPerMs = 1.852 / 3600000;
-    const timestamp = performance.now(); // Current render time
-    const MIN_INTERP_INTERVAL = 100; // Min interval (ms) to attempt interpolation
-
-    for (const flightId in liveFlightData) {
-        const flight = liveFlightData[flightId];
-        
-        let currentLat, currentLon, currentHeading;
-        
-        // Time between the last two API packets (e.g., ~3000ms)
-        const timeBetweenPackets = flight.toTimestamp - flight.fromTimestamp;
-        // Time elapsed since the 'from' packet
-        const timeSinceFromPacket = timestamp - flight.fromTimestamp;
-
-        if (timeBetweenPackets > MIN_INTERP_INTERVAL && timeSinceFromPacket < timeBetweenPackets) {
-            // --- 1. INTERPOLATION PHASE ---
-            // We are chronologically *between* the 'from' and 'to' packets.
-            // Use spherical interpolation for the correct path over the globe.
-            
-            // Progress from 0.0 to 1.0
-            const progress = timeSinceFromPacket / timeBetweenPackets;
-            
-            // Use the *correct* spherical interpolation function
-            const interpPos = getIntermediatePoint(flight.fromLat, flight.fromLon, flight.toLat, flight.toLon, progress);
-            currentLat = interpPos.lat;
-            currentLon = interpPos.lon;
-            
-            // Use the existing heading interpolation
-            currentHeading = interpolateHeading(flight.fromHeading, flight.toHeading, progress);
-        
-        } else {
-            // --- 2. PREDICTION PHASE ---
-            // We are *past* the most recent packet ('toTimestamp').
-            // This happens if (timeBetweenPackets <= 100ms) or (timeSinceFromPacket >= timeBetweenPackets).
-            // Predict position based on the *last known API data* (the 'to' state).
-            
-            const elapsedTimeMs = timestamp - flight.toTimestamp; // Time since the *last* packet
-            const distanceKm = flight.apiSpeed * ktsToKmPerMs * elapsedTimeMs;
-            
-            // Use the spherical prediction function
-            const predictedPos = predictNewPosition(flight.toLat, flight.toLon, flight.toHeading, distanceKm);
-            
-            currentLat = predictedPos.lat;
-            currentLon = predictedPos.lon;
-            currentHeading = flight.toHeading; // Hold the last known heading
-        }
-
-        // We no longer need to store 'displayLat/Lon'
-        // The position is calculated fresh in every animation frame.
-
-        newFeatures.push({
-            type: 'Feature',
-            geometry: {
-                type: 'Point',
-                coordinates: [currentLon, currentLat]
-            },
-            properties: {
-                ...flight.properties,
-                heading: currentHeading
-            }
-        });
-    }
-
-    // This is the key: setData() is now called at a controlled rate,
-    // but with much more accurate, time-synced data.
-    source.setData({ type: 'FeatureCollection', features: newFeatures });
-}
 
 function getAircraftCategory(aircraftName) {
     if (!aircraftName) return 'default';
@@ -1180,30 +1046,35 @@ function getIntermediatePoint(lat1, lon1, lat2, lon2, fraction) {
     return { lat: latI, lon: lonI };
 }
 
-// crew-center.js
-
 /**
- * --- [NEW] Handles live flight data received from the WebSocket.
- * This function updates the 'liveFlightData' object, which the
- * animation loop ('animateFlightPositions') uses to render.
+ * --- [REPLACEMENT - TELEPORT VERSION] Handles live flight data received from the WebSocket.
+ * This function updates the map source directly, causing aircraft to "teleport"
+ * to their new positions with each update.
  */
 function handleSocketFlightUpdate(data) {
     if (!data || !Array.isArray(data.flights)) {
         console.warn('Socket: Received invalid flights data packet.');
         return;
     }
-    
+
+    if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) {
+        return; // Map not ready
+    }
+
+    const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
+    if (!source) {
+        console.warn('Socket: Map source not found, cannot update flight positions.');
+        return;
+    }
+
     const flights = data.flights;
-    const now = performance.now();
     const updatedFlightIds = new Set();
 
     flights.forEach(flight => {
         if (!flight.position || flight.position.lat == null || flight.position.lon == null) return;
-        
+
         const flightId = flight.flightId;
         updatedFlightIds.add(flightId);
-
-        const existingData = liveFlightData[flightId];
 
         // Extract new API data
         const newApiLat = flight.position.lat;
@@ -1220,51 +1091,33 @@ function handleSocketFlightUpdate(data) {
             position: JSON.stringify(flight.position),
             aircraft: JSON.stringify(flight.aircraft),
             userId: flight.userId,
-            category: getAircraftCategory(flight.aircraft?.aircraftName)
+            category: getAircraftCategory(flight.aircraft?.aircraftName),
+            heading: newApiHeading // Pass heading for icon rotation
         };
 
-        if (existingData) {
-            // The old 'to' state becomes the new 'from' state
-            existingData.fromLat = existingData.toLat;
-            existingData.fromLon = existingData.toLon;
-            existingData.fromHeading = existingData.toHeading;
-            existingData.fromTimestamp = existingData.toTimestamp;
-
-            // Update the 'to' state with the new packet
-            existingData.toLat = newApiLat;
-            existingData.toLon = newApiLon;
-            existingData.toHeading = newApiHeading;
-            existingData.toTimestamp = now; // This is the 'to' timestamp
-            existingData.apiSpeed = newApiSpeed; // Speed for prediction
-            existingData.properties = newProperties;
-
-        } else {
-            // This is a new flight. Set 'from' and 'to' to the same state.
-            liveFlightData[flightId] = {
-                // 'From' state
-                fromLat: newApiLat,
-                fromLon: newApiLon,
-                fromHeading: newApiHeading,
-                fromTimestamp: now,
-
-                // 'To' state
-                toLat: newApiLat,
-                toLon: newApiLon,
-                toHeading: newApiHeading,
-                toTimestamp: now,
-                
-                apiSpeed: newApiSpeed,
-                properties: newProperties
-            };
-        }
+        // Create or update the feature in our state
+        currentMapFeatures[flightId] = {
+            type: 'Feature',
+            geometry: {
+                type: 'Point',
+                coordinates: [newApiLon, newApiLat]
+            },
+            properties: newProperties
+        };
     });
 
     // Clean up old flights that are no longer in the broadcast
-    for (const flightId in liveFlightData) {
+    for (const flightId in currentMapFeatures) {
         if (!updatedFlightIds.has(flightId)) {
-            delete liveFlightData[flightId];
+            delete currentMapFeatures[flightId];
         }
     }
+
+    // Update the map source with the new feature collection
+    source.setData({
+        type: 'FeatureCollection',
+        features: Object.values(currentMapFeatures)
+    });
 }
 
 /**
@@ -4062,90 +3915,45 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // START: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
 
-    // --- [NEW] Throttled Animation Loop ---
-// This function will be our new animation "engine."
-// It runs at the browser's native refresh rate (e.g., 60fps)
-// but *throttles* the expensive `animateFlightPositions` call to our
-// desired interval (100ms).
-
-let lastAnimateTimestamp = 0; // Timestamp of the last *logic* update
-const ANIMATION_THROTTLE_MS = 100; // 100ms = 10 updates per second
-
-function throttledAnimationLoop(timestamp) {
-    // 1. Schedule the next frame immediately.
-    // This creates a continuous, efficient loop that's synced with the browser.
-    animationFrameId = requestAnimationFrame(throttledAnimationLoop);
-
-    // 2. Calculate time elapsed since the last *logic* update.
-    const elapsed = timestamp - lastAnimateTimestamp;
-
-    // 3. Check if we've waited long enough (100ms) to run our logic.
-    if (elapsed > ANIMATION_THROTTLE_MS) {
-        // We have. Update the timestamp to "reset" the timer.
-        // We use (timestamp - (elapsed % ANIMATION_THROTTLE_MS)) to stay
-        // in sync, preventing slow drift over time.
-        lastAnimateTimestamp = timestamp - (elapsed % ANIMATION_THROTTLE_MS);
-
-        // 4. Run our *actual* animation logic.
-        // This is the original function that calls source.setData()
-        animateFlightPositions();
-    }
-    
-    // If elapsed <= 100ms, this function does nothing, effectively
-    // "skipping" the expensive logic for this frame and keeping the browser fast.
-}
-
-
-// crew-center.js
 
 // --- [REPLACEMENT for startSectorOpsLiveLoop] ---
-// This function is updated to use the new animation loop,
-// connect to the WebSocket, and set up a separate poller for ATC/NOTAMs.
-
+// This function is updated to only connect to the WebSocket and 
+// set up the poller for ATC/NOTAMs.
 function startSectorOpsLiveLoop() {
     stopSectorOpsLiveLoop(); // Clear any old loops
 
     // 1. Start the data fetching loop for ATC/NOTAMs (infrequent)
     updateSectorOpsSecondaryData(); // Fetch immediately
-    // Note: Renamed 'sectorOpsLiveFlightsInterval' to 'sectorOpsAtcNotamInterval'
     sectorOpsAtcNotamInterval = setInterval(updateSectorOpsSecondaryData, DATA_REFRESH_INTERVAL_MS); 
 
-    // 2. Start the new throttled animation loop (fast)
-    // This is responsible for smooth visual rendering
-    lastAnimateTimestamp = 0;
-    animationFrameId = requestAnimationFrame(throttledAnimationLoop);
-    
-    // 3. Initialize and connect the WebSocket
+    // 2. Initialize and connect the WebSocket
     // This is responsible for receiving flight data
     initializeSectorOpsSocket();
+
+    // 3. Animation loop is no longer started here.
+    // Data updates happen directly in handleSocketFlightUpdate.
 }
 
 
-// crew-center.js
-
 // --- [REPLACEMENT for stopSectorOpsLiveLoop] ---
-// This function is updated to stop the animation loop,
-// disconnect the socket, and clear the ATC/NOTAM poller.
-
+// This function is updated to stop the socket
+// and clear the ATC/NOTAM poller.
 function stopSectorOpsLiveLoop() {
     // 1. Clear the data-fetching interval for ATC/NOTAMs
     if (sectorOpsAtcNotamInterval) {
         clearInterval(sectorOpsAtcNotamInterval);
         sectorOpsAtcNotamInterval = null;
     }
-
-    // 2. Clear the animation loop
-    if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-        animationFrameId = null;
-    }
     
-    // 3. Disconnect the WebSocket and remove listeners
+    // 2. Disconnect the WebSocket and remove listeners
     if (sectorOpsSocket) {
         console.log('Socket: Disconnecting from Sector Ops...');
         sectorOpsSocket.disconnect();
         sectorOpsSocket = null;
     }
+
+    // 3. NEW: Clear the feature state to prevent stale aircraft
+    currentMapFeatures = {};
 }
 
     /**
