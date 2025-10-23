@@ -997,52 +997,77 @@ function runAnimationLoop() {
 
 
 /**
- * --- [REPLACEMENT v5.0 - FR24-Style Extrapolation] ---
- * This function runs on every animation frame (~60fps).
- * It predicts the aircraft's *current* position by extrapolating from the
- * *last known API data* (lat, lon, speed, heading, timestamp).
- * This creates continuous, smooth motion.
+ * --- [REPLACEMENT v7.0 - DYNAMIC Blending Model] ---
+ * This version adjusts the blend factor based on the aircraft's speed.
+ * - At high speeds, it uses a loose blend (more lag) for smoothness.
+ * - At low speeds (taxiing), it uses a tight blend (less lag) to
+ * prevent overshooting and wobbling during turns or stops.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
-    // Exit if the source isn't ready or there's no data
     if (!source || !sectorOpsMap.isStyleLoaded() || Object.keys(liveFlightData).length === 0) {
         return;
     }
 
     const newFeatures = [];
     const ktsToKmPerMs = 1.852 / 3600000;
-    const renderTimestamp = performance.now(); // The time for this specific frame
+    const renderTimestamp = performance.now();
+    
+    // --- Dynamic Blend Configuration ---
+    // You can tune these values
+    const MIN_SPEED_KTS = 40;  // Below this speed, use the tightest blend
+    const MAX_SPEED_KTS = 300; // Above this speed, use the loosest blend
+    
+    const TIGHT_BLEND = 0.12; // High factor for responsiveness on ground
+    const LOOSE_BLEND = 0.03; // Low factor for smoothness at cruise
+    // --- End Configuration ---
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
-        
-        // Calculate how much time has passed since we got the last data packet
-        const elapsedTimeMs = Math.max(0, renderTimestamp - flight.apiTimestamp);
-        
-        // Predict the distance traveled in that time
-        const distanceKm = flight.apiSpeed * ktsToKmPerMs * elapsedTimeMs;
-        
-        // Calculate the new position based on the last known data
-        const predictedPos = predictNewPosition(flight.apiLat, flight.apiLon, flight.apiHeading, distanceKm);
-        
-        // The heading remains the last known heading
-        const currentHeading = flight.apiHeading;
 
+        // --- 1. PREDICT THE MOVING TARGET ---
+        // (This logic is unchanged from the previous step)
+        const elapsedTimeMs = Math.max(0, renderTimestamp - flight.targetTimestamp);
+        const distanceKm = flight.targetSpeed * ktsToKmPerMs * elapsedTimeMs;
+        const currentTargetPos = predictNewPosition(
+            flight.targetLat, 
+            flight.targetLon, 
+            flight.targetHeading, 
+            distanceKm
+        );
+        const currentTargetHeading = flight.targetHeading;
+
+        // --- 2. CALCULATE DYNAMIC BLEND FACTOR ---
+        // Remap the *target* speed (our "intent") to a blend factor.
+        // Note: We remap from MIN/MAX speed to TIGHT/LOOSE blend.
+        const dynamicBlendFactor = remapAndClamp(
+            flight.targetSpeed, 
+            MIN_SPEED_KTS, 
+            MAX_SPEED_KTS, 
+            TIGHT_BLEND, 
+            LOOSE_BLEND 
+        );
+
+        // --- 3. INTERPOLATE THE DISPLAY ---
+        // Use the NEW dynamic blend factor
+        flight.displayLat = lerp(flight.displayLat, currentTargetPos.lat, dynamicBlendFactor);
+        flight.displayLon = lerp(flight.displayLon, currentTargetPos.lon, dynamicBlendFactor);
+        flight.displayHeading = lerpAngle(flight.displayHeading, currentTargetHeading, dynamicBlendFactor);
+
+        // --- 4. RENDER THE DISPLAY ---
         newFeatures.push({
             type: 'Feature',
             geometry: {
                 type: 'Point',
-                coordinates: [predictedPos.lon, predictedPos.lat]
+                coordinates: [flight.displayLon, flight.displayLat]
             },
             properties: {
                 ...flight.properties,
-                heading: currentHeading // Update the icon's rotation
+                heading: flight.displayHeading
             }
         });
     }
 
-    // Update the map source with all predicted positions
     source.setData({ type: 'FeatureCollection', features: newFeatures });
 }
 
@@ -1098,6 +1123,53 @@ function getAircraftCategory(aircraftName) {
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     }
+
+/**
+ * Linearly interpolates between two values.
+ * @param {number} a - The starting value.
+ * @param {number} b - The target value.
+ * @param {number} t - The blend factor (0.0 to 1.0).
+ * @returns {number} The interpolated value.
+ */
+function lerp(a, b, t) {
+    return a + (b - a) * t;
+}
+
+/**
+ * Linearly interpolates between two angles, handling the 360-to-0-degree wrap.
+ * @param {number} a - The starting angle (degrees).
+ * @param {number} b - The target angle (degrees).
+ * @param {number} t - The blend factor (0.0 to 1.0).
+ * @returns {number} The interpolated angle.
+ */
+function lerpAngle(a, b, t) {
+    let delta = b - a;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    return (a + delta * t + 360) % 360;
+}
+
+/**
+ * --- [NEW HELPER] ---
+ * Remaps a value from one range to another, clamping the result.
+ * This will be used to map speed [low, high] to blend factor [tight, loose].
+ * @param {number} value - The value to remap (e.g., current speed).
+ * @param {number} inMin - The input range min (e.g., 40 kts).
+ * @param {number} inMax - The input range max (e.g., 300 kts).
+ * @param {number} outMin - The output range min (e.g., 0.12 blend).
+ * @param {number} outMax - The output range max (e.g., 0.03 blend).
+ * @returns {number} The remapped value, clamped to [outMin, outMax].
+ */
+function remapAndClamp(value, inMin, inMax, outMin, outMax) {
+    // Clamp the input value to the input range
+    const clampedValue = Math.max(inMin, Math.min(value, inMax));
+    
+    // Calculate the normalized position (0.0 to 1.0)
+    const normalized = (clampedValue - inMin) / (inMax - inMin);
+    
+    // Lerp to the output range
+    return outMin + (outMax - outMin) * normalized;
+}
 
 /**
  * Calculates an intermediate point along a great-circle path.
@@ -4062,27 +4134,35 @@ async function updateSectorOpsLiveFlights() {
             // --- End of new data ---
 
             if (existingData) {
-                // --- Data Update Logic ---
-                // Just update the last known state. The animation loop will handle the rest.
-                existingData.apiLat = newApiLat;
-                existingData.apiLon = newApiLon;
-                existingData.apiHeading = newApiHeading;
-                existingData.apiSpeed = newApiSpeed;
-                existingData.apiTimestamp = dataReceptionTimestamp; // CRITICAL: Update the timestamp
-                existingData.properties = newProperties;
-                
-            } else {
-                // --- New Flight Logic ---
-                // This is a new flight. Set its initial state.
-                liveFlightData[flightId] = {
-                    apiLat: newApiLat,
-                    apiLon: newApiLon,
-                    apiHeading: newApiHeading,
-                    apiSpeed: newApiSpeed,
-                    apiTimestamp: dataReceptionTimestamp, // CRITICAL: Set the initial timestamp
-                    properties: newProperties
-                };
-            }
+    // --- Data Update Logic ---
+    // JUST update the target state. The animation loop will handle the rest.
+    existingData.targetLat = newApiLat;
+    existingData.targetLon = newApiLon;
+    existingData.targetHeading = newApiHeading;
+    existingData.targetSpeed = newApiSpeed;
+    existingData.targetTimestamp = dataReceptionTimestamp; // CRITICAL: Update the target timestamp
+    existingData.properties = newProperties;
+    
+} else {
+    // --- New Flight Logic ---
+    // This is a new flight. Set BOTH display and target to the same initial state.
+    liveFlightData[flightId] = {
+        // Target state (the "truth")
+        targetLat: newApiLat,
+        targetLon: newApiLon,
+        targetHeading: newApiHeading,
+        targetSpeed: newApiSpeed,
+        targetTimestamp: dataReceptionTimestamp,
+
+        // Display state (what's on screen)
+        displayLat: newApiLat,
+        displayLon: newApiLon,
+        displayHeading: newApiHeading,
+
+        // Other properties
+        properties: newProperties
+    };
+}
         });
 
         // Clean up old flights
