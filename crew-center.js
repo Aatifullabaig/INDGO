@@ -85,6 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentMapFeatures = {}; // Key: flightId, Value: GeoJSON Feature
     const DATA_REFRESH_INTERVAL_MS = 50000; // Your current refresh interval
     const ACARS_SOCKET_URL = 'https://site--acars-backend--6dmjph8ltlhv.code.run'; // <-- NEW: For WebSocket
+    let isAircraftWindowLoading = false;
 
     // --- Map-related State ---
     let liveFlightsMap = null;
@@ -2844,40 +2845,53 @@ async function initializeSectorOpsMap(centerICAO) {
         return waypoints;
     }
 
-    /**
- * --- [REMODEL V4 - FULL SYNC WITH PATH DENSIFICATION] Handles aircraft clicks, data fetching, map plotting, and window population.
+/**
+ * --- [REMODEL V4.4 - RESILIENT] Handles aircraft clicks, data fetching, map plotting, and window population.
+ * --- Prevents multiple clicks from firing simultaneously and gracefully handles fetch errors.
+ * --- [USER MODIFICATION] The update interval no longer updates the map icon's position or its flight trail.
+ * --- It ONLY updates the PFD and Info Window readouts. Map icon updates are handled globally by the WebSocket.
  */
 async function handleAircraftClick(flightProps, sessionId) {
     if (!flightProps || !flightProps.flightId) return;
 
-    // FIX: Prevent re-fetch if the user clicks the same aircraft while its window is already open.
+    // [RESILIENCE] Prevent new clicks if one is already loading
+    if (isAircraftWindowLoading) {
+        console.warn("Aircraft click ignored: window is already loading.");
+        return;
+    }
+
+    // [ORIGINAL] Prevent re-opening an already open window.
     if (currentFlightInWindow === flightProps.flightId && aircraftInfoWindow.classList.contains('visible')) {
         return;
     }
 
-    resetPfdState();
+    // [RESILIENCE] Set loading flag *after* initial checks
+    isAircraftWindowLoading = true;
 
-    if (currentFlightInWindow && currentFlightInWindow !== flightProps.flightId) {
-        clearLiveFlightPath(currentFlightInWindow);
-    }
+    // [RESILIENCE & CRITICAL] Always clear any existing interval *first*.
     if (activePfdUpdateInterval) {
         clearInterval(activePfdUpdateInterval);
         activePfdUpdateInterval = null;
     }
 
-    currentFlightInWindow = flightProps.flightId;
+    resetPfdState();
 
-    // ✅ REPLACEMENT: This block now defers to the MobileUIHandler
-    // This ensures the mobile script has full control on smaller screens.
+    // [ORIGINAL] Clear previous flight's path
+    if (currentFlightInWindow && currentFlightInWindow !== flightProps.flightId) {
+        clearLiveFlightPath(currentFlightInWindow);
+    }
+
+    currentFlightInWindow = flightProps.flightId; // Set state
+    cachedFlightDataForStatsView = { flightProps: null, plan: null }; // Clear cache
+
+    // [ORIGINAL] Show loading state
     if (window.MobileUIHandler && window.MobileUIHandler.isMobile()) {
         window.MobileUIHandler.openWindow(aircraftInfoWindow);
     } else {
-        // Original desktop logic
         aircraftInfoWindow.classList.add('visible');
     }
     aircraftInfoWindowRecallBtn.classList.remove('visible');
-
-
+    
     const windowEl = document.getElementById('aircraft-info-window');
     windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
 
@@ -2949,54 +2963,9 @@ async function handleAircraftClick(flightProps, sessionId) {
                     updatePfdDisplay(updatedFlight.position);
                     updateAircraftInfoWindow(updatedFlight, plan);
                     
-                    // --- Logic to update the aircraft's icon on the map (Unchanged) ---
-                    const iconSource = sectorOpsMap.getSource('sector-ops-live-flights-source');
-                    if (iconSource && iconSource._data) {
-                        const currentData = iconSource._data;
-                        const featureToUpdate = currentData.features.find(f => f.properties.flightId === flightProps.flightId);
-                        if (featureToUpdate) {
-                            featureToUpdate.geometry.coordinates = [updatedFlight.position.lon, updatedFlight.position.lat];
-                            featureToUpdate.properties.heading = updatedFlight.position.track_deg || 0;
-                            iconSource.setData(currentData);
-                        }
-                    }
-                    
-                    // --- FIX: Logic to update the flown path using the stored array ---
-                    // --- FIX: Logic to update and smooth the flown path in real-time ---
-const flightPathState = sectorOpsLiveFlightPathLayers[flightProps.flightId];
-const pathSource = flightPathState ? sectorOpsMap.getSource(flightPathState.flown) : null;
-
-if (flightPathState && pathSource && flightPathState.coordinates.length > 0) {
-    const newPosition = [updatedFlight.position.lon, updatedFlight.position.lat];
-    const lastPosition = flightPathState.coordinates[flightPathState.coordinates.length - 1];
-
-    const [lon1, lat1] = lastPosition;
-    const [lon2, lat2] = newPosition;
-
-    // Only add points if the aircraft has actually moved
-    if (lat1 !== lat2 || lon1 !== lon2) {
-        const pointsToInterpolate = 5; // Increase for even smoother curves
-        for (let i = 1; i <= pointsToInterpolate; i++) {
-            const fraction = i / (pointsToInterpolate + 1);
-            const intermediate = getIntermediatePoint(lat1, lon1, lat2, lon2, fraction);
-            flightPathState.coordinates.push([intermediate.lon, intermediate.lat]);
-        }
-    }
-
-    // Add the final, actual position from the API
-    flightPathState.coordinates.push(newPosition);
-
-    // Update the map source with the newly densified path
-    pathSource.setData({
-        type: 'Feature',
-        geometry: {
-            type: 'LineString',
-            coordinates: flightPathState.coordinates
-        }
-    });
-}
-// --- END OF FIX ---
-                    // --- END OF FIX ---
+                    // --- [START OF USER MODIFICATION] ---
+                    // Map icon and trail updates are handled globally.
+                    // --- [END OF USER MODIFICATION] ---
 
                 } else {
                     clearInterval(activePfdUpdateInterval);
@@ -3009,9 +2978,17 @@ if (flightPathState && pathSource && flightPathState.coordinates.length > 0) {
             }
         }, 3000);
 
+        // [RESILIENCE] Unset loading flag on success
+        isAircraftWindowLoading = false;
+
     } catch (error) {
         console.error("Error fetching or plotting aircraft details:", error);
         windowEl.innerHTML = `<p class="error-text" style="padding: 2rem;">Could not retrieve complete flight details. The aircraft may have landed or disconnected.</p>`;
+        
+        // [RESILIENCE & CRITICAL] Reset state on failure
+        isAircraftWindowLoading = false; 
+        currentFlightInWindow = null; 
+        cachedFlightDataForStatsView = { flightProps: null, plan: null };
     }
 }
 
