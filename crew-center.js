@@ -997,11 +997,17 @@ function runAnimationLoop() {
 
 
 /**
- * --- [REPLACEMENT v7.0 - DYNAMIC Blending Model] ---
- * This version adjusts the blend factor based on the aircraft's speed.
- * - At high speeds, it uses a loose blend (more lag) for smoothness.
- * - At low speeds (taxiing), it uses a tight blend (less lag) to
- * prevent overshooting and wobbling during turns or stops.
+ * --- [REPLACEMENT v7.1 - SMOOTHING MODEL] ---
+ * This version removes the 60fps extrapolation (predictNewPosition) which
+ * was causing the "snap-back" effect every time new API data arrived.
+ *
+ * Instead, this loop *only* handles the smoothing (lerping) of the
+ * displayed icon toward the "target" state. The "target" state (targetLat,
+ * targetLon, etc.) is updated *only* by the 1Hz data-fetching loop
+ * (updateSectorOpsLiveFlights).
+ *
+ * This creates a much smoother, more stable animation where the icon is
+ * always chasing the last known-good data packet from the server.
  */
 function animateFlightPositions() {
     const source = sectorOpsMap.getSource('sector-ops-live-flights-source');
@@ -1010,36 +1016,28 @@ function animateFlightPositions() {
     }
 
     const newFeatures = [];
-    const ktsToKmPerMs = 1.852 / 3600000;
-    const renderTimestamp = performance.now();
     
     // --- Dynamic Blend Configuration ---
-    // You can tune these values
-    const MIN_SPEED_KTS = 40;  // Below this speed, use the tightest blend
-    const MAX_SPEED_KTS = 300; // Above this speed, use the loosest blend
-    
-    const TIGHT_BLEND = 0.12; // High factor for responsiveness on ground
-    const LOOSE_BLEND = 0.03; // Low factor for smoothness at cruise
+    // (This logic remains the same)
+    const MIN_SPEED_KTS = 40;
+    const MAX_SPEED_KTS = 300;
+    const TIGHT_BLEND = 0.12; 
+    const LOOSE_BLEND = 0.03;
     // --- End Configuration ---
 
     for (const flightId in liveFlightData) {
         const flight = liveFlightData[flightId];
 
-        // --- 1. PREDICT THE MOVING TARGET ---
-        // (This logic is unchanged from the previous step)
-        const elapsedTimeMs = Math.max(0, renderTimestamp - flight.targetTimestamp);
-        const distanceKm = flight.targetSpeed * ktsToKmPerMs * elapsedTimeMs;
-        const currentTargetPos = predictNewPosition(
-            flight.targetLat, 
-            flight.targetLon, 
-            flight.targetHeading, 
-            distanceKm
-        );
+        // --- 1. GET THE STABLE TARGET ---
+        // The "target" is now just the raw data set by the 1Hz update loop.
+        // We no longer predict a new position 60 times a second.
+        const currentTargetPos = { lat: flight.targetLat, lon: flight.targetLon };
         const currentTargetHeading = flight.targetHeading;
 
         // --- 2. CALCULATE DYNAMIC BLEND FACTOR ---
-        // Remap the *target* speed (our "intent") to a blend factor.
-        // Note: We remap from MIN/MAX speed to TIGHT/LOOSE blend.
+        // (This logic remains the same)
+        // We use the flight.targetSpeed (from the 1Hz update) to decide
+        // how "tight" the smoothing should be.
         const dynamicBlendFactor = remapAndClamp(
             flight.targetSpeed, 
             MIN_SPEED_KTS, 
@@ -1049,12 +1047,14 @@ function animateFlightPositions() {
         );
 
         // --- 3. INTERPOLATE THE DISPLAY ---
-        // Use the NEW dynamic blend factor
+        // Smoothly move the *display* values (what the user sees)
+        // toward the *target* values (the last API update).
         flight.displayLat = lerp(flight.displayLat, currentTargetPos.lat, dynamicBlendFactor);
         flight.displayLon = lerp(flight.displayLon, currentTargetPos.lon, dynamicBlendFactor);
         flight.displayHeading = lerpAngle(flight.displayHeading, currentTargetHeading, dynamicBlendFactor);
 
         // --- 4. RENDER THE DISPLAY ---
+        // (This logic remains the same)
         newFeatures.push({
             type: 'Feature',
             geometry: {
