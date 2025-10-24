@@ -176,18 +176,23 @@ function injectCustomStyles() {
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 12px 40px rgba(0,0,0,0.6);
             z-index: 1050;
-            display: none;
+            /* --- [FIX] Changed 'display: none' to 'display: flex' for fade-out --- */
+            display: flex;
             flex-direction: column;
             overflow: hidden;
             color: #e8eaf6;
             transition: opacity 0.3s ease, transform 0.3s ease;
             opacity: 0;
             transform: translateX(20px);
+            /* --- [FIX] Add pointer-events to prevent interaction when hidden --- */
+            pointer-events: none; 
         }
         .info-window.visible { 
-            display: flex; 
+            /* --- [FIX] Removed 'display: flex' (now in base) --- */
             opacity: 1;
             transform: translateX(0);
+            /* --- [FIX] Allow interaction only when visible --- */
+            pointer-events: auto;
         }
         .info-window-header {
             display: flex;
@@ -314,7 +319,8 @@ function injectCustomStyles() {
             content: '';
             position: absolute;
             inset: 0;
-            background: linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.2) 40%, rgba(0, 0, 0, 0.6) 100%);
+            /* --- [FIX] Removed redundant background gradient --- */
+            /* This is now handled *only* by the JS function */
             z-index: 1;
         }
         
@@ -329,19 +335,19 @@ function injectCustomStyles() {
         }
         .overview-col-left h3 {
             margin: 0;
-            /* --- [MODIFIED] --- */
-            font-size: 1.7rem; 
-            font-weight: 600; /* Was 700 */
-            letter-spacing: 0px; /* Was 1px */
-            text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            /* --- [FIX] "Show-ish" text --- */
+            font-size: 2.2rem; 
+            font-weight: 700; 
+            letter-spacing: 0.5px;
+            text-shadow: 0 4px 10px rgba(0, 0, 0, 0.7), 0 0 2px rgba(255, 255, 255, 0.2);
         }
         .overview-col-left p {
             margin: 0;
-            /* --- [MODIFIED] --- */
-            font-size: 0.85rem; /* Was 0.9rem */
-            color: #c5cae9; /* Was #e0e0e0 */
-            font-weight: 500;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+            /* --- [FIX] "Show-ish" text --- */
+            font-size: 1.0rem; 
+            color: #e8eaf6; 
+            font-weight: 400;
+            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
         }
         .overview-col-right {
             text-align: right;
@@ -393,8 +399,8 @@ function injectCustomStyles() {
             position: relative; 
             z-index: 2;
             padding: 12px 20px;
-            /* --- MODIFIED: Fade from transparent-blue to the solid-blue background --- */
-            background: linear-gradient(180deg, rgba(28, 30, 42, 0.1) 0%, #1C1E2A 100%);
+            /* --- [USER REQUEST FIX] Fade from transparent to solid --- */
+            background: linear-gradient(180deg, rgba(28, 30, 42, 0.0) 0%, #1C1E2A 100%);
             backdrop-filter: blur(10px);
             /* --- REMOVED: border-top --- */
             
@@ -3698,16 +3704,20 @@ function updateAircraftInfoWindow(baseProps, plan) {
             // Create a temporary image object to check if it exists
             const img = new Image();
             img.src = imagePath;
+
+            // --- [USER REQUEST FIX] ---
+            // This gradient ONLY darkens the top 40% of the image for text readability.
+            // The rest is transparent, fixing the "too dark" problem.
+            // The fade-to-bottom is now handled by the .route-summary-overlay CSS.
+            const gradient = 'linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0) 40%)';
             
             img.onload = () => {
-                // Image exists, set it as the background
-                overviewPanel.style.backgroundImage = `linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.2) 40%, rgba(0, 0, 0, 0.6) 100%), ${newImageUrl}`;
+                overviewPanel.style.backgroundImage = `${gradient}, ${newImageUrl}`;
                 overviewPanel.dataset.currentPath = imagePath;
             };
             
             img.onerror = () => {
-                // Image doesn't exist, use the fallback
-                overviewPanel.style.backgroundImage = `linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.2) 40%, rgba(0, 0, 0, 0.6) 100%), url('${fallbackPath}')`;
+                overviewPanel.style.backgroundImage = `${gradient}, url('${fallbackPath}')`;
                 overviewPanel.dataset.currentPath = fallbackPath;
             };
         }
