@@ -335,20 +335,68 @@ function injectCustomStyles() {
         }
         .overview-col-left h3 {
             margin: 0;
-            /* --- [FIX] "Show-ish" text --- */
-            font-size: 2.2rem; 
+            /* --- [MODIFIED] "Show-ish" text, callsign made smaller --- */
+            font-size: 2.0rem; /* Was 2.2rem */
             font-weight: 700; 
             letter-spacing: 0.5px;
             text-shadow: 0 4px 10px rgba(0, 0, 0, 0.7), 0 0 2px rgba(255, 255, 255, 0.2);
         }
+        
+        /* --- [MODIFIED] Container for animating subtext --- */
         .overview-col-left p {
+            /* --- [NEW] Make it a relative container --- */
+            position: relative; 
             margin: 0;
             /* --- [FIX] "Show-ish" text --- */
             font-size: 1.0rem; 
             color: #e8eaf6; 
             font-weight: 400;
             text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+            /* --- [NEW] Set height to prevent jump --- */
+            min-height: 1.2em; /* 1.0rem * 1.2 line-height */
         }
+
+        /* --- [NEW] Keyframes for subtext animation --- */
+        @keyframes primarySubtextAnimation {
+            0%   { opacity: 1; transform: translateY(0); }
+            60%  { opacity: 1; transform: translateY(0); } /* Hold Username (6s) */
+            65%  { opacity: 0; transform: translateY(10px); } /* Fade Out (0.5s) */
+            95%  { opacity: 0; transform: translateY(-10px); } /* Stay Hidden (3s) */
+            100% { opacity: 1; transform: translateY(0); } /* Fade In (0.5s) */
+        }
+        @keyframes secondarySubtextAnimation {
+            0%   { opacity: 0; transform: translateY(-10px); } /* Start Hidden (6.5s) */
+            65%  { opacity: 0; transform: translateY(-10px); }
+            70%  { opacity: 1; transform: translateY(0); } /* Fade In (0.5s) */
+            90%  { opacity: 1; transform: translateY(0); } /* Hold Aircraft (2s) */
+            95%  { opacity: 0; transform: translateY(10px); } /* Fade Out (0.5s) */
+            100% { opacity: 0; transform: translateY(-10px); } /* Stay Hidden (0.5s) */
+        }
+        
+        /* --- [NEW] Individual subtext items --- */
+        .ac-header-subtext {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            animation-name: primarySubtextAnimation; /* Default to primary */
+            animation-iteration-count: infinite;
+            animation-duration: 10s;
+            animation-timing-function: ease-in-out;
+            opacity: 0; /* Start hidden, animation will show it */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        #ac-header-username {
+            animation-name: primarySubtextAnimation;
+        }
+        
+        #ac-header-actype {
+            animation-name: secondarySubtextAnimation;
+        }
+
         .overview-col-right {
             text-align: right;
             /* --- [MODIFIED] --- */
@@ -3106,7 +3154,11 @@ function populateAircraftInfoWindow(baseProps, plan) {
             <div class="overview-content">
                 <div class="overview-col-left">
                     <h3 id="ac-header-callsign">${baseProps.callsign}</h3>
-                    <p id="ac-header-actype">${aircraftName}</p>
+                    
+                    <p id="ac-header-subtext-container">
+                        <span class="ac-header-subtext" id="ac-header-username">${baseProps.username || 'N/A'}</span>
+                        <span class="ac-header-subtext" id="ac-header-actype">${aircraftName}</span>
+                    </p>
                 </div>
                 <div class="overview-col-right">
                     <span class="route-icao" id="ac-header-dep">${departureIcao}</span>
