@@ -3521,8 +3521,10 @@ function renderPilotStatsHTML(stats, username) {
     }
 
 /**
- * --- [MAJOR REVISION V4.3 - Refactored State Machine] Updates the non-PFD parts of the Aircraft Info Window.
+ * --- [MAJOR REVISION V4.5 - Detailed Ground States] Updates the non-PFD parts of the Aircraft Info Window.
  * This version uses a fully refactored state machine for more robust and reliable phase detection.
+ * [USER MOD] "PARKED" state is progress-dependent.
+ * [USER MOD] Added "HOLDING SHORT", "TAXIING TO RWY", and "TAXIING TO GATE" states.
 */
 function updateAircraftInfoWindow(baseProps, plan) {
     // --- [NEW] Get all new DOM elements ---
@@ -3571,7 +3573,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
         }
     }
 
-    // --- Configuration Thresholds (Unchanged) ---
+    // --- Configuration Thresholds ---
     const THRESHOLD = {
         ON_GROUND_AGL: 75,
         PARKED_MAX_GS: 2,
@@ -3589,6 +3591,11 @@ function updateAircraftInfoWindow(baseProps, plan) {
         RUNWAY_HEADING_TOLERANCE: 25,
         LANDING_FLARE_MAX_GS: 220,
         APPROACH_CEILING_AGL: 2500,
+        PARKED_PROGRESS_START: 2, // Must be < 2%
+        PARKED_PROGRESS_END: 98,  // Must be > 98%
+        // --- [NEW] Thresholds for specific ground states ---
+        HOLD_SHORT_GS: 2.0,           // Speed to be considered "stopped"
+        HOLD_SHORT_PROXIMITY_NM: 0.15, // Max distance from runway end to be "holding short"
     };
 
     // --- [START OF REFACTORED LOGIC] ---
@@ -3646,15 +3653,11 @@ function updateAircraftInfoWindow(baseProps, plan) {
 
     // 1. ON-GROUND STATES (Highest Priority)
     if (isOnGround) {
-        if (gs <= THRESHOLD.PARKED_MAX_GS) {
-            flightPhase = 'PARKED';
-            phaseIcon = 'fa-parking';
-            phaseClass = 'phase-enroute';
-        } else if (gs <= THRESHOLD.TAXI_MAX_GS) {
-            flightPhase = 'TAXIING';
-            phaseIcon = 'fa-road';
-            phaseClass = 'phase-enroute';
-        } else { 
+        
+        // --- [NEW] Detailed Ground State Logic ---
+        
+        // 1.1 Handle high-speed ground ops (Takeoff/Landing Roll)
+        if (gs > THRESHOLD.TAXI_MAX_GS) {
             if (progress > 90) { 
                 flightPhase = 'LANDING ROLLOUT';
                 phaseClass = 'phase-approach';
@@ -3668,7 +3671,53 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 phaseIcon = 'fa-road';
                 phaseClass = 'phase-enroute';
             }
+        } 
+        // 1.2 Handle low-speed ground ops (gs <= TAXI_MAX_GS)
+        else {
+            const isStopped = gs <= THRESHOLD.HOLD_SHORT_GS;
+            const isAtTerminal = (progress < THRESHOLD.PARKED_PROGRESS_START) || 
+                                 (progress > THRESHOLD.PARKED_PROGRESS_END);
+            const relevantIcao = progress < 50 ? departureIcao : arrivalIcao;
+
+            // 1.2a Check for STOPPED states
+            if (isStopped) {
+                if (isAtTerminal) {
+                    flightPhase = 'PARKED';
+                    phaseIcon = 'fa-parking';
+                    phaseClass = 'phase-enroute';
+                } else {
+                    // Stopped, but not at a gate. Check if near a runway.
+                    const holdShortRunwayInfo = getNearestRunway(aircraftPos, relevantIcao, THRESHOLD.HOLD_SHORT_PROXIMITY_NM);
+                    if (holdShortRunwayInfo) {
+                        flightPhase = `HOLDING SHORT RWY ${holdShortRunwayInfo.ident}`;
+                        phaseIcon = 'fa-pause-circle';
+                        phaseClass = 'phase-enroute'; // Neutral color
+                    } else {
+                        // Stopped, not at gate, not near runway (e.g., in line)
+                        flightPhase = 'TAXIING';
+                        phaseIcon = 'fa-road';
+                        phaseClass = 'phase-enroute';
+                    }
+                }
+            } 
+            // 1.2b Check for MOVING states (gs > 2 and gs <= 35)
+            else {
+                flightPhase = 'TAXIING';
+                phaseIcon = 'fa-road';
+                phaseClass = 'phase-enroute';
+
+                // Add context
+                if (progress < 50 && departureIcao) { // Departing
+                    const depRunwayInfo = getNearestRunway(aircraftPos, departureIcao, 2.0); // 2.0 NM search radius
+                    if (depRunwayInfo) {
+                        flightPhase = `TAXIING TO RWY ${depRunwayInfo.ident}`;
+                    }
+                } else { // Arriving
+                    flightPhase = 'TAXIING TO GATE';
+                }
+            }
         }
+        // --- [END NEW] Detailed Ground State Logic ---
     } 
     // 2. ALL AIRBORNE STATES
     else {
