@@ -393,8 +393,8 @@ function injectCustomStyles() {
             position: relative; 
             z-index: 2;
             padding: 12px 20px;
-            /* --- MODIFIED: Natural fade-in --- */
-            background: linear-gradient(180deg, rgba(0, 0, 0, 0.05) 0%, rgba(0, 0, 0, 0.65) 100%);
+            /* --- MODIFIED: Fade from transparent-blue to the solid-blue background --- */
+            background: linear-gradient(180deg, rgba(28, 30, 42, 0.1) 0%, #1C1E2A 100%);
             backdrop-filter: blur(10px);
             /* --- REMOVED: border-top --- */
             
