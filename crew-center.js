@@ -3521,48 +3521,46 @@ function renderPilotStatsHTML(stats, username) {
     }
 
 /**
- * --- [MAJOR REVISION V4.6 - Robust Ground States] Updates the non-PFD parts of the Aircraft Info Window.
- * This version uses a robust, priority-based state machine for ground operations.
- * [USER MOD] "LINED UP" tolerance is 10 degrees.
- * [USER MOD] "HOLDING SHORT" checks for proximity and non-alignment.
- * [USER MOD] "HOLDING POSITION" added for mid-field stops.
- * [USER MOD] "TAXIING TO RWY" prediction has been removed.
+ * --- [MAJOR REVISION V4.7 - Ground State Fixes]
+ * This version corrects all three reported ground state issues:
+ * 1. Uses the correct `flattenWaypointsFromPlan` helper to fix progress calculation.
+ * 2. Swaps state priority to check for "HOLDING SHORT" before "PARKED".
+ * 3. Re-adds the "TAXIING TO RUNWAY" state.
 */
 function updateAircraftInfoWindow(baseProps, plan) {
     // --- [NEW] Get all new DOM elements ---
     const progressBarFill = document.getElementById('ac-progress-bar');
     const phaseIndicator = document.getElementById('ac-phase-indicator');
-    const footerGS = document.getElementById('ac-gs');
+    const footerGS = document.getElementById('ac-gs'); // <-- This ID was missing in the original file, assuming it's 'ac-gs'
     const footerVS = document.getElementById('ac-vs');
     const footerDist = document.getElementById('ac-dist');
     const footerETE = document.getElementById('ac-ete');
     const overviewPanel = document.getElementById('ac-overview-panel');
 
-    // Calculation logic for progress, ETE, etc. (This part remains unchanged)
-    const allWaypoints = [];
-    if (plan && plan.flightPlanItems) {
-        const extractWps = (items) => {
-            for (const item of items) {
-                if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) { allWaypoints.push(item); }
-                if (Array.isArray(item.children)) { extractWps(item.children); }
-            }
-        };
-        extractWps(plan.flightPlanItems);
-    }
-    const hasPlan = allWaypoints.length >= 2;
+    // --- [FIX 1] Use correct waypoint flattening logic ---
+    const flatWaypoints = (plan && plan.flightPlanItems) ? flattenWaypointsFromPlan(plan.flightPlanItems) : [];
+    const hasPlan = flatWaypoints.length >= 2;
+    // --- END FIX 1 ---
+
     let progress = 0, ete = '--:--', distanceToDestNM = 0;
     let totalDistanceNM = 0;
 
     if (hasPlan) {
         let totalDistanceKm = 0;
-        for (let i = 0; i < allWaypoints.length - 1; i++) {
-            totalDistanceKm += getDistanceKm(allWaypoints[i].location.latitude, allWaypoints[i].location.longitude, allWaypoints[i + 1].location.latitude, allWaypoints[i + 1].location.longitude);
+        // --- [FIX 1] Loop adjusted for [lon, lat] array ---
+        for (let i = 0; i < flatWaypoints.length - 1; i++) {
+            const [lon1, lat1] = flatWaypoints[i];
+            const [lon2, lat2] = flatWaypoints[i + 1];
+            totalDistanceKm += getDistanceKm(lat1, lon1, lat2, lon2);
         }
         totalDistanceNM = totalDistanceKm / 1.852;
 
         if (totalDistanceNM > 0) {
-            const destWp = allWaypoints[allWaypoints.length - 1];
-            const remainingDistanceKm = getDistanceKm(baseProps.position.lat, baseProps.position.lon, destWp.location.latitude, destWp.location.longitude);
+            // --- [FIX 1] Get destination from the flat array ---
+            const [destLon, destLat] = flatWaypoints[flatWaypoints.length - 1];
+            const remainingDistanceKm = getDistanceKm(baseProps.position.lat, baseProps.position.lon, destLat, destLon);
+            // --- END FIX 1 ---
+            
             distanceToDestNM = remainingDistanceKm / 1.852;
             progress = Math.max(0, Math.min(100, (1 - (distanceToDestNM / totalDistanceNM)) * 100));
 
@@ -3590,13 +3588,11 @@ function updateAircraftInfoWindow(baseProps, plan) {
         CRUISE_MIN_ALT_MSL: 18000,
         CRUISE_VS_TOLERANCE: 500,
         RUNWAY_PROXIMITY_NM: 1.5,
-        // --- [USER REQUEST] Changed from 25 to 10 ---
         RUNWAY_HEADING_TOLERANCE: 10,
         LANDING_FLARE_MAX_GS: 220,
         APPROACH_CEILING_AGL: 2500,
         PARKED_PROGRESS_START: 2, // Must be < 2%
         PARKED_PROGRESS_END: 98,  // Must be > 98%
-        // --- [NEW] Thresholds for specific ground states ---
         HOLD_SHORT_GS: 2.0,           // Speed to be considered "stopped"
         HOLD_SHORT_PROXIMITY_NM: 0.15, // Max distance from runway end for ground states
     };
@@ -3624,6 +3620,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // Find the nearest runway at the most relevant airport (for AIRBORNE states)
     let nearestRunwayInfo = null;
     if (hasPlan) {
+        // Correctly use totalDistanceNM (which is now accurate)
         const distanceFlownKm = totalDistanceNM * 1.852 - distanceToDestNM * 1.852;
         // Check if closer to arrival or departure
         if (distanceToDestNM * 1.852 < distanceFlownKm && arrivalIcao) {
@@ -3674,18 +3671,16 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 phaseClass = 'phase-enroute';
             }
         } 
-        // --- [NEW ROBUST LOGIC V4.6] ---
         // 1.2 Handle low-speed ground ops (gs <= TAXI_MAX_GS)
         else {
             const isStopped = gs <= THRESHOLD.HOLD_SHORT_GS;
+            // Now that 'progress' is correct, isAtTerminal will be true at the gate (~0%)
             const isAtTerminal = (progress < THRESHOLD.PARKED_PROGRESS_START) || 
                                  (progress > THRESHOLD.PARKED_PROGRESS_END);
             
-            // Get the single closest runway within the tight "holding short" radius
             const relevantIcao = progress < 50 ? departureIcao : arrivalIcao;
             const closeRunwayInfo = getNearestRunway(aircraftPos, relevantIcao, THRESHOLD.HOLD_SHORT_PROXIMITY_NM);
 
-            // Check alignment *only* against this very close runway
             const isLinedUp = closeRunwayInfo && closeRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE;
 
             // --- State Priority ---
@@ -3698,23 +3693,26 @@ function updateAircraftInfoWindow(baseProps, plan) {
             }
             // PRIORITY 2: STOPPED
             else if (isStopped) {
-                if (isAtTerminal) {
-                    flightPhase = 'PARKED';
-                    phaseIcon = 'fa-parking';
-                    phaseClass = 'phase-enroute';
-                } 
-                // Stopped, close to runway, but NOT lined up (isLinedUp = false)
-                else if (closeRunwayInfo) {
+                // --- [FIX 2] Swapped priority: Check for holding short *before* checking for parked ---
+                // Stopped, close to runway, but NOT lined up
+                if (closeRunwayInfo) {
                     flightPhase = `HOLDING SHORT RWY ${closeRunwayInfo.ident}`;
                     phaseIcon = 'fa-pause-circle';
                     phaseClass = 'phase-enroute';
                 }
+                // Stopped at the gate/terminal (now triggers correctly at the gate)
+                else if (isAtTerminal) {
+                    flightPhase = 'PARKED';
+                    phaseIcon = 'fa-parking';
+                    phaseClass = 'phase-enroute';
+                } 
                 // Stopped, not at terminal, not near runway
                 else {
                     flightPhase = 'HOLDING POSITION';
                     phaseIcon = 'fa-hand';
                     phaseClass = 'phase-enroute';
                 }
+                // --- END FIX 2 ---
             } 
             // PRIORITY 3: MOVING (TAXIING)
             else {
@@ -3722,13 +3720,15 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 phaseIcon = 'fa-road';
                 phaseClass = 'phase-enroute';
 
-                // Add context if arriving (safe assumption)
+                // --- [FIX 3] Re-added "TAXIING TO RUNWAY" state ---
                 if (progress > 50) { 
                     flightPhase = 'TAXIING TO GATE';
+                } else if (progress < 10) { // Assumes user is taxiing for departure
+                    flightPhase = 'TAXIING TO RUNWAY';
                 }
+                // --- END FIX 3 ---
             }
         }
-        // --- [END NEW ROBUST LOGIC] ---
     } 
     // 2. ALL AIRBORNE STATES
     else {
@@ -3818,10 +3818,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
             const img = new Image();
             img.src = imagePath;
 
-            // --- [USER REQUEST FIX] ---
-            // This gradient ONLY darkens the top 40% of the image for text readability.
-            // The rest is transparent, fixing the "too dark" problem.
-            // The fade-to-bottom is now handled by the .route-summary-overlay CSS.
             const gradient = 'linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0) 40%)';
             
             img.onload = () => {
