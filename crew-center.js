@@ -3063,6 +3063,11 @@ async function initializeSectorOpsMap(centerICAO) {
  * --- Prevents multiple clicks from firing simultaneously and gracefully handles fetch errors.
  * --- [USER MODIFICATION] The update interval no longer updates the map icon's position or its flight trail.
  * --- It ONLY updates the PFD and Info Window readouts. Map icon updates are handled globally by the WebSocket.
+ *
+ * --- [FIX v4.8 - ROUTE DENSIFICATION]
+ * --- This version now uses the `densifyRoute()` helper to interpolate the
+ * --- sparse route points into a smooth, great-circle path for Mapbox,
+ * --- fixing the "straight line" route display issue.
  */
 async function handleAircraftClick(flightProps, sessionId) {
     if (!flightProps || !flightProps.flightId) return;
@@ -3131,17 +3136,28 @@ async function handleAircraftClick(flightProps, sessionId) {
             : [];
         
         if (historicalRoute.length > 0) {
-            // ---- FIX APPLIED HERE: Densify the historical route for a smooth great-circle path ----
-            const densifiedPath = densifyRoute(historicalRoute, 30); // Add 30 points between each segment
+            // ⬇️ === START OF FIX ===
+            // This densifies the sparse route points into a smooth path.
+            // We use 30 intermediate points for a very smooth line.
+            const densifiedPath = densifyRoute(historicalRoute, 30);
             const completeFlownPath = [...densifiedPath, currentPosition];
-            // ---- END OF FIX ----
-
-            allCoordsForBounds.push(...historicalRoute);
+            
+            // Use the densified path for calculating the map bounds
+            allCoordsForBounds.push(...densifiedPath);
+            // ⬆️ === END OF FIX ===
 
             if (!sectorOpsMap.getSource(flownLayerId)) {
                 sectorOpsMap.addSource(flownLayerId, {
                     type: 'geojson',
-                    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: completeFlownPath } }
+                    data: { 
+                        type: 'Feature', 
+                        geometry: { 
+                            type: 'LineString', 
+                            // ⬇️ === FIX ===
+                            // Use the densified `completeFlownPath` instead of the sparse one
+                            coordinates: completeFlownPath 
+                        } 
+                    }
                 });
                 sectorOpsMap.addLayer({
                     id: flownLayerId,
@@ -3154,7 +3170,7 @@ async function handleAircraftClick(flightProps, sessionId) {
             // --- FIX: Store the layer ID and the coordinates array for future updates ---
             sectorOpsLiveFlightPathLayers[flightProps.flightId] = {
                 flown: flownLayerId,
-                coordinates: completeFlownPath
+                coordinates: completeFlownPath // Store the densified path
             };
         }
         
