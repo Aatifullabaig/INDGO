@@ -1579,7 +1579,6 @@ const populateDispatchPass = (container, plan, options = {}) => {
                     <label><i class="fa-solid fa-gas-pump"></i> Total Fuel</label>
                     <span>${formatWeightDisplay(plan.fuelTotal)}</span>
                 </div>
-                {/* <<< NEW >>> Runway Items Added Here */}
                 <div class="summary-item">
                     <label><i class="fa-solid fa-road"></i> Takeoff Rwy</label>
                     <span>${takeoffRunway}</span>
