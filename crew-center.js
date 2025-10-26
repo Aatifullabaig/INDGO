@@ -340,6 +340,20 @@ function injectCustomStyles() {
             font-weight: 700; 
             letter-spacing: 0.5px;
             text-shadow: 0 4px 10px rgba(0, 0, 0, 0.7), 0 0 2px rgba(255, 255, 255, 0.2);
+            /* --- [NEW] Convert to flex to align logo and text --- */
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* --- [NEW] Style for Airline Logo in Header --- */
+        .ac-header-logo {
+            height: 2.2rem; /* Match font size */
+            width: auto;
+            max-width: 100px; /* Prevent huge logos */
+            object-fit: contain;
+            /* Add a subtle shadow to pop against any background */
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
         }
         
         /* --- [MODIFIED] Container for animating subtext --- */
@@ -354,6 +368,8 @@ function injectCustomStyles() {
             text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
             /* --- [NEW] Set height to prevent jump --- */
             min-height: 1.2em; /* 1.0rem * 1.2 line-height */
+            /* --- [NEW] Add margin to account for logo --- */
+            margin-top: 4px; 
         }
 
         /* --- [NEW] Keyframes for subtext animation --- */
@@ -3331,6 +3347,40 @@ function populateAircraftInfoWindow(baseProps, plan) {
     const departureIcao = hasPlan ? allWaypoints[0]?.name : 'N/A';
     const arrivalIcao = hasPlan ? allWaypoints[allWaypoints.length - 1]?.name : 'N/A';
 
+    // --- [NEW] Get Airline Logo (REVISED with new rules) ---
+    const liveryName = baseProps.aircraft?.liveryName || '';
+    const words = liveryName.trim().split(/\s+/); // Split by one or more spaces
+    let logoName = '';
+    const specialCharRegex = /[^a-zA-Z0-9]/; // Regex to find any non-alphanumeric character
+
+    if (words.length === 1) {
+        // Rule 2: Only one thing, take it. (e.g., "Generic")
+        logoName = words[0];
+    } else if (words.length > 1) {
+        const firstWord = words[0];
+        const secondWord = words[1];
+
+        // Rule 3: Check if the second word contains special characters (e.g., "(6E)")
+        if (specialCharRegex.test(secondWord)) {
+            // It's a special word, so "just keep the first thing"
+            logoName = firstWord; // e.g., "IndiGo"
+        } else {
+            // Rule 1: Second word is clean, take the first two. (e.g., "El Al", "Delta Air")
+            logoName = `${firstWord} ${secondWord}`;
+        }
+    }
+
+    // Sanitize the final result for the filename
+    const sanitizedLogoName = logoName
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '') // Remove any remaining special chars
+        .replace(/\s+/g, '_'); // Replace spaces with underscores
+
+    // The path is still 'Images/airline_logos/'
+    const logoPath = sanitizedLogoName ? `Images/airline_logos/${sanitizedLogoName}.png` : '';
+    const logoHtml = logoPath ? `<img src="${logoPath}" alt="${liveryName}" class="ac-header-logo" onerror="this.style.display='none'">` : '';
+    // --- End [NEW] ---
+
     // --- Set Aircraft Image (Handled by updateAircraftInfoWindow) ---
     // We set a temporary background
     const tempBg = `background-image: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('/CommunityPlanes/default.png');`;
@@ -3346,7 +3396,7 @@ function populateAircraftInfoWindow(baseProps, plan) {
 
             <div class="overview-content">
                 <div class="overview-col-left">
-                    <h3 id="ac-header-callsign">${baseProps.callsign}</h3>
+                    <h3 id="ac-header-callsign">${logoHtml}${baseProps.callsign}</h3>
                     
                     <p id="ac-header-subtext-container">
                         <span class="ac-header-subtext" id="ac-header-username">${baseProps.username || 'N/A'}</span>
@@ -3509,7 +3559,7 @@ function populateAircraftInfoWindow(baseProps, plan) {
                         </div>
                         <div class="live-data-item">
                             <span class="data-label">ETE to Dest.</span>
-                            <span class="data-value data-value-ete" id="ac-ete">--:--</span>
+                            <span class="data-value" data-value-ete" id="ac-ete">--:--</span>
                         </div>
                     </div>
                     </div>
