@@ -1163,10 +1163,13 @@ function getIntermediatePoint(lat1, lon1, lat2, lon2, fraction) {
     return { lat: latI, lon: lonI };
 }
 
+
 /**
  * --- [REPLACEMENT - TELEPORT VERSION] Handles live flight data received from the WebSocket.
  * This function updates the map source directly, causing aircraft to "teleport"
  * to their new positions with each update.
+ *
+ * ⬇️ MODIFIED: Now passes `isStaff` and `isVAMember` to the map source properties.
  */
 function handleSocketFlightUpdate(data) {
     if (!data || !Array.isArray(data.flights)) {
@@ -1209,7 +1212,11 @@ function handleSocketFlightUpdate(data) {
             aircraft: JSON.stringify(flight.aircraft),
             userId: flight.userId,
             category: getAircraftCategory(flight.aircraft?.aircraftName),
-            heading: newApiHeading // Pass heading for icon rotation
+            heading: newApiHeading, // Pass heading for icon rotation
+            // ⬇️ === NEW: Add VA status for icon logic === ⬇️
+            isStaff: flight.isStaff,
+            isVAMember: flight.isVAMember
+            // ⬆️ === END OF NEW LINES === ⬆️
         };
 
         // Create or update the feature in our state
@@ -2857,7 +2864,8 @@ function updatePfdDisplay(pfdData) {
     }
 
 // [REPLACE THIS FUNCTION]
-// This function is modified to set the map projection to 'globe'
+// ⬇️ MODIFIED: This function is modified to load 21 icons (regular, member, staff)
+// and use a 'case' expression to select the correct icon.
 async function initializeSectorOpsMap(centerICAO) {
     if (!MAPBOX_ACCESS_TOKEN) {
         document.getElementById('sector-ops-map-fullscreen').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
@@ -2891,15 +2899,34 @@ async function initializeSectorOpsMap(centerICAO) {
 
     return new Promise(resolve => {
         sectorOpsMap.on('load', () => {
+            // ⬇️ === MODIFIED: Load all 21 icon variations === ⬇️
             const iconsToLoad = [
+                // Regular
                 { id: 'icon-jumbo', path: '/Images/map_icons/jumbo.png' },
                 { id: 'icon-widebody', path: '/Images/map_icons/widebody.png' },
                 { id: 'icon-narrowbody', path: '/Images/map_icons/narrowbody.png' },
                 { id: 'icon-regional', path: '/Images/map_icons/regional.png' },
                 { id: 'icon-private', path: '/Images/map_icons/private.png' },
                 { id: 'icon-fighter', path: '/Images/map_icons/fighter.png' },
-                { id: 'icon-default', path: '/Images/map_icons/default.png' }
+                { id: 'icon-default', path: '/Images/map_icons/default.png' },
+                // Members
+                { id: 'icon-jumbo-member', path: '/Images/map_icons/members/jumbo.png' },
+                { id: 'icon-widebody-member', path: '/Images/map_icons/members/widebody.png' },
+                { id: 'icon-narrowbody-member', path: '/Images/map_icons/members/narrowbody.png' },
+                { id: 'icon-regional-member', path: '/Images/map_icons/members/regional.png' },
+                { id: 'icon-private-member', path: '/Images/map_icons/members/private.png' },
+                { id: 'icon-fighter-member', path: '/Images/map_icons/members/fighter.png' },
+                { id: 'icon-default-member', path: '/Images/map_icons/members/default.png' },
+                // Staff
+                { id: 'icon-jumbo-staff', path: '/Images/map_icons/staff/jumbo.png' },
+                { id: 'icon-widebody-staff', path: '/Images/map_icons/staff/widebody.png' },
+                { id: 'icon-narrowbody-staff', path: '/Images/map_icons/staff/narrowbody.png' },
+                { id: 'icon-regional-staff', path: '/Images/map_icons/staff/regional.png' },
+                { id: 'icon-private-staff', path: '/Images/map_icons/staff/private.png' },
+                { id: 'icon-fighter-staff', path: '/Images/map_icons/staff/fighter.png' },
+                { id: 'icon-default-staff', path: '/Images/map_icons/staff/default.png' }
             ];
+            // ⬆️ === END OF MODIFICATION === ⬆️
 
             const imagePromises = iconsToLoad.map(icon =>
                 new Promise((res, rej) => {
@@ -2934,7 +2961,49 @@ async function initializeSectorOpsMap(centerICAO) {
                         type: 'symbol',
                         source: 'sector-ops-live-flights-source',
                         layout: {
-                            'icon-image': ['match', ['get', 'category'], 'jumbo', 'icon-jumbo', 'widebody', 'icon-widebody', 'narrowbody', 'icon-narrowbody', 'regional', 'icon-regional', 'private', 'icon-private', 'fighter', 'icon-fighter', 'icon-default'],
+                            // ⬇️ === MODIFIED: Use 'case' expression for icon logic === ⬇️
+                            'icon-image': [
+                                'case',
+                                // Condition 1: Is Staff?
+                                ['==', ['get', 'isStaff'], true],
+                                [ // Result: Use Staff icons
+                                    'match',
+                                    ['get', 'category'],
+                                    'jumbo', 'icon-jumbo-staff',
+                                    'widebody', 'icon-widebody-staff',
+                                    'narrowbody', 'icon-narrowbody-staff',
+                                    'regional', 'icon-regional-staff',
+                                    'private', 'icon-private-staff',
+                                    'fighter', 'icon-fighter-staff',
+                                    'icon-default-staff' // Staff fallback
+                                ],
+                                // Condition 2: Is Member?
+                                ['==', ['get', 'isVAMember'], true],
+                                [ // Result: Use Member icons
+                                    'match',
+                                    ['get', 'category'],
+                                    'jumbo', 'icon-jumbo-member',
+                                    'widebody', 'icon-widebody-member',
+                                    'narrowbody', 'icon-narrowbody-member',
+                                    'regional', 'icon-regional-member',
+                                    'private', 'icon-private-member',
+                                    'fighter', 'icon-fighter-member',
+                                    'icon-default-member' // Member fallback
+                                ],
+                                // Default: Use Regular icons
+                                [
+                                    'match',
+                                    ['get', 'category'],
+                                    'jumbo', 'icon-jumbo',
+                                    'widebody', 'icon-widebody',
+                                    'narrowbody', 'icon-narrowbody',
+                                    'regional', 'icon-regional',
+                                    'private', 'icon-private',
+                                    'fighter', 'icon-fighter',
+                                    'icon-default' // Regular fallback
+                                ]
+                            ],
+                            // ⬆️ === END OF MODIFICATION === ⬆️
                             'icon-size': 0.08,
                             'icon-rotate': ['get', 'heading'],
                             'icon-rotation-alignment': 'map',
