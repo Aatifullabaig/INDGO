@@ -2856,8 +2856,8 @@ function updatePfdDisplay(pfdData) {
         }
     }
 
-    // --- MODIFY THIS FUNCTION ---
-// --- MODIFY THIS FUNCTION ---
+// [REPLACE THIS FUNCTION]
+// This function is modified to set the map projection to 'globe'
 async function initializeSectorOpsMap(centerICAO) {
     if (!MAPBOX_ACCESS_TOKEN) {
         document.getElementById('sector-ops-map-fullscreen').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
@@ -2872,7 +2872,21 @@ async function initializeSectorOpsMap(centerICAO) {
         style: 'mapbox://styles/mapbox/dark-v11',
         center: centerCoords,
         zoom: 4.5,
-        interactive: true
+        interactive: true,
+        // ⬇️ === RECOMMENDED RENDERING FIX ===
+        projection: 'globe' 
+        // ⬆️ === END OF RECOMMENDED RENDERING FIX ===
+    });
+
+    // --- [NEW] Set globe-specific settings on style load ---
+    sectorOpsMap.on('style.load', () => {
+        sectorOpsMap.setFog({
+            color: 'rgb(186, 210, 235)', // Lower atmosphere
+            'high-color': 'rgb(36, 92, 223)', // Upper atmosphere
+            'horizon-blend': 0.02, // Smooth blend
+            'space-color': 'rgb(11, 11, 25)', // Space color
+            'star-intensity': 0.6 // Adjust star intensity
+        });
     });
 
     return new Promise(resolve => {
@@ -3058,17 +3072,10 @@ async function initializeSectorOpsMap(centerICAO) {
         return waypoints;
     }
 
-/**
- * --- [REMODEL V4.4 - RESILIENT] Handles aircraft clicks, data fetching, map plotting, and window population.
- * --- Prevents multiple clicks from firing simultaneously and gracefully handles fetch errors.
- * --- [USER MODIFICATION] The update interval no longer updates the map icon's position or its flight trail.
- * --- It ONLY updates the PFD and Info Window readouts. Map icon updates are handled globally by the WebSocket.
- *
- * --- [FIX v4.8 - ROUTE DENSIFICATION]
- * --- This version now uses the `densifyRoute()` helper to interpolate the
- * --- sparse route points into a smooth, great-circle path for Mapbox,
- * --- fixing the "straight line" route display issue.
- */
+// [REPLACE THIS FUNCTION]
+// This function fixes the "incorrect plot" by sorting the /route data
+// by timestamp before mapping it. It also removes the densifyRoute
+// function, as the 'globe' projection handles curves automatically.
 async function handleAircraftClick(flightProps, sessionId) {
     if (!flightProps || !flightProps.flightId) return;
 
@@ -3131,20 +3138,31 @@ async function handleAircraftClick(flightProps, sessionId) {
         const flownLayerId = `flown-path-${flightProps.flightId}`;
         let allCoordsForBounds = [currentPosition];
 
-        const historicalRoute = (routeData && routeData.ok && Array.isArray(routeData.route)) 
-            ? routeData.route.map(p => [p.longitude, p.latitude]) 
-            : [];
+        // ⬇️ === START OF DATA PLOTTING FIX ===
+        let historicalRoute = [];
+        if (routeData && routeData.ok && Array.isArray(routeData.route) && routeData.route.length > 0) {
+            
+            // 1. Sort the route points by timestamp. The `date` property is a string.
+            const sortedRoutePoints = routeData.route.sort((a, b) => {
+                // Handle null/undefined dates just in case
+                const timeA = a.date ? new Date(a.date).getTime() : 0;
+                const timeB = b.date ? new Date(b.date).getTime() : 0;
+                return timeA - timeB;
+            });
+            
+            // 2. Now map the (chronologically sorted) points to [lon, lat]
+            historicalRoute = sortedRoutePoints.map(p => [p.longitude, p.latitude]);
+        }
+        // ⬆️ === END OF DATA PLOTTING FIX ===
         
         if (historicalRoute.length > 0) {
-            // ⬇️ === START OF FIX ===
-            // This densifies the sparse route points into a smooth path.
-            // We use 30 intermediate points for a very smooth line.
-            const densifiedPath = densifyRoute(historicalRoute, 30);
-            const completeFlownPath = [...densifiedPath, currentPosition];
             
-            // Use the densified path for calculating the map bounds
-            allCoordsForBounds.push(...densifiedPath);
-            // ⬆️ === END OF FIX ===
+            // The map projection is now 'globe', so we no longer need densifyRoute.
+            // We just use the original (but now sorted) sparse points.
+            const completeFlownPath = [...historicalRoute, currentPosition];
+            
+            // Use the sorted, non-densified path for calculating the map bounds
+            allCoordsForBounds.push(...historicalRoute);
 
             if (!sectorOpsMap.getSource(flownLayerId)) {
                 sectorOpsMap.addSource(flownLayerId, {
@@ -3153,8 +3171,7 @@ async function handleAircraftClick(flightProps, sessionId) {
                         type: 'Feature', 
                         geometry: { 
                             type: 'LineString', 
-                            // ⬇️ === FIX ===
-                            // Use the densified `completeFlownPath` instead of the sparse one
+                            // Use the sorted, non-densified path
                             coordinates: completeFlownPath 
                         } 
                     }
@@ -3167,10 +3184,10 @@ async function handleAircraftClick(flightProps, sessionId) {
                 }, 'sector-ops-live-flights-layer');
             }
 
-            // --- FIX: Store the layer ID and the coordinates array for future updates ---
+            // --- Store the layer ID and the coordinates array for future updates ---
             sectorOpsLiveFlightPathLayers[flightProps.flightId] = {
                 flown: flownLayerId,
-                coordinates: completeFlownPath // Store the densified path
+                coordinates: completeFlownPath // Store the sorted path
             };
         }
         
