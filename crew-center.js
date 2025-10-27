@@ -1845,498 +1845,160 @@ if (typeof window.WeatherService === 'undefined') {
     const PFD_HEADING_CENTER_X = 406;
     const PFD_HEADING_REF_VALUE = 0;
 
-/**
- * [MODIFIED] Stable PFD update.
- * Now accepts a 'containerElement' to scope its DOM search,
- * preventing it from targeting the wrong PFD during UI transitions.
- */
-function updatePfdDisplay(pfdData, containerElement) {
-  if (!pfdData) return;
 
-  // ---- tolerate common key names ----
-  const gs_kt =
-    pfdData.gs_kt ??
-    pfdData.groundspeed_kts ??
-    pfdData.groundspeed ??
-    pfdData.gs ??
-    (pfdData.speed && (pfdData.speed.kt || pfdData.speed.kts)) ??
-    0;
-
-  const track_deg =
-    pfdData.track_deg ??
-    pfdData.heading_deg ??
-    pfdData.track ??
-    pfdData.hdg ??
-    0;
-
-  const alt_ft = pfdData.alt_ft ?? pfdData.altitude_ft ?? pfdData.altitude ?? 0;
-  const vs_fpm = pfdData.vs_fpm ?? pfdData.vertical_speed_fpm ?? pfdData.vs ?? 0;
-
-  // ---- DOM ---
-  // [MODIFIED] Use the provided containerElement, or fallback to document
-  const context = containerElement || document; 
-  const attitudeGroup     = context.querySelector('#attitude_group');
-  const speedTapeGroup    = context.querySelector('#speed_tape_group');
-  const altitudeTapeGroup = context.querySelector('#altitude_tape_group');
-  const tensReelGroup     = context.querySelector('#altitude_tens_reel_group');
-  const headingTapeGroup  = context.querySelector('#heading_tape_group');
-  const speedReadout      = context.querySelector('#speed_readout');
-  const altReadoutHund    = context.querySelector('#altitude_readout_hundreds');
-  const headingReadout    = context.querySelector('#heading_readout');
-  if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !headingTapeGroup || !tensReelGroup) return;
-
-  // ---- tunables ----
-  const WINDOW_SEC          = 2.4;   // regression window
-  const LATCH_ON_TURN       = 0.20;  // deg/s to latch "turning"
-  const LATCH_OFF_TURN      = 0.10;  // deg/s to unlatch
-  const LATCH_HOLD_MS       = 400;   // chatter guard
-  const MAX_BANK_DEG        = 35;
-  const MAX_ROLL_RATE       = 60;    // display slew (deg/s)
-  const MIN_GS_FOR_TURN     = 1;
-  const PITCH_LIMIT         = 25;
-
-  const DATA_HOLD_MS        = 1400;  // hold last turn-rate after last fresh packet
-  const STALE_MS            = 4000;  // after this, allow full decay/unlatch
-  const HDG_EPS             = 0.4;   // unwrapped degrees to consider heading "changed"
-  const GS_EPS              = 0.5;   // kt change to consider GS "changed"
-  const DECAY_TO_LEVEL_DPS  = 12;    // decay when not turning
-  const MICRO_DECAY_FACTOR  = 0.25;  // softer decay before STALE_MS
-
-  const EMA_ALPHA           = 0.35;  // EMA smoothing on turn-rate (0..1)
-  const SIGN_MIN_DEG        = 3.0;   // min magnitude to accept L/R sign flip
-  const SIGN_HOLD_MS        = 250;   // new sign must persist this long
-
-  const now = performance.now();
-
-  // ---- persistent state ----
-  if (!window.lastPfdState || typeof window.lastPfdState !== 'object') {
-    window.lastPfdState = {
-      unwrapped: track_deg,
-      lastTime: now,
-      buf: [],                  // [{t, hdg}] for fresh samples only
-      rollDisp: 0,
-      turning: false,
-      lastTurnLatchTs: 0,
-
-      // freshness / hold
-      lastDataTs: 0,
-      lastTurnRate: 0,
-      lastRawTrack: track_deg,
-      lastRawGs: gs_kt,
-      prevUnwrapped: track_deg,
-
-      // smoothing & sign guard
-      turnRateEma: 0,
-      rollSign: 0,
-      lastSignChangeTs: 0
-    };
-  }
-  const S = window.lastPfdState;
-
-  // ---- unwrap heading ----
-  let delta = track_deg - (S.unwrapped % 360);
-  if (delta > 180)  delta -= 360;
-  if (delta < -180) delta += 360;
-  const unwrapped = S.unwrapped + delta;
-
-  // ---- detect "fresh" API packet vs. render tick (use unwrapped delta) ----
-  const unwrappedDelta = Math.abs(unwrapped - S.unwrapped);
-  const isFresh =
-    unwrappedDelta > HDG_EPS ||
-    Math.abs(gs_kt - S.lastRawGs) > GS_EPS;
-
-  // ---- manage regression buffer (only for fresh samples) ----
-  const tNow = now / 1000;
-  if (isFresh) {
-    S.lastDataTs = now;
-    S.lastRawTrack = track_deg;
-    S.lastRawGs = gs_kt;
-    const cutoff = tNow - WINDOW_SEC;
-    S.buf.push({ t: tNow, hdg: unwrapped });
-    while (S.buf.length && S.buf[0].t < cutoff) S.buf.shift();
-  }
-
-  // ---- turn-rate estimate (deg/s): fresh -> compute; else -> hold previous ----
-  let turnRate = S.lastTurnRate;
-  if (isFresh) {
-    if (S.buf.length >= 3 && gs_kt > MIN_GS_FOR_TURN) {
-      // linear regression slope
-      const t0 = S.buf[0].t;
-      let sumT = 0, sumH = 0, sumTT = 0, sumTH = 0, n = S.buf.length;
-      for (let i = 0; i < n; i++) {
-        const ti = S.buf[i].t - t0;
-        const hi = S.buf[i].hdg;
-        sumT  += ti;
-        sumH  += hi;
-        sumTT += ti * ti;
-        sumTH += ti * hi;
-      }
-      const denom = n * sumTT - sumT * sumT;
-      if (denom !== 0) {
-        turnRate = (n * sumTH - sumT * sumH) / denom; // deg/s
-      } else {
-        const dtS = Math.max(0.02, (now - S.lastTime) / 1000);
-        turnRate = (unwrapped - S.prevUnwrapped) / dtS;
-      }
-    } else {
-      const dtS = Math.max(0.02, (now - S.lastTime) / 1000);
-      turnRate = (unwrapped - S.prevUnwrapped) / dtS;
-    }
-    S.lastTurnRate = turnRate;
-  }
-
-  // ---- EMA smoothing on turn-rate ----
-  S.turnRateEma = EMA_ALPHA * turnRate + (1 - EMA_ALPHA) * S.turnRateEma;
-
-  // ---- hysteresis + data-hold for "turning" ----
-  const sinceFresh = now - S.lastDataTs;
-  const rateAbs    = Math.abs(S.turnRateEma);
-  const wasTurning = S.turning;
-  const forceTurningByHold = sinceFresh <= DATA_HOLD_MS && Math.abs(S.lastTurnRate) >= LATCH_OFF_TURN;
-
-  if (!wasTurning) {
-    if (rateAbs >= LATCH_ON_TURN || forceTurningByHold) {
-      S.turning = true;
-      S.lastTurnLatchTs = now;
-    }
-  } else {
-    const timeSinceLatch = now - S.lastTurnLatchTs;
-    const allowUnlatch = rateAbs < LATCH_OFF_TURN && timeSinceLatch > LATCH_HOLD_MS && sinceFresh > DATA_HOLD_MS;
-    if (allowUnlatch && sinceFresh > STALE_MS) {
-      S.turning = false;
-    } else if (rateAbs >= LATCH_OFF_TURN || forceTurningByHold) {
-      S.lastTurnLatchTs = now;
-    }
-  }
-
-  // ---- coordinated-turn bank target from smoothed rate ----
-  const Vms   = Math.max(0, gs_kt) * 0.514444;
-  const omega = (S.turnRateEma * Math.PI) / 180; // rad/s
-  const bankAbs = Math.atan(Math.abs(omega) * Vms / 9.81) * 180 / Math.PI;
-  let targetRoll = (S.turnRateEma >= 0 ? 1 : -1) * Math.min(bankAbs, MAX_BANK_DEG);
-
-  // ---- sign stickiness (prevents brief L/R flips) ----
-  const desiredSign = Math.sign(targetRoll);
-  if (desiredSign !== 0 && desiredSign !== S.rollSign) {
-    const bigEnough = Math.abs(targetRoll) >= SIGN_MIN_DEG;
-    const persisted = (now - S.lastSignChangeTs) >= SIGN_HOLD_MS;
-    if (bigEnough && persisted) {
-      S.rollSign = desiredSign;
-      S.lastSignChangeTs = now;
-    } else {
-      targetRoll = Math.abs(targetRoll) * (S.rollSign || desiredSign);
-    }
-  } else if (S.rollSign === 0 && desiredSign !== 0) {
-    S.rollSign = desiredSign;
-    S.lastSignChangeTs = now;
-  }
-
-  // ---- when not turning: decay toward level (hold pose before STALE_MS) ----
-  if (!S.turning) {
-    const dt = Math.max(0.01, (now - S.lastTime) / 1000);
-    const base = DECAY_TO_LEVEL_DPS * dt;
-    const decayStep = sinceFresh <= STALE_MS ? base * MICRO_DECAY_FACTOR : base;
-    targetRoll = (Math.abs(S.rollDisp) <= decayStep) ? 0 : S.rollDisp - Math.sign(S.rollDisp) * decayStep;
-  }
-
-  // ---- slew-limit the displayed roll ----
-  {
-    const dt = Math.max(0.01, (now - S.lastTime) / 1000);
-    const maxStep = dt * MAX_ROLL_RATE;
-    const diff = targetRoll - S.rollDisp;
-    S.rollDisp += Math.abs(diff) > maxStep ? Math.sign(diff) * maxStep : diff;
-  }
-
-  // ---- update state timestamps/unwraps ----
-  S.unwrapped = unwrapped;
-  S.prevUnwrapped = unwrapped;
-  S.lastTime = now;
-
-  // ---- pitch from VS ----
-  const pitch_deg = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, (vs_fpm / 1000) * 4));
-
-  // ---- global scales (with sane fallbacks) ----
-  const PFD_PITCH_SCALE       = window.PFD_PITCH_SCALE ?? 2.0;
-  const PFD_SPEED_REF_VALUE   = window.PFD_SPEED_REF_VALUE ?? 0;
-  const PFD_SPEED_SCALE       = window.PFD_SPEED_SCALE ?? -0.6;
-  const PFD_ALTITUDE_SCALE    = window.PFD_ALTITUDE_SCALE ?? 0.7;
-  const PFD_REEL_SPACING      = window.PFD_REEL_SPACING ?? 40;
-  const PFD_HEADING_REF_VALUE = window.PFD_HEADING_REF_VALUE ?? 0;
-  const PFD_HEADING_SCALE     = window.PFD_HEADING_SCALE ?? 4;
-
-  // ---- apply attitude transform (pitch translate, roll rotate) ----
-  const rollForSvg = -S.rollDisp; // SVG rotation sense
-  attitudeGroup.setAttribute(
-    'transform',
-    `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(${rollForSvg}, 401.5, 312.5)`
-  );
-
-  // ---- tapes/readouts ----
-  speedReadout.textContent = Math.round(gs_kt);
-  const speedYOffset = (gs_kt - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE;
-  speedTapeGroup.setAttribute('transform', `translate(0, ${speedYOffset})`);
-
-  const altitude = Math.max(0, alt_ft);
-  altReadoutHund.textContent = Math.floor(altitude / 100);
-  const tapeYOffset = altitude * PFD_ALTITUDE_SCALE;
-  altitudeTapeGroup.setAttribute('transform', `translate(0, ${tapeYOffset})`);
-
-  const tensValue = altitude % 100;
-  const reelYOffset = -(tensValue / 20) * PFD_REEL_SPACING;
-  tensReelGroup.setAttribute('transform', `translate(0, ${reelYOffset})`);
-
-  const hdg = ((Math.round(track_deg) % 360) + 360) % 360;
-  headingReadout.textContent = String(hdg).padStart(3, '0');
-  const xOffset = -(track_deg - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
-  headingTapeGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
-}
     
 /**
- * Stable PFD update:
- * - Sample-and-hold last turn-rate between API packets (no snap-back).
- * - Linear regression w/ fallback dH/dt, heading unwrap, and EMA smoothing.
- * - Sign stickiness (won’t flip L/R for brief jitters).
- * - Hysteresis + stale logic so roll only decays when data is truly old.
- */
-function updatePfdDisplay(pfdData) {
-  if (!pfdData) return;
+     * Initializes the SVG PFD by generating its static elements like tapes and ladders.
+     * [MODIFIED] This function now accepts a 'containerElement' to scope
+     * its DOM search, preventing it from finding an old PFD during cleanup.
+     */
+    function createPfdDisplay(containerElement) {
+        const SVG_NS = "http://www.w3.org/2000/svg";
+        
+        // [MODIFIED] Scoped querySelector instead of global getElementById
+        const attitudeGroup = containerElement.querySelector('#attitude_group');
+        const speedTapeGroup = containerElement.querySelector('#speed_tape_group');
+        const altitudeTapeGroup = containerElement.querySelector('#altitude_tape_group');
+        const tensReelGroup = containerElement.querySelector('#altitude_tens_reel_group');
+        const headingTapeGroup = containerElement.querySelector('#heading_tape_group');
 
-  // ---- tolerate common key names ----
-  const gs_kt =
-    pfdData.gs_kt ??
-    pfdData.groundspeed_kts ??
-    pfdData.groundspeed ??
-    pfdData.gs ??
-    (pfdData.speed && (pfdData.speed.kt || pfdData.speed.kts)) ??
-    0;
+        // [MODIFIED] This guard check is now safely scoped to the new container
+        if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !tensReelGroup || !headingTapeGroup || attitudeGroup.dataset.initialized) {
+            return;
+        }
 
-  const track_deg =
-    pfdData.track_deg ??
-    pfdData.heading_deg ??
-    pfdData.track ??
-    pfdData.hdg ??
-    0;
+        attitudeGroup.dataset.initialized = 'true'; // Prevent re-initialization
 
-  const alt_ft = pfdData.alt_ft ?? pfdData.altitude_ft ?? pfdData.altitude ?? 0;
-  const vs_fpm = pfdData.vs_fpm ?? pfdData.vertical_speed_fpm ?? pfdData.vs ?? 0;
-
-  // ---- DOM ----
-  const attitudeGroup     = document.getElementById('attitude_group');
-  const speedTapeGroup    = document.getElementById('speed_tape_group');
-  const altitudeTapeGroup = document.getElementById('altitude_tape_group');
-  const tensReelGroup     = document.getElementById('altitude_tens_reel_group');
-  const headingTapeGroup  = document.getElementById('heading_tape_group');
-  const speedReadout      = document.getElementById('speed_readout');
-  const altReadoutHund    = document.getElementById('altitude_readout_hundreds');
-  const headingReadout    = document.getElementById('heading_readout');
-  if (!attitudeGroup || !speedTapeGroup || !altitudeTapeGroup || !headingTapeGroup || !tensReelGroup) return;
-
-  // ---- tunables ----
-  const WINDOW_SEC          = 2.4;   // regression window
-  const LATCH_ON_TURN       = 0.20;  // deg/s to latch "turning"
-  const LATCH_OFF_TURN      = 0.10;  // deg/s to unlatch
-  const LATCH_HOLD_MS       = 400;   // chatter guard
-  const MAX_BANK_DEG        = 35;
-  const MAX_ROLL_RATE       = 60;    // display slew (deg/s)
-  const MIN_GS_FOR_TURN     = 1;
-  const PITCH_LIMIT         = 25;
-
-  const DATA_HOLD_MS        = 1400;  // hold last turn-rate after last fresh packet
-  const STALE_MS            = 4000;  // after this, allow full decay/unlatch
-  const HDG_EPS             = 0.4;   // unwrapped degrees to consider heading "changed"
-  const GS_EPS              = 0.5;   // kt change to consider GS "changed"
-  const DECAY_TO_LEVEL_DPS  = 12;    // decay when not turning
-  const MICRO_DECAY_FACTOR  = 0.25;  // softer decay before STALE_MS
-
-  const EMA_ALPHA           = 0.35;  // EMA smoothing on turn-rate (0..1)
-  const SIGN_MIN_DEG        = 3.0;   // min magnitude to accept L/R sign flip
-  const SIGN_HOLD_MS        = 250;   // new sign must persist this long
-
-  const now = performance.now();
-
-  // ---- persistent state ----
-  if (!window.lastPfdState || typeof window.lastPfdState !== 'object') {
-    window.lastPfdState = {
-      unwrapped: track_deg,
-      lastTime: now,
-      buf: [],                  // [{t, hdg}] for fresh samples only
-      rollDisp: 0,
-      turning: false,
-      lastTurnLatchTs: 0,
-
-      // freshness / hold
-      lastDataTs: 0,
-      lastTurnRate: 0,
-      lastRawTrack: track_deg,
-      lastRawGs: gs_kt,
-      prevUnwrapped: track_deg,
-
-      // smoothing & sign guard
-      turnRateEma: 0,
-      rollSign: 0,
-      lastSignChangeTs: 0
-    };
-  }
-  const S = window.lastPfdState;
-
-  // ---- unwrap heading ----
-  let delta = track_deg - (S.unwrapped % 360);
-  if (delta > 180)  delta -= 360;
-  if (delta < -180) delta += 360;
-  const unwrapped = S.unwrapped + delta;
-
-  // ---- detect "fresh" API packet vs. render tick (use unwrapped delta) ----
-  const unwrappedDelta = Math.abs(unwrapped - S.unwrapped);
-  const isFresh =
-    unwrappedDelta > HDG_EPS ||
-    Math.abs(gs_kt - S.lastRawGs) > GS_EPS;
-
-  // ---- manage regression buffer (only for fresh samples) ----
-  const tNow = now / 1000;
-  if (isFresh) {
-    S.lastDataTs = now;
-    S.lastRawTrack = track_deg;
-    S.lastRawGs = gs_kt;
-    const cutoff = tNow - WINDOW_SEC;
-    S.buf.push({ t: tNow, hdg: unwrapped });
-    while (S.buf.length && S.buf[0].t < cutoff) S.buf.shift();
-  }
-
-  // ---- turn-rate estimate (deg/s): fresh -> compute; else -> hold previous ----
-  let turnRate = S.lastTurnRate;
-  if (isFresh) {
-    if (S.buf.length >= 3 && gs_kt > MIN_GS_FOR_TURN) {
-      // linear regression slope
-      const t0 = S.buf[0].t;
-      let sumT = 0, sumH = 0, sumTT = 0, sumTH = 0, n = S.buf.length;
-      for (let i = 0; i < n; i++) {
-        const ti = S.buf[i].t - t0;
-        const hi = S.buf[i].hdg;
-        sumT  += ti;
-        sumH  += hi;
-        sumTT += ti * ti;
-        sumTH += ti * hi;
-      }
-      const denom = n * sumTT - sumT * sumT;
-      if (denom !== 0) {
-        turnRate = (n * sumTH - sumT * sumH) / denom; // deg/s
-      } else {
-        const dtS = Math.max(0.02, (now - S.lastTime) / 1000);
-        turnRate = (unwrapped - S.prevUnwrapped) / dtS;
-      }
-    } else {
-      const dtS = Math.max(0.02, (now - S.lastTime) / 1000);
-      turnRate = (unwrapped - S.prevUnwrapped) / dtS;
+        // --- GENERATION FUNCTIONS (unchanged) ---
+        // These are safe as they append to the scoped local variables above
+        function generateAttitudeIndicators() {
+            const centerX = 401.5;
+            const centerY = 312.5;
+            for (let p = -90; p <= 90; p += 2.5) {
+                if (p === 0) continue;
+                const y = centerY - (p * PFD_PITCH_SCALE);
+                const isMajor = (p % 10 === 0);
+                const isMinor = (p % 5 === 0);
+                if (isMajor || isMinor) {
+                    const lineWidth = isMajor ? 80 : 40;
+                    const line = document.createElementNS(SVG_NS, 'line');
+                    line.setAttribute('x1', centerX - lineWidth / 2);
+                    line.setAttribute('x2', centerX + lineWidth / 2);
+                    line.setAttribute('y1', y);
+                    line.setAttribute('y2', y);
+                    line.setAttribute('stroke', 'white');
+                    line.setAttribute('stroke-width', 2);
+                    attitudeGroup.appendChild(line);
+                    if (isMajor) {
+                        const textLeft = document.createElementNS(SVG_NS, 'text');
+                        textLeft.setAttribute('x', centerX - lineWidth / 2 - 10);
+                        textLeft.setAttribute('y', y + 5);
+                        textLeft.setAttribute('fill', 'white');
+                        textLeft.setAttribute('font-size', '18');
+                        textLeft.setAttribute('text-anchor', 'end');
+                        textLeft.textContent = Math.abs(p);
+                        attitudeGroup.appendChild(textLeft);
+                        const textRight = document.createElementNS(SVG_NS, 'text');
+                        textRight.setAttribute('x', centerX + lineWidth / 2 + 10);
+                        textRight.setAttribute('y', y + 5);
+                        textRight.setAttribute('fill', 'white');
+                        textRight.setAttribute('font-size', '18');
+                        textRight.setAttribute('text-anchor', 'start');
+                        textRight.textContent = Math.abs(p);
+                        attitudeGroup.appendChild(textRight);
+                    }
+                }
+            }
+        }
+        function generateSpeedTape() {
+            const MIN_SPEED = 0, MAX_SPEED = 999;
+            for (let s = MIN_SPEED; s <= MAX_SPEED; s += 5) {
+                const yPos = PFD_SPEED_CENTER_Y - (s - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE;
+                const tick = document.createElementNS(SVG_NS, 'line');
+                tick.setAttribute('y1', yPos); tick.setAttribute('y2', yPos);
+                tick.setAttribute('stroke', 'white'); tick.setAttribute('stroke-width', '2');
+                if (s % 10 === 0) {
+                    tick.setAttribute('x1', '67'); tick.setAttribute('x2', '52');
+                    const text = document.createElementNS(SVG_NS, 'text');
+                    text.setAttribute('x', '37'); text.setAttribute('y', yPos + 5);
+                    text.setAttribute('fill', 'white');
+                    text.setAttribute('font-size', '18');
+                    text.setAttribute('text-anchor', 'middle'); text.textContent = s;
+                    speedTapeGroup.appendChild(text);
+                } else {
+                    tick.setAttribute('x1', '67'); tick.setAttribute('x2', '60');
+                }
+                speedTapeGroup.appendChild(tick);
+            }
+        }
+        function generateAltitudeTape() {
+            const MIN_ALTITUDE = 0, MAX_ALTITUDE = 50000;
+            for (let alt = MIN_ALTITUDE; alt <= MAX_ALTITUDE; alt += 20) {
+                const yPos = PFD_ALTITUDE_CENTER_Y - (alt - PFD_ALTITUDE_REF_VALUE) * PFD_ALTITUDE_SCALE;
+                const tick = document.createElementNS(SVG_NS, 'line');
+                tick.setAttribute('y1', yPos); tick.setAttribute('y2', yPos);
+                tick.setAttribute('stroke', 'white'); tick.setAttribute('stroke-width', '2');
+                tick.setAttribute('x1', '72');
+                if (alt % 100 === 0) {
+                    tick.setAttribute('x2', '52');
+                    const text = document.createElementNS(SVG_NS, 'text');
+                    text.setAttribute('x', '25'); text.setAttribute('y', yPos + 5);
+                    text.setAttribute('fill', 'white');
+                    text.setAttribute('font-size', '18');
+                    text.setAttribute('text-anchor', 'middle'); text.textContent = alt / 100;
+                    altitudeTapeGroup.appendChild(text);
+                } else {
+                    tick.setAttribute('x2', '62');
+                }
+                altitudeTapeGroup.appendChild(tick);
+            }
+        }
+        function generateAltitudeTensReel() {
+            const center_y = 316;
+            for (let i = -5; i < 10; i++) {
+                let value = (i * 20); value = (value < 0) ? 100 + (value % 100) : value % 100;
+                const displayValue = String(value).padStart(2, '0');
+                const yPos = center_y + (i * PFD_REEL_SPACING);
+                const text = document.createElementNS(SVG_NS, 'text');
+                text.setAttribute('x', '745'); text.setAttribute('y', yPos);
+                text.setAttribute('fill', '#00FF00'); text.setAttribute('font-size', '32');
+                text.setAttribute('font-weight', 'bold'); text.textContent = displayValue;
+                tensReelGroup.appendChild(text);
+            }
+        }
+        function generateHeadingTape() {
+            const y_text = 650, y_tick_top = 620, y_tick_bottom_major = 635, y_tick_bottom_minor = 628;
+            for (let h = -360; h <= 720; h += 5) {
+                const xPos = PFD_HEADING_CENTER_X + (h - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
+                const normalizedH = (h + 360) % 360;
+                if (normalizedH % 90 === 0) continue;
+                const tick = document.createElementNS(SVG_NS, 'line');
+                tick.setAttribute('x1', xPos); tick.setAttribute('x2', xPos);
+                tick.setAttribute('stroke', 'white'); tick.setAttribute('stroke-width', '1.5');
+                tick.setAttribute('y1', y_tick_top); tick.setAttribute('y2', (h % 10 === 0) ? y_tick_bottom_major : y_tick_bottom_minor);
+                headingTapeGroup.appendChild(tick);
+            }
+            for (let h = 0; h < 360; h += 10) {
+                for (let offset of [-360, 0, 360]) {
+                    const currentH = h + offset;
+                    const xPos = PFD_HEADING_CENTER_X + (currentH - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
+                    const text = document.createElementNS(SVG_NS, 'text');
+                    text.setAttribute('x', xPos); text.setAttribute('y', y_text);
+                    text.setAttribute('fill', 'white'); text.setAttribute('font-size', '16');
+                    text.setAttribute('text-anchor', 'middle');
+                    let displayVal = '';
+                    switch (h) { case 0: displayVal = 'N'; break; case 90: displayVal = 'E'; break; case 180: displayVal = 'S'; break; case 270: displayVal = 'W'; break; default: if (h % 30 === 0) { displayVal = h / 10; } }
+                    if (displayVal !== '') { text.textContent = displayVal; headingTapeGroup.appendChild(text); }
+                }
+            }
+        }
+        
+        generateAttitudeIndicators();
+        generateSpeedTape();
+        generateAltitudeTape();
+        generateAltitudeTensReel();
+        generateHeadingTape();
     }
-    S.lastTurnRate = turnRate;
-  }
-
-  // ---- EMA smoothing on turn-rate ----
-  S.turnRateEma = EMA_ALPHA * turnRate + (1 - EMA_ALPHA) * S.turnRateEma;
-
-  // ---- hysteresis + data-hold for "turning" ----
-  const sinceFresh = now - S.lastDataTs;
-  const rateAbs    = Math.abs(S.turnRateEma);
-  const wasTurning = S.turning;
-  const forceTurningByHold = sinceFresh <= DATA_HOLD_MS && Math.abs(S.lastTurnRate) >= LATCH_OFF_TURN;
-
-  if (!wasTurning) {
-    if (rateAbs >= LATCH_ON_TURN || forceTurningByHold) {
-      S.turning = true;
-      S.lastTurnLatchTs = now;
-    }
-  } else {
-    const timeSinceLatch = now - S.lastTurnLatchTs;
-    const allowUnlatch = rateAbs < LATCH_OFF_TURN && timeSinceLatch > LATCH_HOLD_MS && sinceFresh > DATA_HOLD_MS;
-    if (allowUnlatch && sinceFresh > STALE_MS) {
-      S.turning = false;
-    } else if (rateAbs >= LATCH_OFF_TURN || forceTurningByHold) {
-      S.lastTurnLatchTs = now;
-    }
-  }
-
-  // ---- coordinated-turn bank target from smoothed rate ----
-  const Vms   = Math.max(0, gs_kt) * 0.514444;
-  const omega = (S.turnRateEma * Math.PI) / 180; // rad/s
-  const bankAbs = Math.atan(Math.abs(omega) * Vms / 9.81) * 180 / Math.PI;
-  let targetRoll = (S.turnRateEma >= 0 ? 1 : -1) * Math.min(bankAbs, MAX_BANK_DEG);
-
-  // ---- sign stickiness (prevents brief L/R flips) ----
-  const desiredSign = Math.sign(targetRoll);
-  if (desiredSign !== 0 && desiredSign !== S.rollSign) {
-    const bigEnough = Math.abs(targetRoll) >= SIGN_MIN_DEG;
-    const persisted = (now - S.lastSignChangeTs) >= SIGN_HOLD_MS;
-    if (bigEnough && persisted) {
-      S.rollSign = desiredSign;
-      S.lastSignChangeTs = now;
-    } else {
-      targetRoll = Math.abs(targetRoll) * (S.rollSign || desiredSign);
-    }
-  } else if (S.rollSign === 0 && desiredSign !== 0) {
-    S.rollSign = desiredSign;
-    S.lastSignChangeTs = now;
-  }
-
-  // ---- when not turning: decay toward level (hold pose before STALE_MS) ----
-  if (!S.turning) {
-    const dt = Math.max(0.01, (now - S.lastTime) / 1000);
-    const base = DECAY_TO_LEVEL_DPS * dt;
-    const decayStep = sinceFresh <= STALE_MS ? base * MICRO_DECAY_FACTOR : base;
-    targetRoll = (Math.abs(S.rollDisp) <= decayStep) ? 0 : S.rollDisp - Math.sign(S.rollDisp) * decayStep;
-  }
-
-  // ---- slew-limit the displayed roll ----
-  {
-    const dt = Math.max(0.01, (now - S.lastTime) / 1000);
-    const maxStep = dt * MAX_ROLL_RATE;
-    const diff = targetRoll - S.rollDisp;
-    S.rollDisp += Math.abs(diff) > maxStep ? Math.sign(diff) * maxStep : diff;
-  }
-
-  // ---- update state timestamps/unwraps ----
-  S.unwrapped = unwrapped;
-  S.prevUnwrapped = unwrapped;
-  S.lastTime = now;
-
-  // ---- pitch from VS ----
-  const pitch_deg = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, (vs_fpm / 1000) * 4));
-
-  // ---- global scales (with sane fallbacks) ----
-  const PFD_PITCH_SCALE       = window.PFD_PITCH_SCALE ?? 2.0;
-  const PFD_SPEED_REF_VALUE   = window.PFD_SPEED_REF_VALUE ?? 0;
-  const PFD_SPEED_SCALE       = window.PFD_SPEED_SCALE ?? -0.6;
-  // ✅ FIX: Changed fallback value from -0.09 to 0.7 to ensure correct (positive) tape translation.
-  const PFD_ALTITUDE_SCALE    = window.PFD_ALTITUDE_SCALE ?? 0.7;
-  const PFD_REEL_SPACING      = window.PFD_REEL_SPACING ?? 40;
-  const PFD_HEADING_REF_VALUE = window.PFD_HEADING_REF_VALUE ?? 0;
-  const PFD_HEADING_SCALE     = window.PFD_HEADING_SCALE ?? 4;
-
-  // ---- apply attitude transform (pitch translate, roll rotate) ----
-  const rollForSvg = -S.rollDisp; // SVG rotation sense
-  attitudeGroup.setAttribute(
-    'transform',
-    `translate(0, ${pitch_deg * PFD_PITCH_SCALE}) rotate(${rollForSvg}, 401.5, 312.5)`
-  );
-
-  // ---- tapes/readouts ----
-  speedReadout.textContent = Math.round(gs_kt);
-  const speedYOffset = (gs_kt - PFD_SPEED_REF_VALUE) * PFD_SPEED_SCALE;
-  speedTapeGroup.setAttribute('transform', `translate(0, ${speedYOffset})`);
-
-  const altitude = Math.max(0, alt_ft);
-  altReadoutHund.textContent = Math.floor(altitude / 100);
-  const tapeYOffset = altitude * PFD_ALTITUDE_SCALE;
-  altitudeTapeGroup.setAttribute('transform', `translate(0, ${tapeYOffset})`);
-
-  const tensValue = altitude % 100;
-  const reelYOffset = -(tensValue / 20) * PFD_REEL_SPACING;
-  tensReelGroup.setAttribute('transform', `translate(0, ${reelYOffset})`);
-
-  const hdg = ((Math.round(track_deg) % 360) + 360) % 360;
-  headingReadout.textContent = String(hdg).padStart(3, '0');
-  const xOffset = -(track_deg - PFD_HEADING_REF_VALUE) * PFD_HEADING_SCALE;
-  headingTapeGroup.setAttribute('transform', `translate(${xOffset}, 0)`);
-}
 
     /**
      * --- [NEW] Resets the PFD state and visuals to neutral. ---
