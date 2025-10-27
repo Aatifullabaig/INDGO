@@ -1,5 +1,5 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v4.0)
+ * MobileUIHandler Module (Creative HUD Rehaul - v4.1 - Race Condition Fixed)
  *
  * This version is patched to be compatible with the new unified aircraft
  * info window from crew-center.js.
@@ -8,6 +8,10 @@
  * from the hidden desktop window (#aircraft-info-window) and moves them
  * into the mobile split-view containers. When closed, it moves them back.
  * This preserves all event listeners for the PFD, stats button, and back button.
+ *
+ * v4.1 FIX: Refactored `closeActiveWindow` to immediately set state to null,
+ * preventing a race condition if a new window is opened before the
+ * close animation completes.
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -35,7 +39,7 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (v4.0) Initialized.");
+        console.log("Mobile UI Handler (v4.1) Initialized.");
     },
 
     /**
@@ -414,45 +418,60 @@ const MobileUIHandler = {
     },
 
     /**
+     * --- [FIXED v4.1] ---
      * Animates out, MOVES CONTENT BACK, and removes all mobile UI components.
+     * Resets state immediately to prevent race conditions.
      * @param {boolean} [force=false] - If true, skips animation and just cleans up.
      */
     closeActiveWindow(force = false) {
+        // [FIX] If there's no window, do nothing.
+        if (!this.activeWindow) return;
+
         if (this.contentObserver) this.contentObserver.disconnect();
-        
+
+        // [FIX] Immediately set activeWindow to null to prevent race condition.
+        // We store the elements we need to animate/remove in local vars.
+        const overlay = this.overlayEl;
+        const topWindow = this.topWindowEl;
+        const bottomDrawer = this.bottomDrawerEl;
+        const desktopWrapper = this.desktopContentWrapper;
+
+        // [FIX] Reset state *immediately*.
+        this.activeWindow = null;
+        this.desktopContentWrapper = null;
+        this.contentObserver = null;
+        this.topWindowEl = null;
+        this.bottomDrawerEl = null;
+        this.overlayEl = null;
+
         // Find the content to move back
-        const topContent = this.topWindowEl?.querySelector('.aircraft-overview-panel');
-        const mainContent = this.bottomDrawerEl?.querySelector('.unified-display-main-content');
+        const topContent = topWindow?.querySelector('.aircraft-overview-panel');
+        const mainContent = bottomDrawer?.querySelector('.unified-display-main-content');
         
-        // Move content back to the hidden desktop wrapper
-        if (this.desktopContentWrapper) {
-            if (topContent) this.desktopContentWrapper.appendChild(topContent);
-            if (mainContent) this.desktopContentWrapper.appendChild(mainContent);
+        // [FIX] Move content back *immediately*.
+        if (desktopWrapper) {
+            // We must check if elements exist before appending,
+            // in case they were never populated.
+            if (topContent) desktopWrapper.appendChild(topContent);
+            if (mainContent) desktopWrapper.appendChild(mainContent);
         }
 
+        // Now, define the cleanup function just for DOM removal.
         const cleanup = () => {
-            this.overlayEl?.remove();
-            this.topWindowEl?.remove();
-            this.bottomDrawerEl?.remove();
-
-            // Cleanup state
-            this.activeWindow = null;
-            this.desktopContentWrapper = null;
-            this.contentObserver = null;
-            this.topWindowEl = null;
-            this.bottomDrawerEl = null;
-            this.overlayEl = null;
+            overlay?.remove();
+            topWindow?.remove();
+            bottomDrawer?.remove();
         };
 
         if (force) {
             cleanup();
         } else {
             // Animate out
-            if (this.overlayEl) this.overlayEl.classList.remove('visible');
-            if (this.topWindowEl) this.topWindowEl.classList.remove('visible');
-            if (this.bottomDrawerEl) {
-                this.bottomDrawerEl.classList.add('off-screen');
-                this.bottomDrawerEl.classList.remove('expanded');
+            if (overlay) overlay.classList.remove('visible');
+            if (topWindow) topWindow.classList.remove('visible');
+            if (bottomDrawer) {
+                bottomDrawer.classList.add('off-screen');
+                bottomDrawer.classList.remove('expanded');
             }
             // Remove from DOM after animation
             setTimeout(cleanup, 500);
