@@ -1,17 +1,17 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v4.1 - Race Condition Fixed)
+ * MobileUIHandler Module (Creative HUD Rehaul - v4.0)
  *
- * This version is patched to be compatible with the new unified aircraft
- * info window from crew-center.js.
+ * This version brings the full "desktop feel" and animations to the mobile
+ * UI, while retaining the mobile-native top-window/bottom-drawer layout.
  *
- * It no longer clones DOM nodes. Instead, it "adopts" the real DOM elements
- * from the hidden desktop window (#aircraft-info-window) and moves them
- * into the mobile split-view containers. When closed, it moves them back.
- * This preserves all event listeners for the PFD, stats button, and back button.
- *
- * v4.1 FIX: Refactored `closeActiveWindow` to immediately set state to null,
- * preventing a race condition if a new window is opened before the
- * close animation completes.
+ * This is achieved by changing the core strategy:
+ * 1. STOP CLONING: We no longer "scrape" and "clone" DOM nodes.
+ * 2. START MOVING: We use appendChild() to move the *actual* live DOM elements
+ * from the hidden desktop window into the mobile containers.
+ * 3. PRESERVE BINDINGS: This preserves all desktop CSS, animations, and JS
+ * data bindings (like the PFD and live data readouts).
+ * 4. MOVE BACK: On close, we move the content back to the original hidden
+ * window, ensuring it's not destroyed.
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -21,8 +21,7 @@ const MobileUIHandler = {
 
     // --- STATE ---
     isMobile: () => window.innerWidth <= MobileUIHandler.CONFIG.breakpoint,
-    activeWindow: null, // This will be the original #aircraft-info-window
-    desktopContentWrapper: null, // The .info-window-content inside #aircraft-info-window
+    activeWindow: null, // The *original* hidden #aircraft-info-window
     topWindowEl: null,
     bottomDrawerEl: null,
     overlayEl: null,
@@ -39,13 +38,15 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (v4.1) Initialized.");
+        console.log("Mobile UI Handler (HUD Rehaul v4.0) Initialized.");
     },
 
     /**
      * Injects all the CSS for the new HUD-themed floating windows.
-     * This is now simplified to *only* style the mobile containers,
-     * as crew-center.js already provides responsive styles for the content.
+     * ---
+     * [RENOVATED] This CSS is now *much* simpler. It only styles the
+     * mobile containers and no longer tries to re-style the content,
+     * as the desktop CSS from crew-center.js will handle that.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -80,7 +81,8 @@ const MobileUIHandler = {
 
             .mobile-aircraft-view {
                 position: absolute;
-                background: var(--hud-bg);
+                /* MODIFIED: Use the desktop's dark color for a seamless content blend */
+                background: #1C1E2A; 
                 backdrop-filter: blur(var(--hud-blur));
                 -webkit-backdrop-filter: blur(var(--hud-blur));
                 border: 1px solid var(--hud-border);
@@ -99,12 +101,16 @@ const MobileUIHandler = {
                 border-radius: 16px;
                 transform: translateY(-250%);
                 overflow: hidden;
+                /* MODIFIED: Let content define height, but set a max */
+                max-height: 250px; 
             }
             #mobile-aircraft-top-window.visible {
                 transform: translateY(0);
             }
-            /* The .aircraft-overview-panel will be moved inside this,
-               and crew-center.js styles will handle its content. */
+            /* * [REMOVED] All content-specific styles like .aircraft-image-container.
+             * The desktop's .aircraft-overview-panel will be moved here and
+             * will style itself.
+             */
 
             /* --- Bottom Drawer: Flight Deck --- */
             #mobile-aircraft-bottom-drawer {
@@ -159,28 +165,25 @@ const MobileUIHandler = {
             .drawer-content {
                 overflow-y: auto;
                 flex-grow: 1;
-                /* Padding is now handled by .unified-display-main-content 
-                  from crew-center.js, which is great.
-                */
+                /*
+                 * [REMOVED] All padding/gap styles.
+                 * The desktop's .unified-display-main-content will be moved
+                 * here and provides its own padding.
+                 */
             }
             /* Custom Scrollbar for the drawer */
             .drawer-content::-webkit-scrollbar { width: 6px; }
             .drawer-content::-webkit-scrollbar-track { background: transparent; }
             .drawer-content::-webkit-scrollbar-thumb { background-color: var(--hud-accent); border-radius: 10px; }
             
-            /* This is the only style we need to override from crew-center.js
-              to ensure the stats panel fits the drawer height.
-            */
-            .drawer-content #pilot-stats-display {
-                height: 100%;
-            }
+            /* * [REMOVED] All rules for .unified-display-main, .pfd-main-panel, etc.
+             * The desktop CSS from crew-center.js is already responsive
+             * and will correctly style the content.
+             */
 
-            /* --- Media query to hide desktop window --- */
             @media (max-width: ${this.CONFIG.breakpoint}px) {
-                /* IMPORTANT: Hide the desktop window. 
-                  Its content will be moved to the mobile UI.
-                */
                 #aircraft-info-window, #airport-info-window {
+                    /* This is the key that hides the original desktop window */
                     display: none !important;
                 }
             }
@@ -199,26 +202,18 @@ const MobileUIHandler = {
         if (!this.isMobile() || this.activeWindow) return;
 
         if (windowElement.id === 'aircraft-info-window') {
-            // Store the original desktop window
+            // Store reference to the *original* hidden window
             this.activeWindow = windowElement; 
             
-            // Find the content wrapper that holds all the UI
-            this.desktopContentWrapper = this.activeWindow.querySelector('.info-window-content');
-            if (!this.desktopContentWrapper) {
-                 console.error("MobileUI: Could not find .info-window-content to adopt.");
-                 this.activeWindow = null;
-                 return;
-            }
-            
-            this.createSplitViewUI();
+            this.createSplitViewUI(); // Build our mobile containers
 
             setTimeout(() => {
                 if (this.topWindowEl) this.topWindowEl.classList.add('visible');
                 if (this.bottomDrawerEl) this.bottomDrawerEl.classList.remove('off-screen');
             }, 50);
 
-            // Start observing for the new content
-            this.observeOriginalWindow(this.desktopContentWrapper);
+            // Watch the original window for when crew-center.js populates it
+            this.observeOriginalWindow(windowElement);
         }
     },
 
@@ -226,7 +221,7 @@ const MobileUIHandler = {
      * Creates the new DOM structure for the HUD.
      */
     createSplitViewUI() {
-        this.closeActiveWindow(true); // Force close any existing UI
+        this.closeActiveWindow(true); // Force close any existing
         const viewContainer = document.getElementById('view-rosters');
         if (!viewContainer) return;
 
@@ -244,11 +239,12 @@ const MobileUIHandler = {
         this.bottomDrawerEl.id = 'mobile-aircraft-bottom-drawer';
         this.bottomDrawerEl.className = 'mobile-aircraft-view off-screen';
         
+        // [MODIFIED] Simplified header. The dynamic info is now *in* the top panel.
         this.bottomDrawerEl.innerHTML = `
             <div class="drawer-header">
                 <h4>
                     <i class="fa-solid fa-chevron-up chevron-icon"></i>
-                    <span>Flight Deck</span>
+                    <span>Flight Data</span>
                 </h4>
             </div>
             <div class="drawer-content"></div>
@@ -259,101 +255,140 @@ const MobileUIHandler = {
     /**
      * Watches the original hidden window for when its content is ready.
      */
-    observeOriginalWindow(contentWrapper) {
+    observeOriginalWindow(windowElement) {
         if (this.contentObserver) this.contentObserver.disconnect();
         
-        // Check if content is already there
-        if (contentWrapper.querySelector('.unified-display-main-content')) {
-            this.populateSplitView(contentWrapper);
-            return;
-        }
-        
-        // If not, wait for it
         this.contentObserver = new MutationObserver((mutationsList, obs) => {
-            if (contentWrapper.querySelector('.unified-display-main-content')) {
-                this.populateSplitView(contentWrapper);
-                obs.disconnect();
+            // [CRITICAL FIX] Wait for the *correct* element to appear.
+            const mainContent = windowElement.querySelector('.unified-display-main-content');
+            if (mainContent) {
+                this.populateSplitView(windowElement);
+                obs.disconnect(); // Stop observing
                 this.contentObserver = null;
             }
         });
-        this.contentObserver.observe(contentWrapper, { childList: true, subtree: true });
+        
+        // Also check if content is already there (e.g., race condition)
+        if (windowElement.querySelector('.unified-display-main-content')) {
+             this.populateSplitView(windowElement);
+             this.contentObserver = null;
+        } else {
+            // Only observe if content isn't ready
+            this.contentObserver.observe(windowElement, { childList: true, subtree: true });
+        }
     },
 
     /**
-     * MOVES content from the original window into the new HUD components.
+     * [COMPLETELY RENOVATED]
+     * Moves content from the original window into the new HUD components.
+     * We use appendChild (move) instead of cloneNode (copy) to preserve
+     * all event listeners, animations, and live data bindings from crew-center.js.
      */
-    populateSplitView(sourceContentWrapper) {
+    populateSplitView(sourceWindow) {
         if (!this.topWindowEl || !this.bottomDrawerEl) return;
 
-        // Get references to new mobile containers
         const drawerContentContainer = this.bottomDrawerEl.querySelector('.drawer-content');
+        if (!drawerContentContainer) return;
 
-        // Find original content pieces
-        const topContent = sourceContentWrapper.querySelector('.aircraft-overview-panel');
-        const mainContent = sourceContentWrapper.querySelector('.unified-display-main-content');
-        
-        // Update the drawer header with dynamic flight info
-        const drawerHeaderH4 = this.bottomDrawerEl.querySelector('.drawer-header h4');
-        const drawerHeaderTextSpan = drawerHeaderH4?.querySelector('span');
+        // Find original content pieces from crew-center.js
+        const topOverviewPanel = sourceWindow.querySelector('.aircraft-overview-panel');
+        const mainFlightContent = sourceWindow.querySelector('.unified-display-main-content');
 
-        if (drawerHeaderTextSpan && topContent) {
-            // Get data from the new structure
-            const callsignEl = topContent.querySelector('#ac-header-callsign');
-            const usernameEl = topContent.querySelector('#ac-header-username');
-            
-            const callsign = callsignEl ? callsignEl.textContent.trim() : 'Flight';
-            const username = usernameEl ? usernameEl.textContent.trim() : 'Pilot';
-            
-            drawerHeaderTextSpan.innerHTML = `${callsign} | ${username} <i class="fa-solid fa-user" style="opacity: 0.8;"></i>`;
+        // [CRITICAL] Move the elements, don't clone them
+        if (topOverviewPanel) {
+            this.topWindowEl.appendChild(topOverviewPanel);
         }
         
-        // --- THIS IS THE KEY CHANGE ---
-        // We MOVE the elements, not clone them. This preserves event listeners.
-        if (topContent) this.topWindowEl.appendChild(topContent);
-        if (mainContent) drawerContentContainer.appendChild(mainContent);
-        // --- END KEY CHANGE ---
+        if (mainFlightContent) {
+            drawerContentContainer.appendChild(mainFlightContent);
+        }
+        
+        // [REMOVED] All text modification logic. It's no longer needed.
+        // [REMOVED] Dynamic header logic. It's now part of the moved topOverviewPanel.
 
         this.wireUpInteractions();
     },
 
     /**
-     * Adds event listeners for all interactions (tap, swipe, close).
+     * [RENOVATED]
+     * Adds event listeners for mobile interactions (swipe) AND re-wires
+     * desktop-driven buttons (hide, stats) that were broken by the move.
      */
     wireUpInteractions() {
         if (!this.bottomDrawerEl || !this.topWindowEl) return;
 
         const drawerHeader = this.bottomDrawerEl.querySelector('.drawer-header');
-        
-        // Find the close/hide buttons *inside* the top window where we moved them
-        const closeBtn = this.topWindowEl.querySelector('.aircraft-window-close-btn');
-        const hideBtn = this.topWindowEl.querySelector('.aircraft-window-hide-btn');
 
+        // --- Mobile-specific interactions ---
         if (drawerHeader) {
             drawerHeader.addEventListener('click', () => this.toggleExpansion());
             drawerHeader.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
         }
-
-        // Re-wire the close/hide buttons for mobile
-        if (closeBtn) {
-            closeBtn.addEventListener('click', this.handleMobileClose.bind(this));
-        }
-        if (hideBtn) {
-            // On mobile, "hide" and "close" do the same thing.
-            hideBtn.addEventListener('click', this.handleMobileClose.bind(this));
-        }
         
         document.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
         document.addEventListener('touchend', this.handleTouchEnd.bind(this));
-    },
-    
-    /**
-     * New helper to handle mobile close/hide clicks.
-     * It prevents the desktop listener from firing and calls the mobile close function.
-     */
-    handleMobileClose(e) {
-        e.preventDefault();
-        e.stopImmediatePropagation(); // Stop crew-center.js listener
-        this.closeActiveWindow();
+
+        // --- Re-wire desktop buttons using event delegation ---
+
+        // 1. Close and Hide buttons (in top panel)
+        this.topWindowEl.addEventListener('click', (e) => {
+            const closeBtn = e.target.closest('.aircraft-window-close-btn');
+            const hideBtn = e.target.closest('.aircraft-window-hide-btn');
+
+            if (closeBtn) {
+                this.closeActiveWindow();
+            }
+
+            if (hideBtn) {
+                // This logic is from crew-center.js, adapted for mobile
+                this.topWindowEl.classList.remove('visible');
+                this.bottomDrawerEl.classList.add('off-screen');
+                this.overlayEl.classList.remove('visible');
+                
+                // We don't need to stop the PFD interval here,
+                // as the user might just be hiding, not closing.
+                
+                const recallBtn = document.getElementById('aircraft-recall-btn');
+                if (recallBtn) {
+                    recallBtn.classList.add('visible', 'palpitate');
+                    setTimeout(() => recallBtn.classList.remove('palpitate'), 1000);
+                }
+            }
+        });
+        
+        // 2. Stats and Back buttons (in bottom drawer)
+        this.bottomDrawerEl.addEventListener('click', async (e) => {
+            const statsBtn = e.target.closest('.pilot-stats-toggle-btn');
+            const backBtn = e.target.closest('.back-to-flight-btn'); // Renamed in crew-center
+
+            if (statsBtn) {
+                const userId = statsBtn.dataset.userId;
+                const username = statsBtn.dataset.username;
+                
+                // This logic is from crew-center.js
+                if (userId) {
+                    const statsDisplay = this.bottomDrawerEl.querySelector('#pilot-stats-display');
+                    const flightDisplay = this.bottomDrawerEl.querySelector('#aircraft-display-main');
+                    if (statsDisplay && flightDisplay) {
+                        // This function is global, defined in crew-center.js
+                        await displayPilotStats(userId, username);
+                        // Ensure mobile UI shows the right panel
+                        flightDisplay.style.display = 'none';
+                        statsDisplay.style.display = 'block';
+                    }
+                }
+            }
+
+            if (backBtn) {
+                // This logic is from crew-center.js
+                const statsDisplay = this.bottomDrawerEl.querySelector('#pilot-stats-display');
+                const flightDisplay = this.bottomDrawerEl.querySelector('#aircraft-display-main');
+                if (statsDisplay && flightDisplay) {
+                    statsDisplay.style.display = 'none';
+                    flightDisplay.style.display = 'flex';
+                }
+            }
+        });
     },
     
     /**
@@ -368,19 +403,15 @@ const MobileUIHandler = {
         if (this.overlayEl) this.overlayEl.classList.toggle('visible', shouldExpand);
     },
 
-    // --- Swipe Gesture Handlers ---
+    // --- Swipe Gesture Handlers (Unchanged) ---
     handleTouchStart(e) {
-        // Allow scrolling inside the drawer content
-        const drawerContent = this.bottomDrawerEl.querySelector('.drawer-content');
-        if (drawerContent.contains(e.target) && drawerContent.scrollTop > 0) {
-             this.swipeState.isDragging = false;
-             return;
+        // Prevent swipe if touching a button or the scrollable content
+        if (e.target.closest('button, a, .drawer-content')) {
+            this.swipeState.isDragging = false;
+            return;
         }
         
-        // Prevent drag on buttons
-        if (e.target.closest('button')) return;
-
-        e.preventDefault();
+        e.preventDefault(); // Only prevent default if we're dragging the header
         this.swipeState.isDragging = true;
         this.swipeState.touchStartY = e.touches[0].clientY;
         const currentTransform = new WebKitCSSMatrix(window.getComputedStyle(this.bottomDrawerEl).transform);
@@ -393,7 +424,9 @@ const MobileUIHandler = {
         e.preventDefault();
         this.swipeState.touchCurrentY = e.touches[0].clientY;
         let deltaY = this.swipeState.touchCurrentY - this.swipeState.touchStartY;
-        let newY = Math.max(0, this.swipeState.drawerStartY + deltaY); // Don't let it go above the top
+        
+        // Clamp movement: cannot go higher than expanded (0)
+        let newY = Math.max(0, this.swipeState.drawerStartY + deltaY); 
         this.bottomDrawerEl.style.transform = `translateY(${newY}px)`;
     },
     
@@ -401,81 +434,88 @@ const MobileUIHandler = {
         if (!this.swipeState.isDragging) return;
         this.swipeState.isDragging = false;
         this.bottomDrawerEl.classList.remove('dragging');
-        this.bottomDrawerEl.style.transform = '';
+        this.bottomDrawerEl.style.transform = ''; // Clear inline style
 
         const deltaY = this.swipeState.touchCurrentY - this.swipeState.touchStartY;
+        const isExpanded = this.bottomDrawerEl.classList.contains('expanded');
 
-        if (deltaY > 150) { // Swiped down a lot, close everything
-            this.closeActiveWindow();
-            return;
+        if (deltaY > 150) { // Swiped down a lot
+             // If expanded, just collapse. If already collapsed, close everything.
+            if (isExpanded) {
+                 this.toggleExpansion(false);
+            } else {
+                 this.closeActiveWindow();
+                 return;
+            }
         }
         
         // Snap open or closed based on swipe direction
         if (deltaY < -50) this.toggleExpansion(true); // Swiped up
         else if (deltaY > 50) this.toggleExpansion(false); // Swiped down
+        else {
+             // Not a strong swipe, snap back to original state
+             this.toggleExpansion(isExpanded);
+        }
         
         this.swipeState = { ...this.swipeState, touchStartY: 0, touchCurrentY: 0 };
     },
 
     /**
-     * --- [FIXED v4.1] ---
-     * Animates out, MOVES CONTENT BACK, and removes all mobile UI components.
-     * Resets state immediately to prevent race conditions.
-     * @param {boolean} [force=false] - If true, skips animation and just cleans up.
+     * [RENOVATED]
+     * Animates out, moves content back to the original hidden window,
+     * and removes all mobile UI components.
      */
     closeActiveWindow(force = false) {
-        // [FIX] If there's no window, do nothing.
-        if (!this.activeWindow) return;
-
         if (this.contentObserver) this.contentObserver.disconnect();
+        
+        // [CRITICAL] Move content back to the original hidden window
+        // This ensures the desktop UI is intact if the user resizes.
+        if (this.activeWindow && this.topWindowEl && this.bottomDrawerEl) {
+            const topContent = this.topWindowEl.querySelector('.aircraft-overview-panel');
+            const mainContent = this.bottomDrawerEl.querySelector('.unified-display-main-content');
+            
+            if (topContent) {
+                this.activeWindow.appendChild(topContent);
+            }
+            if (mainContent) {
+                // We must also move back the stats display if it exists
+                const statsDisplay = mainContent.querySelector('#pilot-stats-display');
+                if(statsDisplay) this.activeWindow.appendChild(statsDisplay);
+                
+                this.activeWindow.appendChild(mainContent);
+            }
+        }
 
-        // [FIX] Immediately set activeWindow to null to prevent race condition.
-        // We store the elements we need to animate/remove in local vars.
-        const overlay = this.overlayEl;
-        const topWindow = this.topWindowEl;
-        const bottomDrawer = this.bottomDrawerEl;
-        const desktopWrapper = this.desktopContentWrapper;
+        const animationDuration = force ? 0 : 500;
 
-        // [FIX] Reset state *immediately*.
+        // Animate out and remove mobile containers
+        if (this.overlayEl) {
+            this.overlayEl.classList.remove('visible');
+            setTimeout(() => this.overlayEl?.remove(), animationDuration);
+        }
+        if (this.topWindowEl) {
+            this.topWindowEl.classList.remove('visible');
+            setTimeout(() => this.topWindowEl?.remove(), animationDuration);
+        }
+        if (this.bottomDrawerEl) {
+            this.bottomDrawerEl.classList.add('off-screen');
+            this.bottomDrawerEl.classList.remove('expanded');
+            setTimeout(() => this.bottomDrawerEl?.remove(), animationDuration);
+        }
+        
+        // Stop the PFD interval (if crew-center.js hasn't already)
+        // This is a safety check.
+        if (window.activePfdUpdateInterval) {
+             clearInterval(window.activePfdUpdateInterval);
+             window.activePfdUpdateInterval = null;
+        }
+
+        // Cleanup state
         this.activeWindow = null;
-        this.desktopContentWrapper = null;
         this.contentObserver = null;
         this.topWindowEl = null;
         this.bottomDrawerEl = null;
         this.overlayEl = null;
-
-        // Find the content to move back
-        const topContent = topWindow?.querySelector('.aircraft-overview-panel');
-        const mainContent = bottomDrawer?.querySelector('.unified-display-main-content');
-        
-        // [FIX] Move content back *immediately*.
-        if (desktopWrapper) {
-            // We must check if elements exist before appending,
-            // in case they were never populated.
-            if (topContent) desktopWrapper.appendChild(topContent);
-            if (mainContent) desktopWrapper.appendChild(mainContent);
-        }
-
-        // Now, define the cleanup function just for DOM removal.
-        const cleanup = () => {
-            overlay?.remove();
-            topWindow?.remove();
-            bottomDrawer?.remove();
-        };
-
-        if (force) {
-            cleanup();
-        } else {
-            // Animate out
-            if (overlay) overlay.classList.remove('visible');
-            if (topWindow) topWindow.classList.remove('visible');
-            if (bottomDrawer) {
-                bottomDrawer.classList.add('off-screen');
-                bottomDrawer.classList.remove('expanded');
-            }
-            // Remove from DOM after animation
-            setTimeout(cleanup, 500);
-        }
     }
 };
 
