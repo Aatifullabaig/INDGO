@@ -233,7 +233,6 @@ const MobileUIHandler = {
      * Creates the new DOM structure for the HUD.
      */
     createSplitViewUI() {
-        this.closeActiveWindow(true); // Force close any existing
         const viewContainer = document.getElementById('view-rosters');
         if (!viewContainer) return;
 
