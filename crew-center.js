@@ -352,8 +352,12 @@ function injectCustomStyles() {
             width: auto;
             max-width: 100px; /* Prevent huge logos */
             object-fit: contain;
-            /* Add a subtle shadow to pop against any background */
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+            /* ---
+              [USER REQUEST FIX]: This adds a subtle white glow for dark-on-dark,
+              while keeping a dark shadow for light-on-light.
+              ---
+            */
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7)) drop-shadow(0 0 5px rgba(255, 255, 255, 0.3));
         }
         
         /* --- [MODIFIED] Container for animating subtext --- */
