@@ -475,6 +475,12 @@ const MobileUIHandler = {
      * [RENOVATED]
      * Animates out, moves content back to the original hidden window,
      * and removes all mobile UI components.
+     *
+     * [FIXED v4.1] This function now correctly handles:
+     * 1. Asynchronous cleanup to prevent a race condition where a new
+     * window could be removed by a lingering setTimeout.
+     * 2. Synchronous cleanup when 'force = true' is passed.
+     * 3. Correctly moves content back without breaking the DOM structure.
      */
     closeActiveWindow(force = false) {
         if (this.contentObserver) this.contentObserver.disconnect();
@@ -488,45 +494,72 @@ const MobileUIHandler = {
             if (topContent) {
                 this.activeWindow.appendChild(topContent);
             }
+            
+            // [FIX #2] Only move the main container. The stats display
+            // is *inside* it and will be moved correctly with it.
+            // Moving it separately breaks the DOM structure.
             if (mainContent) {
-                // We must also move back the stats display if it exists
-                const statsDisplay = mainContent.querySelector('#pilot-stats-display');
-                if(statsDisplay) this.activeWindow.appendChild(statsDisplay);
-                
                 this.activeWindow.appendChild(mainContent);
             }
         }
 
         const animationDuration = force ? 0 : 500;
 
-        // Animate out and remove mobile containers
-        if (this.overlayEl) {
-            this.overlayEl.classList.remove('visible');
-            setTimeout(() => this.overlayEl?.remove(), animationDuration);
-        }
-        if (this.topWindowEl) {
-            this.topWindowEl.classList.remove('visible');
-            setTimeout(() => this.topWindowEl?.remove(), animationDuration);
-        }
-        if (this.bottomDrawerEl) {
-            this.bottomDrawerEl.classList.add('off-screen');
-            this.bottomDrawerEl.classList.remove('expanded');
-            setTimeout(() => this.bottomDrawerEl?.remove(), animationDuration);
-        }
-        
-        // Stop the PFD interval (if crew-center.js hasn't already)
-        // This is a safety check.
+        // --- [FIX #1 START] ---
+        // 1. Capture the *current* elements that need to be removed.
+        const overlayToRemove = this.overlayEl;
+        const topWindowToRemove = this.topWindowEl;
+        const bottomDrawerToRemove = this.bottomDrawerEl;
+
+        // 2. Stop the PFD interval
         if (window.activePfdUpdateInterval) {
              clearInterval(window.activePfdUpdateInterval);
              window.activePfdUpdateInterval = null;
         }
 
-        // Cleanup state
-        this.activeWindow = null;
-        this.contentObserver = null;
-        this.topWindowEl = null;
-        this.bottomDrawerEl = null;
-        this.overlayEl = null;
+        // 3. Handle removal and cleanup based on 'force'
+        if (force) {
+            // --- SYNCHRONOUS PATH ---
+            // Immediately remove elements
+            overlayToRemove?.remove();
+            topWindowToRemove?.remove();
+            bottomDrawerToRemove?.remove();
+            
+            // Immediately cleanup state
+            this.activeWindow = null;
+            this.contentObserver = null;
+            this.topWindowEl = null;
+            this.bottomDrawerEl = null;
+            this.overlayEl = null;
+        } else {
+            // --- ASYNCHRONOUS PATH ---
+            // Animate out
+            if (overlayToRemove) overlayToRemove.classList.remove('visible');
+            if (topWindowToRemove) topWindowToRemove.classList.remove('visible');
+            if (bottomDrawerToRemove) {
+                bottomDrawerToRemove.classList.add('off-screen');
+                bottomDrawerToRemove.classList.remove('expanded');
+            }
+
+            // Schedule removal AND state cleanup
+            setTimeout(() => {
+                overlayToRemove?.remove();
+                topWindowToRemove?.remove();
+                bottomDrawerToRemove?.remove();
+                
+                // [CRITICAL] Only reset the state if a new window
+                // hasn't already been created. We check if the *current*
+                // state element is the same one we intended to remove.
+                if (this.topWindowEl === topWindowToRemove) {
+                    this.activeWindow = null;
+                    this.contentObserver = null;
+                    this.topWindowEl = null;
+                    this.bottomDrawerEl = null;
+                    this.overlayEl = null;
+                }
+            }, animationDuration);
+        }
+        // --- [FIX #1 END] ---
     }
 };
 
