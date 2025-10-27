@@ -471,26 +471,23 @@ const MobileUIHandler = {
         this.swipeState = { ...this.swipeState, touchStartY: 0, touchCurrentY: 0 };
     },
 
-/**
+    /**
      * [RENOVATED]
      * Animates out, moves content back to the original hidden window,
      * and removes all mobile UI components.
      *
-     * [FIXED v4.2 - PFD STATE FIX] This function now correctly handles:
-     * 1. Asynchronous cleanup to prevent race conditions.
+     * [FIXED v4.1] This function now correctly handles:
+     * 1. Asynchronous cleanup to prevent a race condition where a new
+     * window could be removed by a lingering setTimeout.
      * 2. Synchronous cleanup when 'force = true' is passed.
-     * 3. [BUGFIX] Only moves content back and clears the PFD interval
-     * on a manual close (force = false). This prevents a race condition
-     * where this function would destroy the *new* PFD's content and
-     * clear its update interval when a new window is opened.
+     * 3. Correctly moves content back without breaking the DOM structure.
      */
     closeActiveWindow(force = false) {
         if (this.contentObserver) this.contentObserver.disconnect();
         
-        // [CRITICAL BUGFIX] Only move content back if this is a manual close.
-        // If 'force = true', a new window is opening, and we must not
-        // move the old content back, as it would destroy the new content.
-        if (force === false && this.activeWindow && this.topWindowEl && this.bottomDrawerEl) {
+        // [CRITICAL] Move content back to the original hidden window
+        // This ensures the desktop UI is intact if the user resizes.
+        if (this.activeWindow && this.topWindowEl && this.bottomDrawerEl) {
             const topContent = this.topWindowEl.querySelector('.aircraft-overview-panel');
             const mainContent = this.bottomDrawerEl.querySelector('.unified-display-main-content');
             
@@ -498,7 +495,9 @@ const MobileUIHandler = {
                 this.activeWindow.appendChild(topContent);
             }
             
-            // [FIX #2] Only move the main container.
+            // [FIX #2] Only move the main container. The stats display
+            // is *inside* it and will be moved correctly with it.
+            // Moving it separately breaks the DOM structure.
             if (mainContent) {
                 this.activeWindow.appendChild(mainContent);
             }
@@ -513,9 +512,7 @@ const MobileUIHandler = {
         const bottomDrawerToRemove = this.bottomDrawerEl;
 
         // 2. Stop the PFD interval
-        // [CRITICAL BUGFIX] Only stop the interval on a manual close (force=false)
-        // to prevent a race condition with the new window's interval.
-        if (window.activePfdUpdateInterval && force === false) {
+        if (window.activePfdUpdateInterval) {
              clearInterval(window.activePfdUpdateInterval);
              window.activePfdUpdateInterval = null;
         }
@@ -551,7 +548,8 @@ const MobileUIHandler = {
                 bottomDrawerToRemove?.remove();
                 
                 // [CRITICAL] Only reset the state if a new window
-                // hasn't already been created.
+                // hasn't already been created. We check if the *current*
+                // state element is the same one we intended to remove.
                 if (this.topWindowEl === topWindowToRemove) {
                     this.activeWindow = null;
                     this.contentObserver = null;
