@@ -197,13 +197,25 @@ const MobileUIHandler = {
 
     /**
      * Intercepts the window open command to build the mobile UI.
+     * ---
+     * [FIXED] This function now handles being called multiple times.
+     * It will force-close any existing mobile window before building
+     * a new one, ensuring a clean state for every aircraft click.
      */
     openWindow(windowElement) {
-        if (!this.isMobile() || this.activeWindow) return;
+        if (!this.isMobile()) return; // 1. Only check for mobile
 
+        // 2. [CRITICAL FIX] If a window is already active, force-close it
+        //    synchronously. This resets the state (this.activeWindow = null)
+        //    before we continue.
+        if (this.activeWindow) {
+            // 'true' = force close, no animation, synchronous
+            this.closeActiveWindow(true); 
+        }
+
+        // 3. Now that the state is clean, proceed as normal
         if (windowElement.id === 'aircraft-info-window') {
-            // Store reference to the *original* hidden window
-            this.activeWindow = windowElement; 
+            this.activeWindow = windowElement; // Store reference
             
             this.createSplitViewUI(); // Build our mobile containers
 
@@ -212,7 +224,7 @@ const MobileUIHandler = {
                 if (this.bottomDrawerEl) this.bottomDrawerEl.classList.remove('off-screen');
             }, 50);
 
-            // Watch the original window for when crew-center.js populates it
+            // Watch the original window
             this.observeOriginalWindow(windowElement);
         }
     },
