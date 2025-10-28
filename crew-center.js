@@ -3142,6 +3142,35 @@ async function initializeSectorOpsMap(centerICAO) {
              currentAirportInWindow = null;
         }
     }
+
+    /**
+ * --- [NEW HELPER FUNCTION FOR WAYPOINT FIX] ---
+ * Recursively flattens the nested flightPlanItems from the SimBrief API plan
+ * into a single, clean array of the full waypoint *objects*.
+ * @param {Array} items - The flightPlanItems array from the API response.
+ * @returns {Array<object>} A flat array of waypoint objects.
+ */
+function getFlatWaypointObjects(items) {
+    const waypoints = [];
+    if (!Array.isArray(items)) return waypoints;
+
+    const extract = (planItems) => {
+        for (const item of planItems) {
+            // If an item is a container for a procedure (like a SID/STAR),
+            // ignore its own object and process its children instead.
+            if (Array.isArray(item.children) && item.children.length > 0) {
+                extract(item.children);
+            } 
+            // Otherwise, if it's a simple waypoint, add its object.
+            else if (item.location && typeof item.location.longitude === 'number' && typeof item.location.latitude === 'number' && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
+                waypoints.push(item); // Push the whole object
+            }
+        }
+    };
+
+    extract(items);
+    return waypoints;
+}
     
     /**
      * --- [FIXED HELPER] ---
@@ -3173,7 +3202,7 @@ async function initializeSectorOpsMap(centerICAO) {
         return waypoints;
     }
 
-// [REPLACE THIS FUNCTION]
+
 // This function fixes the "incorrect plot" by sorting the /route data
 // by timestamp before mapping it. It also removes the densifyRoute
 // function, as the 'globe' projection handles curves automatically.
@@ -3793,17 +3822,17 @@ function renderPilotStatsHTML(stats, username) {
     }
 
 /**
- * --- [MAJOR REVISION V4.8 - FPLAN Data]
- * This version adds logic to extract and display:
- * 1. Cruise Altitude (Top Altitude) from the plan.
- * 2. Next Waypoint name using `plan.nextWaypointIndex`.
- * 3. Distance to the next waypoint.
+ * --- [MAJOR REVISION V4.9 - FPLAN Data FIX]
+ * This version corrects the logic for finding the Next Waypoint.
+ * It now uses the `getFlatWaypointObjects` helper to create a flat
+ * list of waypoint objects, which `plan.nextWaypointIndex` can
+ * correctly index into.
 */
 function updateAircraftInfoWindow(baseProps, plan) {
     // --- [MODIFIED] Get all DOM elements ---
     const progressBarFill = document.getElementById('ac-progress-bar');
     const phaseIndicator = document.getElementById('ac-phase-indicator');
-    const footerGS = document.getElementById('ac-gs'); // This ID might be missing in your HTML, as noted in thought
+    const footerGS = document.getElementById('ac-gs'); // This ID might be missing in your HTML
     const footerVS = document.getElementById('ac-vs');
     const footerDist = document.getElementById('ac-dist');
     const footerETE = document.getElementById('ac-ete');
@@ -3850,7 +3879,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
         }
     }
 
-    // --- [NEW] Flight Plan Data Extraction ---
+    // --- [MODIFIED] Flight Plan Data Extraction ---
     let cruiseAlt = 0;
     let nextWpName = '---';
     let nextWpDistNM = '---';
@@ -3868,12 +3897,19 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 }
             }
         };
-        findMaxAlt(plan.flightPlanItems);
+        findMaxAlt(plan.flightPlanItems); // This part was working
 
+        // --- [FIX] Use the new helper to get a flat list of *objects* ---
+        const flatWaypointObjects = getFlatWaypointObjects(plan.flightPlanItems);
+        
         // 2. Find Next Waypoint & Distance
-        const nextWpIndex = plan.nextWaypointIndex;
-        if (typeof nextWpIndex === 'number' && plan.flightPlanItems && nextWpIndex < plan.flightPlanItems.length) {
-            const nextWp = plan.flightPlanItems[nextWpIndex];
+        const nextWpIndex = plan.nextWaypointIndex; // This is the API index
+        
+        // Check if the index is valid for our *new* flat list
+        if (typeof nextWpIndex === 'number' && flatWaypointObjects.length > 0 && nextWpIndex < flatWaypointObjects.length) {
+            
+            const nextWp = flatWaypointObjects[nextWpIndex]; // <-- Access the correct waypoint
+            
             if (nextWp) {
                 nextWpName = nextWp.identifier || nextWp.name || 'N/A';
                 
@@ -3883,13 +3919,18 @@ function updateAircraftInfoWindow(baseProps, plan) {
                     nextWpDistNM = (distKm / 1.852).toFixed(0);
                 }
             }
-        } else if (hasPlan && distanceToDestNM < 10) {
-            // Handle last leg when index might be out of bounds
-            nextWpName = "DEST";
+        } else if (hasPlan && distanceToDestNM < 10 && distanceToDestNM > 0.5) {
+            // Fallback for final approach when index might be out of bounds
+            nextWpName = flatWaypointObjects.length > 0 ? (flatWaypointObjects[flatWaypointObjects.length - 1].identifier || flatWaypointObjects[flatWaypointObjects.length - 1].name) : "DEST";
             nextWpDistNM = distanceToDestNM.toFixed(0);
+        } else if (hasPlan && distanceToDestNM <= 0.5) {
+             // We are at the destination
+             nextWpName = "DEST";
+             nextWpDistNM = "0";
         }
     }
-    // --- [END NEW] Flight Plan Data Extraction ---
+    // --- [END MODIFICATION] Flight Plan Data Extraction ---
+
 
     // --- Configuration Thresholds ---
     const THRESHOLD = {
