@@ -88,9 +88,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let isAircraftWindowLoading = false;
 
     // --- Map-related State ---
-    let liveFlightsMap = null;
-    let pilotMarkers = {};
-    let liveFlightsInterval = null;
     let sectorOpsMap = null;
     let sectorOpsAnimationInterval = null; // Add this new variable
     let airportAndAtcMarkers = {}; // Holds all airport markers (blue dots and red ATC dots)
@@ -158,6 +155,14 @@ function injectCustomStyles() {
         #sector-ops-map-fullscreen {
             grid-column: 1 / -1;
             grid-row: 1 / -1;
+        }
+
+        /* --- [NEW FIX] Ensure main-content padding is removed for Sector Ops --- */
+        /* This rule is now global (not just mobile) to ensure fullscreen map */
+        .main-content:has(#view-rosters.active) {
+            padding: 0 !important; /* Remove ALL padding (top, right, bottom, left) */
+            height: 100%; /* Set height to 100% of the viewport height */
+            overflow: hidden; /* Prevent the main container from scrolling */
         }
         
         /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
@@ -1006,11 +1011,14 @@ function injectCustomStyles() {
                 padding-left: 0;
             }
             
+            /* --- [REMOVED] This rule was moved outside the media query --- */
+            /*
             .main-content:has(#view-rosters.active) {
-                padding: 0; /* Remove ALL padding (top, right, bottom, left) */
-                height: 100vh; /* Set height to 100% of the viewport height */
-                overflow: hidden; /* Prevent the main container from scrolling */
+                padding: 0; 
+                height: 100vh; 
+                overflow: hidden; 
             }
+            */
 
             /* --- [REDESIGN] Mobile layout for info window --- */
             .info-window {
@@ -2539,142 +2547,6 @@ function updatePfdDisplay(pfdData) {
             newMap.fitBounds(bounds, { padding: 50 });
         });
     };
-
-    /**
-     * Initializes the live operations map.
-     */
-    function initializeLiveMap() {
-        if (!MAPBOX_ACCESS_TOKEN) return;
-        if (document.getElementById('live-flights-map-container') && !liveFlightsMap) {
-            liveFlightsMap = new mapboxgl.Map({
-                container: 'live-flights-map-container',
-                style: 'mapbox://styles/mapbox/dark-v11',
-                center: [78.9629, 22.5937],
-                zoom: 4,
-                minZoom: 2
-            });
-            liveFlightsMap.on('load', startLiveLoop);
-        } else {
-            startLiveLoop();
-        }
-    }
-
-    /**
-     * Starts or restarts the live flight update interval.
-     */
-    function startLiveLoop() {
-        if (!liveFlightsInterval) {
-            updateLiveFlights();
-            liveFlightsInterval = setInterval(updateLiveFlights, 3000);
-        }
-    }
-
-    /**
-     * Helper to remove dynamic flight path layers from the map.
-     */
-    function removeFlightPathLayers(map) {
-        if (map.getLayer('flown-path')) map.removeLayer('flown-path');
-        if (map.getSource('flown-path-source')) map.removeSource('flown-path-source');
-        if (map.getLayer('planned-path')) map.removeLayer('planned-path');
-        if (map.getSource('planned-path-source')) map.removeSource('planned-path-source');
-    }
-
-    /**
-     * Fetches live flight data and updates the map.
-     */
-    async function updateLiveFlights() {
-        if (!liveFlightsMap || !liveFlightsMap.isStyleLoaded()) return;
-
-        try {
-            const sessionsRes = await fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions');
-            const expertSession = (await sessionsRes.json()).sessions.find(s => s.name.toLowerCase().includes('expert'));
-            if (!expertSession) {
-                console.warn('No Expert Server session found for live flights.');
-                return;
-            }
-
-            const response = await fetch(`${LIVE_FLIGHTS_API_URL}/${expertSession.id}?callsignEndsWith=GO`);
-            const flights = (await response.json()).flights || [];
-            const activeFlightIds = new Set();
-
-            flights.forEach(f => {
-                const { flightId, position: pos, callsign, username } = f;
-                if (!flightId || !pos || pos.lat == null || pos.lon == null) return;
-
-                activeFlightIds.add(flightId);
-                const lngLat = [pos.lon, pos.lat];
-
-                if (pilotMarkers[flightId]) {
-                    // Update existing marker
-                    const entry = pilotMarkers[flightId];
-                    entry.marker.setLngLat(lngLat);
-                    entry.marker.getElement().style.transform = `rotate(${pos.track_deg ?? 0}deg)`;
-                } else {
-                    // Create new marker
-                    const el = document.createElement('div');
-                    el.className = 'plane-marker';
-                    const marker = new mapboxgl.Marker(el).setLngLat(lngLat).addTo(liveFlightsMap);
-                    pilotMarkers[flightId] = { marker: marker };
-
-                    // Add click event listener
-                    marker.getElement().addEventListener('click', async () => {
-                        removeFlightPathLayers(liveFlightsMap);
-                        const popup = new mapboxgl.Popup({ closeButton: false, offset: 25 }).setLngLat(lngLat).setHTML(`<b>${callsign}</b><br><i>Loading flight data...</i>`).addTo(liveFlightsMap);
-
-                        try {
-                            const [planRes, routeRes] = await Promise.all([
-                                fetch(`${LIVE_FLIGHTS_API_URL}/${expertSession.id}/${flightId}/plan`),
-                                fetch(`${LIVE_FLIGHTS_API_URL}/${expertSession.id}/${flightId}/route`)
-                            ]);
-                            const planJson = await planRes.json();
-                            const routeJson = await routeRes.json();
-                            let allCoordsForBounds = [];
-
-                            // Flown path
-                            const flownCoords = (routeRes.ok && routeJson.ok && Array.isArray(routeJson.route)) ? routeJson.route.map(p => [p.lon, p.lat]) : [];
-                            if (flownCoords.length > 1) {
-                                allCoordsForBounds.push(...flownCoords);
-                                liveFlightsMap.addSource('flown-path-source', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: flownCoords } } });
-                                liveFlightsMap.addLayer({ id: 'flown-path', type: 'line', source: 'flown-path-source', paint: { 'line-color': '#00b894', 'line-width': 4 } });
-                            }
-
-                            // Planned path
-                            if (planRes.ok && planJson.ok && Array.isArray(planJson?.plan?.flightPlanItems) && planJson.plan.flightPlanItems.length > 0) {
-                                const nextIdx = (typeof planJson?.plan?.nextWaypointIndex === 'number') ? planJson.plan.nextWaypointIndex : 0;
-                                const items = Array.isArray(planJson.plan.flightPlanItems) ? planJson.plan.flightPlanItems.slice(nextIdx) : [];
-                                const plannedWps = flattenWaypointsFromPlan(items);
-                                const remainingPathCoords = [lngLat, ...plannedWps];
-                                allCoordsForBounds.push(...remainingPathCoords);
-                                liveFlightsMap.addSource('planned-path-source', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: remainingPathCoords } } });
-                                liveFlightsMap.addLayer({ id: 'planned-path', type: 'line', source: 'planned-path-source', paint: { 'line-color': '#e84393', 'line-width': 3, 'line-dasharray': [2, 2] } });
-                                popup.setHTML(`<b>${callsign}</b> (${username || 'N/A'})<br>Route and flight plan loaded.`);
-                            } else {
-                                popup.setHTML(`<b>${callsign}</b> (${username || 'N/A'})<br>No flight plan filed.`);
-                            }
-
-                            if (allCoordsForBounds.length > 0) {
-                                const bounds = allCoordsForBounds.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(allCoordsForBounds[0], allCoordsForBounds[0]));
-                                liveFlightsMap.fitBounds(bounds, { padding: 60, maxZoom: 10 });
-                            }
-                        } catch (err) {
-                            console.error("Failed to fetch/render flight paths:", err);
-                            popup.setHTML(`<b>${callsign}</b> (${username || 'N/A'})<br>Could not load flight data.`);
-                        }
-                    });
-                }
-            });
-
-            // Remove inactive markers
-            Object.keys(pilotMarkers).forEach(fid => {
-                if (!activeFlightIds.has(String(fid))) {
-                    pilotMarkers[fid].marker?.remove();
-                    delete pilotMarkers[fid];
-                }
-            });
-        } catch (err) {
-            console.error('Error updating live flights:', err);
-        }
-    }
 
 
     // ==========================================================
@@ -4552,11 +4424,7 @@ async function updateSectorOpsSecondaryData() {
             newView.classList.add('active');
         }
 
-        // Stop the dashboard live map loop
-        if (liveFlightsInterval) {
-            clearInterval(liveFlightsInterval);
-            liveFlightsInterval = null;
-        }
+        // --- [REMOVED] Logic for the dashboard live map ---
         
         // Stop the Sector Ops live map loop
         stopSectorOpsLiveLoop();
@@ -4567,13 +4435,10 @@ async function updateSectorOpsSecondaryData() {
         }
 
         // Conditionally start the correct loop based on the new view
-        if (viewId === 'view-duty-status') {
-            initializeLiveMap();
-        } else if (viewId === 'view-rosters') {
+        if (viewId === 'view-rosters') {
             initializeSectorOpsView();
         }
     };
-
 
     // --- New function to fetch fleet data ---
     async function fetchFleetData() {
@@ -4829,21 +4694,14 @@ async function updateSectorOpsSecondaryData() {
             }
         }
 
-        const liveMapHTML = `
-            <div class="content-card live-map-section" style="margin-top: 1.5rem;">
-                <h2><i class="fa-solid fa-tower-broadcast"></i> Live Operations Map</h2>
-                <div id="live-flights-map-container" style="height: 450px; border-radius: 8px; margin-top: 1rem; background-color: #191a1a;">
-                    <p class="map-loader" style="text-align: center; padding-top: 2rem; color: #ccc;">Loading Live Map...</p>
-                </div>
-            </div>
-        `;
+        // --- [REMOVED] The liveMapHTML variable ---
 
         return `
             <div class="pilot-hub-card">
                 ${createHubHeaderHTML(pilot, title)}
                 ${content}
-            </div>
-            ${liveMapHTML}`;
+            </div>`;
+            // --- [REMOVED] ${liveMapHTML} from the end of the return statement ---
     };
 
     const renderOnDutyContent = async (pilot) => {
@@ -4871,14 +4729,7 @@ async function updateSectorOpsSecondaryData() {
 
             const headerTitle = '<i class="fa-solid fa-plane-departure"></i> Current Status: 🟢 On Duty';
 
-            const liveMapHTML = `
-                <div class="content-card live-map-section" style="margin-top: 1.5rem;">
-                    <h2><i class="fa-solid fa-tower-broadcast"></i> Live Operations Map</h2>
-                    <div id="live-flights-map-container" style="height: 450px; border-radius: 8px; margin-top: 1rem; background-color: #191a1a;">
-                        <p class="map-loader" style="text-align: center; padding-top: 2rem; color: #ccc;">Loading Live Map...</p>
-                    </div>
-                </div>
-            `;
+            // --- [REMOVED] The liveMapHTML variable ---
 
             return `
                 <div class="pilot-hub-card">
@@ -4905,8 +4756,8 @@ async function updateSectorOpsSecondaryData() {
                               </div>`;
             }).join('')}
                     </div>
-                </div>
-                ${liveMapHTML}`;
+                </div>`;
+                // --- [REMOVED] ${liveMapHTML} from the end of the return statement ---
         } catch (error) {
             return `<div class="content-card"><p class="error-text">${error.message}</p></div>`;
         }
