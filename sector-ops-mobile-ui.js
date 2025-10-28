@@ -61,20 +61,26 @@ const MobileUIHandler = {
             #mobile-aircraft-top-window,
             #mobile-aircraft-bottom-drawer {
                 position: absolute;
-                left: 0;
-                right: 0;
+                /* [FIX] Added 10px spacing from screen edges */
+                left: 10px;
+                right: 10px;
                 z-index: 1001;
                 transition: transform 0.3s ease;
+                /* [FIX] Added rounded corners and overflow */
+                border-radius: 16px;
+                overflow: hidden;
             }
 
             #mobile-aircraft-top-window {
-                top: 0;
-                transform: translateY(-100%);
+                /* [FIX] Added 10px top spacing */
+                top: 10px;
+                transform: translateY(-110%); /* Adjusted for new top position */
             }
 
             #mobile-aircraft-bottom-drawer {
-                bottom: 0;
-                transform: translateY(100%);
+                /* [FIX] Added 10px bottom spacing */
+                bottom: 10px;
+                transform: translateY(110%); /* Adjusted for new bottom position */
             }
 
             #mobile-aircraft-top-window.visible {
@@ -117,7 +123,9 @@ const MobileUIHandler = {
 
             setTimeout(() => {
                 if (this.topWindowEl) this.topWindowEl.classList.add('visible');
-                if (this.bottomDrawerEl) this.bottomDrawerEl.classList.remove('off-screen');
+                // [FIX] Changed from .remove('off-screen') to .add('visible')
+                // This matches the CSS logic.
+                if (this.bottomDrawerEl) this.bottomDrawerEl.classList.add('visible');
             }, 50);
 
             // Watch the original window
@@ -144,7 +152,8 @@ const MobileUIHandler = {
 
         this.bottomDrawerEl = document.createElement('div');
         this.bottomDrawerEl.id = 'mobile-aircraft-bottom-drawer';
-        this.bottomDrawerEl.className = 'mobile-aircraft-view off-screen';
+        // [FIX] Removed the unused 'off-screen' class.
+        this.bottomDrawerEl.className = 'mobile-aircraft-view';
         
         // [MODIFIED] Simplified header. The dynamic info is now *in* the top panel.
         this.bottomDrawerEl.innerHTML = `
@@ -254,7 +263,8 @@ const MobileUIHandler = {
             if (hideBtn) {
                 // This logic is from crew-center.js, adapted for mobile
                 this.topWindowEl.classList.remove('visible');
-                this.bottomDrawerEl.classList.add('off-screen');
+                // [FIX] Changed from .add('off-screen') to .remove('visible')
+                this.bottomDrawerEl.classList.remove('visible');
                 this.overlayEl.classList.remove('visible');
                 
                 // We don't need to stop the PFD interval here,
@@ -438,7 +448,8 @@ const MobileUIHandler = {
             if (overlayToRemove) overlayToRemove.classList.remove('visible');
             if (topWindowToRemove) topWindowToRemove.classList.remove('visible');
             if (bottomDrawerToRemove) {
-                bottomDrawerToRemove.classList.add('off-screen');
+                // [FIX] Changed from .add('off-screen') to .remove('visible')
+                bottomDrawerToRemove.classList.remove('visible');
                 bottomDrawerToRemove.classList.remove('expanded');
             }
 
