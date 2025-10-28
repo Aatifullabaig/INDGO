@@ -1163,6 +1163,29 @@ function getAircraftCategory(aircraftName) {
     }
 
 /**
+ * --- [NEW HELPER FUNCTION V6.0] ---
+ * Calculates the initial bearing from point 1 to point 2.
+ * @param {number} lat1 - Latitude of point 1.
+ * @param {number} lon1 - Longitude of point 1.
+ * @param {number} lat2 - Latitude of point 2.
+ * @param {number} lon2 - Longitude of point 2.
+ * @returns {number} The initial bearing in degrees (0-360).
+ */
+function getBearing(lat1, lon1, lat2, lon2) {
+    const toRad = (v) => v * Math.PI / 180;
+    const toDeg = (v) => v * 180 / Math.PI;
+    const lat1Rad = toRad(lat1);
+    const lon1Rad = toRad(lon1);
+    const lat2Rad = toRad(lat2);
+    const lon2Rad = toRad(lon2);
+    const dLon = lon2Rad - lon1Rad;
+    const y = Math.sin(dLon) * Math.cos(lat2Rad);
+    const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+    let brng = toDeg(Math.atan2(y, x));
+    return (brng + 360) % 360; // Normalize to 0-360
+}
+
+/**
  * Calculates an intermediate point along a great-circle path.
  * @param {number} lat1 - Latitude of the starting point in degrees.
  * @param {number} lon1 - Longitude of the starting point in degrees.
@@ -3820,40 +3843,40 @@ function renderPilotStatsHTML(stats, username) {
             // The main delegate will also catch this back button
         }
     }
-
+// 
 /**
- * --- [MAJOR REVISION V4.9 - FPLAN Data FIX]
- * This version corrects the logic for finding the Next Waypoint.
- * It now uses the `getFlatWaypointObjects` helper to create a flat
- * list of waypoint objects, which `plan.nextWaypointIndex` can
- * correctly index into.
+ * --- [MAJOR REVISION V6.0 - MANUAL WAYPOINT FINDER]
+ * This version completely removes reliance on `plan.nextWaypointIndex`.
+ * It now manually finds the next waypoint by:
+ * 1. Getting a flat list of all waypoint objects.
+ * 2. Calculating the bearing and distance to every waypoint.
+ * 3. Selecting the *closest* waypoint that is *in front of* the aircraft
+ * (within a 90-degree forward-facing cone).
 */
 function updateAircraftInfoWindow(baseProps, plan) {
-    // --- [MODIFIED] Get all DOM elements ---
+    // --- Get all DOM elements ---
     const progressBarFill = document.getElementById('ac-progress-bar');
     const phaseIndicator = document.getElementById('ac-phase-indicator');
-    const footerGS = document.getElementById('ac-gs'); // This ID might be missing in your HTML
+    const footerGS = document.getElementById('ac-gs');
     const footerVS = document.getElementById('ac-vs');
     const footerDist = document.getElementById('ac-dist');
     const footerETE = document.getElementById('ac-ete');
     const overviewPanel = document.getElementById('ac-overview-panel');
-    // --- [NEW] Get new DOM elements ---
     const footerCruiseAlt = document.getElementById('ac-cruise-alt');
     const footerNextWp = document.getElementById('ac-next-wp');
     const footerNextWpDist = document.getElementById('ac-next-wp-dist');
-    // --- [END NEW] ---
+    // --- [END] ---
 
-    // --- [FIX 1] Use correct waypoint flattening logic ---
+    // --- Use correct waypoint flattening logic for *progress* ---
     const flatWaypoints = (plan && plan.flightPlanItems) ? flattenWaypointsFromPlan(plan.flightPlanItems) : [];
     const hasPlan = flatWaypoints.length >= 2;
-    // --- END FIX 1 ---
+    // --- END ---
 
     let progress = 0, ete = '--:--', distanceToDestNM = 0;
     let totalDistanceNM = 0;
 
     if (hasPlan) {
         let totalDistanceKm = 0;
-        // --- [FIX 1] Loop adjusted for [lon, lat] array ---
         for (let i = 0; i < flatWaypoints.length - 1; i++) {
             const [lon1, lat1] = flatWaypoints[i];
             const [lon2, lat2] = flatWaypoints[i + 1];
@@ -3862,10 +3885,8 @@ function updateAircraftInfoWindow(baseProps, plan) {
         totalDistanceNM = totalDistanceKm / 1.852;
 
         if (totalDistanceNM > 0) {
-            // --- [FIX 1] Get destination from the flat array ---
             const [destLon, destLat] = flatWaypoints[flatWaypoints.length - 1];
             const remainingDistanceKm = getDistanceKm(baseProps.position.lat, baseProps.position.lon, destLat, destLon);
-            // --- END FIX 1 ---
             
             distanceToDestNM = remainingDistanceKm / 1.852;
             progress = Math.max(0, Math.min(100, (1 - (distanceToDestNM / totalDistanceNM)) * 100));
@@ -3879,13 +3900,13 @@ function updateAircraftInfoWindow(baseProps, plan) {
         }
     }
 
-    // --- [MODIFIED] Flight Plan Data Extraction ---
+    // --- [MODIFIED V6.0] Flight Plan Data Extraction ---
     let cruiseAlt = 0;
     let nextWpName = '---';
     let nextWpDistNM = '---';
 
-    if (plan) { // Use the raw plan object
-        // 1. Find Cruise Altitude (max altitude in plan)
+    if (plan) { 
+        // 1. Find Cruise Altitude (This logic is correct and unchanged)
         const findMaxAlt = (items) => {
             if (!Array.isArray(items)) return;
             for (const item of items) {
@@ -3897,36 +3918,59 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 }
             }
         };
-        findMaxAlt(plan.flightPlanItems); // This part was working
+        findMaxAlt(plan.flightPlanItems); 
 
-        // --- [FIX] Use the new helper to get a flat list of *objects* ---
-        const flatWaypointObjects = getFlatWaypointObjects(plan.flightPlanItems);
+        // 2. Manually find the next waypoint
+        const allWaypointObjects = getFlatWaypointObjects(plan.flightPlanItems);
+        const acPos = baseProps.position;
+        const acTrack = baseProps.position.track_deg;
         
-        // 2. Find Next Waypoint & Distance
-        const nextWpIndex = plan.nextWaypointIndex; // This is the API index
-        
-        // Check if the index is valid for our *new* flat list
-        if (typeof nextWpIndex === 'number' && flatWaypointObjects.length > 0 && nextWpIndex < flatWaypointObjects.length) {
-            
-            const nextWp = flatWaypointObjects[nextWpIndex]; // <-- Access the correct waypoint
-            
-            if (nextWp) {
-                nextWpName = nextWp.identifier || nextWp.name || 'N/A';
+        let bestWp = null;
+        let minDist = Infinity;
+        const FORWARD_CONE_DEG = 90; // Look 90 degrees left/right
+        const OVERFLY_THRESHOLD_KM = 1.5; // Ignore waypoints this close
+
+        if (allWaypointObjects.length > 0) {
+            for (const wp of allWaypointObjects) {
+                const distKm = getDistanceKm(acPos.lat, acPos.lon, wp.location.latitude, wp.location.longitude);
                 
-                // 3. Calculate distance to it
-                if (nextWp.location && baseProps.position) {
-                    const distKm = getDistanceKm(baseProps.position.lat, baseProps.position.lon, nextWp.location.latitude, nextWp.location.longitude);
-                    nextWpDistNM = (distKm / 1.852).toFixed(0);
+                // Skip waypoints we are right on top of (likely just passed)
+                if (distKm < OVERFLY_THRESHOLD_KM) continue;
+
+                const bearingToWp = getBearing(acPos.lat, acPos.lon, wp.location.latitude, wp.location.longitude);
+                let angleDiff = Math.abs(acTrack - bearingToWp);
+                if (angleDiff > 180) angleDiff = 360 - angleDiff; // Normalize
+
+                // Is this waypoint in our "forward cone"?
+                if (angleDiff <= FORWARD_CONE_DEG) {
+                    // Yes. Is it the closest one *so far* that's in front of us?
+                    if (distKm < minDist) {
+                        minDist = distKm;
+                        bestWp = wp;
+                    }
                 }
             }
-        } else if (hasPlan && distanceToDestNM < 10 && distanceToDestNM > 0.5) {
-            // Fallback for final approach when index might be out of bounds
-            nextWpName = flatWaypointObjects.length > 0 ? (flatWaypointObjects[flatWaypointObjects.length - 1].identifier || flatWaypointObjects[flatWaypointObjects.length - 1].name) : "DEST";
-            nextWpDistNM = distanceToDestNM.toFixed(0);
-        } else if (hasPlan && distanceToDestNM <= 0.5) {
-             // We are at the destination
-             nextWpName = "DEST";
-             nextWpDistNM = "0";
+
+            if (bestWp) {
+                // We found a waypoint in front of us
+                nextWpName = bestWp.identifier || bestWp.name;
+                nextWpDistNM = (minDist / 1.852).toFixed(0);
+            } else {
+                // Nothing is in front (maybe we're turning) or we're on final.
+                // Default to the *actual* destination.
+                const destWp = allWaypointObjects[allWaypointObjects.length - 1];
+                if (destWp) {
+                    nextWpName = destWp.identifier || destWp.name;
+                    // Use the already calculated distanceToDestNM
+                    nextWpDistNM = distanceToDestNM.toFixed(0);
+                }
+            }
+            
+            // Handle being at the destination
+            if (distanceToDestNM < OVERFLY_THRESHOLD_KM / 1.852) {
+                 nextWpName = allWaypointObjects[allWaypointObjects.length - 1].identifier || "DEST";
+                 nextWpDistNM = "0";
+            }
         }
     }
     // --- [END MODIFICATION] Flight Plan Data Extraction ---
@@ -3956,40 +4000,29 @@ function updateAircraftInfoWindow(baseProps, plan) {
         HOLD_SHORT_PROXIMITY_NM: 0.15, // Max distance from runway end for ground states
     };
 
-    // --- [START OF REFACTORED LOGIC] ---
-    // --- Flight Phase State Machine ---
+    // --- Flight Phase State Machine (Unchanged) ---
     let flightPhase = 'ENROUTE'; // Default state
     let phaseClass = 'phase-enroute';
     let phaseIcon = 'fa-route';
-
-    // --- Live Flight Data & Context ---
     const vs = baseProps.position.vs_fpm || 0;
     const altitude = baseProps.position.alt_ft || 0;
     const gs = baseProps.position.gs_kt || 0;
-    
     let departureIcao = null;
     let arrivalIcao = null;
-
     if (plan && Array.isArray(plan.flightPlanItems) && plan.flightPlanItems.length >= 2) {
         departureIcao = plan.flightPlanItems[0]?.identifier?.trim().toUpperCase();
         arrivalIcao = plan.flightPlanItems[plan.flightPlanItems.length - 1]?.identifier?.trim().toUpperCase();
     }
     const aircraftPos = { lat: baseProps.position.lat, lon: baseProps.position.lon, track_deg: baseProps.position.track_deg };
-
-    // Find the nearest runway at the most relevant airport (for AIRBORNE states)
     let nearestRunwayInfo = null;
     if (hasPlan) {
-        // Correctly use totalDistanceNM (which is now accurate)
         const distanceFlownKm = totalDistanceNM * 1.852 - distanceToDestNM * 1.852;
-        // Check if closer to arrival or departure
         if (distanceToDestNM * 1.852 < distanceFlownKm && arrivalIcao) {
              nearestRunwayInfo = getNearestRunway(aircraftPos, arrivalIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
         } else if (departureIcao) {
              nearestRunwayInfo = getNearestRunway(aircraftPos, departureIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
         }
     }
-    
-    // Calculate AGL based on the most relevant elevation data
     let altitudeAGL = null;
     if (nearestRunwayInfo && nearestRunwayInfo.elevation_ft != null) {
         altitudeAGL = altitude - nearestRunwayInfo.elevation_ft;
@@ -4001,20 +4034,11 @@ function updateAircraftInfoWindow(baseProps, plan) {
             altitudeAGL = altitude - relevantElevationFt;
         }
     }
-
     const aglCheck = altitudeAGL !== null && altitudeAGL < THRESHOLD.ON_GROUND_AGL;
     const fallbackGroundCheck = altitudeAGL === null && gs < THRESHOLD.TAXI_MAX_GS && Math.abs(vs) < 150;
     const isOnGround = aglCheck || fallbackGroundCheck;
-    
-    // Contextual booleans for state logic
     const isLinedUpForLanding = nearestRunwayInfo && nearestRunwayInfo.airport === arrivalIcao && nearestRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE;
-
-    // --- State Machine Logic (Processed in order of priority) ---
-
-    // 1. ON-GROUND STATES (Highest Priority)
     if (isOnGround) {
-        
-        // 1.1 Handle high-speed ground ops (Takeoff/Landing Roll)
         if (gs > THRESHOLD.TAXI_MAX_GS) {
             if (progress > 90) { 
                 flightPhase = 'LANDING ROLLOUT';
@@ -4030,71 +4054,48 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 phaseClass = 'phase-enroute';
             }
         } 
-        // 1.2 Handle low-speed ground ops (gs <= TAXI_MAX_GS)
         else {
             const isStopped = gs <= THRESHOLD.HOLD_SHORT_GS;
-            // Now that 'progress' is correct, isAtTerminal will be true at the gate (~0%)
             const isAtTerminal = (progress < THRESHOLD.PARKED_PROGRESS_START) || 
                                  (progress > THRESHOLD.PARKED_PROGRESS_END);
-            
             const relevantIcao = progress < 50 ? departureIcao : arrivalIcao;
             const closeRunwayInfo = getNearestRunway(aircraftPos, relevantIcao, THRESHOLD.HOLD_SHORT_PROXIMITY_NM);
-
             const isLinedUp = closeRunwayInfo && closeRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE;
-
-            // --- State Priority ---
-            
-            // PRIORITY 1: LINED UP
             if (isLinedUp) {
                 flightPhase = `LINED UP RWY ${closeRunwayInfo.ident}`;
                 phaseIcon = 'fa-arrow-up';
                 phaseClass = 'phase-climb';
             }
-            // PRIORITY 2: STOPPED
             else if (isStopped) {
-                // --- [FIX 2] Swapped priority: Check for holding short *before* checking for parked ---
-                // Stopped, close to runway, but NOT lined up
                 if (closeRunwayInfo) {
                     flightPhase = `HOLDING SHORT RWY ${closeRunwayInfo.ident}`;
                     phaseIcon = 'fa-pause-circle';
                     phaseClass = 'phase-enroute';
                 }
-                // Stopped at the gate/terminal (now triggers correctly at the gate)
                 else if (isAtTerminal) {
                     flightPhase = 'PARKED';
                     phaseIcon = 'fa-parking';
                     phaseClass = 'phase-enroute';
                 } 
-                // Stopped, not at terminal, not near runway
                 else {
                     flightPhase = 'HOLDING POSITION';
                     phaseIcon = 'fa-hand';
                     phaseClass = 'phase-enroute';
                 }
-                // --- END FIX 2 ---
             } 
-            // PRIORITY 3: MOVING (TAXIING)
             else {
                 flightPhase = 'TAXIING';
                 phaseIcon = 'fa-road';
                 phaseClass = 'phase-enroute';
-
-                // --- [FIX 3] Re-added "TAXIING TO RUNWAY" state ---
                 if (progress > 50) { 
                     flightPhase = 'TAXIING TO GATE';
-                } else if (progress < 10) { // Assumes user is taxiing for departure
+                } else if (progress < 10) { 
                     flightPhase = 'TAXIING TO RUNWAY';
                 }
-                // --- END FIX 3 ---
             }
         }
     } 
-    // 2. ALL AIRBORNE STATES
     else {
-        // This state now requires a 10-degree alignment
-        const isInLandingSequence = isLinedUpForLanding && altitudeAGL !== null;
-
-        // Specific landing sequences take highest priority when airborne
         if (isInLandingSequence && altitudeAGL < THRESHOLD.APPROACH_CEILING_AGL) {
             if (altitudeAGL < 60 && vs < -50) {
                 flightPhase = 'FLARE';
@@ -4106,37 +4107,30 @@ function updateAircraftInfoWindow(baseProps, plan) {
             phaseClass = 'phase-approach';
             phaseIcon = 'fa-plane-arrival';
         }
-        // General approach in the terminal area
         else if (hasPlan && distanceToDestNM < THRESHOLD.TERMINAL_AREA_DIST_NM && progress > THRESHOLD.APPROACH_PROGRESS_MIN) {
             flightPhase = 'APPROACH';
             phaseClass = 'phase-approach';
             phaseIcon = 'fa-plane-arrival';
         } 
-        // Any climbing state (uses lower threshold to prevent gaps after liftoff)
         else if (vs > THRESHOLD.TAKEOFF_MIN_VS) {
             flightPhase = 'CLIMB';
             phaseClass = 'phase-climb';
             phaseIcon = 'fa-arrow-trend-up';
-            
-            // Refine to LIFTOFF if in the initial takeoff phase
             if (progress < 10 && altitudeAGL !== null && altitudeAGL < THRESHOLD.TAKEOFF_CEILING_AGL) {
                  flightPhase = 'LIFTOFF';
                  phaseIcon = 'fa-plane-up';
             }
         } 
-        // General descent
         else if (vs < THRESHOLD.DESCENT_MIN_VS) {
             flightPhase = 'DESCENT';
             phaseClass = 'phase-descent';
             phaseIcon = 'fa-arrow-trend-down';
         } 
-        // Cruise
         else if (altitude > THRESHOLD.CRUISE_MIN_ALT_MSL && Math.abs(vs) < THRESHOLD.CRUISE_VS_TOLERANCE) {
             flightPhase = 'CRUISE';
             phaseClass = 'phase-cruise';
             phaseIcon = 'fa-minus';
         }
-        // If nothing else matches, it remains ENROUTE by default.
     }
 
     // --- Update DOM Elements ---
@@ -4158,38 +4152,28 @@ function updateAircraftInfoWindow(baseProps, plan) {
     if (footerDist) footerDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
     if (footerETE) footerETE.textContent = ete;
 
-    // --- [NEW] Update Aircraft Image ---
+    // --- Update Aircraft Image (Unchanged) ---
     if (overviewPanel) {
         const sanitizeFilename = (name) => {
             if (!name || typeof name !== 'string') return 'unknown';
             return name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '_');
         };
-
         const aircraftName = baseProps.aircraft?.aircraftName || 'Generic Aircraft';
         const liveryName = baseProps.aircraft?.liveryName || 'Default Livery';
-
         const sanitizedAircraft = sanitizeFilename(aircraftName);
         const sanitizedLivery = sanitizeFilename(liveryName);
-
         const imagePath = `/CommunityPlanes/${sanitizedAircraft}/${sanitizedLivery}.png`;
         const fallbackPath = '/CommunityPlanes/default.png';
-
         const newImageUrl = `url('${imagePath}')`;
 
-        // Only update if the path is different to prevent flickering
         if (overviewPanel.dataset.currentPath !== imagePath) {
-            
-            // Create a temporary image object to check if it exists
             const img = new Image();
             img.src = imagePath;
-
             const gradient = 'linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0) 40%)';
-            
             img.onload = () => {
                 overviewPanel.style.backgroundImage = `${gradient}, ${newImageUrl}`;
                 overviewPanel.dataset.currentPath = imagePath;
             };
-            
             img.onerror = () => {
                 overviewPanel.style.backgroundImage = `${gradient}, url('${fallbackPath}')`;
                 overviewPanel.dataset.currentPath = fallbackPath;
