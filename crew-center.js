@@ -659,27 +659,6 @@ function injectCustomStyles() {
         }
         /* --- [END] MODIFIED STYLES FOR REDESIGN --- */
 
-        .filed-cruise-readout {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 8px 12px;
-            background: rgba(10, 12, 26, 0.5);
-            border-radius: 8px;
-            margin-top: 12px; /* Add space from PFD */
-        }
-        .filed-cruise-readout .data-label {
-            font-size: 0.7rem;
-            color: #c5cae9;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-        }
-        .filed-cruise-readout .data-value {
-            font-size: 1.5rem;
-            color: #fff;
-            font-weight: 600;
-            font-family: 'Courier New', monospace;
-        }
 
         /* 6. Pilot Stats Button */
         .pilot-stats-toggle-btn {
@@ -3360,10 +3339,10 @@ async function handleAircraftClick(flightProps, sessionId) {
     }
 }
 
-
+// [REPLACE THIS FUNCTION]
 /**
  * --- [REDESIGNED & UPDATED] Generates the "Unified Flight Display" with image overlay and aircraft type.
- * --- [FIXED] Corrected recursive logic to find first/last waypoints.
+ * --- [MODIFIED] Added new data fields for Cruise Alt, Next WP, and Dist. to Next.
  */
 function populateAircraftInfoWindow(baseProps, plan) {
     const windowEl = document.getElementById('aircraft-info-window');
@@ -3372,32 +3351,18 @@ function populateAircraftInfoWindow(baseProps, plan) {
     const aircraftName = baseProps.aircraft?.aircraftName || 'Unknown Type';
     const airlineName = baseProps.aircraft?.liveryName || 'Generic Livery';
 
-    // --- [START OF FIX] ---
-    // This recursive function now correctly finds all *actual* waypoints,
-    // skipping the procedure (SID/STAR) containers.
     const allWaypoints = [];
     if (plan && plan.flightPlanItems) {
         const extractWps = (items) => {
-            if (!Array.isArray(items)) return;
             for (const item of items) {
-                // If it has children, it's a procedure. Recurse into them.
-                if (Array.isArray(item.children) && item.children.length > 0) {
-                    extractWps(item.children);
-                } 
-                // Otherwise, if it's a waypoint with a valid location, add it.
-                else if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
-                    allWaypoints.push(item);
-                }
+                if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) { allWaypoints.push(item); }
+                if (Array.isArray(item.children)) { extractWps(item.children); }
             }
         };
         extractWps(plan.flightPlanItems);
     }
-    // --- [END OF FIX] ---
-
     const hasPlan = allWaypoints.length >= 2;
-    // This will now correctly get the airport name from the *first* actual waypoint
     const departureIcao = hasPlan ? allWaypoints[0]?.name : 'N/A';
-    // This will correctly get the airport name from the *last* actual waypoint
     const arrivalIcao = hasPlan ? allWaypoints[allWaypoints.length - 1]?.name : 'N/A';
 
     // --- [NEW] Get Airline Logo (REVISED with new rules) ---
@@ -3598,17 +3563,20 @@ function populateAircraftInfoWindow(baseProps, plan) {
                             </svg>
                         </div>
                         
-                        <div class="filed-cruise-readout">
-                            <span class="data-label">Filed Cruise</span>
-                            <span class="data-value" id="ac-filed-cruise">--</span>
-                        </div>
                         </div>
 
                     <div class="live-data-panel">
-                        
                         <div class="live-data-item">
-                            <span class="data-label">Vertical Speed</span>
-                            <span class="data-value" id="ac-vs">---<span class="unit">fpm</span></span>
+                            <span class="data-label">Cruise Alt</span>
+                            <span class="data-value" id="ac-cruise-alt">---<span class="unit">ft</span></span>
+                        </div>
+                        <div class="live-data-item">
+                            <span class="data-label">Next Waypoint</span>
+                            <span class="data-value" id="ac-next-wp">---</span>
+                        </div>
+                        <div class="live-data-item">
+                            <span class="data-label">Dist. to Next</span>
+                            <span class="data-value" id="ac-next-wp-dist">---<span class="unit">NM</span></span>
                         </div>
                         <div class="live-data-item">
                             <span class="data-label">Dist. to Dest.</span>
@@ -3618,16 +3586,11 @@ function populateAircraftInfoWindow(baseProps, plan) {
                             <span class="data-label">ETE to Dest.</span>
                             <span class="data-value" data-value-ete" id="ac-ete">--:--</span>
                         </div>
-                        
                         <div class="live-data-item">
-                            <span class="data-label">Next Waypoint</span>
-                            <span class="data-value" id="ac-next-wpt">--</span>
+                            <span class="data-label">Vertical Speed</span>
+                            <span class="data-value" id="ac-vs">---<span class="unit">fpm</span></span>
                         </div>
-                        <div class="live-data-item">
-                            <span class="data-label">Next Constraint</span>
-                            <span class="data-value" id="ac-next-const">--</span>
-                        </div>
-                        </div>
+                    </div>
                     </div>
 
                 <button class="pilot-stats-toggle-btn" data-user-id="${baseProps.userId}" data-username="${baseProps.username || 'N/A'}">
@@ -3829,30 +3792,27 @@ function renderPilotStatsHTML(stats, username) {
         }
     }
 
-// ⬇️ REPLACE this entire function in crew-center.js ⬇️
-
 /**
- * --- [MAJOR REVISION V4.9 - Waypoint Logic Fix]
- * 1. Corrected first/last waypoint logic in `populateAircraftInfoWindow`.
- * 2. This function now handles `nextWaypointIndex` pointing to a procedure
- * by looking for the first valid child waypoint.
- * 3. Ground state logic and all other fixes remain.
+ * --- [MAJOR REVISION V4.8 - FPLAN Data]
+ * This version adds logic to extract and display:
+ * 1. Cruise Altitude (Top Altitude) from the plan.
+ * 2. Next Waypoint name using `plan.nextWaypointIndex`.
+ * 3. Distance to the next waypoint.
 */
 function updateAircraftInfoWindow(baseProps, plan) {
-    // --- [NEW] Get all new DOM elements ---
+    // --- [MODIFIED] Get all DOM elements ---
     const progressBarFill = document.getElementById('ac-progress-bar');
     const phaseIndicator = document.getElementById('ac-phase-indicator');
+    const footerGS = document.getElementById('ac-gs'); // This ID might be missing in your HTML, as noted in thought
     const footerVS = document.getElementById('ac-vs');
     const footerDist = document.getElementById('ac-dist');
     const footerETE = document.getElementById('ac-ete');
     const overviewPanel = document.getElementById('ac-overview-panel');
-    
-    // --- [START OF NEW V4.8 LOGIC] ---
-    const filedCruiseEl = document.getElementById('ac-filed-cruise');
-    const nextWptEl = document.getElementById('ac-next-wpt');
-    const nextConstEl = document.getElementById('ac-next-const');
-    // --- [END OF NEW V4.8 LOGIC] ---
-
+    // --- [NEW] Get new DOM elements ---
+    const footerCruiseAlt = document.getElementById('ac-cruise-alt');
+    const footerNextWp = document.getElementById('ac-next-wp');
+    const footerNextWpDist = document.getElementById('ac-next-wp-dist');
+    // --- [END NEW] ---
 
     // --- [FIX 1] Use correct waypoint flattening logic ---
     const flatWaypoints = (plan && plan.flightPlanItems) ? flattenWaypointsFromPlan(plan.flightPlanItems) : [];
@@ -3889,89 +3849,47 @@ function updateAircraftInfoWindow(baseProps, plan) {
             }
         }
     }
-    
-    // --- [START OF FIX 2 / NEW V4.9 LOGIC] ---
-    // --- Populate Filed Flight Plan Data ---
-    if (plan && filedCruiseEl && nextWptEl && nextConstEl) {
-        // 1. Filed Cruise
-        if (plan.cruiseAltitude) {
-            filedCruiseEl.textContent = `FL${Math.round(plan.cruiseAltitude / 100)}`;
-        } else {
-            filedCruiseEl.textContent = '--';
-        }
 
-        // 2. Next Waypoint & Constraint
-        const nextIdx = plan.nextWaypointIndex;
-        if (nextIdx != null && plan.flightPlanItems && plan.flightPlanItems[nextIdx]) {
-            
-            let nextWpt = plan.flightPlanItems[nextIdx]; // Get the item at the index
-            
-            // --- THIS IS THE FIX ---
-            // If this item is a procedure (it has children), find the first valid waypoint *inside* it.
-            // This assumes the "next waypoint" is the first child of the next procedure.
-            if (Array.isArray(nextWpt.children) && nextWpt.children.length > 0) {
-                // Helper to find the first *real* waypoint
-                const findFirstWaypoint = (items) => {
-                    if (!Array.isArray(items)) return null;
-                    for (const item of items) {
-                        // Check if it's a valid waypoint *and not* a procedure itself
-                        if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0) && (!item.children || item.children.length === 0)) {
-                            return item; // Found it
-                        }
-                        // If it is a procedure, recurse
-                        if (Array.isArray(item.children) && item.children.length > 0) {
-                            const childWpt = findFirstWaypoint(item.children);
-                            if (childWpt) return childWpt; // Found in sub-procedure
-                        }
-                    }
-                    return null; // Not found in this branch
-                };
-                
-                const firstChildWaypoint = findFirstWaypoint(nextWpt.children);
-                if (firstChildWaypoint) {
-                    nextWpt = firstChildWaypoint; // Use the child waypoint
+    // --- [NEW] Flight Plan Data Extraction ---
+    let cruiseAlt = 0;
+    let nextWpName = '---';
+    let nextWpDistNM = '---';
+
+    if (plan) { // Use the raw plan object
+        // 1. Find Cruise Altitude (max altitude in plan)
+        const findMaxAlt = (items) => {
+            if (!Array.isArray(items)) return;
+            for (const item of items) {
+                if (item.altitude > cruiseAlt) {
+                    cruiseAlt = item.altitude;
                 }
-                // If no child waypoint is found, we'll just use the procedure name (e.g., "SID")
-            }
-            // --- END OF FIX ---
-
-            // Waypoint Name (Use 'name' which is usually the identifier)
-            nextWptEl.textContent = nextWpt.name || '--';
-
-            // Constraint
-            if (nextWpt.altitude) {
-                const altFt = Math.round(nextWpt.altitude);
-                let constraintPrefix = '';
-                
-                // altitudeConstraintType: 0 = AtOrAbove, 1 = AtOrBelow, 2 = At
-                switch (nextWpt.altitudeConstraintType) {
-                    case 0: constraintPrefix = '≥ '; break; // At or Above
-                    case 1: constraintPrefix = '≤ '; break; // At or Below
-                    case 2: constraintPrefix = '@ '; break; // At
-                    default: constraintPrefix = ''; // No constraint type
+                if (Array.isArray(item.children)) {
+                    findMaxAlt(item.children);
                 }
-
-                // Use FL if at or above 18000
-                const altDisplay = altFt >= 18000 ? `FL${altFt / 100}` : `${altFt.toLocaleString()} ft`;
-                nextConstEl.textContent = `${constraintPrefix}${altDisplay}`;
-
-            } else {
-                nextConstEl.textContent = '--';
             }
-            
-        } else {
-            nextWptEl.textContent = '--';
-            nextConstEl.textContent = '--';
-        }
+        };
+        findMaxAlt(plan.flightPlanItems);
 
-    } else if (filedCruiseEl && nextWptEl && nextConstEl) {
-        // Clear if no plan
-        filedCruiseEl.textContent = '--';
-        nextWptEl.textContent = '--';
-        nextConstEl.textContent = '--';
+        // 2. Find Next Waypoint & Distance
+        const nextWpIndex = plan.nextWaypointIndex;
+        if (typeof nextWpIndex === 'number' && plan.flightPlanItems && nextWpIndex < plan.flightPlanItems.length) {
+            const nextWp = plan.flightPlanItems[nextWpIndex];
+            if (nextWp) {
+                nextWpName = nextWp.identifier || nextWp.name || 'N/A';
+                
+                // 3. Calculate distance to it
+                if (nextWp.location && baseProps.position) {
+                    const distKm = getDistanceKm(baseProps.position.lat, baseProps.position.lon, nextWp.location.latitude, nextWp.location.longitude);
+                    nextWpDistNM = (distKm / 1.852).toFixed(0);
+                }
+            }
+        } else if (hasPlan && distanceToDestNM < 10) {
+            // Handle last leg when index might be out of bounds
+            nextWpName = "DEST";
+            nextWpDistNM = distanceToDestNM.toFixed(0);
+        }
     }
-    // --- [END OF FIX 2 / NEW V4.9 LOGIC] ---
-
+    // --- [END NEW] Flight Plan Data Extraction ---
 
     // --- Configuration Thresholds ---
     const THRESHOLD = {
@@ -4012,30 +3930,8 @@ function updateAircraftInfoWindow(baseProps, plan) {
     let arrivalIcao = null;
 
     if (plan && Array.isArray(plan.flightPlanItems) && plan.flightPlanItems.length >= 2) {
-        // Use the flat array of actual waypoints to get correct ICAOs
-        const waypoints = flattenWaypointsFromPlan(plan.flightPlanItems);
-        if (waypoints.length >= 2) {
-            // This relies on flattenWaypointsFromPlan being correct, which it now is.
-            // But flattenWaypointsFromPlan returns [lon, lat]. We need the names.
-            // Re-running the logic from populate...
-            const allWaypoints = [];
-            const extractWps = (items) => {
-                if (!Array.isArray(items)) return;
-                for (const item of items) {
-                    if (Array.isArray(item.children) && item.children.length > 0) {
-                        extractWps(item.children);
-                    } else if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
-                        allWaypoints.push(item);
-                    }
-                }
-            };
-            extractWps(plan.flightPlanItems);
-            
-            if (allWaypoints.length >= 2) {
-                departureIcao = allWaypoints[0]?.name?.trim().toUpperCase();
-                arrivalIcao = allWaypoints[allWaypoints.length - 1]?.name?.trim().toUpperCase();
-            }
-        }
+        departureIcao = plan.flightPlanItems[0]?.identifier?.trim().toUpperCase();
+        arrivalIcao = plan.flightPlanItems[plan.flightPlanItems.length - 1]?.identifier?.trim().toUpperCase();
     }
     const aircraftPos = { lat: baseProps.position.lat, lon: baseProps.position.lon, track_deg: baseProps.position.track_deg };
 
@@ -4101,7 +3997,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
                                  (progress > THRESHOLD.PARKED_PROGRESS_END);
             
             const relevantIcao = progress < 50 ? departureIcao : arrivalIcao;
-            const closeRunwayInfo = (relevantIcao) ? getNearestRunway(aircraftPos, relevantIcao, THRESHOLD.HOLD_SHORT_PROXIMITY_NM) : null;
+            const closeRunwayInfo = getNearestRunway(aircraftPos, relevantIcao, THRESHOLD.HOLD_SHORT_PROXIMITY_NM);
 
             const isLinedUp = closeRunwayInfo && closeRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE;
 
@@ -4210,6 +4106,13 @@ function updateAircraftInfoWindow(baseProps, plan) {
         phaseIndicator.innerHTML = `<i class="fa-solid ${phaseIcon}"></i> ${flightPhase}`;
     }
 
+    // --- [NEW] Update new DOM elements ---
+    if (footerCruiseAlt) footerCruiseAlt.innerHTML = `${cruiseAlt > 0 ? cruiseAlt.toLocaleString() : '---'}<span class="unit">ft</span>`;
+    if (footerNextWp) footerNextWp.textContent = nextWpName;
+    if (footerNextWpDist) footerNextWpDist.innerHTML = `${nextWpDistNM}<span class="unit">NM</span>`;
+    // --- [END NEW] ---
+
+    if (footerGS) footerGS.innerHTML = `${Math.round(gs)}<span class="unit">kts</span>`;
     if (footerVS) footerVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
     if (footerDist) footerDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
     if (footerETE) footerETE.textContent = ete;
