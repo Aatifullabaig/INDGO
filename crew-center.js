@@ -1034,10 +1034,10 @@ function injectCustomStyles() {
             /* ⬇️ --- [NEW FIX] --- ⬇️ */
             /* Selectively reduce callsign font size only on mobile */
             .overview-col-left h3 {
-                font-size: 1.3rem;
+                font-size: 1.1rem;
             }
             .ac-header-logo {
-                height: 1.5rem;
+                height: 1.3rem;
             }
             /* ⬆️ --- [END NEW FIX] --- ⬆️ */
         }
