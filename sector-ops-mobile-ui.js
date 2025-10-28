@@ -41,60 +41,158 @@ const MobileUIHandler = {
         console.log("Mobile UI Handler (HUD Rehaul v4.0) Initialized.");
     },
 
+    /**
+     * Injects all the CSS for the new HUD-themed floating windows.
+     * ---
+     * [RENOVATED] This CSS is now *much* simpler. It only styles the
+     * mobile containers and no longer tries to re-style the content,
+     * as the desktop CSS from crew-center.js will handle that.
+     */
     injectMobileStyles() {
-        const styleId = 'mobile-ui-styles';
-        if (document.getElementById(styleId)) return;
+        const styleId = 'mobile-sector-ops-styles';
+        if (document.getElementById(styleId)) document.getElementById(styleId).remove();
 
         const css = `
-            /* --- Mobile UI Styles --- */
-            #mobile-window-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.5);
-                z-index: 1000;
-                display: none;
+            :root {
+                --hud-bg: rgba(10, 15, 28, 0.85);
+                --hud-blur: 15px;
+                --hud-border: rgba(0, 168, 255, 0.3);
+                --hud-accent: #00a8ff;
+                --hud-glow: 0 0 15px rgba(0, 168, 255, 0.5);
+                --drawer-peek-height: 235px; /* How much of the drawer is visible */
             }
 
-            #mobile-aircraft-top-window,
-            #mobile-aircraft-bottom-drawer {
-                position: absolute;
-                /* [FIX] Added 10px spacing from screen edges */
-                left: 10px;
-                right: 10px;
-                z-index: 1001;
-                transition: transform 0.3s ease;
-                /* [FIX] Added rounded corners and overflow */
-                border-radius: 16px;
+            #view-rosters.active {
+                position: relative;
                 overflow: hidden;
             }
 
+            #mobile-window-overlay {
+                position: absolute;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.7);
+                backdrop-filter: blur(5px);
+                z-index: 1040;
+                opacity: 0;
+                transition: opacity 0.4s ease;
+                pointer-events: none;
+            }
+            #mobile-window-overlay.visible { opacity: 1; pointer-events: auto; }
+
+            .mobile-aircraft-view {
+                position: absolute;
+                /* MODIFIED: Use the desktop's dark color for a seamless content blend */
+                background: #1C1E2A; 
+                backdrop-filter: blur(var(--hud-blur));
+                -webkit-backdrop-filter: blur(var(--hud-blur));
+                border: 1px solid var(--hud-border);
+                z-index: 1045;
+                transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+                will-change: transform;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.5), var(--hud-glow);
+                color: #e8eaf6;
+            }
+
+            /* --- Top Floating Window: Image & Route --- */
             #mobile-aircraft-top-window {
-                /* [FIX] Added 10px top spacing */
-                top: 10px;
-                transform: translateY(-110%); /* Adjusted for new top position */
+                top: env(safe-area-inset-top, 15px);
+                left: 15px;
+                right: 15px;
+                border-radius: 16px;
+                transform: translateY(-250%);
+                overflow: hidden;
+                /* MODIFIED: Let content define height, but set a max */
+                max-height: 250px; 
             }
-
-            #mobile-aircraft-bottom-drawer {
-                /* [FIX] Added 10px bottom spacing */
-                bottom: 10px;
-                transform: translateY(110%); /* Adjusted for new bottom position */
-            }
-
             #mobile-aircraft-top-window.visible {
                 transform: translateY(0);
             }
+            /* * [REMOVED] All content-specific styles like .aircraft-image-container.
+             * The desktop's .aircraft-overview-panel will be moved here and
+             * will style itself.
+             */
 
-            #mobile-aircraft-bottom-drawer.visible {
-                transform: translateY(0);
+            /* --- Bottom Drawer: Flight Deck --- */
+            #mobile-aircraft-bottom-drawer {
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 85vh;
+                max-height: calc(100vh - 80px);
+                border-radius: 20px 20px 0 0;
+                transform: translateY(calc(85vh - var(--drawer-peek-height))); /* "Peek" state */
+                display: flex;
+                flex-direction: column;
+                transition-property: transform;
+                transition-duration: 0.45s;
+                transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+                padding-bottom: env(safe-area-inset-bottom, 0);
+                box-sizing: border-box;
+            }
+            #mobile-aircraft-bottom-drawer.dragging { transition: none; }
+            #mobile-aircraft-bottom-drawer.off-screen { transform: translateY(100%); }
+            #mobile-aircraft-bottom-drawer.expanded { transform: translateY(0); }
+
+            /* --- Drawer Header / Handle --- */
+            .drawer-header {
+                padding: 12px 20px;
+                text-align: center;
+                flex-shrink: 0;
+                cursor: grab;
+                touch-action: none;
+                user-select: none;
+                border-bottom: 1px solid var(--hud-border);
+            }
+             .drawer-header h4 {
+                margin: 0;
+                font-size: 1.1rem;
+                font-weight: 600;
+                color: var(--hud-accent);
+                text-shadow: var(--hud-glow);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 10px;
+            }
+            .drawer-header .chevron-icon {
+                transition: transform 0.3s ease-in-out;
+            }
+            #mobile-aircraft-bottom-drawer.expanded .chevron-icon {
+                transform: rotate(180deg);
+            }
+            
+            /* --- Drawer Content Wrapper --- */
+            .drawer-content {
+                overflow-y: auto;
+                flex-grow: 1;
+                /*
+                 * [REMOVED] All padding/gap styles.
+                 * The desktop's .unified-display-main-content will be moved
+                 * here and provides its own padding.
+                 */
+            }
+            /* Custom Scrollbar for the drawer */
+            .drawer-content::-webkit-scrollbar { width: 6px; }
+            .drawer-content::-webkit-scrollbar-track { background: transparent; }
+            .drawer-content::-webkit-scrollbar-thumb { background-color: var(--hud-accent); border-radius: 10px; }
+            
+            /* * [REMOVED] All rules for .unified-display-main, .pfd-main-panel, etc.
+             * The desktop CSS from crew-center.js is already responsive
+             * and will correctly style the content.
+             */
+
+            @media (max-width: ${this.CONFIG.breakpoint}px) {
+                #aircraft-info-window, #airport-info-window {
+                    /* This is the key that hides the original desktop window */
+                    display: none !important;
+                }
             }
         `;
-        const styleEl = document.createElement('style');
-        styleEl.id = styleId;
-        styleEl.textContent = css;
-        document.head.appendChild(styleEl);
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.type = 'text/css';
+        style.appendChild(document.createTextNode(css));
+        document.head.appendChild(style);
     },
 
     /**
@@ -123,9 +221,7 @@ const MobileUIHandler = {
 
             setTimeout(() => {
                 if (this.topWindowEl) this.topWindowEl.classList.add('visible');
-                // [FIX] Changed from .remove('off-screen') to .add('visible')
-                // This matches the CSS logic.
-                if (this.bottomDrawerEl) this.bottomDrawerEl.classList.add('visible');
+                if (this.bottomDrawerEl) this.bottomDrawerEl.classList.remove('off-screen');
             }, 50);
 
             // Watch the original window
@@ -152,8 +248,7 @@ const MobileUIHandler = {
 
         this.bottomDrawerEl = document.createElement('div');
         this.bottomDrawerEl.id = 'mobile-aircraft-bottom-drawer';
-        // [FIX] Removed the unused 'off-screen' class.
-        this.bottomDrawerEl.className = 'mobile-aircraft-view';
+        this.bottomDrawerEl.className = 'mobile-aircraft-view off-screen';
         
         // [MODIFIED] Simplified header. The dynamic info is now *in* the top panel.
         this.bottomDrawerEl.innerHTML = `
@@ -263,8 +358,7 @@ const MobileUIHandler = {
             if (hideBtn) {
                 // This logic is from crew-center.js, adapted for mobile
                 this.topWindowEl.classList.remove('visible');
-                // [FIX] Changed from .add('off-screen') to .remove('visible')
-                this.bottomDrawerEl.classList.remove('visible');
+                this.bottomDrawerEl.classList.add('off-screen');
                 this.overlayEl.classList.remove('visible');
                 
                 // We don't need to stop the PFD interval here,
@@ -448,8 +542,7 @@ const MobileUIHandler = {
             if (overlayToRemove) overlayToRemove.classList.remove('visible');
             if (topWindowToRemove) topWindowToRemove.classList.remove('visible');
             if (bottomDrawerToRemove) {
-                // [FIX] Changed from .add('off-screen') to .remove('visible')
-                bottomDrawerToRemove.classList.remove('visible');
+                bottomDrawerToRemove.classList.add('off-screen');
                 bottomDrawerToRemove.classList.remove('expanded');
             }
 
