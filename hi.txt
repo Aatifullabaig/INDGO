@@ -1,9 +1,9 @@
-Get User Flights
-Retrieves the online flight logbook for a given user.
+Get Detailed Flight Plan
+Retrieve the flight plan for a specific active flight.
 
 ⚠️This API is intended for simulated flight only and must not be used in real-world flight situations.
 Resource
-GET https://api.infiniteflight.com/public/v2/users/{userId}/flights
+GET https://api.infiniteflight.com/public/v2/sessions/{sessionId}/flights/{flightId}/flightplan
 
 Authorization
 Include your API key (<apikey>) by either:
@@ -12,58 +12,72 @@ Adding the apikey query parameter. For example, ?apikey=<apikey>.
 Sending a bearer authorization header with your API key. For example, Authorization: Bearer <apikey>.
 Parameters
 Name	Located in	Description	Required	Schema
-userId	path	ID of the User	Yes	string (uuid)
-page	query	Index of the page to retrieve	No, default 1	integer
+sessionId	path	ID of the session returned from the Sessions endpoint	Yes	string (uuid)
+flightId	path	ID of the flight. The flight must be in an active session and have a filed flight plan.	Yes	string (uuid)
 Response
 Sample Response
 {
   "errorCode": 0,
   "result": {
-    "pageIndex": 1,
-    "totalPages": 80,
-    "totalCount": 799,
-    "hasPreviousPage": false,
-    "hasNextPage": true,
-    "data": [
-      {
-        "id": "9aeb16a3-ac69-41d3-9dd4-d62be72b1525",
-        "created": "2022-01-10T10:37:41.965626",
-        "userId": "b0018209-e010-40a0-afe1-00ecd5856c5e",
-        "aircraftId": "849366e1-cb11-4d72-9034-78b11cd026b0",
-        "liveryId": "a071518d-995a-4b3c-b65b-656da0d6ed86",
-        "callsign": "VH-KAI",
-        "server": "Casual Server",
-        "dayTime": 2.5355167,
-        "nightTime": 0,
-        "totalTime": 2.5355167,
-        "landingCount": 0,
-        "originAirport": "YTYA",
-        "destinationAirport": "YTYA",
-        "xp": 25,
-        "worldType": 1,
-        "violations": [
-          {
-            "issuedBy": {
-                "id": "2a11e620-1cc1-4ac6-90d1-18c4ed9cb913",
-                "username": "Cameron",
-                "callsign": "EC-CAM",
-                "discourseUser": {
-                    "userId": 4,
-                    "username": "Cameron",
-                    "virtualOrganization": "",
-                    "avatarTemplate": "/user_avatar/community.infiniteflight.com/cameron/{size}/886772_2.png"
-                }
-            },
-            "level": 1,
-            "type": "Ground Overspeed",
-            "description": "Ground Overspeed",
-            "created": "2023-10-31T16:34:51.014366+00:00"
+      "flightPlanId": "4a57de08-a3b1-48ba-a081-adeff0a5b503",
+      "flightId": "0b8cc273-d97d-4223-afac-907d09d8ca8b",
+      "waypoints": [
+        "AMAHE",
+        "L12R"
+      ],
+      "lastUpdate": "2021-01-06 15:35:04Z",
+      "flightPlanItems": [
+        {
+          "name": "AMAHE",
+          "type": 0,
+          "children": null,
+          "identifier": null,
+          "altitude": -1,
+          "location": {
+            "latitude": 26.92723722,
+            "longitude": -77.47139889,
+            "altitude": 0
           }
-        ]
-      },
-      ...
-    ]
-  }
+        },
+        {
+          "name": "L12R",
+          "type": 2,
+          "children": [
+            {
+              "name": "ZESTY",
+              "type": 0,
+              "children": null,
+              "identifier": "ZESTY",
+              "altitude": 4000,
+              "location": {
+                "latitude": 44.97196917,
+                "longitude": -93.429735,
+                "altitude": 0
+              }
+            },
+            {
+              "name": "RW12R",
+              "type": 0,
+              "children": null,
+              "identifier": "RW12R",
+              "altitude": -1,
+              "location": {
+                "latitude": 44.887794494628906,
+                "longitude": -93.23413848876953,
+                "altitude": 0
+              }
+            }
+          ],
+          "identifier": "L12R",
+          "altitude": 0,
+          "location": {
+            "latitude": 0,
+            "longitude": 0,
+            "altitude": 0
+          }
+        }
+      ]
+    }
 }
 
 LiveAPIResponse
@@ -71,49 +85,25 @@ Response Type: application/json
 
 Name	Type	Description
 errorCode	integer	Enum: "Ok = 0", "UserNotFound = 1", "MissingRequestParameters = 2", "EndpointError = 3", "NotAuthorized = 4", "ServerNotFound = 5", "FlightNotFound = 6", "NoAtisAvailable = 7"
-result	PaginatedList	A page from the logbook.
-Paginated List
+result	[FlightPlanInfo]	Array of FlightPlanInfo objects
+FlightPlanInfo
 Name	Type	Description
-pageIndex	integer	The index of the current page
-totalPages	integer	The total number of pages available
-totalCount	integer	The total amount of entries for this dataset
-hasPreviousPage	boolean	Whether there is a page before this one
-hasNextPage	boolean	Whether there is a page after this one
-data	[UserFlight]	The entries in the current page
-UserFlight
+flightPlanId	string (uuid)	Unique identifier for the flight plan
+flightId	string (uuid)	Unique identifier for the flight. Associate with the response from the Get Flights endpoint
+waypoints	[string]	Deprecated. An array of waypoint names. You can correlate these with data from the Airport Editing Project
+lastUpdate	string	Last report time of the flight plan in the following format: YYYY-MM-DD HH:mm:ssZ
+flightPlanItems	[FlightPlanItem]	An array of FlightPlanItems which contain waypoint and procedure data for points in a flight plan.
+flightPlanType	integer	Type of flightplan. Enum: VFR = 0,IFR = 1
+FlightPlanItem
 Name	Type	Description
-id	string (uuid)	The ID of the flight
-created	string (datetime)	The time the flight was created
-userId	string (uuid)	The ID of the user who flew the flight
-aircraftId	string (uuid)	The ID of the aircraft flown
-liveryId	string (uuid)	The ID of the livery flown. This is currently only supported on the Casual server
-callsign	string	The callsign of the user during this flight
-server	string	The name of the server the flight was flown on
-dayTime	float	The flight time during the day, in minutes
-nightTime	float	The flight time during the night, in minutes
-totalTime	float	The total flight time of the flight, in minutes
-landingCount	integer	The number of landings conducted during the flight
-originAirport	string	The ICAO code of the departure airport. Can be null
-destinationAirport	string	The ICAO code of the arrival airport. Can be null
-xp	integer	The number of XP earned during the flight
-worldType	integer	Type of server the flight was flown on. Enum: "Solo = 0", "Casual = 1", "Training = 2", "Expert = 3", "Private = 4"
-violations	[Violation]	An array of violations the user received in this flight.
-Violation
+name	string	Name of the waypoint or the procedure. In the children array, this is the name of a waypoint inside a procedure.
+type	integer	Type of procedure for this item. Only use this if the FlightPlanItem's children field is populated and not null. Enum: "Sid = 0", "STAR = 1", "Approach = 2", "Track = 3", "Unknown = 5"
+children	[FlightPlanItem]	An array of FlightPlanItems containing waypoint information about a procedure. Only present if this item defines a procedure (SID/STAR/Approach/Track). If not, assume this is a Fix/VOR/Custom User Waypoint.
+identifier	string	Identifier for the waypoint or the procedure. This is not unique.
+altitude	integer	The altitude in feet for this waypoint. This is optionally defined by the user and defaults to -1 if not set.
+location	Coordinate	A Coordinate object defining the position of this waypoint.
+Coordinate
 Name	Type	Description
-issuedBy	Issuer	The information about the person who issued the violation
-level	integer	The severity level of the violation
-type	string	The type of violation committed
-description	string	A detailed description of the violation
-created	string (datetime)	The time when the violation was recorded
-Issuer
-Name	Type	Description
-id	string (uuid)	The ID of the issuer
-username	string	The username of the issuer
-callsign	string	The callsign of the issuer
-discourseUser	DiscourseUser	Information about the issuer's Discourse account, if available
-DiscourseUser
-Name	Type	Description
-userId	integer	The user ID on the Discourse platform
-username	string	The username on the Discourse platform
-virtualOrganization	string	The virtual organization associated with the user, if any
-avatarTemplate	string	URL template for the user's avatar on Discourse
+latitude	double	Current decimal latitude of the aircraft
+longitude	double	Current decimal longitude of the aircraft
+altitude	double	Current decimal altitude of the aircraft
