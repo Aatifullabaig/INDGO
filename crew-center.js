@@ -336,7 +336,7 @@ function injectCustomStyles() {
         .overview-col-left h3 {
             margin: 0;
             /* --- [MODIFIED] "Show-ish" text, callsign made smaller --- */
-            /* MODIFIED: Reduced from 2.0rem to 1.6rem for mobile */
+            /* ⬇️ MODIFIED: Restored to 1.6rem for desktop base */
             font-size: 1.6rem; 
             font-weight: 700; 
             letter-spacing: 0.5px;
@@ -349,7 +349,7 @@ function injectCustomStyles() {
 
         /* --- [NEW] Style for Airline Logo in Header --- */
         .ac-header-logo {
-            /* MODIFIED: Reduced from 2.2rem to 1.8rem to match new font */
+            /* ⬇️ MODIFIED: Restored to 1.8rem for desktop base */
             height: 1.8rem; 
             width: auto;
             max-width: 100px; /* Prevent huge logos */
@@ -1030,6 +1030,16 @@ function injectCustomStyles() {
                 margin: 0 auto;
             }
             /* --- [REMOVED] Mobile grid styles for deleted elements --- */
+
+            /* ⬇️ --- [NEW FIX] --- ⬇️ */
+            /* Selectively reduce callsign font size only on mobile */
+            .overview-col-left h3 {
+                font-size: 1.3rem;
+            }
+            .ac-header-logo {
+                height: 1.5rem;
+            }
+            /* ⬆️ --- [END NEW FIX] --- ⬆️ */
         }
     `;
 
