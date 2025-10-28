@@ -3360,8 +3360,10 @@ async function handleAircraftClick(flightProps, sessionId) {
     }
 }
 
+
 /**
  * --- [REDESIGNED & UPDATED] Generates the "Unified Flight Display" with image overlay and aircraft type.
+ * --- [FIXED] Corrected recursive logic to find first/last waypoints.
  */
 function populateAircraftInfoWindow(baseProps, plan) {
     const windowEl = document.getElementById('aircraft-info-window');
@@ -3370,18 +3372,32 @@ function populateAircraftInfoWindow(baseProps, plan) {
     const aircraftName = baseProps.aircraft?.aircraftName || 'Unknown Type';
     const airlineName = baseProps.aircraft?.liveryName || 'Generic Livery';
 
+    // --- [START OF FIX] ---
+    // This recursive function now correctly finds all *actual* waypoints,
+    // skipping the procedure (SID/STAR) containers.
     const allWaypoints = [];
     if (plan && plan.flightPlanItems) {
         const extractWps = (items) => {
+            if (!Array.isArray(items)) return;
             for (const item of items) {
-                if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) { allWaypoints.push(item); }
-                if (Array.isArray(item.children)) { extractWps(item.children); }
+                // If it has children, it's a procedure. Recurse into them.
+                if (Array.isArray(item.children) && item.children.length > 0) {
+                    extractWps(item.children);
+                } 
+                // Otherwise, if it's a waypoint with a valid location, add it.
+                else if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
+                    allWaypoints.push(item);
+                }
             }
         };
         extractWps(plan.flightPlanItems);
     }
+    // --- [END OF FIX] ---
+
     const hasPlan = allWaypoints.length >= 2;
+    // This will now correctly get the airport name from the *first* actual waypoint
     const departureIcao = hasPlan ? allWaypoints[0]?.name : 'N/A';
+    // This will correctly get the airport name from the *last* actual waypoint
     const arrivalIcao = hasPlan ? allWaypoints[allWaypoints.length - 1]?.name : 'N/A';
 
     // --- [NEW] Get Airline Logo (REVISED with new rules) ---
@@ -3813,15 +3829,14 @@ function renderPilotStatsHTML(stats, username) {
         }
     }
 
+// ⬇️ REPLACE this entire function in crew-center.js ⬇️
+
 /**
- * --- [MAJOR REVISION V4.7 - Ground State Fixes]
- * This version corrects all three reported ground state issues:
- * 1. Uses the correct `flattenWaypointsFromPlan` helper to fix progress calculation.
- * 2. Swaps state priority to check for "HOLDING SHORT" before "PARKED".
- * 3. Re-adds the "TAXIING TO RUNWAY" state.
- *
- * --- [UPDATE V4.8 - Filed Plan Data] ---
- * 4. Adds logic to populate filed cruise, next waypoint, and next constraint.
+ * --- [MAJOR REVISION V4.9 - Waypoint Logic Fix]
+ * 1. Corrected first/last waypoint logic in `populateAircraftInfoWindow`.
+ * 2. This function now handles `nextWaypointIndex` pointing to a procedure
+ * by looking for the first valid child waypoint.
+ * 3. Ground state logic and all other fixes remain.
 */
 function updateAircraftInfoWindow(baseProps, plan) {
     // --- [NEW] Get all new DOM elements ---
@@ -3875,7 +3890,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
         }
     }
     
-    // --- [START OF NEW V4.8 LOGIC] ---
+    // --- [START OF FIX 2 / NEW V4.9 LOGIC] ---
     // --- Populate Filed Flight Plan Data ---
     if (plan && filedCruiseEl && nextWptEl && nextConstEl) {
         // 1. Filed Cruise
@@ -3888,8 +3903,38 @@ function updateAircraftInfoWindow(baseProps, plan) {
         // 2. Next Waypoint & Constraint
         const nextIdx = plan.nextWaypointIndex;
         if (nextIdx != null && plan.flightPlanItems && plan.flightPlanItems[nextIdx]) {
-            const nextWpt = plan.flightPlanItems[nextIdx];
             
+            let nextWpt = plan.flightPlanItems[nextIdx]; // Get the item at the index
+            
+            // --- THIS IS THE FIX ---
+            // If this item is a procedure (it has children), find the first valid waypoint *inside* it.
+            // This assumes the "next waypoint" is the first child of the next procedure.
+            if (Array.isArray(nextWpt.children) && nextWpt.children.length > 0) {
+                // Helper to find the first *real* waypoint
+                const findFirstWaypoint = (items) => {
+                    if (!Array.isArray(items)) return null;
+                    for (const item of items) {
+                        // Check if it's a valid waypoint *and not* a procedure itself
+                        if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0) && (!item.children || item.children.length === 0)) {
+                            return item; // Found it
+                        }
+                        // If it is a procedure, recurse
+                        if (Array.isArray(item.children) && item.children.length > 0) {
+                            const childWpt = findFirstWaypoint(item.children);
+                            if (childWpt) return childWpt; // Found in sub-procedure
+                        }
+                    }
+                    return null; // Not found in this branch
+                };
+                
+                const firstChildWaypoint = findFirstWaypoint(nextWpt.children);
+                if (firstChildWaypoint) {
+                    nextWpt = firstChildWaypoint; // Use the child waypoint
+                }
+                // If no child waypoint is found, we'll just use the procedure name (e.g., "SID")
+            }
+            // --- END OF FIX ---
+
             // Waypoint Name (Use 'name' which is usually the identifier)
             nextWptEl.textContent = nextWpt.name || '--';
 
@@ -3925,7 +3970,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
         nextWptEl.textContent = '--';
         nextConstEl.textContent = '--';
     }
-    // --- [END OF NEW V4.8 LOGIC] ---
+    // --- [END OF FIX 2 / NEW V4.9 LOGIC] ---
 
 
     // --- Configuration Thresholds ---
@@ -3967,8 +4012,30 @@ function updateAircraftInfoWindow(baseProps, plan) {
     let arrivalIcao = null;
 
     if (plan && Array.isArray(plan.flightPlanItems) && plan.flightPlanItems.length >= 2) {
-        departureIcao = plan.flightPlanItems[0]?.identifier?.trim().toUpperCase();
-        arrivalIcao = plan.flightPlanItems[plan.flightPlanItems.length - 1]?.identifier?.trim().toUpperCase();
+        // Use the flat array of actual waypoints to get correct ICAOs
+        const waypoints = flattenWaypointsFromPlan(plan.flightPlanItems);
+        if (waypoints.length >= 2) {
+            // This relies on flattenWaypointsFromPlan being correct, which it now is.
+            // But flattenWaypointsFromPlan returns [lon, lat]. We need the names.
+            // Re-running the logic from populate...
+            const allWaypoints = [];
+            const extractWps = (items) => {
+                if (!Array.isArray(items)) return;
+                for (const item of items) {
+                    if (Array.isArray(item.children) && item.children.length > 0) {
+                        extractWps(item.children);
+                    } else if (item.location && (item.location.latitude !== 0 || item.location.longitude !== 0)) {
+                        allWaypoints.push(item);
+                    }
+                }
+            };
+            extractWps(plan.flightPlanItems);
+            
+            if (allWaypoints.length >= 2) {
+                departureIcao = allWaypoints[0]?.name?.trim().toUpperCase();
+                arrivalIcao = allWaypoints[allWaypoints.length - 1]?.name?.trim().toUpperCase();
+            }
+        }
     }
     const aircraftPos = { lat: baseProps.position.lat, lon: baseProps.position.lon, track_deg: baseProps.position.track_deg };
 
@@ -4034,7 +4101,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
                                  (progress > THRESHOLD.PARKED_PROGRESS_END);
             
             const relevantIcao = progress < 50 ? departureIcao : arrivalIcao;
-            const closeRunwayInfo = getNearestRunway(aircraftPos, relevantIcao, THRESHOLD.HOLD_SHORT_PROXIMITY_NM);
+            const closeRunwayInfo = (relevantIcao) ? getNearestRunway(aircraftPos, relevantIcao, THRESHOLD.HOLD_SHORT_PROXIMITY_NM) : null;
 
             const isLinedUp = closeRunwayInfo && closeRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE;
 
