@@ -1,17 +1,18 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v4.0)
+ * MobileUIHandler Module (Creative HUD Rehaul - v5.1 - User-Revised Handle)
  *
- * This version brings the full "desktop feel" and animations to the mobile
- * UI, while retaining the mobile-native top-window/bottom-drawer layout.
+ * This version implements the user's request for a re-hauled bottom panel,
+ * creating a functional "mini-dashboard" in the "peek" (collapsed) state.
  *
- * This is achieved by changing the core strategy:
- * 1. STOP CLONING: We no longer "scrape" and "clone" DOM nodes.
- * 2. START MOVING: We use appendChild() to move the *actual* live DOM elements
- * from the hidden desktop window into the mobile containers.
- * 3. PRESERVE BINDINGS: This preserves all desktop CSS, animations, and JS
- * data bindings (like the PFD and live data readouts).
- * 4. MOVE BACK: On close, we move the content back to the original hidden
- * window, ensuring it's not destroyed.
+ * REHAUL v5.1 CHANGES (Based on user feedback):
+ * 1. REVERTED: The ".route-summary-overlay" is NO LONGER moved. It remains
+ * in the top panel, as requested by the user.
+ * 2. NEW HANDLE: A static, minimalist ".drawer-handle" (a "grab bar") is
+ * re-introduced to the bottom drawer to control opening/closing.
+ * 3. RETAINED: The side-by-side "mini-dashboard" layout for the "peek"
+ * state (PFD left, Live Data right) is kept from v5.0.
+ * 4. RE-WIRED: All event listeners (`click`, `touchstart`) are re-wired
+ * to use the new ".drawer-handle".
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -38,15 +39,14 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (HUD Rehaul v4.0) Initialized.");
+        console.log("Mobile UI Handler (HUD Rehaul v5.1) Initialized.");
     },
 
     /**
      * Injects all the CSS for the new HUD-themed floating windows.
      * ---
-     * [RENOVATED] This CSS is now *much* simpler. It only styles the
-     * mobile containers and no longer tries to re-style the content,
-     * as the desktop CSS from crew-center.js will handle that.
+     * [RENOVATED v5.1] This CSS now includes the static grab-bar handle
+     * and the peek/expanded layout overrides.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -59,7 +59,9 @@ const MobileUIHandler = {
                 --hud-border: rgba(0, 168, 255, 0.3);
                 --hud-accent: #00a8ff;
                 --hud-glow: 0 0 15px rgba(0, 168, 255, 0.5);
-                --drawer-peek-height: 235px; /* How much of the drawer is visible */
+                --drawer-handle-height: 35px;
+                --drawer-peek-content-height: 200px;
+                --drawer-peek-height: calc(var(--drawer-handle-height) + var(--drawer-peek-content-height)); /* 235px */
             }
 
             #view-rosters.active {
@@ -81,7 +83,6 @@ const MobileUIHandler = {
 
             .mobile-aircraft-view {
                 position: absolute;
-                /* MODIFIED: Use the desktop's dark color for a seamless content blend */
                 background: #1C1E2A; 
                 backdrop-filter: blur(var(--hud-blur));
                 -webkit-backdrop-filter: blur(var(--hud-blur));
@@ -101,16 +102,11 @@ const MobileUIHandler = {
                 border-radius: 16px;
                 transform: translateY(-250%);
                 overflow: hidden;
-                /* MODIFIED: Let content define height, but set a max */
                 max-height: 250px; 
             }
             #mobile-aircraft-top-window.visible {
                 transform: translateY(0);
             }
-            /* * [REMOVED] All content-specific styles like .aircraft-image-container.
-             * The desktop's .aircraft-overview-panel will be moved here and
-             * will style itself.
-             */
 
             /* --- Bottom Drawer: Flight Deck --- */
             #mobile-aircraft-bottom-drawer {
@@ -120,66 +116,134 @@ const MobileUIHandler = {
                 height: 85vh;
                 max-height: calc(100vh - 80px);
                 border-radius: 20px 20px 0 0;
-                transform: translateY(calc(85vh - var(--drawer-peek-height))); /* "Peek" state */
+                /* "Peek" state */
+                transform: translateY(calc(85vh - var(--drawer-peek-height))); 
                 display: flex;
                 flex-direction: column;
                 transition-property: transform;
                 transition-duration: 0.45s;
                 transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-                padding-bottom: env(safe-area-inset-bottom, 0);
                 box-sizing: border-box;
             }
             #mobile-aircraft-bottom-drawer.dragging { transition: none; }
             #mobile-aircraft-bottom-drawer.off-screen { transform: translateY(100%); }
             #mobile-aircraft-bottom-drawer.expanded { transform: translateY(0); }
 
-            /* --- Drawer Header / Handle --- */
-            .drawer-header {
-                padding: 12px 20px;
-                text-align: center;
+            /* --- [REHAUL v5.1] New Drawer Handle --- */
+            .drawer-handle {
+                height: var(--drawer-handle-height);
                 flex-shrink: 0;
                 cursor: grab;
                 touch-action: none;
                 user-select: none;
+                padding: 10px; /* Click/touch area */
+                display: grid;
+                place-items: center;
                 border-bottom: 1px solid var(--hud-border);
+                background: rgba(18, 20, 38, 0.85); /* Match drawer bg */
+                box-sizing: border-box;
             }
-             .drawer-header h4 {
-                margin: 0;
-                font-size: 1.1rem;
-                font-weight: 600;
-                color: var(--hud-accent);
-                text-shadow: var(--hud-glow);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 10px;
+            .drawer-handle::before {
+                content: '';
+                width: 50px;
+                height: 5px;
+                background: var(--hud-border);
+                border-radius: 3px;
+                opacity: 0.8;
+                transition: all 0.3s ease;
             }
-            .drawer-header .chevron-icon {
-                transition: transform 0.3s ease-in-out;
+            #mobile-aircraft-bottom-drawer.expanded .drawer-handle::before {
+                opacity: 0.4;
             }
-            #mobile-aircraft-bottom-drawer.expanded .chevron-icon {
-                transform: rotate(180deg);
-            }
-            
+
             /* --- Drawer Content Wrapper --- */
             .drawer-content {
                 overflow-y: auto;
                 flex-grow: 1;
-                /*
-                 * [REMOVED] All padding/gap styles.
-                 * The desktop's .unified-display-main-content will be moved
-                 * here and provides its own padding.
-                 */
+                /* [NEW] Add safe-area padding here */
+                padding-bottom: env(safe-area-inset-bottom, 0);
             }
             /* Custom Scrollbar for the drawer */
             .drawer-content::-webkit-scrollbar { width: 6px; }
             .drawer-content::-webkit-scrollbar-track { background: transparent; }
             .drawer-content::-webkit-scrollbar-thumb { background-color: var(--hud-accent); border-radius: 10px; }
             
-            /* * [REMOVED] All rules for .unified-display-main, .pfd-main-panel, etc.
-             * The desktop CSS from crew-center.js is already responsive
-             * and will correctly style the content.
-             */
+            /* --- [REHAUL v5.1] Core Rehaul: Side-by-Side Peek Layout --- */
+            #mobile-aircraft-bottom-drawer .unified-display-main {
+                /* This is the PEEK state layout */
+                display: grid !important;
+                grid-template-columns: 1.2fr 1fr !important; /* PFD slightly larger */
+                grid-template-rows: 1fr;
+                
+                /* Constrain height to fit in the peek view */
+                height: var(--drawer-peek-content-height); /* 200px */
+                padding: 10px;
+                box-sizing: border-box;
+                gap: 10px;
+                overflow: hidden; /* Clip anything below */
+                transition: all 0.3s ease-in-out;
+            }
+            
+            #mobile-aircraft-bottom-drawer .pfd-main-panel {
+                /* Override centering from desktop-mobile */
+                margin: 0 !important;
+                max-width: none !important;
+                justify-content: center; /* Keep it centered vertically */
+            }
+            
+            #mobile-aircraft-bottom-drawer .live-data-panel {
+                /* Override styles for peek view */
+                justify-content: space-around !important;
+                padding: 0 !important;
+                background: none !important;
+            }
+            
+            #mobile-aircraft-bottom-drawer .live-data-item .data-label {
+                font-size: 0.6rem; /* Smaller label */
+            }
+            #mobile-aircraft-bottom-drawer .live-data-item .data-value {
+                font-size: 1.1rem; /* Smaller value */
+            }
+            #mobile-aircraft-bottom-drawer .live-data-item .data-value .unit {
+                font-size: 0.7rem;
+            }
+            #mobile-aircraft-bottom-drawer .live-data-item .data-value-ete {
+                font-size: 1.3rem; /* ETE still a bit bigger */
+            }
+
+            /* --- [REHAUL v5.1] Revert to stacked layout when EXPANDED --- */
+            #mobile-aircraft-bottom-drawer.expanded .unified-display-main {
+                grid-template-columns: 1fr !important; /* Stacked */
+                height: auto;
+                overflow: visible; /* Allow scrolling */
+                padding: 16px; /* Restore original padding */
+            }
+            
+            #mobile-aircraft-bottom-drawer.expanded .pfd-main-panel {
+                margin: 0 auto !important; /* Re-center the PFD */
+                max-width: 400px !important;
+            }
+
+            #mobile-aircraft-bottom-drawer.expanded .live-data-panel {
+                justify-content: space-around !important; /* Keep this */
+                padding: 0 !important; /* Keep this */
+                background: rgba(10, 12, 26, 0.5) !important; /* Restore bg */
+            }
+
+            #mobile-aircraft-bottom-drawer.expanded .live-data-item .data-label {
+                font-size: 0.7rem; /* Restore label size */
+            }
+            #mobile-aircraft-bottom-drawer.expanded .live-data-item .data-value {
+                font-size: 1.5rem; /* Restore value size */
+            }
+             #mobile-aircraft-bottom-drawer.expanded .live-data-item .data-value .unit {
+                font-size: 0.8rem;
+            }
+            #mobile-aircraft-bottom-drawer.expanded .live-data-item .data-value-ete {
+                font-size: 1.7rem; /* Restore ETE size */
+            }
+            /* --- [END REHAUL v5.1] --- */
+
 
             @media (max-width: ${this.CONFIG.breakpoint}px) {
                 #aircraft-info-window, #airport-info-window {
@@ -231,6 +295,7 @@ const MobileUIHandler = {
 
     /**
      * Creates the new DOM structure for the HUD.
+     * [REHAUL v5.1] Adds static .drawer-handle.
      */
     createSplitViewUI() {
         const viewContainer = document.getElementById('view-rosters');
@@ -250,14 +315,9 @@ const MobileUIHandler = {
         this.bottomDrawerEl.id = 'mobile-aircraft-bottom-drawer';
         this.bottomDrawerEl.className = 'mobile-aircraft-view off-screen';
         
-        // [MODIFIED] Simplified header. The dynamic info is now *in* the top panel.
+        // [REHAUL v5.1] Add the static grab bar handle
         this.bottomDrawerEl.innerHTML = `
-            <div class="drawer-header">
-                <h4>
-                    <i class="fa-solid fa-chevron-up chevron-icon"></i>
-                    <span>Flight Data</span>
-                </h4>
-            </div>
+            <div class="drawer-handle"></div>
             <div class="drawer-content"></div>
         `;
         viewContainer.appendChild(this.bottomDrawerEl);
@@ -286,19 +346,16 @@ const MobileUIHandler = {
             }
         });
         
-        // [REMOVED] The synchronous "if/else" block that was causing
-        // the race condition.
-        
         // Always observe, forcing the UI to wait for crew-center.js
         // to destroy old content and add new content.
         this.contentObserver.observe(windowElement, { childList: true, subtree: true });
     },
 
     /**
-     * [COMPLETELY RENOVATED]
+     * [REHAUL v5.1]
      * Moves content from the original window into the new HUD components.
-     * We use appendChild (move) instead of cloneNode (copy) to preserve
-     * all event listeners, animations, and live data bindings from crew-center.js.
+     * 1. Moves .aircraft-overview-panel to top window. (Route summary stays inside)
+     * 2. Moves .unified-display-main-content to bottom drawer's content.
      */
     populateSplitView(sourceWindow) {
         if (!this.topWindowEl || !this.bottomDrawerEl) return;
@@ -309,9 +366,13 @@ const MobileUIHandler = {
         // Find original content pieces from crew-center.js
         const topOverviewPanel = sourceWindow.querySelector('.aircraft-overview-panel');
         const mainFlightContent = sourceWindow.querySelector('.unified-display-main-content');
+        
+        // [REVERTED] No longer moving the route summary handle
 
         // [CRITICAL] Move the elements, don't clone them
         if (topOverviewPanel) {
+            // The .route-summary-overlay is INSIDE this panel and will move with it,
+            // staying at the bottom of the top panel, as requested.
             this.topWindowEl.appendChild(topOverviewPanel);
         }
         
@@ -319,26 +380,26 @@ const MobileUIHandler = {
             drawerContentContainer.appendChild(mainFlightContent);
         }
         
-        // [REMOVED] All text modification logic. It's no longer needed.
-        // [REMOVED] Dynamic header logic. It's now part of the moved topOverviewPanel.
-
         this.wireUpInteractions();
     },
 
     /**
-     * [RENOVATED]
+     * [REHAUL v5.1]
      * Adds event listeners for mobile interactions (swipe) AND re-wires
-     * desktop-driven buttons (hide, stats) that were broken by the move.
+     * desktop-driven buttons. Now targets ".drawer-handle".
      */
     wireUpInteractions() {
         if (!this.bottomDrawerEl || !this.topWindowEl) return;
 
-        const drawerHeader = this.bottomDrawerEl.querySelector('.drawer-header');
+        // [REHAUL v5.1] Target the new static grab bar handle
+        const drawerHandle = this.bottomDrawerEl.querySelector('.drawer-handle');
 
         // --- Mobile-specific interactions ---
-        if (drawerHeader) {
-            drawerHeader.addEventListener('click', () => this.toggleExpansion());
-            drawerHeader.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+        if (drawerHandle) {
+            drawerHandle.addEventListener('click', (e) => {
+                this.toggleExpansion();
+            });
+            drawerHandle.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
         }
         
         document.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
@@ -360,9 +421,6 @@ const MobileUIHandler = {
                 this.topWindowEl.classList.remove('visible');
                 this.bottomDrawerEl.classList.add('off-screen');
                 this.overlayEl.classList.remove('visible');
-                
-                // We don't need to stop the PFD interval here,
-                // as the user might just be hiding, not closing.
                 
                 const recallBtn = document.getElementById('aircraft-recall-btn');
                 if (recallBtn) {
@@ -419,15 +477,21 @@ const MobileUIHandler = {
         if (this.overlayEl) this.overlayEl.classList.toggle('visible', shouldExpand);
     },
 
-    // --- Swipe Gesture Handlers (Unchanged) ---
+    // --- Swipe Gesture Handlers ---
+    
+    /**
+     * [REHAUL v5.1] Updated to only allow dragging from the new handle.
+     */
     handleTouchStart(e) {
-        // Prevent swipe if touching a button or the scrollable content
-        if (e.target.closest('button, a, .drawer-content')) {
+        // Check if the touch started on the handle itself
+        const handle = this.bottomDrawerEl.querySelector('.drawer-handle');
+        if (!handle || !handle.contains(e.target)) {
+             // If touch wasn't on the handle, don't drag.
             this.swipeState.isDragging = false;
             return;
         }
         
-        e.preventDefault(); // Only prevent default if we're dragging the header
+        e.preventDefault(); // Only prevent default if we're dragging the handle
         this.swipeState.isDragging = true;
         this.swipeState.touchStartY = e.touches[0].clientY;
         const currentTransform = new WebKitCSSMatrix(window.getComputedStyle(this.bottomDrawerEl).transform);
@@ -477,34 +541,27 @@ const MobileUIHandler = {
     },
 
     /**
-     * [RENOVATED]
+     * [REHAUL v5.1]
      * Animates out, moves content back to the original hidden window,
      * and removes all mobile UI components.
-     *
-     * [FIXED v4.1] This function now correctly handles:
-     * 1. Asynchronous cleanup to prevent a race condition where a new
-     * window could be removed by a lingering setTimeout.
-     * 2. Synchronous cleanup when 'force = true' is passed.
-     * 3. Correctly moves content back without breaking the DOM structure.
      */
     closeActiveWindow(force = false) {
         if (this.contentObserver) this.contentObserver.disconnect();
         
         // [CRITICAL] Move content back to the original hidden window
-        // This ensures the desktop UI is intact if the user resizes.
         if (this.activeWindow && this.topWindowEl && this.bottomDrawerEl) {
-            const topContent = this.topWindowEl.querySelector('.aircraft-overview-panel');
-            const mainContent = this.bottomDrawerEl.querySelector('.unified-display-main-content');
+            const topOverviewPanel = this.topWindowEl.querySelector('.aircraft-overview-panel');
+            const mainFlightContent = this.bottomDrawerEl.querySelector('.unified-display-main-content');
             
-            if (topContent) {
-                this.activeWindow.appendChild(topContent);
+            // [REVERTED] No logic needed for route summary handle
+
+            if (topOverviewPanel) {
+                // Move the entire top panel (with summary bar still inside) back
+                this.activeWindow.appendChild(topOverviewPanel);
             }
             
-            // [FIX #2] Only move the main container. The stats display
-            // is *inside* it and will be moved correctly with it.
-            // Moving it separately breaks the DOM structure.
-            if (mainContent) {
-                this.activeWindow.appendChild(mainContent);
+            if (mainFlightContent) {
+                this.activeWindow.appendChild(mainFlightContent);
             }
         }
 
