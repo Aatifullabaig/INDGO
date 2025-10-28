@@ -96,8 +96,9 @@ const MobileUIHandler = {
             /* --- Top Floating Window: Image & Route --- */
             #mobile-aircraft-top-window {
                 top: env(safe-area-inset-top, 15px);
-                left: 15px;
-                right: 15px;
+                /* MODIFIED: Changed from 15px to 8px for a wider feel */
+                left: 8px;
+                right: 8px;
                 border-radius: 16px;
                 transform: translateY(-250%);
                 overflow: hidden;

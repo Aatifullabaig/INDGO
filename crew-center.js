@@ -336,7 +336,8 @@ function injectCustomStyles() {
         .overview-col-left h3 {
             margin: 0;
             /* --- [MODIFIED] "Show-ish" text, callsign made smaller --- */
-            font-size: 2.0rem; /* Was 2.2rem */
+            /* MODIFIED: Reduced from 2.0rem to 1.6rem for mobile */
+            font-size: 1.6rem; 
             font-weight: 700; 
             letter-spacing: 0.5px;
             text-shadow: 0 4px 10px rgba(0, 0, 0, 0.7), 0 0 2px rgba(255, 255, 255, 0.2);
@@ -348,7 +349,8 @@ function injectCustomStyles() {
 
         /* --- [NEW] Style for Airline Logo in Header --- */
         .ac-header-logo {
-            height: 2.2rem; /* Match font size */
+            /* MODIFIED: Reduced from 2.2rem to 1.8rem to match new font */
+            height: 1.8rem; 
             width: auto;
             max-width: 100px; /* Prevent huge logos */
             object-fit: contain;
