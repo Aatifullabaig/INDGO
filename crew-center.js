@@ -133,7 +133,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     
-// --- [REHAULED] Helper to inject custom CSS for new features ---
+// crew-center.js
+
+    // --- [REHAULED] Helper to inject custom CSS for new features ---
 function injectCustomStyles() {
     const styleId = 'sector-ops-custom-styles';
     if (document.getElementById(styleId)) return;
@@ -551,21 +553,22 @@ function injectCustomStyles() {
         #aircraft-display-main {
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            /* --- [MODIFIED] Reduced gap for tighter layout --- */
+            gap: 12px;
         }
         .unified-display-main {
             display: grid;
             grid-template-columns: 240px 1fr; /* PFD Left, Grids Right */
-            gap: 16px;
+            /* --- [MODIFIED] Reduced gap for tighter layout --- */
+            gap: 12px;
             min-height: 0;
             overflow: hidden;
         }
         .pfd-main-panel {
             display: flex;
             flex-direction: column;
-            /* --- [MODIFIED] --- */
-            /* gap: 12px; (Removed) */
-            justify-content: center; /* Center the PFD vertically */
+            /* --- [MODIFIED] Was 'center', changed to 'flex-start' to push PFD up --- */
+            justify-content: flex-start; 
             min-width: 0;
         }
 
@@ -1252,6 +1255,39 @@ function injectCustomStyles() {
         --- [END] VSD RE-DESIGN --- 
         ====================================================================
         */
+
+        /* --- [NEW] VSD Disclaimer --- */
+        .vsd-disclaimer {
+            background: rgba(10, 12, 26, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-top: 0; /* The gap from aircraft-display-main will handle it */
+        }
+        .disclaimer-legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .disclaimer-legend span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .vsd-disclaimer p {
+            font-size: 0.75rem;
+            color: #9fa8da;
+            text-align: center;
+            margin: 0;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .vsd-disclaimer p .fa-solid {
+            margin-right: 4px;
+        }
     `;
 
     const style = document.createElement('style');
@@ -3660,6 +3696,7 @@ async function handleAircraftClick(flightProps, sessionId) {
 /**
  * --- [REDESIGNED & UPDATED] Generates the "Unified Flight Display" with image overlay and aircraft type.
  * --- [MODIFIED] Replaced data list with Vertical Situation Display (VSD)
+ * --- [MODIFIED v2] Added VSD Disclaimer
  */
 function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     const windowEl = document.getElementById('aircraft-info-window');
@@ -3758,7 +3795,7 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
 
         <div class="unified-display-main-content">
             
-            <div id="aircraft-display-main" style="display: flex; flex-direction: column; gap: 16px;">
+            <div id="aircraft-display-main" style="display: flex; flex-direction: column; gap: 12px;">
             
                 <div id="vsd-summary-bar" class="vsd-summary-bar">
                     <div class="vsd-summary-item">
@@ -3913,8 +3950,15 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
 
                         </div>
                     </div>
-                    </div>
+                </div>
 
+                <div class="vsd-disclaimer">
+                    <div class="disclaimer-legend">
+                        <span><i class="fa-solid fa-circle" style="color: #00a8ff;"></i> Planned FPL</span>
+                        <span><i class="fa-solid fa-circle" style="color: #dc3545;"></i> Flown Route</span>
+                    </div>
+                    <p><i class="fa-solid fa-circle-info"></i> The vertical profile may be inaccurate if your filed flight plan altitudes are incomplete or incorrect.</p>
+                </div>
                 <button class="pilot-stats-toggle-btn" data-user-id="${baseProps.userId}" data-username="${baseProps.username || 'N/A'}">
                     <i class="fa-solid fa-chart-simple"></i>
                     View Pilot Report for ${baseProps.username || 'N/A'}
