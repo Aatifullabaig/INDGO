@@ -1100,7 +1100,7 @@ function injectCustomStyles() {
 
         #vsd-aircraft-icon {
             position: absolute;
-            left: 40px; /* Static X position */
+            left: 0px; /* Initial position, will be set by JS */
             top: 50%; /* Will be set by JS */
             width: 30px;
             height: 20px;
@@ -1111,7 +1111,8 @@ function injectCustomStyles() {
             background-repeat: no-repeat;
             background-position: center;
             transform: translateY(-50%);
-            transition: top 0.5s ease-out; /* Smooth altitude changes */
+            /* --- MODIFIED: Added 'left' to the transition --- */
+            transition: top 0.5s ease-out, left 1s linear; /* Smooth altitude and scroll */
         }
         
         /* This holds the scrolling content */
@@ -3997,20 +3998,13 @@ function renderPilotStatsHTML(stats, username) {
     }
 
 
-// --- [UPDATED - V6.3] Renders the main aircraft info window with PFD and VSD ---
 
 /**
- * --- [MAJOR REVISION V6.3 - VSD Multi-Pass Interpolation FIX]
- * This version replaces the "cruise zero" logic (V6.2) with a more
- * robust, general-purpose sanitization.
- * * 1. Pass 1 (Unchanged): Anchors start/end altitudes to airport elevation.
- * 2. Pass 2 (FIXED): Sanitizes *all* "implausible zeros". Any waypoint
- * between the start and end with an altitude of `0` is now marked as
- * `null`. This treats all `0` altitudes (except for the ground
- * elevations from Pass 1) as "missing data".
- * 3. Pass 3 (Unchanged): The "look-ahead" interpolation now correctly
- * fills all `null` gaps (including the newly marked zeros) to create a
- * smooth, logical vertical profile.
+ * --- [MAJOR REVISION V6.4: Centered VSD]
+ * Implements a "clamping viewport" logic for the VSD.
+ * The aircraft's current position is now centered, and the viewport
+ * clamps to the start/end of the flight plan as needed.
+ * This replaces the "fixed left icon" (V6.3) logic.
 */
 function updateAircraftInfoWindow(baseProps, plan) {
     // --- Get all DOM elements ---
@@ -4198,84 +4192,63 @@ function updateAircraftInfoWindow(baseProps, plan) {
     }
 
     // --- [NEW] VSD LOGIC ---
-    if (vsdPanel && hasPlan) {
+    if (vsdPanel && hasPlan && vsdGraphContent && vsdAircraftIcon) {
         // --- 1. Define VSD scales ---
         const VSD_HEIGHT_PX = vsdGraphContent.clientHeight || 190;
         const MAX_ALT_FT = 45000;
         const Y_SCALE_PX_PER_FT = VSD_HEIGHT_PX / MAX_ALT_FT;
         const FIXED_X_SCALE_PX_PER_NM = 4;
-        const AIRCRAFT_ICON_X_POS_PX = 40;
-
+        
         // --- 2. Build the Profile (Only once per flight plan) ---
         const planId = plan.flightPlanId || plan.id || 'unknown';
         if (vsdPanel.dataset.profileBuilt !== 'true' || vsdPanel.dataset.planId !== planId) {
             
             // =================================================================
-            // --- [START OF V6.3 FIX] ---
+            // --- [V6.3 FIX - Unchanged] ---
             // =================================================================
-            // Create a deep copy to avoid mutating the original data
             let flatWaypointObjects = JSON.parse(JSON.stringify(originalFlatWaypointObjects));
             
             if (flatWaypointObjects.length > 0) {
                 const lastIdx = flatWaypointObjects.length - 1;
 
                 // --- Pass 1: Anchor Start and End Altitudes ---
-                // Ensure first waypoint has a valid altitude
                 if (flatWaypointObjects[0].altitude == null) {
                     flatWaypointObjects[0].altitude = plan?.origin?.elevation_ft || 0;
                 }
-                
-                // Ensure last waypoint has a valid altitude
                 if (flatWaypointObjects[lastIdx].altitude == null) {
-                    // Try to get a valid altitude from the second-to-last point, otherwise use dest elevation
                     const prevAlt = (lastIdx > 0) ? flatWaypointObjects[lastIdx - 1]?.altitude : null;
                     flatWaypointObjects[lastIdx].altitude = (prevAlt != null) ? prevAlt : (plan?.destination?.elevation_ft || 0);
                 }
 
                 // --- Pass 2: Sanitize "Implausible Zeros" ---
-                // Mark any waypoint with altitude 0 as 'null' for interpolation,
-                // *unless* it's the very first or very last point (which are
-                // set to ground elevation in Pass 1).
-                for (let i = 1; i < lastIdx; i++) { // Loop from second to second-to-last
+                for (let i = 1; i < lastIdx; i++) {
                     const wp = flatWaypointObjects[i];
                     if (wp.altitude === 0) {
-                        wp.altitude = null; // Mark for interpolation
+                        wp.altitude = null;
                     }
                 }
                 
                 // --- Pass 3: Interpolation Pass (Look-Ahead Gap Filler) ---
-                // This loop now fills gaps of 'null' or 'undefined'
-                let lastValidAltIndex = 0; // We know index 0 is valid (from Pass 1)
+                let lastValidAltIndex = 0; 
                 for (let i = 1; i < flatWaypointObjects.length; i++) {
                     const wp = flatWaypointObjects[i];
-
                     if (wp.altitude != null && typeof wp.altitude === 'number') {
-                        // This is a valid point.
-                        
-                        // Check if we just *finished* a gap
                         if (i > lastValidAltIndex + 1) {
-                            // Yes, a gap existed from (lastValidAltIndex + 1) to (i - 1)
                             const gapStartIndex = lastValidAltIndex;
                             const gapEndIndex = i;
-                            
                             const startAlt = flatWaypointObjects[gapStartIndex].altitude;
                             const endAlt = flatWaypointObjects[gapEndIndex].altitude;
                             const numStepsInGap = gapEndIndex - gapStartIndex;
 
-                            // Interpolate for all waypoints *within* the gap
                             for (let j = 1; j < numStepsInGap; j++) {
                                 const stepIndex = gapStartIndex + j;
                                 const fraction = j / numStepsInGap;
-                                // Linear interpolation: y = y1 + (y2 - y1) * fraction
                                 const interpolatedAlt = startAlt + (endAlt - startAlt) * fraction;
-                                
                                 flatWaypointObjects[stepIndex].altitude = Math.round(interpolatedAlt);
                             }
                         }
-                        // This is now the last valid point we've seen
                         lastValidAltIndex = i;
                     }
-                    // If altitude is null, we just keep looping until we find a valid one.
                 }
             }
             // =================================================================
@@ -4286,16 +4259,13 @@ function updateAircraftInfoWindow(baseProps, plan) {
             let labels_html = "";
             let current_x_px = 0;
             
-            // Exit if we still have no waypoints
             if (flatWaypointObjects.length === 0) return;
 
             let lastLat = flatWaypointObjects[0].location.latitude;
             let lastLon = flatWaypointObjects[0].location.longitude;
 
-            // --- Build Graph from the CLEANED flatWaypointObjects ---
             for (let i = 0; i < flatWaypointObjects.length; i++) {
                 const wp = flatWaypointObjects[i];
-                // We can now trust wp.altitude because we fixed it
                 const wpAltFt = wp.altitude; 
                 const wpAltPx = VSD_HEIGHT_PX - (wpAltFt * Y_SCALE_PX_PER_FT);
                 const wpLat = wp.location.latitude;
@@ -4335,11 +4305,42 @@ function updateAircraftInfoWindow(baseProps, plan) {
         vsdAircraftIcon.style.top = `${currentAltPx}px`;
 
         // --- 4. Scroll the Graph (Horizontal) ---
-        const distanceFlownNM = totalDistanceNM - distanceToDestNM;
-        const scrollOffsetPx = (distanceFlownNM * FIXED_X_SCALE_PX_PER_NM);
-        const translateX = AIRCRAFT_ICON_X_POS_PX - scrollOffsetPx; 
-        
-        vsdGraphContent.style.transform = `translateX(${translateX}px)`;
+        // [START OF V6.4 USER REQUEST FIX]
+        const vsdGraphWindow = document.getElementById('vsd-graph-window');
+        if (vsdGraphWindow && vsdGraphWindow.clientWidth > 0) {
+            const distanceFlownNM = totalDistanceNM - distanceToDestNM;
+            const scrollOffsetPx = (distanceFlownNM * FIXED_X_SCALE_PX_PER_NM);
+
+            const vsdViewportWidth = vsdGraphWindow.clientWidth;
+            const totalProfileWidthPx = vsdGraphContent.scrollWidth;
+            
+            const centerOffset = vsdViewportWidth / 2;
+            const desiredTranslateX = centerOffset - scrollOffsetPx;
+            
+            // Clamp translation so the tape doesn't show empty space at the start or end
+            const maxTranslateX = 0;
+            const minTranslateX = Math.min(0, vsdViewportWidth - totalProfileWidthPx); // Ensure min is <= 0
+
+            const finalTranslateX = Math.max(minTranslateX, Math.min(maxTranslateX, desiredTranslateX));
+
+            // Set the tape's horizontal scroll
+            vsdGraphContent.style.transform = `translateX(${finalTranslateX}px)`;
+
+            // Set the icon's horizontal position relative to the viewport
+            // It's the aircraft's position on the tape, plus the tape's translation
+            const iconLeftPx = scrollOffsetPx + finalTranslateX;
+            vsdAircraftIcon.style.left = `${iconLeftPx}px`;
+
+        } else {
+            // Fallback to original logic if viewport isn't ready
+            const distanceFlownNM = totalDistanceNM - distanceToDestNM;
+            const scrollOffsetPx = (distanceFlownNM * FIXED_X_SCALE_PX_PER_NM);
+            // Use a hardcoded fallback 40px
+            const translateX = 40 - scrollOffsetPx; 
+            vsdGraphContent.style.transform = `translateX(${translateX}px)`;
+            vsdAircraftIcon.style.left = `40px`; // Set fallback icon pos
+        }
+        // [END OF V6.4 USER REQUEST FIX]
         
         // --- 5. Update Summary Bar ---
         if (vsdSummaryDist) vsdSummaryDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
@@ -4364,7 +4365,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
             return name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '_');
         };
         const aircraftName = baseProps.aircraft?.aircraftName || 'Generic Aircraft';
-        const liveryName = baseProps.aircraft?.liveryName || 'Default Liwery'; // Typo in original, kept for consistency
+        const liveryName = baseProps.aircraft?.liveryName || 'Default Liwery';
         const sanitizedAircraft = sanitizeFilename(aircraftName);
         const sanitizedLivery = sanitizeFilename(liveryName);
         const imagePath = `/CommunityPlanes/${sanitizedAircraft}/${sanitizedLivery}.png`;
