@@ -3997,13 +3997,20 @@ function renderPilotStatsHTML(stats, username) {
     }
 
 
+// --- [UPDATED - V6.3] Renders the main aircraft info window with PFD and VSD ---
+
 /**
- * --- [MAJOR REVISION V6.2 - VSD Multi-Pass Interpolation]
- * This version implements a robust, multi-pass data cleaning process.
- * 1. It anchors the start/end altitudes.
- * 2. It sanitizes "cruise zeros" by converting them to null.
- * 3. It uses a look-ahead interpolation to fill all remaining null-data gaps.
- * This fixes the "dive to zero" bug and handles bad data from SimBrief.
+ * --- [MAJOR REVISION V6.3 - VSD Multi-Pass Interpolation FIX]
+ * This version replaces the "cruise zero" logic (V6.2) with a more
+ * robust, general-purpose sanitization.
+ * * 1. Pass 1 (Unchanged): Anchors start/end altitudes to airport elevation.
+ * 2. Pass 2 (FIXED): Sanitizes *all* "implausible zeros". Any waypoint
+ * between the start and end with an altitude of `0` is now marked as
+ * `null`. This treats all `0` altitudes (except for the ground
+ * elevations from Pass 1) as "missing data".
+ * 3. Pass 3 (Unchanged): The "look-ahead" interpolation now correctly
+ * fills all `null` gaps (including the newly marked zeros) to create a
+ * smooth, logical vertical profile.
 */
 function updateAircraftInfoWindow(baseProps, plan) {
     // --- Get all DOM elements ---
@@ -4204,12 +4211,14 @@ function updateAircraftInfoWindow(baseProps, plan) {
         if (vsdPanel.dataset.profileBuilt !== 'true' || vsdPanel.dataset.planId !== planId) {
             
             // =================================================================
-            // --- [START OF NEW FIX V6.2] ---
+            // --- [START OF V6.3 FIX] ---
             // =================================================================
             // Create a deep copy to avoid mutating the original data
             let flatWaypointObjects = JSON.parse(JSON.stringify(originalFlatWaypointObjects));
             
             if (flatWaypointObjects.length > 0) {
+                const lastIdx = flatWaypointObjects.length - 1;
+
                 // --- Pass 1: Anchor Start and End Altitudes ---
                 // Ensure first waypoint has a valid altitude
                 if (flatWaypointObjects[0].altitude == null) {
@@ -4217,33 +4226,26 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 }
                 
                 // Ensure last waypoint has a valid altitude
-                const lastIdx = flatWaypointObjects.length - 1;
                 if (flatWaypointObjects[lastIdx].altitude == null) {
                     // Try to get a valid altitude from the second-to-last point, otherwise use dest elevation
                     const prevAlt = (lastIdx > 0) ? flatWaypointObjects[lastIdx - 1]?.altitude : null;
                     flatWaypointObjects[lastIdx].altitude = (prevAlt != null) ? prevAlt : (plan?.destination?.elevation_ft || 0);
                 }
 
-                // --- Pass 2: Sanitize "Cruise Zeros" ---
-                // If a point is '0' but the previous valid point was > 5000ft, it's bad data.
-                // Treat it as 'null' so the *next* pass can interpolate it.
-                let lastGoodAltitude = flatWaypointObjects[0].altitude;
-                for (let i = 1; i < lastIdx; i++) { // Don't check the absolute start/end
+                // --- Pass 2: Sanitize "Implausible Zeros" ---
+                // Mark any waypoint with altitude 0 as 'null' for interpolation,
+                // *unless* it's the very first or very last point (which are
+                // set to ground elevation in Pass 1).
+                for (let i = 1; i < lastIdx; i++) { // Loop from second to second-to-last
                     const wp = flatWaypointObjects[i];
-                    if (wp.altitude != null && typeof wp.altitude === 'number') {
-                        if (wp.altitude === 0 && lastGoodAltitude > 5000) {
-                            // This is a "cruise zero". It's bad. Mark for interpolation.
-                            wp.altitude = null; 
-                        } else {
-                            // This is a valid altitude, record it
-                            lastGoodAltitude = wp.altitude;
-                        }
+                    if (wp.altitude === 0) {
+                        wp.altitude = null; // Mark for interpolation
                     }
                 }
                 
                 // --- Pass 3: Interpolation Pass (Look-Ahead Gap Filler) ---
                 // This loop now fills gaps of 'null' or 'undefined'
-                let lastValidAltIndex = 0; // We know index 0 is valid
+                let lastValidAltIndex = 0; // We know index 0 is valid (from Pass 1)
                 for (let i = 1; i < flatWaypointObjects.length; i++) {
                     const wp = flatWaypointObjects[i];
 
@@ -4277,7 +4279,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 }
             }
             // =================================================================
-            // --- [END OF NEW FIX V6.2] ---
+            // --- [END OF V6.3 FIX] ---
             // =================================================================
 
             let path_d = "";
