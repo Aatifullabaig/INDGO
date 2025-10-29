@@ -133,7 +133,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     
-// [REPLACE THIS ENTIRE FUNCTION]
 // --- [REHAULED] Helper to inject custom CSS for new features ---
 function injectCustomStyles() {
     const styleId = 'sector-ops-custom-styles';
@@ -1184,6 +1183,16 @@ function injectCustomStyles() {
             stroke-linejoin: round;
         }
 
+        /* --- [MODIFIED] Style for the Flown Altitude Path --- */
+        #vsd-flown-path {
+            fill: none;
+            stroke: #dc3545; /* Red */
+            stroke-width: 4; /* <-- MODIFIED */
+            stroke-linejoin: round;
+            opacity: 0.9; /* <-- MODIFIED */
+        }
+        /* --- [END MODIFIED] --- */
+
         #vsd-waypoint-labels {
             position: absolute;
             top: 0;
@@ -1236,22 +1245,6 @@ function injectCustomStyles() {
         /* Low label: tick goes from top-center UP */
         .vsd-wp-label.low-label::after {
             bottom: 100%;
-        }
-
-        #vsd-profile-path {
-            fill: none;
-            stroke: #00a8ff;
-            stroke-width: 3;
-            stroke-linejoin: round;
-        }
-
-        /* --- [NEW] Style for the Flown Altitude Path --- */
-        #vsd-flown-path {
-            fill: none;
-            stroke: #dc3545; /* Red */
-            stroke-width: 2.5;
-            stroke-linejoin: round;
-            opacity: 0.8;
         }
         /* --- [END NEW] --- */
 
@@ -3523,25 +3516,23 @@ async function handleAircraftClick(flightProps, sessionId) {
         const plan = (planData && planData.ok) ? planData.plan : null;
         const routeData = routeRes.ok ? await routeRes.json() : null;
         
-        // --- [NEW] ---
-        // Define sortedRoutePoints here, so it's available for the initial call 
-        // and the interval.
+        // --- [MODIFIED] ---
+        // Get the *initial* sorted route points for the first render
         let sortedRoutePoints = [];
         if (routeData && routeData.ok && Array.isArray(routeData.route) && routeData.route.length > 0) {
             sortedRoutePoints = routeData.route.sort((a, b) => {
-                // Handle null/undefined dates just in case
                 const timeA = a.date ? new Date(a.date).getTime() : 0;
                 const timeB = b.date ? new Date(b.date).getTime() : 0;
                 return timeA - timeB;
             });
         }
-        // --- [END NEW] ---
+        // --- [END MODIFIED] ---
 
         // NEW: Cache data for stats view
         cachedFlightDataForStatsView = { flightProps, plan };
         
         // --- [MODIFIED] ---
-        // Pass the historical route data to the info window builder
+        // Pass the *initial* historical route data to the info window builder
         populateAircraftInfoWindow(flightProps, plan, sortedRoutePoints);
 
         const currentPosition = [flightProps.position.lon, flightProps.position.lat];
@@ -3599,28 +3590,48 @@ async function handleAircraftClick(flightProps, sessionId) {
         }
         
         // --- [MODIFIED] ---
-        // Pass 'sortedRoutePoints' to the update function in the interval
+        // The interval will NOW re-fetch the route data on every tick.
         activePfdUpdateInterval = setInterval(async () => {
             try {
-                const freshDataRes = await fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}`);
+                // --- [NEW] Fetch both live position AND route history in parallel ---
+                const [freshDataRes, routeRes] = await Promise.all([
+                    fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}`), // Live position
+                    fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/route`) // Route history
+                ]);
+
                 if (!freshDataRes.ok) throw new Error("Flight data update failed.");
                 
                 const allFlights = await freshDataRes.json();
                 const updatedFlight = allFlights.flights.find(f => f.flightId === flightProps.flightId);
+
+                // --- [NEW] Process the freshly fetched route data ---
+                let updatedSortedRoutePoints = [];
+                if (routeRes.ok) {
+                    const routeData = await routeRes.json();
+                    if (routeData && routeData.ok && Array.isArray(routeData.route) && routeData.route.length > 0) {
+                        updatedSortedRoutePoints = routeData.route.sort((a, b) => {
+                            const timeA = a.date ? new Date(a.date).getTime() : 0;
+                            const timeB = b.date ? new Date(b.date).getTime() : 0;
+                            return timeA - timeB;
+                        });
+                    }
+                }
+                // --- [END NEW] ---
 
                 if (updatedFlight && updatedFlight.position) {
                     // --- Logic to update the info window (Unchanged) ---
                     updatePfdDisplay(updatedFlight.position);
                     
                     // --- [MODIFIED] ---
-                    // Pass historical data along with live data for VSD rendering
-                    updateAircraftInfoWindow(updatedFlight, plan, sortedRoutePoints);
+                    // Pass the NEWLY fetched historical data
+                    updateAircraftInfoWindow(updatedFlight, plan, updatedSortedRoutePoints);
                     
                     // --- [START OF USER MODIFICATION] ---
                     // Map icon and trail updates are handled globally.
                     // --- [END OF USER MODIFICATION] ---
 
                 } else {
+                    // Flight no longer found, stop the interval
                     clearInterval(activePfdUpdateInterval);
                     activePfdUpdateInterval = null;
                 }
