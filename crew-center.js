@@ -567,9 +567,11 @@ function injectCustomStyles() {
         .pfd-main-panel {
             display: flex;
             flex-direction: column;
-            /* --- [MODIFIED] Was 'center', changed to 'flex-start' to push PFD up --- */
+            /* --- [MODIFIED] Align to top --- */
             justify-content: flex-start; 
             min-width: 0;
+            /* --- [NEW] Weld PFD to footer --- */
+            gap: 0;
         }
 
         /* 4. PFD Styles (Resized) */
@@ -582,6 +584,9 @@ function injectCustomStyles() {
             min-width: 0;
             /* --- [MODIFIED] --- */
             /* flex-grow: 1; (Removed) */
+            /* --- [NEW] Weld PFD to footer --- */
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
         }
         #pfd-container svg {
             width: 100%;
@@ -599,6 +604,58 @@ function injectCustomStyles() {
         #pfd-container svg #attitude_group {
             transition: transform 0.5s ease-out;
         }
+
+        /* --- [NEW] PFD Footer Display --- */
+        .pfd-footer-display {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            gap: 10px;
+            background: rgba(10, 12, 26, 0.5); /* Match PFD/VSD bg */
+            padding: 8px 12px;
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+            min-height: 46px; /* Fills the vertical gap */
+            box-sizing: border-box;
+        }
+        .pfd-footer-ac-icon {
+            width: 40px;
+            height: 40px;
+        }
+        .pfd-footer-ac-icon svg {
+            width: 100%;
+            height: 100%;
+            fill: #00a8ff;
+            opacity: 0.7;
+        }
+        .pfd-footer-nav-item {
+            display: flex;
+            flex-direction: column;
+            text-align: right;
+            min-width: 60px; /* Give it some space */
+        }
+        .pfd-footer-nav-item .data-label {
+            font-size: 0.7rem;
+            color: #c5cae9;
+            text-transform: uppercase;
+            margin-bottom: 2px;
+        }
+        .pfd-footer-nav-item .data-value {
+            font-size: 1.2rem;
+            color: #fff;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+            line-height: 1;
+        }
+        .pfd-footer-nav-item .data-value .unit {
+            font-size: 0.8rem; 
+            color: #9fa8da; 
+            margin-left: 2px;
+            font-family: 'Segoe UI', sans-serif; /* Match other units */
+            font-weight: 400;
+        }
+        /* --- [END NEW] --- */
+
 
         /* Aircraft Type Readout (REMOVED) */
         #aircraft-type-readout {
@@ -1068,7 +1125,7 @@ function injectCustomStyles() {
             background: rgba(10, 12, 26, 0.5);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 12px;
-            margin-bottom: 16px; 
+            margin-bottom: 12px; /* [MODIFIED] Tighter layout */
             flex-shrink: 0;
         }
         .vsd-summary-item {
@@ -3691,12 +3748,12 @@ async function handleAircraftClick(flightProps, sessionId) {
         cachedFlightDataForStatsView = { flightProps: null, plan: null };
     }
 }
-
+// crew-center.js
 
 /**
  * --- [REDESIGNED & UPDATED] Generates the "Unified Flight Display" with image overlay and aircraft type.
  * --- [MODIFIED] Replaced data list with Vertical Situation Display (VSD)
- * --- [MODIFIED v2] Added VSD Disclaimer
+ * --- [MODIFIED v3] Added PFD Footer Panel
  */
 function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     const windowEl = document.getElementById('aircraft-info-window');
@@ -3931,8 +3988,23 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
                             </defs>
                             </svg>
                         </div>
-                        
-                    </div>
+
+                        <div id="pfd-footer-display" class="pfd-footer-display">
+                            <div class="pfd-footer-ac-icon">
+                                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+                                    <path d="M50,85 C45,80 40,75 35,70 C30,65 25,60 20,55 C15,50 10,45 5,40 C10,40 15,40 20,40 C25,40 30,40 35,40 C35,35 35,30 35,25 C35,20 35,15 35,10 C40,15 45,20 50,25 C55,20 60,15 65,10 C65,15 65,20 65,25 C65,30 65,35 65,40 C70,40 75,40 80,40 C85,40 90,40 95,40 C90,45 85,50 80,55 C75,60 70,65 65,70 C60,75 55,80 50,85 Z" />
+                                </svg>
+                            </div>
+                            <div class="pfd-footer-nav-item">
+                                <span class="data-label">NEXT WP</span>
+                                <span class="data-value" id="ac-next-wp">---</span>
+                            </div>
+                            <div class="pfd-footer-nav-item">
+                                <span class="data-label">DIST</span>
+                                <span class="data-value" id="ac-next-wp-dist">--.-<span class="unit">NM</span></span>
+                            </div>
+                        </div>
+                        </div>
 
                     <div id="vsd-panel" class="vsd-panel" data-plan-id="" data-profile-built="false">
                         
@@ -4161,23 +4233,12 @@ function renderPilotStatsHTML(stats, username) {
 
 
 
+// crew-center.js
+
 /**
  * --- [MAJOR REVISION V7.1: Pre-Cache Progress Data]
  * This update fixes the "vertical red line" bug introduced in V7.0.
- *
- * * 1.  [THE FIX] The `cumulativeNM` (cumulative distance) for each planned
- * waypoint is now **pre-calculated** on the `originalFlatWaypointObjects`
- * *before* any other progress logic is run.
- * * 2.  [THE REASON] The V7.0 bug was an order-of-operations failure.
- * The `progressAlongRouteNM` logic was trying to read `wp.cumulativeNM`
- * before that value had been calculated, causing the check to fail.
- * It then fell back to a `totalDistance - distanceToDest` logic,
- * which results in `0` at takeoff, creating a `scaleFactor` of `0`
- * and a vertical line.
- * * 3.  [NEW] The `progressAlongRouteNM` logic now has a more robust
- * fallback to prevent a `0` value, ensuring the line is always drawn.
- * * 4.  [OPTIMIZATION] The "Build Profile" (blue line) block now *uses*
- * this pre-cached `cumulativeNM` data instead of recalculating it.
+ * --- [MODIFIED v2] Added PFD Footer data binding
 */
 function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- Get all DOM elements ---
@@ -4196,6 +4257,10 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     const vsdProfilePath = document.getElementById('vsd-profile-path');
     const vsdFlownPath = document.getElementById('vsd-flown-path'); // <-- The red line
     const vsdWpLabels = document.getElementById('vsd-waypoint-labels');
+
+    // --- [NEW] PFD Footer Elements ---
+    const nextWpEl = document.getElementById('ac-next-wp');
+    const nextWpDistValEl = document.getElementById('ac-next-wp-dist');
 
     // --- Get Original Data ---
     const originalFlatWaypoints = (plan && plan.flightPlanItems) ? flattenWaypointsFromPlan(plan.flightPlanItems) : [];
@@ -4328,6 +4393,18 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         progressAlongRouteNM = totalDistanceNM;
     }
     // --- [END MODIFIED in V7.1] ---
+
+
+    // --- [NEW] Update PFD Footer Display ---
+    const nextWpDisplay = nextWpName;
+    const nextWpDistDisplay = (nextWpDistNM === '---' || isNaN(parseFloat(nextWpDistNM))) ? '--.-' : Number(nextWpDistNM).toFixed(1);
+
+    if (nextWpEl) nextWpEl.textContent = nextWpDisplay;
+    if (nextWpDistValEl) {
+        nextWpDistValEl.innerHTML = `${nextWpDistDisplay}<span class="unit">NM</span>`;
+    }
+    // --- [END NEW] ---
+
 
     // --- Configuration Thresholds (Unchanged) ---
     const THRESHOLD = {
