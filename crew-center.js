@@ -1237,6 +1237,22 @@ function injectCustomStyles() {
         .vsd-wp-label.low-label::after {
             bottom: 100%;
         }
+
+        #vsd-profile-path {
+            fill: none;
+            stroke: #00a8ff;
+            stroke-width: 3;
+            stroke-linejoin: round;
+        }
+
+        /* --- [NEW] Style for the Flown Altitude Path --- */
+        #vsd-flown-path {
+            fill: none;
+            stroke: #dc3545; /* Red */
+            stroke-width: 2.5;
+            stroke-linejoin: round;
+            opacity: 0.8;
+        }
         /* --- [END NEW] --- */
 
         /* ====================================================================
@@ -3449,6 +3465,7 @@ function getFlatWaypointObjects(items) {
     }
 
 
+
 // This function fixes the "incorrect plot" by sorting the /route data
 // by timestamp before mapping it. It also removes the densifyRoute
 // function, as the 'globe' projection handles curves automatically.
@@ -3506,9 +3523,26 @@ async function handleAircraftClick(flightProps, sessionId) {
         const plan = (planData && planData.ok) ? planData.plan : null;
         const routeData = routeRes.ok ? await routeRes.json() : null;
         
+        // --- [NEW] ---
+        // Define sortedRoutePoints here, so it's available for the initial call 
+        // and the interval.
+        let sortedRoutePoints = [];
+        if (routeData && routeData.ok && Array.isArray(routeData.route) && routeData.route.length > 0) {
+            sortedRoutePoints = routeData.route.sort((a, b) => {
+                // Handle null/undefined dates just in case
+                const timeA = a.date ? new Date(a.date).getTime() : 0;
+                const timeB = b.date ? new Date(b.date).getTime() : 0;
+                return timeA - timeB;
+            });
+        }
+        // --- [END NEW] ---
+
         // NEW: Cache data for stats view
         cachedFlightDataForStatsView = { flightProps, plan };
-        populateAircraftInfoWindow(flightProps, plan);
+        
+        // --- [MODIFIED] ---
+        // Pass the historical route data to the info window builder
+        populateAircraftInfoWindow(flightProps, plan, sortedRoutePoints);
 
         const currentPosition = [flightProps.position.lon, flightProps.position.lat];
         const flownLayerId = `flown-path-${flightProps.flightId}`;
@@ -3516,16 +3550,8 @@ async function handleAircraftClick(flightProps, sessionId) {
 
         // ⬇️ === START OF DATA PLOTTING FIX ===
         let historicalRoute = [];
-        if (routeData && routeData.ok && Array.isArray(routeData.route) && routeData.route.length > 0) {
-            
-            // 1. Sort the route points by timestamp. The `date` property is a string.
-            const sortedRoutePoints = routeData.route.sort((a, b) => {
-                // Handle null/undefined dates just in case
-                const timeA = a.date ? new Date(a.date).getTime() : 0;
-                const timeB = b.date ? new Date(b.date).getTime() : 0;
-                return timeA - timeB;
-            });
-            
+        // --- [MODIFIED] Use the pre-sorted 'sortedRoutePoints' ---
+        if (sortedRoutePoints.length > 0) {
             // 2. Now map the (chronologically sorted) points to [lon, lat]
             historicalRoute = sortedRoutePoints.map(p => [p.longitude, p.latitude]);
         }
@@ -3572,6 +3598,8 @@ async function handleAircraftClick(flightProps, sessionId) {
             sectorOpsMap.fitBounds(bounds, { padding: 80, maxZoom: 10, duration: 1000 });
         }
         
+        // --- [MODIFIED] ---
+        // Pass 'sortedRoutePoints' to the update function in the interval
         activePfdUpdateInterval = setInterval(async () => {
             try {
                 const freshDataRes = await fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}`);
@@ -3583,7 +3611,10 @@ async function handleAircraftClick(flightProps, sessionId) {
                 if (updatedFlight && updatedFlight.position) {
                     // --- Logic to update the info window (Unchanged) ---
                     updatePfdDisplay(updatedFlight.position);
-                    updateAircraftInfoWindow(updatedFlight, plan);
+                    
+                    // --- [MODIFIED] ---
+                    // Pass historical data along with live data for VSD rendering
+                    updateAircraftInfoWindow(updatedFlight, plan, sortedRoutePoints);
                     
                     // --- [START OF USER MODIFICATION] ---
                     // Map icon and trail updates are handled globally.
@@ -3619,7 +3650,7 @@ async function handleAircraftClick(flightProps, sessionId) {
  * --- [REDESIGNED & UPDATED] Generates the "Unified Flight Display" with image overlay and aircraft type.
  * --- [MODIFIED] Replaced data list with Vertical Situation Display (VSD)
  */
-function populateAircraftInfoWindow(baseProps, plan) {
+function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     const windowEl = document.getElementById('aircraft-info-window');
 
     // --- Get Aircraft & Route Data ---
@@ -3863,6 +3894,7 @@ function populateAircraftInfoWindow(baseProps, plan) {
                             
                             <div id="vsd-graph-content">
                                 <svg id="vsd-profile-svg" xmlns="http://www.w3.org/2000/svg">
+                                    <path id="vsd-flown-path" d="" />
                                     <path id="vsd-profile-path" d="" />
                                 </svg>
                                 <div id="vsd-waypoint-labels"></div>
@@ -3886,9 +3918,10 @@ function populateAircraftInfoWindow(baseProps, plan) {
     
     createPfdDisplay();
     updatePfdDisplay(baseProps.position);
-    updateAircraftInfoWindow(baseProps, plan);
     
-    // --- [REMOVED] Logic to populate the aircraft type box ---
+    // --- [MODIFIED] ---
+    // Pass the historical route data to the update function
+    updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints);
 }
 
     // --- [NEW - CORRECTED] Renders the creative Pilot Stats view inside the info window ---
@@ -4073,14 +4106,14 @@ function renderPilotStatsHTML(stats, username) {
 
 
 
-// [REPLACE THIS ENTIRE FUNCTION]
 /**
- * --- [MAJOR REVISION V6.6: VSD Readability Fix]
- * Fixes waypoint label overlap by implementing a staggering algorithm.
- * Adds a dynamic Y-Axis (altitude scale) to the VSD for context.
- * Adds a vertical "dropline" to the aircraft icon to clarify its horizontal position.
+ * --- [MAJOR REVISION V6.7: Flown Altitude Profile]
+ * Adds a red line (vsd-flown-path) to the VSD showing the actual flown altitude.
+ * This line is built by combining historical `sortedRoutePoints` with the live `baseProps`.
+ * It calculates a separate X-axis (distance) based on the *actual flown distance*
+ * to correctly compare against the blue *planned distance* line.
 */
-function updateAircraftInfoWindow(baseProps, plan) {
+function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     // --- Get all DOM elements ---
     const progressBarFill = document.getElementById('ac-progress-bar');
     const phaseIndicator = document.getElementById('ac-phase-indicator');
@@ -4092,9 +4125,10 @@ function updateAircraftInfoWindow(baseProps, plan) {
     const vsdSummaryDist = document.getElementById('ac-dist');
     const vsdSummaryETE = document.getElementById('ac-ete');
     const vsdAircraftIcon = document.getElementById('vsd-aircraft-icon');
-    const vsdGraphWindow = document.getElementById('vsd-graph-window'); // <-- MODIFIED: Get window
+    const vsdGraphWindow = document.getElementById('vsd-graph-window');
     const vsdGraphContent = document.getElementById('vsd-graph-content');
     const vsdProfilePath = document.getElementById('vsd-profile-path');
+    const vsdFlownPath = document.getElementById('vsd-flown-path'); // <-- NEW: Get red line path
     const vsdWpLabels = document.getElementById('vsd-waypoint-labels');
 
     // --- Get Original Data ---
@@ -4131,15 +4165,14 @@ function updateAircraftInfoWindow(baseProps, plan) {
     }
 
     // --- Flight Plan Data Extraction (for flight phase) ---
+    // ... (This entire section is unchanged) ...
     let nextWpName = '---';
     let nextWpDistNM = '---';
-
     if (plan) { 
         const currentPos = baseProps.position;
         const currentTrack = currentPos.track_deg;
         let bestWpIndex = -1;
         let minScore = Infinity; 
-
         if (originalFlatWaypointObjects.length > 1 && currentPos && typeof currentTrack === 'number') {
             for (let i = 1; i < originalFlatWaypointObjects.length; i++) { 
                 const wp = originalFlatWaypointObjects[i];
@@ -4149,7 +4182,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 const distanceToWpKm = getDistanceKm(currentPos.lat, currentPos.lon, wp.location.latitude, wp.location.longitude);
                 const bearingToWp = getBearing(currentPos.lat, currentPos.lon, wp.location.latitude, wp.location.longitude);
                 const bearingDiff = Math.abs(normalizeBearingDiff(currentTrack - bearingToWp));
-
                 if (bearingDiff <= 95) { 
                     if (distanceToWpKm < minScore) {
                         minScore = distanceToWpKm;
@@ -4158,7 +4190,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 }
             }
         }
-        
         if (bestWpIndex !== -1) {
             const nextWp = originalFlatWaypointObjects[bestWpIndex]; 
             if (nextWp) {
@@ -4173,6 +4204,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
              nextWpDistNM = "0";
         }
     }
+    // ... (End of unchanged section) ...
 
     // --- Configuration Thresholds (Unchanged) ---
     const THRESHOLD = {
@@ -4186,6 +4218,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
     };
 
     // --- Flight Phase State Machine (Unchanged) ---
+    // ... (This entire section is unchanged) ...
     let flightPhase = 'ENROUTE';
     let phaseClass = 'phase-enroute';
     let phaseIcon = 'fa-route';
@@ -4265,6 +4298,8 @@ function updateAircraftInfoWindow(baseProps, plan) {
             flightPhase = 'CRUISE'; phaseClass = 'phase-cruise'; phaseIcon = 'fa-minus';
         }
     }
+    // ... (End of unchanged section) ...
+
 
     // --- [NEW] VSD LOGIC ---
     if (vsdPanel && hasPlan && vsdGraphContent && vsdAircraftIcon) {
@@ -4279,7 +4314,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
         if (vsdPanel.dataset.profileBuilt !== 'true' || vsdPanel.dataset.planId !== planId) {
             
             // =================================================================
-            // --- [V6.5 FIX - START] (Data sanitation)
+            // --- [V6.5 FIX - START] (Data sanitation for PLANNED line)
             // =================================================================
             let flatWaypointObjects = JSON.parse(JSON.stringify(originalFlatWaypointObjects));
             
@@ -4424,6 +4459,78 @@ function updateAircraftInfoWindow(baseProps, plan) {
             // --- [V6.6 FIX - END]
             // =================================================================
         }
+        
+        // =================================================================
+        // --- [V6.7 NEW - START] (Build/Update Flown Altitude Path)
+        // This runs on *every* update, not just once.
+        // =================================================================
+        if (vsdFlownPath && hasPlan && originalFlatWaypointObjects.length > 0) {
+            let flown_path_d = "";
+            let current_flown_x_px = 0;
+            let lastFlownLat, lastFlownLon;
+
+            // Combine historical + live data
+            const fullFlownRoute = [];
+            if (sortedRoutePoints && sortedRoutePoints.length > 0) {
+                fullFlownRoute.push(...sortedRoutePoints);
+                lastFlownLat = sortedRoutePoints[0].latitude;
+                lastFlownLon = sortedRoutePoints[0].longitude;
+            }
+            
+            // Add the current live position as the final point
+            fullFlownRoute.push({
+                latitude: baseProps.position.lat,
+                longitude: baseProps.position.lon,
+                altitude: baseProps.position.alt_ft
+            });
+
+            if (fullFlownRoute.length > 0) {
+                if (!lastFlownLat) { // Handle case with no historical data, start from current pos
+                    lastFlownLat = fullFlownRoute[0].latitude;
+                    lastFlownLon = fullFlownRoute[0].longitude;
+                }
+
+                // Get the planned origin altitude to use as the starting "anchor"
+                const startAltFt = originalFlatWaypointObjects[0]?.altitude || fullFlownRoute[0].altitude;
+                const startAltPx = VSD_HEIGHT_PX - (startAltFt * Y_SCALE_PX_PER_FT);
+
+                for (let i = 0; i < fullFlownRoute.length; i++) {
+                    const point = fullFlownRoute[i];
+                    // Ensure altitude is a number, default to 0 if not
+                    const wpAltFt = typeof point.altitude === 'number' ? point.altitude : 0;
+                    const wpAltPx = VSD_HEIGHT_PX - (wpAltFt * Y_SCALE_PX_PER_FT);
+                    const wpLat = point.latitude;
+                    const wpLon = point.longitude;
+                    
+                    let segmentDistNM = 0;
+                    if (i > 0) { // Don't calculate distance for the first point
+                        segmentDistNM = getDistanceKm(lastFlownLat, lastFlownLon, wpLat, wpLon) / 1.852;
+                    }
+                    current_flown_x_px += (segmentDistNM * FIXED_X_SCALE_PX_PER_NM);
+
+                    if (i === 0) {
+                        // Start the line at X=0 and the planned origin altitude
+                        flown_path_d = `M 0 ${startAltPx}`;
+                        // If this is the *only* point, draw a line from start to current
+                        if (fullFlownRoute.length === 1) {
+                            flown_path_d += ` L ${current_flown_x_px} ${wpAltPx}`;
+                        }
+                    } else {
+                        // Add the next segment to the path
+                        flown_path_d += ` L ${current_flown_x_px} ${wpAltPx}`;
+                    }
+
+                    lastFlownLat = wpLat;
+                    lastFlownLon = wpLon;
+                }
+                // Set the SVG path attribute
+                vsdFlownPath.setAttribute('d', flown_path_d);
+            }
+        }
+        // =================================================================
+        // --- [V6.7 NEW - END]
+        // =================================================================
+
 
         // --- 3. Update Aircraft Icon Position (Vertical) ---
         const currentAltPx = VSD_HEIGHT_PX - (altitude * Y_SCALE_PX_PER_FT);
@@ -6078,7 +6185,6 @@ async function updateSectorOpsSecondaryData() {
         }
     };
 
-    // --- Initial Load ---
     // --- Initial Load ---
 async function initializeApp() {
     mainContentLoader.classList.add('active');
