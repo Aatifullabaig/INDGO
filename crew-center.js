@@ -133,6 +133,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     
+// [REPLACE THIS ENTIRE FUNCTION]
 // --- [REHAULED] Helper to inject custom CSS for new features ---
 function injectCustomStyles() {
     const styleId = 'sector-ops-custom-styles';
@@ -1043,7 +1044,7 @@ function injectCustomStyles() {
         }
         
         /* ====================================================================
-        --- [NEW] Vertical Situation Display (VSD) --- 
+        --- [START] VSD RE-DESIGN (USER REQUEST) --- 
         ====================================================================
         */
         #vsd-panel {
@@ -1058,16 +1059,14 @@ function injectCustomStyles() {
             font-family: 'Courier New', monospace;
         }
         
-        /* --- [USER REQUEST] MODIFIED VSD SUMMARY BAR --- */
         #vsd-summary-bar {
             display: flex;
             justify-content: space-between;
             padding: 8px 12px;
-            /* New styles for standalone panel */
             background: rgba(10, 12, 26, 0.5);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 12px;
-            margin-bottom: 16px; /* Space between bar and grid */
+            margin-bottom: 16px; 
             flex-shrink: 0;
         }
         .vsd-summary-item {
@@ -1085,27 +1084,54 @@ function injectCustomStyles() {
             color: #fff;
             font-weight: 600;
         }
-        /* --- [END USER REQUEST] --- */
 
         #vsd-graph-window {
             position: relative;
             width: 100%;
             flex-grow: 1;
             overflow: hidden;
-            /* --- [USER REQUEST] Make graph rounded --- */
             border-radius: 12px;
+            
+            /* --- [MODIFIED] Add padding for the new Y-Axis --- */
+            padding-left: 35px;
+            box-sizing: border-box; /* Ensure padding is included in width */
             
             /* Add horizontal grid lines for altitude */
             background: linear-gradient(
                 rgba(0, 168, 255, 0.1) 1px, 
                 transparent 1px
             );
-            background-size: 100% 50px; /* 50px = 10,000 ft approx */
+            /* --- [MODIFIED] Adjusted background size to match 10k ft intervals --- */
+            background-size: 100% 53.3px; /* (240px / 45k ft) * 10k ft */
         }
 
+        /* --- [NEW] Y-Axis (Altitude Scale) --- */
+        #vsd-y-axis {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 35px; /* Matches padding-left */
+            font-size: 0.7rem;
+            color: #9fa8da;
+            font-weight: 600;
+            padding: 5px 0;
+            box-sizing: border-box;
+            border-right: 1px solid rgba(0, 168, 255, 0.1);
+            pointer-events: none; /* Let clicks pass through */
+        }
+        .y-axis-label {
+            position: absolute;
+            left: 5px;
+            transform: translateY(-50%); /* Center on its 'top' value */
+            text-shadow: 0 0 3px rgba(0,0,0,0.5);
+        }
+        /* --- [END NEW] --- */
+
+        /* --- [MODIFIED] Aircraft Icon (Added Dropline) --- */
         #vsd-aircraft-icon {
             position: absolute;
-            left: 0px; /* Initial position, will be set by JS */
+            left: 0px; /* Will be set by JS */
             top: 50%; /* Will be set by JS */
             width: 30px;
             height: 20px;
@@ -1116,17 +1142,28 @@ function injectCustomStyles() {
             background-repeat: no-repeat;
             background-position: center;
             transform: translateY(-50%);
-            /* --- MODIFIED: Added 'left' to the transition --- */
-            transition: top 0.5s ease-out, left 1s linear; /* Smooth altitude and scroll */
+            transition: top 0.5s ease-out, left 1s linear;
         }
         
-        /* This holds the scrolling content */
+        /* --- [NEW] Vertical Dropline for aircraft --- */
+        #vsd-aircraft-icon::before {
+            content: '';
+            position: absolute;
+            top: 50%; /* Start at icon center */
+            left: 10px; /* Position horizontally within icon bounds */
+            width: 2px;
+            height: 500px; /* Arbitrarily long */
+            background: linear-gradient(to bottom, #00a8ff, transparent 80%);
+            opacity: 0.7;
+        }
+        /* --- [END NEW] --- */
+        
         #vsd-graph-content {
             position: absolute;
             top: 0;
-            left: 0;
+            left: 35px; /* --- [MODIFIED] Start after Y-Axis --- */
             height: 100%;
-            width: 1px; /* Will be set by JS, but start small */
+            width: 1px; /* Will be set by JS */
             will-change: transform;
             transition: transform 1s linear; /* Smooth scroll */
         }
@@ -1156,6 +1193,7 @@ function injectCustomStyles() {
             pointer-events: none;
         }
         
+        /* --- [MODIFIED] Waypoint Labels (Staggering) --- */
         .vsd-wp-label {
             position: absolute;
             transform: translateX(-50%); /* Center the label on its 'left' pos */
@@ -1164,6 +1202,10 @@ function injectCustomStyles() {
             text-align: center;
             text-shadow: 0 0 5px rgba(0,0,0,0.8);
             line-height: 1.2;
+            padding: 2px 4px;
+            background: rgba(10, 12, 26, 0.5);
+            border-radius: 3px;
+            white-space: nowrap;
         }
         .vsd-wp-label .wp-name {
             font-weight: 700;
@@ -1174,6 +1216,33 @@ function injectCustomStyles() {
             font-size: 0.75rem;
             color: #c5cae9;
         }
+
+        /* --- [NEW] Tick lines for labels --- */
+        .vsd-wp-label::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 1px;
+            height: 12px; /* Connects label to profile */
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* High label: tick goes from bottom-center DOWN */
+        .vsd-wp-label.high-label::after {
+            top: 100%;
+        }
+
+        /* Low label: tick goes from top-center UP */
+        .vsd-wp-label.low-label::after {
+            bottom: 100%;
+        }
+        /* --- [END NEW] --- */
+
+        /* ====================================================================
+        --- [END] VSD RE-DESIGN --- 
+        ====================================================================
+        */
     `;
 
     const style = document.createElement('style');
@@ -4004,14 +4073,12 @@ function renderPilotStatsHTML(stats, username) {
 
 
 
+// [REPLACE THIS ENTIRE FUNCTION]
 /**
- * --- [MAJOR REVISION V6.5: VSD Data Sanitation Fix]
- * Fixes a bug where 0, -1, or null altitudes in the flight plan
- * were not properly interpolated, causing jagged lines on the VSD.
- *
- * Implements a "clamping viewport" logic for the VSD.
- * The aircraft's current position is now centered, and the viewport
- * clamps to the start/end of the flight plan as needed.
+ * --- [MAJOR REVISION V6.6: VSD Readability Fix]
+ * Fixes waypoint label overlap by implementing a staggering algorithm.
+ * Adds a dynamic Y-Axis (altitude scale) to the VSD for context.
+ * Adds a vertical "dropline" to the aircraft icon to clarify its horizontal position.
 */
 function updateAircraftInfoWindow(baseProps, plan) {
     // --- Get all DOM elements ---
@@ -4025,6 +4092,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
     const vsdSummaryDist = document.getElementById('ac-dist');
     const vsdSummaryETE = document.getElementById('ac-ete');
     const vsdAircraftIcon = document.getElementById('vsd-aircraft-icon');
+    const vsdGraphWindow = document.getElementById('vsd-graph-window'); // <-- MODIFIED: Get window
     const vsdGraphContent = document.getElementById('vsd-graph-content');
     const vsdProfilePath = document.getElementById('vsd-profile-path');
     const vsdWpLabels = document.getElementById('vsd-waypoint-labels');
@@ -4201,7 +4269,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
     // --- [NEW] VSD LOGIC ---
     if (vsdPanel && hasPlan && vsdGraphContent && vsdAircraftIcon) {
         // --- 1. Define VSD scales ---
-        const VSD_HEIGHT_PX = vsdGraphContent.clientHeight || 190;
+        const VSD_HEIGHT_PX = vsdGraphContent.clientHeight || 240; // Use 240 as fallback
         const MAX_ALT_FT = 45000;
         const Y_SCALE_PX_PER_FT = VSD_HEIGHT_PX / MAX_ALT_FT;
         const FIXED_X_SCALE_PX_PER_NM = 4;
@@ -4211,7 +4279,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
         if (vsdPanel.dataset.profileBuilt !== 'true' || vsdPanel.dataset.planId !== planId) {
             
             // =================================================================
-            // --- [V6.5 FIX - START] ---
+            // --- [V6.5 FIX - START] (Data sanitation)
             // =================================================================
             let flatWaypointObjects = JSON.parse(JSON.stringify(originalFlatWaypointObjects));
             
@@ -4219,7 +4287,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 const lastIdx = flatWaypointObjects.length - 1;
 
                 // --- Pass 1: Anchor Start and End Altitudes ---
-                // (Your suggestion: "if it cant find one maybe its the airport")
                 if (flatWaypointObjects[0].altitude == null) {
                     flatWaypointObjects[0].altitude = plan?.origin?.elevation_ft || 0;
                 }
@@ -4229,19 +4296,14 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 }
 
                 // --- Pass 2: Sanitize implausible intermediate altitudes ---
-                // This now catches null, 0, -1, and undefined values and
-                // marks them for interpolation.
                 for (let i = 1; i < lastIdx; i++) {
                     const wp = flatWaypointObjects[i];
-                    
-                    // Check if altitude is null, undefined, or a number <= 0
                     if (wp.altitude == null || (typeof wp.altitude === 'number' && wp.altitude <= 0)) {
                         wp.altitude = null;
                     }
                 }
                 
                 // --- Pass 3: Interpolation Pass (Look-Ahead Gap Filler) ---
-                // (Your suggestion: "use the last known altitude to nearest next")
                 let lastValidAltIndex = 0; 
                 for (let i = 1; i < flatWaypointObjects.length; i++) {
                     const wp = flatWaypointObjects[i];
@@ -4255,7 +4317,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
 
                             for (let j = 1; j < numStepsInGap; j++) {
                                 const stepIndex = gapStartIndex + j;
-                                // This is a simple linear interpolation (a straight line)
                                 const fraction = j / numStepsInGap;
                                 const interpolatedAlt = startAlt + (endAlt - startAlt) * fraction;
                                 flatWaypointObjects[stepIndex].altitude = Math.round(interpolatedAlt);
@@ -4269,9 +4330,31 @@ function updateAircraftInfoWindow(baseProps, plan) {
             // --- [V6.5 FIX - END] ---
             // =================================================================
 
+            // =================================================================
+            // --- [V6.6 FIX - START] (Y-Axis & Label De-confliction)
+            // =================================================================
+
+            // --- Build Y-Axis ---
+            if (vsdGraphWindow && !vsdGraphWindow.querySelector('#vsd-y-axis')) {
+                let yAxisHtml = '<div id="vsd-y-axis">';
+                const altLabels = [10000, 20000, 30000, 40000];
+                for (const alt of altLabels) {
+                    const yPos = VSD_HEIGHT_PX - (alt * Y_SCALE_PX_PER_FT);
+                    yAxisHtml += `<div class="y-axis-label" style="top: ${yPos}px;">${alt / 1000}K</div>`;
+                }
+                yAxisHtml += '</div>';
+                vsdGraphWindow.insertAdjacentHTML('afterbegin', yAxisHtml);
+            }
+            
+            // --- Build Profile Path & Staggered Labels ---
             let path_d = "";
             let labels_html = "";
             let current_x_px = 0;
+            
+            // --- De-confliction state ---
+            let last_label_x_px = -1000;
+            let stagger_level = 0; // 0 = high, 1 = low
+            const MIN_LABEL_SPACING_PX = 80; // Min px distance between label centers
             
             if (flatWaypointObjects.length === 0) return;
 
@@ -4294,11 +4377,36 @@ function updateAircraftInfoWindow(baseProps, plan) {
                     path_d += ` L ${current_x_px} ${wpAltPx}`;
                 }
 
+                // --- Label Staggering Logic ---
+                let label_top_px;
+                let label_class = '';
+                
+                if (current_x_px - last_label_x_px < MIN_LABEL_SPACING_PX) {
+                    // Too close! Use the other stagger level
+                    stagger_level = 1 - stagger_level; // Flip 0 to 1 or 1 to 0
+                } else {
+                    // Enough space, reset to default high
+                    stagger_level = 0;
+                }
+
+                if (stagger_level === 1) {
+                    // Low label
+                    label_class = 'low-label';
+                    label_top_px = wpAltPx + 12; // Position below line, plus 12px for tick
+                } else {
+                    // High label
+                    label_class = 'high-label';
+                    label_top_px = wpAltPx - 42; // Position above line, minus 42px (label height + tick)
+                }
+                
+                last_label_x_px = current_x_px; // Store this label's position
+
                 labels_html += `
-                    <div class="vsd-wp-label" style="left: ${current_x_px}px; top: ${wpAltPx - 25}px;">
+                    <div class="vsd-wp-label ${label_class}" style="left: ${current_x_px}px; top: ${label_top_px}px;">
                         <span class="wp-name">${wp.identifier}</span>
                         <span class="wp-alt">${Math.round(wpAltFt)}ft</span>
                     </div>`;
+                // --- End Staggering Logic ---
 
                 lastLat = wpLat;
                 lastLon = wpLon;
@@ -4312,6 +4420,9 @@ function updateAircraftInfoWindow(baseProps, plan) {
             
             vsdPanel.dataset.profileBuilt = 'true';
             vsdPanel.dataset.planId = planId;
+            // =================================================================
+            // --- [V6.6 FIX - END]
+            // =================================================================
         }
 
         // --- 3. Update Aircraft Icon Position (Vertical) ---
@@ -4319,8 +4430,6 @@ function updateAircraftInfoWindow(baseProps, plan) {
         vsdAircraftIcon.style.top = `${currentAltPx}px`;
 
         // --- 4. Scroll the Graph (Horizontal) ---
-        // [START OF V6.4 USER REQUEST FIX]
-        const vsdGraphWindow = document.getElementById('vsd-graph-window');
         if (vsdGraphWindow && vsdGraphWindow.clientWidth > 0) {
             const distanceFlownNM = totalDistanceNM - distanceToDestNM;
             const scrollOffsetPx = (distanceFlownNM * FIXED_X_SCALE_PX_PER_NM);
@@ -4328,17 +4437,21 @@ function updateAircraftInfoWindow(baseProps, plan) {
             const vsdViewportWidth = vsdGraphWindow.clientWidth;
             const totalProfileWidthPx = vsdGraphContent.scrollWidth;
             
-            const centerOffset = vsdViewportWidth / 2;
+            // --- [MODIFIED] Center offset now accounts for Y-Axis padding ---
+            const centerOffset = (vsdViewportWidth / 2) + 35; // 35px is Y-axis width
             const desiredTranslateX = centerOffset - scrollOffsetPx;
             
-            // Clamp translation so the tape doesn't show empty space at the start or end
             const maxTranslateX = 0;
-            const minTranslateX = Math.min(0, vsdViewportWidth - totalProfileWidthPx); // Ensure min is <= 0
+            const minTranslateX = Math.min(0, vsdViewportWidth - totalProfileWidthPx);
 
             const finalTranslateX = Math.max(minTranslateX, Math.min(maxTranslateX, desiredTranslateX));
 
             // Set the tape's horizontal scroll
-            vsdGraphContent.style.transform = `translateX(${finalTranslateX}px)`;
+            // --- [MODIFIED] TranslateX is relative to the *content* element
+            // which already starts at 35px, so we must correct the
+            // finalTranslateX value by removing the 35px it "gains" from its
+            // starting 'left' position.
+            vsdGraphContent.style.transform = `translateX(${finalTranslateX - 35}px)`;
 
             // Set the icon's horizontal position relative to the viewport
             // It's the aircraft's position on the tape, plus the tape's translation
@@ -4346,15 +4459,14 @@ function updateAircraftInfoWindow(baseProps, plan) {
             vsdAircraftIcon.style.left = `${iconLeftPx}px`;
 
         } else {
-            // Fallback to original logic if viewport isn't ready
+            // Fallback (unchanged)
             const distanceFlownNM = totalDistanceNM - distanceToDestNM;
             const scrollOffsetPx = (distanceFlownNM * FIXED_X_SCALE_PX_PER_NM);
-            // Use a hardcoded fallback 40px
-            const translateX = 40 - scrollOffsetPx; 
-            vsdGraphContent.style.transform = `translateX(${translateX}px)`;
-            vsdAircraftIcon.style.left = `40px`; // Set fallback icon pos
+            // --- [MODIFIED] Fallback 75px = 40px old margin + 35px padding
+            const translateX = 75 - scrollOffsetPx; 
+            vsdGraphContent.style.transform = `translateX(${translateX - 35}px)`;
+            vsdAircraftIcon.style.left = `75px`; // Set fallback icon pos
         }
-        // [END OF V6.4 USER REQUEST FIX]
         
         // --- 5. Update Summary Bar ---
         if (vsdSummaryDist) vsdSummaryDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
