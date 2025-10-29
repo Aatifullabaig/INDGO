@@ -1058,12 +1058,16 @@ function injectCustomStyles() {
             font-family: 'Courier New', monospace;
         }
         
+        /* --- [USER REQUEST] MODIFIED VSD SUMMARY BAR --- */
         #vsd-summary-bar {
             display: flex;
             justify-content: space-between;
             padding: 8px 12px;
-            background: rgba(0, 0, 0, 0.2);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            /* New styles for standalone panel */
+            background: rgba(10, 12, 26, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            margin-bottom: 16px; /* Space between bar and grid */
             flex-shrink: 0;
         }
         .vsd-summary-item {
@@ -1081,14 +1085,15 @@ function injectCustomStyles() {
             color: #fff;
             font-weight: 600;
         }
+        /* --- [END USER REQUEST] --- */
 
         #vsd-graph-window {
             position: relative;
             width: 100%;
             flex-grow: 1;
             overflow: hidden;
-            border-bottom-left-radius: 12px;
-            border-bottom-right-radius: 12px;
+            /* --- [USER REQUEST] Make graph rounded --- */
+            border-radius: 12px;
             
             /* Add horizontal grid lines for altitude */
             background: linear-gradient(
@@ -3643,6 +3648,21 @@ function populateAircraftInfoWindow(baseProps, plan) {
         <div class="unified-display-main-content">
             
             <div id="aircraft-display-main" style="display: flex; flex-direction: column; gap: 16px;">
+            
+                <div id="vsd-summary-bar" class="vsd-summary-bar">
+                    <div class="vsd-summary-item">
+                        <span class="data-label">DIST. TO DEST.</span>
+                        <span class="data-value" id="ac-dist">---</span>
+                    </div>
+                    <div class="vsd-summary-item">
+                        <span class="data-label">ETE TO DEST.</span>
+                        <span class="data-value" id="ac-ete">--:--</span>
+                    </div>
+                    <div class="vsd-summary-item">
+                        <span class="data-label">VERTICAL SPEED</span>
+                        <span class="data-value" id="ac-vs">---</span>
+                    </div>
+                </div>
                 <div class="unified-display-main">
                     <div class="pfd-main-panel">
                         <div id="pfd-container">
@@ -3767,21 +3787,6 @@ function populateAircraftInfoWindow(baseProps, plan) {
                     </div>
 
                     <div id="vsd-panel" class="vsd-panel" data-plan-id="" data-profile-built="false">
-                        
-                        <div id="vsd-summary-bar" class="vsd-summary-bar">
-                            <div class="vsd-summary-item">
-                                <span class="data-label">DIST. TO DEST.</span>
-                                <span class="data-value" id="ac-dist">---</span>
-                            </div>
-                            <div class="vsd-summary-item">
-                                <span class="data-label">ETE TO DEST.</span>
-                                <span class="data-value" id="ac-ete">--:--</span>
-                            </div>
-                            <div class="vsd-summary-item">
-                                <span class="data-label">VERTICAL SPEED</span>
-                                <span class="data-value" id="ac-vs">---</span>
-                            </div>
-                        </div>
                         
                         <div id="vsd-graph-window" class="vsd-graph-window">
                             
