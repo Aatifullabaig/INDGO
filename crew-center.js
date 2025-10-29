@@ -4118,23 +4118,22 @@ function renderPilotStatsHTML(stats, username) {
 
 
 /**
- * --- [MAJOR REVISION V7.0: Horizontal Path Synchronization]
- * This update fixes the horizontal "drift" between the red (flown) and blue (planned) lines.
- * * 1.  [NEW] When the blue (planned) line is first drawn, it now calculates and caches the
- * cumulative distance (in NM) to each waypoint (stored as `wp.cumulativeNM`).
- * 2.  [NEW] A new "progress" metric, `progressAlongRouteNM`, is calculated on every
- * update. It determines how far (in NM) the aircraft is along the *planned* route,
- * rather than just "as the crow flies."
- * 3.  [FIX] The VSD's horizontal scrolling is now based on this new, more accurate
- * `progressAlongRouteNM` metric.
- * 4.  [FIX] The red (flown) line's drawing logic is now a 2-pass system:
- * a. Pass 1: It calculates the *actual* total distance flown (e.g., "110 NM").
- * b. Pass 2: It compares this to the *planned* progress (e.g., "100 NM")
- * and creates a scale factor (e.g., 100 / 110 = 0.909).
- * c. It then draws the red line, scaling its horizontal length by this factor.
+ * --- [MAJOR REVISION V7.1: Pre-Cache Progress Data]
+ * This update fixes the "vertical red line" bug introduced in V7.0.
  *
- * This ensures the end of the red line (your position) and the horizontal scroll
- * (your progress) are always synchronized, eliminating the visual mismatch.
+ * * 1.  [THE FIX] The `cumulativeNM` (cumulative distance) for each planned
+ * waypoint is now **pre-calculated** on the `originalFlatWaypointObjects`
+ * *before* any other progress logic is run.
+ * * 2.  [THE REASON] The V7.0 bug was an order-of-operations failure.
+ * The `progressAlongRouteNM` logic was trying to read `wp.cumulativeNM`
+ * before that value had been calculated, causing the check to fail.
+ * It then fell back to a `totalDistance - distanceToDest` logic,
+ * which results in `0` at takeoff, creating a `scaleFactor` of `0`
+ * and a vertical line.
+ * * 3.  [NEW] The `progressAlongRouteNM` logic now has a more robust
+ * fallback to prevent a `0` value, ensuring the line is always drawn.
+ * * 4.  [OPTIMIZATION] The "Build Profile" (blue line) block now *uses*
+ * this pre-cached `cumulativeNM` data instead of recalculating it.
 */
 function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- Get all DOM elements ---
@@ -4187,6 +4186,32 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         }
     }
 
+    // --- [NEW in V7.1] Pre-calculate cumulative NM on the main waypoint objects ---
+    // This is required for the 'progressAlongRouteNM' calculation to work.
+    if (hasPlan) {
+        let cumulativeDistNM = 0;
+        let lastLat = originalFlatWaypointObjects[0].location.latitude;
+        let lastLon = originalFlatWaypointObjects[0].location.longitude;
+
+        for (let i = 0; i < originalFlatWaypointObjects.length; i++) {
+            const wp = originalFlatWaypointObjects[i];
+            // Handle waypoints that might be missing location data
+            if (!wp.location) continue; 
+            const wpLat = wp.location.latitude;
+            const wpLon = wp.location.longitude;
+            
+            const segmentDistNM = (i === 0) ? 0 : getDistanceKm(lastLat, lastLon, wpLat, wpLon) / 1.852;
+            cumulativeDistNM += segmentDistNM;
+            wp.cumulativeNM = cumulativeDistNM; // Cache on the *original* object
+            
+            lastLat = wpLat;
+            lastLon = wpLon;
+        }
+        // Ensure totalDistanceNM matches the cumulative calculation
+        totalDistanceNM = cumulativeDistNM;
+    }
+    // --- [END NEW in V7.1] ---
+
     // --- Flight Plan Data Extraction (for flight phase) ---
     let nextWpName = '---';
     let nextWpDistNM = '---';
@@ -4228,34 +4253,37 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         }
     }
     
-    // --- [NEW in V7.0] Calculate accurate progress along the planned route ---
+    // --- [MODIFIED in V7.1] Calculate accurate progress along the planned route ---
+    // This logic now works because 'cumulativeNM' was pre-cached.
     let progressAlongRouteNM = 0;
     if (hasPlan && bestWpIndex > 0) {
         const prevWp = originalFlatWaypointObjects[bestWpIndex - 1];
         const nextWp = originalFlatWaypointObjects[bestWpIndex];
         
-        // Use the cumulativeNM cached on the waypoint objects
+        // Check if cumulativeNM was successfully cached
         if (prevWp && nextWp && prevWp.cumulativeNM != null && nextWp.cumulativeNM != null) {
             const segmentTotalNM = nextWp.cumulativeNM - prevWp.cumulativeNM;
             const distToNextNM = minScore / 1.852; // minScore is distance in KM
             
             if (segmentTotalNM > 0) {
-                // Calculate how much of the segment we've *completed*
                 const segmentProgressNM = Math.max(0, segmentTotalNM - distToNextNM);
                 progressAlongRouteNM = prevWp.cumulativeNM + segmentProgressNM;
             } else {
-                // We are likely at the waypoint, just use its distance
                 progressAlongRouteNM = prevWp.cumulativeNM;
             }
+        } else {
+             // Fallback if caching somehow failed, ensure it's not 0
+             progressAlongRouteNM = Math.max(0.01, totalDistanceNM - distanceToDestNM);
         }
-    } else if (hasPlan && bestWpIndex === -1 && distanceToDestNM < 1.0) { 
-        // We are past the last waypoint, just use total distance
+    } else if (hasPlan && (bestWpIndex === 0 || bestWpIndex === -1) && distanceToDestNM >= 1.0) { 
+        // We are on the first leg or off-track, use the fallback.
+        // --- [FIX] --- Ensure fallback is never 0 at takeoff by comparing "as the crow flies" dist.
+        progressAlongRouteNM = Math.max(0.01, totalDistanceNM - distanceToDestNM);
+    } else if (hasPlan && distanceToDestNM < 1.0) { 
+        // We are at the destination
         progressAlongRouteNM = totalDistanceNM;
-    } else {
-        // Fallback: use the "as the crow flies" distance (less accurate but won't break)
-        progressAlongRouteNM = Math.max(0, totalDistanceNM - distanceToDestNM);
     }
-    // --- [END NEW in V7.0] ---
+    // --- [END MODIFIED in V7.1] ---
 
     // --- Configuration Thresholds (Unchanged) ---
     const THRESHOLD = {
@@ -4365,8 +4393,10 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         if (vsdPanel.dataset.profileBuilt !== 'true' || vsdPanel.dataset.planId !== planId) {
             
             // =================================================================
-            // --- [MODIFIED in V7.0] (Data sanitation + CUMULATIVE NM CACHING)
+            // --- [MODIFIED in V7.1] (Data sanitation for PLANNED line)
             // =================================================================
+            // We use a deep copy because the altitude interpolation logic
+            // should not affect the original waypoint data.
             let flatWaypointObjects = JSON.parse(JSON.stringify(originalFlatWaypointObjects));
             
             if (flatWaypointObjects.length > 0) {
@@ -4417,7 +4447,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
             // =================================================================
 
             // =================================================================
-            // --- [MODIFIED in V7.0] (Y-Axis & Label De-confliction + NM Caching)
+            // --- [MODIFIED in V7.1] (Y-Axis & Label De-confliction)
             // =================================================================
 
             // --- Build Y-Axis ---
@@ -4444,26 +4474,15 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
             
             if (flatWaypointObjects.length === 0) return;
 
-            // --- [NEW in V7.0] Caching variables ---
-            let cumulativeDistNM = 0;
-            let lastLat = flatWaypointObjects[0].location.latitude;
-            let lastLon = flatWaypointObjects[0].location.longitude;
-            // --- [END NEW in V7.0] ---
-
             for (let i = 0; i < flatWaypointObjects.length; i++) {
                 const wp = flatWaypointObjects[i];
                 const wpAltFt = wp.altitude; 
                 const wpAltPx = VSD_HEIGHT_PX - (wpAltFt * Y_SCALE_PX_PER_FT);
-                const wpLat = wp.location.latitude;
-                const wpLon = wp.location.longitude;
 
-                // --- [NEW in V7.0] Calculate and cache cumulative NM ---
-                const segmentDistNM = (i === 0) ? 0 : getDistanceKm(lastLat, lastLon, wpLat, wpLon) / 1.852;
-                cumulativeDistNM += segmentDistNM;
-                wp.cumulativeNM = cumulativeDistNM; // Store cumulative NM on the object
-                // --- [END NEW in V7.0] ---
-
-                current_x_px += (segmentDistNM * FIXED_X_SCALE_PX_PER_NM);
+                // --- [MODIFIED in V7.1] Use pre-cached cumulativeNM ---
+                // wp.cumulativeNM was copied from originalFlatWaypointObjects
+                current_x_px = wp.cumulativeNM * FIXED_X_SCALE_PX_PER_NM;
+                // --- [END MODIFIED in V7.1] ---
 
                 if (i === 0) {
                     path_d = `M ${current_x_px} ${wpAltPx}`; // Starts at X=0
@@ -4501,11 +4520,6 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
                         <span class="wp-alt">${Math.round(wpAltFt)}ft</span>
                     </div>`;
                 // --- End Staggering Logic ---
-
-                // --- [NEW in V7.0] Update last lat/lon for next segment ---
-                lastLat = wpLat;
-                lastLon = wpLon;
-                // --- [END NEW in V7.0] ---
             }
             
             vsdGraphContent.style.width = `${current_x_px + 100}px`;
@@ -4523,7 +4537,8 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         
         // =================================================================
         // --- [MODIFIED in V7.0] (Build/Update Flown Altitude Path with SCALING)
-        // This is now a 2-pass system to scale the red line horizontally.
+        // This logic is unchanged from V7.0, but will now work
+        // because `plannedProgressNM` is no longer 0.
         // =================================================================
         if (vsdFlownPath && hasPlan && originalFlatWaypointObjects.length > 0) {
             let flown_path_d = "";
@@ -4550,7 +4565,6 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
             }
             // --- [V6.9 FIX - END] ---
 
-            // 5. Combine historical (and now FILTERED) + live data
             const fullFlownRoute = [];
             if (currentFlightRoutePoints && currentFlightRoutePoints.length > 0) {
                 fullFlownRoute.push(...currentFlightRoutePoints); 
@@ -4564,7 +4578,6 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
                 altitude: baseProps.position.alt_ft
             });
 
-            // 7. Draw the final path (this logic is unchanged)
             const flownPathPoints = []; // Store points for Pass 2
             let totalActualFlownNM = 0; // Track total *actual* flown NM
 
@@ -4600,16 +4613,14 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
                 // --- Pass 2: Build the scaled SVG path ---
                 const plannedProgressNM = progressAlongRouteNM;
                 
-                // Avoid division by zero if we haven't moved
-                const scaleFactor = (totalActualFlownNM > 0.1) ? (plannedProgressNM / totalActualFlownNM) : 1;
+                // [FIX] Ensure scaleFactor is never 0, even if plannedProgressNM is
+                const scaleFactor = (totalActualFlownNM > 0.1 && plannedProgressNM > 0.01) ? (plannedProgressNM / totalActualFlownNM) : 1;
                 
                 for (let i = 0; i < flownPathPoints.length; i++) {
                     const point = flownPathPoints[i];
-                    // Apply scale factor to the horizontal distance
                     const scaled_x_px = point.x_nm * scaleFactor * FIXED_X_SCALE_PX_PER_NM; 
                     
                     if (i === 0) {
-                        // Start the line at X=0 and the planned origin altitude
                         flown_path_d = `M 0 ${startAltPx}`;
                         if (flownPathPoints.length === 1) {
                             flown_path_d += ` L ${scaled_x_px} ${point.y_px}`;
@@ -4623,7 +4634,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
             }
         }
         // =================================================================
-        // --- [END V7.0 FIX]
+        // --- [END V7.0 LOGIC]
         // =================================================================
 
 
@@ -4688,10 +4699,10 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     if (overviewPanel) {
         const sanitizeFilename = (name) => {
             if (!name || typeof name !== 'string') return 'unknown';
-            return name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '_');
+            return name.trim().toLowerCase().replace(/[^a-z0-j-9-]/g, '_');
         };
         const aircraftName = baseProps.aircraft?.aircraftName || 'Generic Aircraft';
-        const liveryName = baseProps.aircraft?.liveryName || 'Default Liwery';
+        const liveryName = baseProps.aircraft?.liveryName || 'Default Livery';
         const sanitizedAircraft = sanitizeFilename(aircraftName);
         const sanitizedLivery = sanitizeFilename(liveryName);
         const imagePath = `/CommunityPlanes/${sanitizedAircraft}/${sanitizedLivery}.png`;
