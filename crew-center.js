@@ -4118,20 +4118,25 @@ function renderPilotStatsHTML(stats, username) {
 
 
 /**
- * --- [MAJOR REVISION V6.9: Simplified Takeoff Detection]
- * This update removes the dependency on airport elevation data (`plan.origin.elevation_ft`)
- * as requested.
+ * --- [MAJOR REVISION V7.0: Horizontal Path Synchronization]
+ * This update fixes the horizontal "drift" between the red (flown) and blue (planned) lines.
+ * * 1.  [NEW] When the blue (planned) line is first drawn, it now calculates and caches the
+ * cumulative distance (in NM) to each waypoint (stored as `wp.cumulativeNM`).
+ * 2.  [NEW] A new "progress" metric, `progressAlongRouteNM`, is calculated on every
+ * update. It determines how far (in NM) the aircraft is along the *planned* route,
+ * rather than just "as the crow flies."
+ * 3.  [FIX] The VSD's horizontal scrolling is now based on this new, more accurate
+ * `progressAlongRouteNM` metric.
+ * 4.  [FIX] The red (flown) line's drawing logic is now a 2-pass system:
+ * a. Pass 1: It calculates the *actual* total distance flown (e.g., "110 NM").
+ * b. Pass 2: It compares this to the *planned* progress (e.g., "100 NM")
+ * and creates a scale factor (e.g., 100 / 110 = 0.909).
+ * c. It then draws the red line, scaling its horizontal length by this factor.
  *
- * It now filters the historical path (`sortedRoutePoints`) by finding the
- * *last* point in the data that was:
- * 1. Near the departure airport (within 25km).
- * 2. At a low altitude (below 1000ft MSL).
- *
- * This approximates the start of the takeoff roll and "cuts off" stale
- * data from previous flights, ensuring the VSD's red line is correct
- * for the current flight.
+ * This ensures the end of the red line (your position) and the horizontal scroll
+ * (your progress) are always synchronized, eliminating the visual mismatch.
 */
-function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
+function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- Get all DOM elements ---
     const progressBarFill = document.getElementById('ac-progress-bar');
     const phaseIndicator = document.getElementById('ac-phase-indicator');
@@ -4183,14 +4188,14 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- M
     }
 
     // --- Flight Plan Data Extraction (for flight phase) ---
-    // ... (This entire section is unchanged) ...
     let nextWpName = '---';
     let nextWpDistNM = '---';
+    let bestWpIndex = -1;
+    let minScore = Infinity; // This will be distance in KM
     if (plan) { 
         const currentPos = baseProps.position;
         const currentTrack = currentPos.track_deg;
-        let bestWpIndex = -1;
-        let minScore = Infinity; 
+        
         if (originalFlatWaypointObjects.length > 1 && currentPos && typeof currentTrack === 'number') {
             for (let i = 1; i < originalFlatWaypointObjects.length; i++) { 
                 const wp = originalFlatWaypointObjects[i];
@@ -4222,7 +4227,35 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- M
              nextWpDistNM = "0";
         }
     }
-    // ... (End of unchanged section) ...
+    
+    // --- [NEW in V7.0] Calculate accurate progress along the planned route ---
+    let progressAlongRouteNM = 0;
+    if (hasPlan && bestWpIndex > 0) {
+        const prevWp = originalFlatWaypointObjects[bestWpIndex - 1];
+        const nextWp = originalFlatWaypointObjects[bestWpIndex];
+        
+        // Use the cumulativeNM cached on the waypoint objects
+        if (prevWp && nextWp && prevWp.cumulativeNM != null && nextWp.cumulativeNM != null) {
+            const segmentTotalNM = nextWp.cumulativeNM - prevWp.cumulativeNM;
+            const distToNextNM = minScore / 1.852; // minScore is distance in KM
+            
+            if (segmentTotalNM > 0) {
+                // Calculate how much of the segment we've *completed*
+                const segmentProgressNM = Math.max(0, segmentTotalNM - distToNextNM);
+                progressAlongRouteNM = prevWp.cumulativeNM + segmentProgressNM;
+            } else {
+                // We are likely at the waypoint, just use its distance
+                progressAlongRouteNM = prevWp.cumulativeNM;
+            }
+        }
+    } else if (hasPlan && bestWpIndex === -1 && distanceToDestNM < 1.0) { 
+        // We are past the last waypoint, just use total distance
+        progressAlongRouteNM = totalDistanceNM;
+    } else {
+        // Fallback: use the "as the crow flies" distance (less accurate but won't break)
+        progressAlongRouteNM = Math.max(0, totalDistanceNM - distanceToDestNM);
+    }
+    // --- [END NEW in V7.0] ---
 
     // --- Configuration Thresholds (Unchanged) ---
     const THRESHOLD = {
@@ -4332,7 +4365,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- M
         if (vsdPanel.dataset.profileBuilt !== 'true' || vsdPanel.dataset.planId !== planId) {
             
             // =================================================================
-            // --- [V6.5 FIX - START] (Data sanitation for PLANNED line)
+            // --- [MODIFIED in V7.0] (Data sanitation + CUMULATIVE NM CACHING)
             // =================================================================
             let flatWaypointObjects = JSON.parse(JSON.stringify(originalFlatWaypointObjects));
             
@@ -4380,11 +4413,11 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- M
                 }
             }
             // =================================================================
-            // --- [V6.5 FIX - END] ---
+            // --- [END V6.5 FIX] ---
             // =================================================================
 
             // =================================================================
-            // --- [V6.6 FIX - START] (Y-Axis & Label De-confliction)
+            // --- [MODIFIED in V7.0] (Y-Axis & Label De-confliction + NM Caching)
             // =================================================================
 
             // --- Build Y-Axis ---
@@ -4411,8 +4444,11 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- M
             
             if (flatWaypointObjects.length === 0) return;
 
+            // --- [NEW in V7.0] Caching variables ---
+            let cumulativeDistNM = 0;
             let lastLat = flatWaypointObjects[0].location.latitude;
             let lastLon = flatWaypointObjects[0].location.longitude;
+            // --- [END NEW in V7.0] ---
 
             for (let i = 0; i < flatWaypointObjects.length; i++) {
                 const wp = flatWaypointObjects[i];
@@ -4421,11 +4457,16 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- M
                 const wpLat = wp.location.latitude;
                 const wpLon = wp.location.longitude;
 
-                const segmentDistNM = getDistanceKm(lastLat, lastLon, wpLat, wpLon) / 1.852;
+                // --- [NEW in V7.0] Calculate and cache cumulative NM ---
+                const segmentDistNM = (i === 0) ? 0 : getDistanceKm(lastLat, lastLon, wpLat, wpLon) / 1.852;
+                cumulativeDistNM += segmentDistNM;
+                wp.cumulativeNM = cumulativeDistNM; // Store cumulative NM on the object
+                // --- [END NEW in V7.0] ---
+
                 current_x_px += (segmentDistNM * FIXED_X_SCALE_PX_PER_NM);
 
                 if (i === 0) {
-                    path_d = `M ${current_x_px} ${wpAltPx}`;
+                    path_d = `M ${current_x_px} ${wpAltPx}`; // Starts at X=0
                 } else {
                     path_d += ` L ${current_x_px} ${wpAltPx}`;
                 }
@@ -4461,8 +4502,10 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- M
                     </div>`;
                 // --- End Staggering Logic ---
 
+                // --- [NEW in V7.0] Update last lat/lon for next segment ---
                 lastLat = wpLat;
                 lastLon = wpLon;
+                // --- [END NEW in V7.0] ---
             }
             
             vsdGraphContent.style.width = `${current_x_px + 100}px`;
@@ -4474,70 +4517,47 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- M
             vsdPanel.dataset.profileBuilt = 'true';
             vsdPanel.dataset.planId = planId;
             // =================================================================
-            // --- [V6.6 FIX - END]
+            // --- [END V6.6 FIX]
             // =================================================================
         }
         
         // =================================================================
-        // --- [V6.9 FIX - START] (Build/Update Flown Altitude Path)
-        // This logic now filters the historical points using the
-        // simplified low-altitude/proximity check.
+        // --- [MODIFIED in V7.0] (Build/Update Flown Altitude Path with SCALING)
+        // This is now a 2-pass system to scale the red line horizontally.
         // =================================================================
         if (vsdFlownPath && hasPlan && originalFlatWaypointObjects.length > 0) {
             let flown_path_d = "";
-            let current_flown_x_px = 0;
             let lastFlownLat, lastFlownLon;
 
-            // --- [NEW LOGIC START] ---
-            // Filter sortedRoutePoints to find the start of the CURRENT flight
-            
-            // 1. Start with all available historical points
+            // --- [V6.9 FIX - START] (Filter stale data) ---
             let currentFlightRoutePoints = [...sortedRoutePoints]; 
             const originLat = plan?.origin?.latitude;
             const originLon = plan?.origin?.longitude;
-
-            // 2. Only run this filter if we have an origin and enough data
             if (originLat != null && originLon != null && sortedRoutePoints.length > 10) {
-                
-                // 3. Find the *last* point that looks like it's "on the ground"
-                //    near the origin. Iterate backward from the most recent point.
                 let startIndex = -1;
                 for (let i = sortedRoutePoints.length - 1; i > 0; i--) {
                     const point = sortedRoutePoints[i];
                     if (!point.latitude || !point.longitude || point.altitude == null) continue;
-                    
                     const distKm = getDistanceKm(point.latitude, point.longitude, originLat, originLon);
-                    
-                    // Check for a point that is:
-                    // 1. Below 1000ft MSL (approximating "on ground")
-                    // 2. Within 25km (13.5NM) of the origin
                     if (point.altitude < 1000 && distKm < 25) {
-                        startIndex = i; // This is our "start of takeoff" point
+                        startIndex = i;
                         break;
                     }
                 }
-                
                 if (startIndex !== -1) {
-                    // 4. We are now at the index of the start of the takeoff roll.
-                    //    Slice the array to get *only* the points for this flight.
                     currentFlightRoutePoints = sortedRoutePoints.slice(startIndex);
                 }
-                // If no such point is found (e.g., flight is in cruise from
-                // a different origin), the filter won't run, and the path
-                // might be incorrect. This logic assumes the *current* flight
-                // started from the `plan.origin`.
             }
-            // --- [NEW LOGIC END] ---
+            // --- [V6.9 FIX - END] ---
 
             // 5. Combine historical (and now FILTERED) + live data
             const fullFlownRoute = [];
             if (currentFlightRoutePoints && currentFlightRoutePoints.length > 0) {
-                fullFlownRoute.push(...currentFlightRoutePoints); // Use the filtered list
+                fullFlownRoute.push(...currentFlightRoutePoints); 
                 lastFlownLat = currentFlightRoutePoints[0].latitude;
                 lastFlownLon = currentFlightRoutePoints[0].longitude;
             }
             
-            // 6. Add the current live position as the final point
             fullFlownRoute.push({
                 latitude: baseProps.position.lat,
                 longitude: baseProps.position.lon,
@@ -4545,51 +4565,65 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- M
             });
 
             // 7. Draw the final path (this logic is unchanged)
+            const flownPathPoints = []; // Store points for Pass 2
+            let totalActualFlownNM = 0; // Track total *actual* flown NM
+
             if (fullFlownRoute.length > 0) {
-                if (!lastFlownLat) { // Handle case with no historical data, start from current pos
+                if (!lastFlownLat) { // Handle case with no historical data
                     lastFlownLat = fullFlownRoute[0].latitude;
                     lastFlownLon = fullFlownRoute[0].longitude;
                 }
 
-                // Get the planned origin altitude to use as the starting "anchor"
                 const startAltFt = originalFlatWaypointObjects[0]?.altitude || fullFlownRoute[0].altitude;
                 const startAltPx = VSD_HEIGHT_PX - (startAltFt * Y_SCALE_PX_PER_FT);
 
+                // --- Pass 1: Calculate actual flown distance and Y positions ---
                 for (let i = 0; i < fullFlownRoute.length; i++) {
                     const point = fullFlownRoute[i];
-                    // Ensure altitude is a number, default to 0 if not
                     const wpAltFt = typeof point.altitude === 'number' ? point.altitude : 0;
                     const wpAltPx = VSD_HEIGHT_PX - (wpAltFt * Y_SCALE_PX_PER_FT);
                     const wpLat = point.latitude;
                     const wpLon = point.longitude;
                     
                     let segmentDistNM = 0;
-                    if (i > 0) { // Don't calculate distance for the first point
+                    if (i > 0) { 
                         segmentDistNM = getDistanceKm(lastFlownLat, lastFlownLon, wpLat, wpLon) / 1.852;
                     }
-                    current_flown_x_px += (segmentDistNM * FIXED_X_SCALE_PX_PER_NM);
+                    totalActualFlownNM += segmentDistNM;
 
-                    if (i === 0) {
-                        // Start the line at X=0 and the planned origin altitude
-                        flown_path_d = `M 0 ${startAltPx}`;
-                        // If this is the *only* point, draw a line from start to current
-                        if (fullFlownRoute.length === 1) {
-                            flown_path_d += ` L ${current_flown_x_px} ${wpAltPx}`;
-                        }
-                    } else {
-                        // Add the next segment to the path
-                        flown_path_d += ` L ${current_flown_x_px} ${wpAltPx}`;
-                    }
+                    flownPathPoints.push({ x_nm: totalActualFlownNM, y_px: wpAltPx }); // Store NM and Px
 
                     lastFlownLat = wpLat;
                     lastFlownLon = wpLon;
                 }
-                // Set the SVG path attribute
+                
+                // --- Pass 2: Build the scaled SVG path ---
+                const plannedProgressNM = progressAlongRouteNM;
+                
+                // Avoid division by zero if we haven't moved
+                const scaleFactor = (totalActualFlownNM > 0.1) ? (plannedProgressNM / totalActualFlownNM) : 1;
+                
+                for (let i = 0; i < flownPathPoints.length; i++) {
+                    const point = flownPathPoints[i];
+                    // Apply scale factor to the horizontal distance
+                    const scaled_x_px = point.x_nm * scaleFactor * FIXED_X_SCALE_PX_PER_NM; 
+                    
+                    if (i === 0) {
+                        // Start the line at X=0 and the planned origin altitude
+                        flown_path_d = `M 0 ${startAltPx}`;
+                        if (flownPathPoints.length === 1) {
+                            flown_path_d += ` L ${scaled_x_px} ${point.y_px}`;
+                        }
+                    } else {
+                        flown_path_d += ` L ${scaled_x_px} ${point.y_px}`;
+                    }
+                }
+                
                 vsdFlownPath.setAttribute('d', flown_path_d);
             }
         }
         // =================================================================
-        // --- [V6.9 FIX - END]
+        // --- [END V7.0 FIX]
         // =================================================================
 
 
@@ -4597,15 +4631,17 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- M
         const currentAltPx = VSD_HEIGHT_PX - (altitude * Y_SCALE_PX_PER_FT);
         vsdAircraftIcon.style.top = `${currentAltPx}px`;
 
-        // --- 4. Scroll the Graph (Horizontal) ---
+        // =================================================================
+        // --- 4. [MODIFIED in V7.0] Scroll the Graph (Horizontal) ---
+        // =================================================================
         if (vsdGraphWindow && vsdGraphWindow.clientWidth > 0) {
-            const distanceFlownNM = totalDistanceNM - distanceToDestNM;
+            // --- [FIX] Use the new accurate progress metric ---
+            const distanceFlownNM = progressAlongRouteNM; 
             const scrollOffsetPx = (distanceFlownNM * FIXED_X_SCALE_PX_PER_NM);
 
             const vsdViewportWidth = vsdGraphWindow.clientWidth;
             const totalProfileWidthPx = vsdGraphContent.scrollWidth;
             
-            // --- [MODIFIED] Center offset now accounts for Y-Axis padding ---
             const centerOffset = (vsdViewportWidth / 2) + 35; // 35px is Y-axis width
             const desiredTranslateX = centerOffset - scrollOffsetPx;
             
@@ -4614,27 +4650,23 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- M
 
             const finalTranslateX = Math.max(minTranslateX, Math.min(maxTranslateX, desiredTranslateX));
 
-            // Set the tape's horizontal scroll
-            // --- [MODIFIED] TranslateX is relative to the *content* element
-            // which already starts at 35px, so we must correct the
-            // finalTranslateX value by removing the 35px it "gains" from its
-            // starting 'left' position.
             vsdGraphContent.style.transform = `translateX(${finalTranslateX - 35}px)`;
 
-            // Set the icon's horizontal position relative to the viewport
-            // It's the aircraft's position on the tape, plus the tape's translation
             const iconLeftPx = scrollOffsetPx + finalTranslateX;
             vsdAircraftIcon.style.left = `${iconLeftPx}px`;
 
         } else {
             // Fallback (unchanged)
-            const distanceFlownNM = totalDistanceNM - distanceToDestNM;
+            // --- [FIX] Use the new accurate progress metric ---
+            const distanceFlownNM = progressAlongRouteNM;
             const scrollOffsetPx = (distanceFlownNM * FIXED_X_SCALE_PX_PER_NM);
-            // --- [MODIFIED] Fallback 75px = 40px old margin + 35px padding
             const translateX = 75 - scrollOffsetPx; 
             vsdGraphContent.style.transform = `translateX(${translateX - 35}px)`;
             vsdAircraftIcon.style.left = `75px`; // Set fallback icon pos
         }
+        // =================================================================
+        // --- [END V7.0 FIX]
+        // =================================================================
         
         // --- 5. Update Summary Bar ---
         if (vsdSummaryDist) vsdSummaryDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
