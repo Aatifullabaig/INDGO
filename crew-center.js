@@ -1041,6 +1041,133 @@ function injectCustomStyles() {
             }
             /* ⬆️ --- [END NEW FIX] --- ⬆️ */
         }
+        
+        /* ====================================================================
+        --- [NEW] Vertical Situation Display (VSD) --- 
+        ====================================================================
+        */
+        #vsd-panel {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            background: rgba(10, 12, 26, 0.5);
+            border-radius: 12px;
+            min-height: 240px; /* Give it a fixed height */
+            max-height: 240px;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+        }
+        
+        #vsd-summary-bar {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            flex-shrink: 0;
+        }
+        .vsd-summary-item {
+            display: flex;
+            flex-direction: column;
+            text-align: center;
+        }
+        .vsd-summary-item .data-label {
+            font-size: 0.7rem;
+            color: #c5cae9;
+            text-transform: uppercase;
+        }
+        .vsd-summary-item .data-value {
+            font-size: 1.3rem;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        #vsd-graph-window {
+            position: relative;
+            width: 100%;
+            flex-grow: 1;
+            overflow: hidden;
+            border-bottom-left-radius: 12px;
+            border-bottom-right-radius: 12px;
+            
+            /* Add horizontal grid lines for altitude */
+            background: linear-gradient(
+                rgba(0, 168, 255, 0.1) 1px, 
+                transparent 1px
+            );
+            background-size: 100% 50px; /* 50px = 10,000 ft approx */
+        }
+
+        #vsd-aircraft-icon {
+            position: absolute;
+            left: 40px; /* Static X position */
+            top: 50%; /* Will be set by JS */
+            width: 30px;
+            height: 20px;
+            z-index: 10;
+            /* Simple '>' icon for aircraft */
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 20' fill='%2300a8ff'%3E%3Cpath d='M2,10 L10,2 L10,7 L28,7 L28,13 L10,13 L10,18 L2,10 Z' /%3E%3C/svg%3E");
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            transform: translateY(-50%);
+            transition: top 0.5s ease-out; /* Smooth altitude changes */
+        }
+        
+        /* This holds the scrolling content */
+        #vsd-graph-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 1px; /* Will be set by JS, but start small */
+            will-change: transform;
+            transition: transform 1s linear; /* Smooth scroll */
+        }
+
+        #vsd-profile-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+        
+        #vsd-profile-path {
+            fill: none;
+            stroke: #00a8ff;
+            stroke-width: 3;
+            stroke-linejoin: round;
+        }
+
+        #vsd-waypoint-labels {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .vsd-wp-label {
+            position: absolute;
+            transform: translateX(-50%); /* Center the label on its 'left' pos */
+            color: #fff;
+            font-size: 0.8rem;
+            text-align: center;
+            text-shadow: 0 0 5px rgba(0,0,0,0.8);
+            line-height: 1.2;
+        }
+        .vsd-wp-label .wp-name {
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: #89f7fe;
+        }
+        .vsd-wp-label .wp-alt {
+            font-size: 0.75rem;
+            color: #c5cae9;
+        }
     `;
 
     const style = document.createElement('style');
@@ -3412,10 +3539,10 @@ async function handleAircraftClick(flightProps, sessionId) {
     }
 }
 
-// [REPLACE THIS FUNCTION]
+
 /**
  * --- [REDESIGNED & UPDATED] Generates the "Unified Flight Display" with image overlay and aircraft type.
- * --- [MODIFIED] Added new data fields for Cruise Alt, Next WP, and Dist. to Next.
+ * --- [MODIFIED] Replaced data list with Vertical Situation Display (VSD)
  */
 function populateAircraftInfoWindow(baseProps, plan) {
     const windowEl = document.getElementById('aircraft-info-window');
@@ -3636,32 +3763,36 @@ function populateAircraftInfoWindow(baseProps, plan) {
                             </svg>
                         </div>
                         
-                        </div>
+                    </div>
 
-                    <div class="live-data-panel">
-                        <div class="live-data-item">
-                            <span class="data-label">Cruise Alt</span>
-                            <span class="data-value" id="ac-cruise-alt">---<span class="unit">ft</span></span>
+                    <div id="vsd-panel" class="vsd-panel" data-plan-id="" data-profile-built="false">
+                        
+                        <div id="vsd-summary-bar" class="vsd-summary-bar">
+                            <div class="vsd-summary-item">
+                                <span class="data-label">DIST. TO DEST.</span>
+                                <span class="data-value" id="ac-dist">---</span>
+                            </div>
+                            <div class="vsd-summary-item">
+                                <span class="data-label">ETE TO DEST.</span>
+                                <span class="data-value" id="ac-ete">--:--</span>
+                            </div>
+                            <div class="vsd-summary-item">
+                                <span class="data-label">VERTICAL SPEED</span>
+                                <span class="data-value" id="ac-vs">---</span>
+                            </div>
                         </div>
-                        <div class="live-data-item">
-                            <span class="data-label">Next Waypoint</span>
-                            <span class="data-value" id="ac-next-wp">---</span>
-                        </div>
-                        <div class="live-data-item">
-                            <span class="data-label">Dist. to Next</span>
-                            <span class="data-value" id="ac-next-wp-dist">---<span class="unit">NM</span></span>
-                        </div>
-                        <div class="live-data-item">
-                            <span class="data-label">Dist. to Dest.</span>
-                            <span class="data-value" id="ac-dist">---<span class="unit">NM</span></span>
-                        </div>
-                        <div class="live-data-item">
-                            <span class="data-label">ETE to Dest.</span>
-                            <span class="data-value" data-value-ete" id="ac-ete">--:--</span>
-                        </div>
-                        <div class="live-data-item">
-                            <span class="data-label">Vertical Speed</span>
-                            <span class="data-value" id="ac-vs">---<span class="unit">fpm</span></span>
+                        
+                        <div id="vsd-graph-window" class="vsd-graph-window">
+                            
+                            <div id="vsd-aircraft-icon"></div>
+                            
+                            <div id="vsd-graph-content">
+                                <svg id="vsd-profile-svg" xmlns="http://www.w3.org/2000/svg">
+                                    <path id="vsd-profile-path" d="" />
+                                </svg>
+                                <div id="vsd-waypoint-labels"></div>
+                            </div>
+
                         </div>
                     </div>
                     </div>
@@ -3865,31 +3996,32 @@ function renderPilotStatsHTML(stats, username) {
         }
     }
 
-// crew-center.js
 
 /**
- * --- [MAJOR REVISION V5.0 - Waypoint Prediction]
- * This version removes the reliance on `plan.nextWaypointIndex`.
- * It now manually predicts the next waypoint by finding the closest
- * waypoint that is geographically "in front" of the aircraft's current track.
+ * --- [MAJOR REVISION V6.0 - Vertical Situation Display]
+ * This version replaces the right-hand data list with a scrolling VSD
+ * to visualize the flight's vertical profile, as requested by the user.
 */
 function updateAircraftInfoWindow(baseProps, plan) {
-    // --- [MODIFIED] Get all DOM elements ---
+    // --- Get all DOM elements ---
     const progressBarFill = document.getElementById('ac-progress-bar');
     const phaseIndicator = document.getElementById('ac-phase-indicator');
-    const footerGS = document.getElementById('ac-gs'); // This ID might be missing in your HTML
-    const footerVS = document.getElementById('ac-vs');
-    const footerDist = document.getElementById('ac-dist');
-    const footerETE = document.getElementById('ac-ete');
     const overviewPanel = document.getElementById('ac-overview-panel');
-    // --- [NEW] Get new DOM elements ---
-    const footerCruiseAlt = document.getElementById('ac-cruise-alt');
-    const footerNextWp = document.getElementById('ac-next-wp');
-    const footerNextWpDist = document.getElementById('ac-next-wp-dist');
+    
+    // --- [NEW] VSD Elements ---
+    const vsdPanel = document.getElementById('vsd-panel');
+    const vsdSummaryVS = document.getElementById('ac-vs');
+    const vsdSummaryDist = document.getElementById('ac-dist');
+    const vsdSummaryETE = document.getElementById('ac-ete');
+    const vsdAircraftIcon = document.getElementById('vsd-aircraft-icon');
+    const vsdGraphContent = document.getElementById('vsd-graph-content');
+    const vsdProfilePath = document.getElementById('vsd-profile-path');
+    const vsdWpLabels = document.getElementById('vsd-waypoint-labels');
     // --- [END NEW] ---
 
     // --- [FIX 1] Use correct waypoint flattening logic ---
     const flatWaypoints = (plan && plan.flightPlanItems) ? flattenWaypointsFromPlan(plan.flightPlanItems) : [];
+    const flatWaypointObjects = (plan && plan.flightPlanItems) ? getFlatWaypointObjects(plan.flightPlanItems) : [];
     const hasPlan = flatWaypoints.length >= 2;
     // --- END FIX 1 ---
 
@@ -3925,52 +4057,27 @@ function updateAircraftInfoWindow(baseProps, plan) {
     }
 
     // --- [MODIFIED] Flight Plan Data Extraction ---
-    let cruiseAlt = 0;
+    // This logic is still needed for the flight phase detection
     let nextWpName = '---';
     let nextWpDistNM = '---';
 
     if (plan) { // Use the raw plan object
-        // 1. Find Cruise Altitude (max altitude in plan)
-        const findMaxAlt = (items) => {
-            if (!Array.isArray(items)) return;
-            for (const item of items) {
-                if (item.altitude > cruiseAlt) {
-                    cruiseAlt = item.altitude;
-                }
-                if (Array.isArray(item.children)) {
-                    findMaxAlt(item.children);
-                }
-            }
-        };
-        findMaxAlt(plan.flightPlanItems); // This part was working
-
-        // --- [NEW LOGIC] Predict Next Waypoint ---
-        // This replaces the logic that relied on `plan.nextWaypointIndex`
-        const flatWaypointObjects = getFlatWaypointObjects(plan.flightPlanItems);
-        let bestWpIndex = -1;
-        let minScore = Infinity; // We'll use distance as the score for the best waypoint
-
         const currentPos = baseProps.position;
         const currentTrack = currentPos.track_deg;
+        let bestWpIndex = -1;
+        let minScore = Infinity; 
 
-        // Check if we have waypoints and a valid position/track
         if (flatWaypointObjects.length > 1 && currentPos && typeof currentTrack === 'number') {
-            for (let i = 1; i < flatWaypointObjects.length; i++) { // Start from 1 (skip departure)
+            for (let i = 1; i < flatWaypointObjects.length; i++) { 
                 const wp = flatWaypointObjects[i];
                 if (!wp.location || wp.location.latitude == null || wp.location.longitude == null) {
-                    continue; // Skip waypoints with no location
+                    continue; 
                 }
-
                 const distanceToWpKm = getDistanceKm(currentPos.lat, currentPos.lon, wp.location.latitude, wp.location.longitude);
                 const bearingToWp = getBearing(currentPos.lat, currentPos.lon, wp.location.latitude, wp.location.longitude);
-                
-                // Get the smallest angle difference between track and bearing
                 const bearingDiff = Math.abs(normalizeBearingDiff(currentTrack - bearingToWp));
 
-                // Only consider waypoints "in front" (within a ~190 degree cone)
-                // 95 degrees = a bit more than a perpendicular line
                 if (bearingDiff <= 95) { 
-                    // This is a candidate. Is it the closest one "in front"?
                     if (distanceToWpKm < minScore) {
                         minScore = distanceToWpKm;
                         bestWpIndex = i;
@@ -3979,31 +4086,25 @@ function updateAircraftInfoWindow(baseProps, plan) {
             }
         }
         
-        // 2. Find Next Waypoint & Distance (using our predicted index)
         if (bestWpIndex !== -1) {
-            // We found a valid "next" waypoint
             const nextWp = flatWaypointObjects[bestWpIndex]; 
-            
             if (nextWp) {
                 nextWpName = nextWp.identifier || nextWp.name || 'N/A';
-                // We already have the distance in Km (minScore), but we'll convert to NM
                 nextWpDistNM = (minScore / 1.852).toFixed(0);
             }
         } else if (hasPlan && distanceToDestNM < 10 && distanceToDestNM > 0.5) {
-            // Fallback for final approach (if no waypoint is "in front", e.g., we passed the last one)
             nextWpName = flatWaypointObjects.length > 0 ? (flatWaypointObjects[flatWaypointObjects.length - 1].identifier || flatWaypointObjects[flatWaypointObjects.length - 1].name) : "DEST";
             nextWpDistNM = distanceToDestNM.toFixed(0);
         } else if (hasPlan && distanceToDestNM <= 0.5) {
-             // We are at the destination
              nextWpName = "DEST";
              nextWpDistNM = "0";
         }
-        // If no waypoint is found and we're not at the destination, fields will remain '---'
     }
     // --- [END MODIFICATION] Flight Plan Data Extraction ---
 
 
     // --- Configuration Thresholds ---
+    // (This section is unchanged, logic remains the same)
     const THRESHOLD = {
         ON_GROUND_AGL: 75,
         PARKED_MAX_GS: 2,
@@ -4029,38 +4130,29 @@ function updateAircraftInfoWindow(baseProps, plan) {
 
     // --- [START OF REFACTORED LOGIC] ---
     // --- Flight Phase State Machine ---
+    // (This entire state machine logic is unchanged and remains valid)
     let flightPhase = 'ENROUTE'; // Default state
     let phaseClass = 'phase-enroute';
     let phaseIcon = 'fa-route';
-
-    // --- Live Flight Data & Context ---
     const vs = baseProps.position.vs_fpm || 0;
     const altitude = baseProps.position.alt_ft || 0;
     const gs = baseProps.position.gs_kt || 0;
-    
     let departureIcao = null;
     let arrivalIcao = null;
-
     if (plan && Array.isArray(plan.flightPlanItems) && plan.flightPlanItems.length >= 2) {
         departureIcao = plan.flightPlanItems[0]?.identifier?.trim().toUpperCase();
         arrivalIcao = plan.flightPlanItems[plan.flightPlanItems.length - 1]?.identifier?.trim().toUpperCase();
     }
     const aircraftPos = { lat: baseProps.position.lat, lon: baseProps.position.lon, track_deg: baseProps.position.track_deg };
-
-    // Find the nearest runway at the most relevant airport (for AIRBORNE states)
     let nearestRunwayInfo = null;
     if (hasPlan) {
-        // Correctly use totalDistanceNM (which is now accurate)
         const distanceFlownKm = totalDistanceNM * 1.852 - distanceToDestNM * 1.852;
-        // Check if closer to arrival or departure
         if (distanceToDestNM * 1.852 < distanceFlownKm && arrivalIcao) {
              nearestRunwayInfo = getNearestRunway(aircraftPos, arrivalIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
         } else if (departureIcao) {
              nearestRunwayInfo = getNearestRunway(aircraftPos, departureIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
         }
     }
-    
-    // Calculate AGL based on the most relevant elevation data
     let altitudeAGL = null;
     if (nearestRunwayInfo && nearestRunwayInfo.elevation_ft != null) {
         altitudeAGL = altitude - nearestRunwayInfo.elevation_ft;
@@ -4072,145 +4164,135 @@ function updateAircraftInfoWindow(baseProps, plan) {
             altitudeAGL = altitude - relevantElevationFt;
         }
     }
-
     const aglCheck = altitudeAGL !== null && altitudeAGL < THRESHOLD.ON_GROUND_AGL;
     const fallbackGroundCheck = altitudeAGL === null && gs < THRESHOLD.TAXI_MAX_GS && Math.abs(vs) < 150;
     const isOnGround = aglCheck || fallbackGroundCheck;
-    
-    // Contextual booleans for state logic
     const isLinedUpForLanding = nearestRunwayInfo && nearestRunwayInfo.airport === arrivalIcao && nearestRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE;
-
-    // --- State Machine Logic (Processed in order of priority) ---
-
-    // 1. ON-GROUND STATES (Highest Priority)
     if (isOnGround) {
-        
-        // 1.1 Handle high-speed ground ops (Takeoff/Landing Roll)
         if (gs > THRESHOLD.TAXI_MAX_GS) {
-            if (progress > 90) { 
-                flightPhase = 'LANDING ROLLOUT';
-                phaseClass = 'phase-approach';
-                phaseIcon = 'fa-plane-arrival';
-            } else if (progress < 10) {
-                flightPhase = 'TAKEOFF ROLL';
-                phaseClass = 'phase-climb';
-                phaseIcon = 'fa-plane-departure';
-            } else {
-                flightPhase = 'HIGH-SPEED TAXI';
-                phaseIcon = 'fa-road';
-                phaseClass = 'phase-enroute';
-            }
-        } 
-        // 1.2 Handle low-speed ground ops (gs <= TAXI_MAX_GS)
-        else {
+            if (progress > 90) { flightPhase = 'LANDING ROLLOUT'; phaseClass = 'phase-approach'; phaseIcon = 'fa-plane-arrival';
+            } else if (progress < 10) { flightPhase = 'TAKEOFF ROLL'; phaseClass = 'phase-climb'; phaseIcon = 'fa-plane-departure';
+            } else { flightPhase = 'HIGH-SPEED TAXI'; phaseIcon = 'fa-road'; phaseClass = 'phase-enroute'; }
+        } else {
             const isStopped = gs <= THRESHOLD.HOLD_SHORT_GS;
-            // Now that 'progress' is correct, isAtTerminal will be true at the gate (~0%)
-            const isAtTerminal = (progress < THRESHOLD.PARKED_PROGRESS_START) || 
-                                 (progress > THRESHOLD.PARKED_PROGRESS_END);
-            
+            const isAtTerminal = (progress < THRESHOLD.PARKED_PROGRESS_START) || (progress > THRESHOLD.PARKED_PROGRESS_END);
             const relevantIcao = progress < 50 ? departureIcao : arrivalIcao;
             const closeRunwayInfo = getNearestRunway(aircraftPos, relevantIcao, THRESHOLD.HOLD_SHORT_PROXIMITY_NM);
-
             const isLinedUp = closeRunwayInfo && closeRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE;
-
-            // --- State Priority ---
-            
-            // PRIORITY 1: LINED UP
-            if (isLinedUp) {
-                flightPhase = `LINED UP RWY ${closeRunwayInfo.ident}`;
-                phaseIcon = 'fa-arrow-up';
-                phaseClass = 'phase-climb';
-            }
-            // PRIORITY 2: STOPPED
-            else if (isStopped) {
-                // --- [FIX 2] Swapped priority: Check for holding short *before* checking for parked ---
-                // Stopped, close to runway, but NOT lined up
-                if (closeRunwayInfo) {
-                    flightPhase = `HOLDING SHORT RWY ${closeRunwayInfo.ident}`;
-                    phaseIcon = 'fa-pause-circle';
-                    phaseClass = 'phase-enroute';
-                }
-                // Stopped at the gate/terminal (now triggers correctly at the gate)
-                else if (isAtTerminal) {
-                    flightPhase = 'PARKED';
-                    phaseIcon = 'fa-parking';
-                    phaseClass = 'phase-enroute';
-                } 
-                // Stopped, not at terminal, not near runway
-                else {
-                    flightPhase = 'HOLDING POSITION';
-                    phaseIcon = 'fa-hand';
-                    phaseClass = 'phase-enroute';
-                }
-                // --- END FIX 2 ---
-            } 
-            // PRIORITY 3: MOVING (TAXIING)
-            else {
-                flightPhase = 'TAXIING';
-                phaseIcon = 'fa-road';
-                phaseClass = 'phase-enroute';
-
-                // --- [FIX 3] Re-added "TAXIING TO RUNWAY" state ---
-                if (progress > 50) { 
-                    flightPhase = 'TAXIING TO GATE';
-                } else if (progress < 10) { // Assumes user is taxiing for departure
-                    flightPhase = 'TAXIING TO RUNWAY';
-                }
-                // --- END FIX 3 ---
-            }
-        }
-    } 
-    // 2. ALL AIRBORNE STATES
-    else {
-        // This state now requires a 10-degree alignment
-        const isInLandingSequence = isLinedUpForLanding && altitudeAGL !== null;
-
-        // Specific landing sequences take highest priority when airborne
-        if (isInLandingSequence && altitudeAGL < THRESHOLD.APPROACH_CEILING_AGL) {
-            if (altitudeAGL < 60 && vs < -50) {
-                flightPhase = 'FLARE';
-            } else if (altitudeAGL < THRESHOLD.LANDING_CEILING_AGL) {
-                flightPhase = 'SHORT FINAL';
+            if (isLinedUp) { flightPhase = `LINED UP RWY ${closeRunwayInfo.ident}`; phaseIcon = 'fa-arrow-up'; phaseClass = 'phase-climb';
+            } else if (isStopped) {
+                if (closeRunwayInfo) { flightPhase = `HOLDING SHORT RWY ${closeRunwayInfo.ident}`; phaseIcon = 'fa-pause-circle'; phaseClass = 'phase-enroute';
+                } else if (isAtTerminal) { flightPhase = 'PARKED'; phaseIcon = 'fa-parking'; phaseClass = 'phase-enroute';
+                } else { flightPhase = 'HOLDING POSITION'; phaseIcon = 'fa-hand'; phaseClass = 'phase-enroute'; }
             } else {
-                flightPhase = 'FINAL APPROACH';
+                flightPhase = 'TAXIING'; phaseIcon = 'fa-road'; phaseClass = 'phase-enroute';
+                if (progress > 50) { flightPhase = 'TAXIING TO GATE';
+                } else if (progress < 10) { flightPhase = 'TAXIING TO RUNWAY'; }
             }
-            phaseClass = 'phase-approach';
-            phaseIcon = 'fa-plane-arrival';
         }
-        // General approach in the terminal area
-        else if (hasPlan && distanceToDestNM < THRESHOLD.TERMINAL_AREA_DIST_NM && progress > THRESHOLD.APPROACH_PROGRESS_MIN) {
-            flightPhase = 'APPROACH';
-            phaseClass = 'phase-approach';
-            phaseIcon = 'fa-plane-arrival';
-        } 
-        // Any climbing state (uses lower threshold to prevent gaps after liftoff)
-        else if (vs > THRESHOLD.TAKEOFF_MIN_VS) {
-            flightPhase = 'CLIMB';
-            phaseClass = 'phase-climb';
-            phaseIcon = 'fa-arrow-trend-up';
-            
-            // Refine to LIFTOFF if in the initial takeoff phase
+    } else {
+        const isInLandingSequence = isLinedUpForLanding && altitudeAGL !== null;
+        if (isInLandingSequence && altitudeAGL < THRESHOLD.APPROACH_CEILING_AGL) {
+            if (altitudeAGL < 60 && vs < -50) { flightPhase = 'FLARE';
+            } else if (altitudeAGL < THRESHOLD.LANDING_CEILING_AGL) { flightPhase = 'SHORT FINAL';
+            } else { flightPhase = 'FINAL APPROACH'; }
+            phaseClass = 'phase-approach'; phaseIcon = 'fa-plane-arrival';
+        } else if (hasPlan && distanceToDestNM < THRESHOLD.TERMINAL_AREA_DIST_NM && progress > THRESHOLD.APPROACH_PROGRESS_MIN) {
+            flightPhase = 'APPROACH'; phaseClass = 'phase-approach'; phaseIcon = 'fa-plane-arrival';
+        } else if (vs > THRESHOLD.TAKEOFF_MIN_VS) {
+            flightPhase = 'CLIMB'; phaseClass = 'phase-climb'; phaseIcon = 'fa-arrow-trend-up';
             if (progress < 10 && altitudeAGL !== null && altitudeAGL < THRESHOLD.TAKEOFF_CEILING_AGL) {
-                 flightPhase = 'LIFTOFF';
-                 phaseIcon = 'fa-plane-up';
+                 flightPhase = 'LIFTOFF'; phaseIcon = 'fa-plane-up';
             }
-        } 
-        // General descent
-        else if (vs < THRESHOLD.DESCENT_MIN_VS) {
-            flightPhase = 'DESCENT';
-            phaseClass = 'phase-descent';
-            phaseIcon = 'fa-arrow-trend-down';
-        } 
-        // Cruise
-        else if (altitude > THRESHOLD.CRUISE_MIN_ALT_MSL && Math.abs(vs) < THRESHOLD.CRUISE_VS_TOLERANCE) {
-            flightPhase = 'CRUISE';
-            phaseClass = 'phase-cruise';
-            phaseIcon = 'fa-minus';
+        } else if (vs < THRESHOLD.DESCENT_MIN_VS) {
+            flightPhase = 'DESCENT'; phaseClass = 'phase-descent'; phaseIcon = 'fa-arrow-trend-down';
+        } else if (altitude > THRESHOLD.CRUISE_MIN_ALT_MSL && Math.abs(vs) < THRESHOLD.CRUISE_VS_TOLERANCE) {
+            flightPhase = 'CRUISE'; phaseClass = 'phase-cruise'; phaseIcon = 'fa-minus';
         }
-        // If nothing else matches, it remains ENROUTE by default.
     }
+    // --- [END OF FLIGHT PHASE LOGIC] ---
 
-    // --- Update DOM Elements ---
+
+    // --- [NEW] VSD LOGIC ---
+    if (vsdPanel && hasPlan) {
+        // --- 1. Define VSD scales ---
+        const VSD_HEIGHT_PX = vsdGraphContent.clientHeight || 190; // Get actual height, fallback to 190
+        const MAX_ALT_FT = 45000; // Max altitude for the Y-axis
+        const Y_SCALE_PX_PER_FT = VSD_HEIGHT_PX / MAX_ALT_FT;
+        const FIXED_X_SCALE_PX_PER_NM = 4; // 4px for every 1 nautical mile
+        const AIRCRAFT_ICON_X_POS_PX = 40; // Static X position of the aircraft icon
+
+        // --- 2. Build the Profile (Only once per flight plan) ---
+        const planId = plan.flightPlanId || plan.id || 'unknown';
+        if (vsdPanel.dataset.profileBuilt !== 'true' || vsdPanel.dataset.planId !== planId) {
+            let path_d = "";
+            let labels_html = "";
+            let current_x_px = 0;
+            let lastLat = flatWaypointObjects[0].location.latitude;
+            let lastLon = flatWaypointObjects[0].location.longitude;
+
+            for (let i = 0; i < flatWaypointObjects.length; i++) {
+                const wp = flatWaypointObjects[i];
+                const wpAltFt = wp.altitude;
+                const wpAltPx = VSD_HEIGHT_PX - (wpAltFt * Y_SCALE_PX_PER_FT);
+                const wpLat = wp.location.latitude;
+                const wpLon = wp.location.longitude;
+
+                // Calculate distance from *last* waypoint to this one
+                const segmentDistNM = getDistanceKm(lastLat, lastLon, wpLat, wpLon) / 1.852;
+                current_x_px += (segmentDistNM * FIXED_X_SCALE_PX_PER_NM);
+
+                // Build the SVG path string
+                if (i === 0) {
+                    path_d = `M ${current_x_px} ${wpAltPx}`;
+                } else {
+                    path_d += ` L ${current_x_px} ${wpAltPx}`;
+                }
+
+                // Build the HTML for the labels
+                labels_html += `
+                    <div class="vsd-wp-label" style="left: ${current_x_px}px; top: ${wpAltPx - 25}px;">
+                        <span class="wp-name">${wp.identifier}</span>
+                        <span class="wp-alt">${Math.round(wpAltFt)}ft</span>
+                    </div>`;
+
+                lastLat = wpLat;
+                lastLon = wpLon;
+            }
+            
+            // Set the width of the graph content and SVG to be the total length
+            vsdGraphContent.style.width = `${current_x_px + 100}px`; // Add padding
+            vsdProfilePath.closest('svg').style.width = `${current_x_px + 100}px`;
+            
+            // Apply to DOM
+            vsdProfilePath.setAttribute('d', path_d);
+            vsdWpLabels.innerHTML = labels_html;
+            
+            vsdPanel.dataset.profileBuilt = 'true';
+            vsdPanel.dataset.planId = planId;
+        }
+
+        // --- 3. Update Aircraft Icon Position (Vertical) ---
+        const currentAltPx = VSD_HEIGHT_PX - (altitude * Y_SCALE_PX_PER_FT);
+        vsdAircraftIcon.style.top = `${currentAltPx}px`;
+
+        // --- 4. Scroll the Graph (Horizontal) ---
+        const distanceFlownNM = totalDistanceNM - distanceToDestNM;
+        const scrollOffsetPx = (distanceFlownNM * FIXED_X_SCALE_PX_PER_NM);
+        // We want to align the *start* of the graph with the icon's X pos, then subtract the distance flown
+        const translateX = AIRCRAFT_ICON_X_POS_PX - scrollOffsetPx; 
+        
+        vsdGraphContent.style.transform = `translateX(${translateX}px)`;
+        
+        // --- 5. Update Summary Bar ---
+        if (vsdSummaryDist) vsdSummaryDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
+        if (vsdSummaryETE) vsdSummaryETE.textContent = ete;
+        if (vsdSummaryVS) vsdSummaryVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
+    }
+    // --- [END NEW VSD LOGIC] ---
+
+
+    // --- Update Other DOM Elements ---
     if (progressBarFill) progressBarFill.style.width = `${progress.toFixed(1)}%`;
 
     if (phaseIndicator) {
@@ -4218,49 +4300,28 @@ function updateAircraftInfoWindow(baseProps, plan) {
         phaseIndicator.innerHTML = `<i class="fa-solid ${phaseIcon}"></i> ${flightPhase}`;
     }
 
-    // --- [NEW] Update new DOM elements ---
-    if (footerCruiseAlt) footerCruiseAlt.innerHTML = `${cruiseAlt > 0 ? cruiseAlt.toLocaleString() : '---'}<span class="unit">ft</span>`;
-    if (footerNextWp) footerNextWp.textContent = nextWpName;
-    if (footerNextWpDist) footerNextWpDist.innerHTML = `${nextWpDistNM}<span class="unit">NM</span>`;
-    // --- [END NEW] ---
-
-    if (footerGS) footerGS.innerHTML = `${Math.round(gs)}<span class="unit">kts</span>`;
-    if (footerVS) footerVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
-    if (footerDist) footerDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
-    if (footerETE) footerETE.textContent = ete;
-
-    // --- [NEW] Update Aircraft Image ---
+    // --- [NEW] Update Aircraft Image (Unchanged) ---
     if (overviewPanel) {
         const sanitizeFilename = (name) => {
             if (!name || typeof name !== 'string') return 'unknown';
             return name.trim().toLowerCase().replace(/[^a-z0-9-]/g, '_');
         };
-
         const aircraftName = baseProps.aircraft?.aircraftName || 'Generic Aircraft';
         const liveryName = baseProps.aircraft?.liveryName || 'Default Livery';
-
         const sanitizedAircraft = sanitizeFilename(aircraftName);
         const sanitizedLivery = sanitizeFilename(liveryName);
-
         const imagePath = `/CommunityPlanes/${sanitizedAircraft}/${sanitizedLivery}.png`;
         const fallbackPath = '/CommunityPlanes/default.png';
-
         const newImageUrl = `url('${imagePath}')`;
 
-        // Only update if the path is different to prevent flickering
         if (overviewPanel.dataset.currentPath !== imagePath) {
-            
-            // Create a temporary image object to check if it exists
             const img = new Image();
             img.src = imagePath;
-
             const gradient = 'linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0) 40%)';
-            
             img.onload = () => {
                 overviewPanel.style.backgroundImage = `${gradient}, ${newImageUrl}`;
                 overviewPanel.dataset.currentPath = imagePath;
             };
-            
             img.onerror = () => {
                 overviewPanel.style.backgroundImage = `${gradient}, url('${fallbackPath}')`;
                 overviewPanel.dataset.currentPath = fallbackPath;
