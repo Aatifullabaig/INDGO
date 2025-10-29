@@ -4005,11 +4005,13 @@ function renderPilotStatsHTML(stats, username) {
 
 
 /**
- * --- [MAJOR REVISION V6.4: Centered VSD]
+ * --- [MAJOR REVISION V6.5: VSD Data Sanitation Fix]
+ * Fixes a bug where 0, -1, or null altitudes in the flight plan
+ * were not properly interpolated, causing jagged lines on the VSD.
+ *
  * Implements a "clamping viewport" logic for the VSD.
  * The aircraft's current position is now centered, and the viewport
  * clamps to the start/end of the flight plan as needed.
- * This replaces the "fixed left icon" (V6.3) logic.
 */
 function updateAircraftInfoWindow(baseProps, plan) {
     // --- Get all DOM elements ---
@@ -4209,7 +4211,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
         if (vsdPanel.dataset.profileBuilt !== 'true' || vsdPanel.dataset.planId !== planId) {
             
             // =================================================================
-            // --- [V6.3 FIX - Unchanged] ---
+            // --- [V6.5 FIX - START] ---
             // =================================================================
             let flatWaypointObjects = JSON.parse(JSON.stringify(originalFlatWaypointObjects));
             
@@ -4217,6 +4219,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 const lastIdx = flatWaypointObjects.length - 1;
 
                 // --- Pass 1: Anchor Start and End Altitudes ---
+                // (Your suggestion: "if it cant find one maybe its the airport")
                 if (flatWaypointObjects[0].altitude == null) {
                     flatWaypointObjects[0].altitude = plan?.origin?.elevation_ft || 0;
                 }
@@ -4225,15 +4228,20 @@ function updateAircraftInfoWindow(baseProps, plan) {
                     flatWaypointObjects[lastIdx].altitude = (prevAlt != null) ? prevAlt : (plan?.destination?.elevation_ft || 0);
                 }
 
-                // --- Pass 2: Sanitize "Implausible Zeros" ---
+                // --- Pass 2: Sanitize implausible intermediate altitudes ---
+                // This now catches null, 0, -1, and undefined values and
+                // marks them for interpolation.
                 for (let i = 1; i < lastIdx; i++) {
                     const wp = flatWaypointObjects[i];
-                    if (wp.altitude === 0) {
+                    
+                    // Check if altitude is null, undefined, or a number <= 0
+                    if (wp.altitude == null || (typeof wp.altitude === 'number' && wp.altitude <= 0)) {
                         wp.altitude = null;
                     }
                 }
                 
                 // --- Pass 3: Interpolation Pass (Look-Ahead Gap Filler) ---
+                // (Your suggestion: "use the last known altitude to nearest next")
                 let lastValidAltIndex = 0; 
                 for (let i = 1; i < flatWaypointObjects.length; i++) {
                     const wp = flatWaypointObjects[i];
@@ -4247,6 +4255,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
 
                             for (let j = 1; j < numStepsInGap; j++) {
                                 const stepIndex = gapStartIndex + j;
+                                // This is a simple linear interpolation (a straight line)
                                 const fraction = j / numStepsInGap;
                                 const interpolatedAlt = startAlt + (endAlt - startAlt) * fraction;
                                 flatWaypointObjects[stepIndex].altitude = Math.round(interpolatedAlt);
@@ -4257,7 +4266,7 @@ function updateAircraftInfoWindow(baseProps, plan) {
                 }
             }
             // =================================================================
-            // --- [END OF V6.3 FIX] ---
+            // --- [V6.5 FIX - END] ---
             // =================================================================
 
             let path_d = "";
