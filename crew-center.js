@@ -4118,11 +4118,18 @@ function renderPilotStatsHTML(stats, username) {
 
 
 /**
- * --- [MAJOR REVISION V6.7: Flown Altitude Profile]
- * Adds a red line (vsd-flown-path) to the VSD showing the actual flown altitude.
- * This line is built by combining historical `sortedRoutePoints` with the live `baseProps`.
- * It calculates a separate X-axis (distance) based on the *actual flown distance*
- * to correctly compare against the blue *planned distance* line.
+ * --- [MAJOR REVISION V6.9: Simplified Takeoff Detection]
+ * This update removes the dependency on airport elevation data (`plan.origin.elevation_ft`)
+ * as requested.
+ *
+ * It now filters the historical path (`sortedRoutePoints`) by finding the
+ * *last* point in the data that was:
+ * 1. Near the departure airport (within 25km).
+ * 2. At a low altitude (below 1000ft MSL).
+ *
+ * This approximates the start of the takeoff roll and "cuts off" stale
+ * data from previous flights, ensuring the VSD's red line is correct
+ * for the current flight.
 */
 function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     // --- Get all DOM elements ---
@@ -4139,7 +4146,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- M
     const vsdGraphWindow = document.getElementById('vsd-graph-window');
     const vsdGraphContent = document.getElementById('vsd-graph-content');
     const vsdProfilePath = document.getElementById('vsd-profile-path');
-    const vsdFlownPath = document.getElementById('vsd-flown-path'); // <-- NEW: Get red line path
+    const vsdFlownPath = document.getElementById('vsd-flown-path'); // <-- The red line
     const vsdWpLabels = document.getElementById('vsd-waypoint-labels');
 
     // --- Get Original Data ---
@@ -4472,29 +4479,72 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- M
         }
         
         // =================================================================
-        // --- [V6.7 NEW - START] (Build/Update Flown Altitude Path)
-        // This runs on *every* update, not just once.
+        // --- [V6.9 FIX - START] (Build/Update Flown Altitude Path)
+        // This logic now filters the historical points using the
+        // simplified low-altitude/proximity check.
         // =================================================================
         if (vsdFlownPath && hasPlan && originalFlatWaypointObjects.length > 0) {
             let flown_path_d = "";
             let current_flown_x_px = 0;
             let lastFlownLat, lastFlownLon;
 
-            // Combine historical + live data
+            // --- [NEW LOGIC START] ---
+            // Filter sortedRoutePoints to find the start of the CURRENT flight
+            
+            // 1. Start with all available historical points
+            let currentFlightRoutePoints = [...sortedRoutePoints]; 
+            const originLat = plan?.origin?.latitude;
+            const originLon = plan?.origin?.longitude;
+
+            // 2. Only run this filter if we have an origin and enough data
+            if (originLat != null && originLon != null && sortedRoutePoints.length > 10) {
+                
+                // 3. Find the *last* point that looks like it's "on the ground"
+                //    near the origin. Iterate backward from the most recent point.
+                let startIndex = -1;
+                for (let i = sortedRoutePoints.length - 1; i > 0; i--) {
+                    const point = sortedRoutePoints[i];
+                    if (!point.latitude || !point.longitude || point.altitude == null) continue;
+                    
+                    const distKm = getDistanceKm(point.latitude, point.longitude, originLat, originLon);
+                    
+                    // Check for a point that is:
+                    // 1. Below 1000ft MSL (approximating "on ground")
+                    // 2. Within 25km (13.5NM) of the origin
+                    if (point.altitude < 1000 && distKm < 25) {
+                        startIndex = i; // This is our "start of takeoff" point
+                        break;
+                    }
+                }
+                
+                if (startIndex !== -1) {
+                    // 4. We are now at the index of the start of the takeoff roll.
+                    //    Slice the array to get *only* the points for this flight.
+                    currentFlightRoutePoints = sortedRoutePoints.slice(startIndex);
+                }
+                // If no such point is found (e.g., flight is in cruise from
+                // a different origin), the filter won't run, and the path
+                // might be incorrect. This logic assumes the *current* flight
+                // started from the `plan.origin`.
+            }
+            // --- [NEW LOGIC END] ---
+
+            // 5. Combine historical (and now FILTERED) + live data
             const fullFlownRoute = [];
-            if (sortedRoutePoints && sortedRoutePoints.length > 0) {
-                fullFlownRoute.push(...sortedRoutePoints);
-                lastFlownLat = sortedRoutePoints[0].latitude;
-                lastFlownLon = sortedRoutePoints[0].longitude;
+            if (currentFlightRoutePoints && currentFlightRoutePoints.length > 0) {
+                fullFlownRoute.push(...currentFlightRoutePoints); // Use the filtered list
+                lastFlownLat = currentFlightRoutePoints[0].latitude;
+                lastFlownLon = currentFlightRoutePoints[0].longitude;
             }
             
-            // Add the current live position as the final point
+            // 6. Add the current live position as the final point
             fullFlownRoute.push({
                 latitude: baseProps.position.lat,
                 longitude: baseProps.position.lon,
                 altitude: baseProps.position.alt_ft
             });
 
+            // 7. Draw the final path (this logic is unchanged)
             if (fullFlownRoute.length > 0) {
                 if (!lastFlownLat) { // Handle case with no historical data, start from current pos
                     lastFlownLat = fullFlownRoute[0].latitude;
@@ -4539,7 +4589,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- M
             }
         }
         // =================================================================
-        // --- [V6.7 NEW - END]
+        // --- [V6.9 FIX - END]
         // =================================================================
 
 
