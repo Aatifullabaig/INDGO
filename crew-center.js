@@ -161,6 +161,39 @@ function injectCustomStyles() {
             grid-column: 1 / -1;
             grid-row: 1 / -1;
         }
+
+        /* ====================================================================
+        --- [START] CORNER-TO-CORNER MAP FIX (USER REQUEST) ---
+        ====================================================================
+        */
+
+        /* When the Sector Ops map is active, force its parent container to fill the viewport */
+        .main-content:has(#view-rosters.active) {
+            padding: 0 !important;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* Hide the sidebar when the map is active (on desktop) */
+        .dashboard-container:has(#view-rosters.active) .sidebar {
+            display: none;
+        }
+
+        /* Hide the mobile toggle button when the map is active */
+        .dashboard-container:has(#view-rosters.active) .mobile-sidebar-toggle-btn {
+            display: none;
+        }
+
+        /* On desktop, .main-content has padding-left. Remove it when map is active. */
+        .dashboard-container:not(.sidebar-collapsed) .main-content:has(#view-rosters.active) {
+            padding-left: 0 !important;
+        }
+
+        /*
+        ====================================================================
+        --- [END] CORNER-TO-CORNER MAP FIX ---
+        ====================================================================
+        */
         
         /* --- [OVERHAUL] Base Info Window Styles (Refined Glassmorphism) --- */
         .info-window {
@@ -1066,11 +1099,11 @@ function injectCustomStyles() {
                 padding-left: 0;
             }
             
-            .main-content:has(#view-rosters.active) {
-                padding: 0; /* Remove ALL padding (top, right, bottom, left) */
-                height: 100vh; /* Set height to 100% of the viewport height */
-                overflow: hidden; /* Prevent the main container from scrolling */
-            }
+            /* --- [MODIFIED] ---
+               This rule is REMOVED from the media query 
+               and is now a global rule (see fix above)
+            --- [END MODIFIED] --- */
+            
 
             /* --- [REDESIGN] Mobile layout for info window --- */
             .info-window {
