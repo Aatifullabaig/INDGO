@@ -1,5 +1,5 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v6.1 - Island Interiors)
+ * MobileUIHandler Module (Creative HUD Rehaul - v6.2 - Island Interiors)
  *
  * This version implements the "clean islands" concept AND redesigns the
  * content *within* the islands for a smoother, more modern HUD.
@@ -16,6 +16,14 @@
  * 4. STATE 2 (EXPANDED): The main content area is now a flex-column
  * with a `gap`. Data panels (like live-data) and buttons are
  * styled as distinct ".hud-module" cards for better organization.
+ *
+ * REHAUL v6.2 CHANGES (Consistent Handle Design):
+ * 1. Mini Island now has a .drawer-handle for interaction affordance.
+ * 2. All bottom islands (.drawer-handle) now have a consistent
+ * `border-bottom` to cleanly separate the handle from content.
+ * 3. Implements "v4 Redesign" for Mini Island content:
+ * - "Less cramped" layout with more gap.
+ * - "Smaller texts" (1.6rem) for a more balanced feel.
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -46,16 +54,16 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (HUD Rehaul v6.1 / Island Interiors) Initialized.");
+        console.log("Mobile UI Handler (HUD Rehaul v6.2 / Island Interiors) Initialized.");
     },
 
     /**
      * Injects all the CSS for the new HUD-themed floating islands.
      * ---
-     * [REHAUL v6.1 / INTERIOR REDESIGN]
-     * 1. Redesigns drawer handle to be a minimal "pill".
-     * 2. Redesigns State 1 (Peek) to be a stacked layout.
-     * 3. Adds ".hud-module" styling to State 2 (Expanded).
+     * [REHAUL v6.2 / CONSISTENT HANDLES]
+     * 1. Adds handle structure to Mini Island.
+     * 2. Adds consistent separator line to all drawer handles.
+     * 3. Implements "v4" content design for Mini Island.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -72,8 +80,8 @@ const MobileUIHandler = {
                 /* [MODIFIED] Island Dimensions */
                 --drawer-handle-height: 30px; /* <-- Tighter handle */
                 
-                /* [USER REDESIGN] Made Mini Island taller */
-                --drawer-mini-content-height: 85px; /* <-- Was 65px */
+                /* [USER REDESIGN v6.2] Mini Island Data Area Height */
+                --drawer-mini-data-height: 60px; /* <-- Was 85px */
                 
                 --drawer-peek-content-height: 200px;
                 --island-bottom-margin: env(safe-area-inset-bottom, 15px);
@@ -162,11 +170,29 @@ const MobileUIHandler = {
                 opacity: 1;
             }
 
-            /* --- [NEW] State 0: Mini Island --- */
+            /* --- [MODIFIED v6.2] State 0: Mini Island --- */
             #mobile-island-mini {
                 bottom: var(--island-bottom-margin);
-                height: var(--drawer-mini-content-height);
+                /* [NEW] Total height is handle + data area */
+                height: calc(var(--drawer-handle-height) + var(--drawer-mini-data-height)); 
                 cursor: pointer;
+                overflow: hidden;
+                
+                /* [NEW] Use flex to stack handle and content */
+                display: flex;
+                flex-direction: column; 
+                padding: 0; /* Handle/content have their own padding */
+            }
+
+            /* [NEW v6.2] Make the "pill" fainter on the mini-island */
+            #mobile-island-mini .drawer-handle::before {
+                opacity: 0.3;
+            }
+
+            /* [NEW v6.2] Wrapper for the summary bar */
+            .mini-content-wrapper {
+                height: var(--drawer-mini-data-height);
+                flex-grow: 1; /* Fill remaining space */
                 overflow: hidden;
             }
             
@@ -185,7 +211,7 @@ const MobileUIHandler = {
                 overflow: hidden; /* .drawer-content will scroll */
             }
 
-            /* --- [MODIFIED] Drawer Handle (Used in Peek & Expanded) --- */
+            /* --- [MODIFIED v6.2] Drawer Handle (Used in ALL Bottom Islands) --- */
             .drawer-handle {
                 height: var(--drawer-handle-height);
                 flex-shrink: 0;
@@ -195,6 +221,7 @@ const MobileUIHandler = {
                 display: grid;
                 place-items: center;
                 box-sizing: border-box;
+                border-bottom: 1px solid var(--hud-border); /* [NEW] Consistent separator */
             }
             .drawer-handle::before {
                 content: '';
@@ -213,8 +240,7 @@ const MobileUIHandler = {
                 overflow-y: auto;
                 flex-grow: 1;
                 padding-bottom: env(safe-area-inset-bottom, 0);
-                /* [USER REDESIGN] Removed separator line for seamless look */
-                /* border-top: 1px solid var(--hud-border); <-- REMOVED */
+                /* [NOTE] Border is now on the handle, not here */
             }
             #mobile-island-peek .drawer-content {
                 overflow: hidden;
@@ -224,15 +250,16 @@ const MobileUIHandler = {
             .drawer-content::-webkit-scrollbar-thumb { background-color: var(--hud-accent); border-radius: 10px; }
 
             /* ====================================================================
-            --- [USER REDESIGN V2] State 0: Minimalist Widget Look ---
+            --- [USER REDESIGN V4] State 0: "Balanced" Widget Look ---
             ==================================================================== */
 
-            #mobile-island-mini > #vsd-summary-bar {
+            /* [MODIFIED] The summary bar now lives inside the wrapper */
+            .mini-content-wrapper > #vsd-summary-bar {
                 display: grid;
                 grid-template-columns: 1fr 1fr 1fr;
-                gap: 0; /* No gap, spacing is handled by padding */
+                gap: 0;
                 height: 100%;
-                padding: 12px; /* [MODIFIED] More vertical padding */
+                padding: 8px 12px; /* Balanced padding */
                 box-sizing: border-box;
                 background: transparent;
                 border-bottom: none;
@@ -240,59 +267,58 @@ const MobileUIHandler = {
                 align-items: center;
             }
 
-            /* [MODIFIED] Item layout */
+            /* [MODIFIED v4] Item layout: Value on top, Label on bottom */
             #vsd-summary-bar .vsd-summary-item {
-                flex-direction: column-reverse; /* [CRITICAL] Value on top, label on bottom */
+                flex-direction: column-reverse; /* [MODIFIED] Flipped back to Value on Top */
                 text-align: center;
-                justify-content: center; /* Center the stack vertically */
-                padding: 0 4px; 
+                justify-content: center;
+                padding: 0 4px;
+                gap: 6px; /* [MODIFIED] Increased gap for a "less cramped" feel */
+                overflow: hidden;
             }
 
-            /* [REMOVED] Vertical separator lines */
-
-            /* [MODIFIED] Data Label styling */
+            /* [MODIFIED v4] Data Label styling */
             #vsd-summary-bar .vsd-summary-item .data-label {
-                font-size: 0.75rem; /* [MODIFIED] Slightly larger */
+                font-size: 0.7rem; /* [MODIFIED] Smaller text */
                 color: #9fa8da;
                 text-transform: uppercase;
-                font-weight: 500;
+                font-weight: 500; /* [MODIFIED] Lighter weight */
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
-                margin-top: 4px; /* [NEW] Space between value and label */
+                margin-top: 0;
+                opacity: 0.7; /* [NEW] De-emphasize for a cleaner look */
             }
 
-            /* [MODIFIED] Data Value styling */
+            /* [MODIFIED v4] Data Value styling */
             #vsd-summary-bar .vsd-summary-item .data-value {
-                font-size: 2.2rem; /* [MODIFIED] Increased for new height */
+                font-size: 1.6rem; /* [MODIFIED] Smaller text */
                 font-weight: 600;
-                line-height: 1.1; /* [MODIFIED] Tighter line height */
+                line-height: 1.1;
                 color: #fff;
                 
-                /* [MODIFIED] Use Flexbox *only* to align value and unit */
                 display: flex;
-                align-items: baseline; 
+                align-items: baseline;
                 justify-content: center;
-                gap: 4px; /* Space between value and unit */
+                gap: 4px;
                 
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
 
-            /* [REMOVED] All icon-related CSS */
-
-            /* [MODIFIED] Show the units (was display: none) */
+            /* [MODIFIED v4] Unit styling */
             #vsd-summary-bar .vsd-summary-item .data-value .unit {
                 display: inline-block;
-                font-size: 1.0rem; /* [MODIFIED] Increased size */
+                font-size: 0.9rem; /* [MODIFIED] Good companion size */
                 color: #9fa8da;
                 font-weight: 400;
                 margin-left: 1px;
+                opacity: 0.7; /* [NEW] Match the label's opacity */
             }
-            
+
             /* ====================================================================
-            --- [END V2 REDESIGN] ---
+            --- [END V4 REDESIGN] ---
             ==================================================================== */
 
 
@@ -429,9 +455,12 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.0]
+     * [REHAUL v6.2]
      * Creates the new DOM structure for the HUD:
      * 1 Top Window + 3 Bottom Islands (Mini, Peek, Expanded).
+     *
+     * v6.2 Change: Adds a drawer handle and content wrapper
+     * directly into the Mini Island for better UX affordance.
      */
     createSplitViewUI() {
         const viewContainer = document.getElementById('view-rosters');
@@ -448,11 +477,15 @@ const MobileUIHandler = {
         this.topWindowEl.className = 'mobile-aircraft-view';
         viewContainer.appendChild(this.topWindowEl);
 
-        // 3. [NEW] Bottom Island - State 0 (Mini)
+        // 3. [MODIFIED v6.2] Bottom Island - State 0 (Mini)
         this.miniIslandEl = document.createElement('div');
         this.miniIslandEl.id = 'mobile-island-mini';
         this.miniIslandEl.className = 'mobile-island-bottom';
-        // No innerHTML, it's just a container for the summary bar
+        // [NEW v6.2] Add handle and content wrapper
+        this.miniIslandEl.innerHTML = `
+            <div class="drawer-handle"></div>
+            <div class="mini-content-wrapper"></div>
+        `;
         viewContainer.appendChild(this.miniIslandEl);
 
         // 4. [NEW] Bottom Island - State 1 (Peek)
@@ -496,19 +529,20 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.0]
+     * [REHAUL v6.2]
      * Moves content from the original window into the new island components.
      * 1. Top Overview -> Top Window
-     * 2. Summary Bar -> Mini Island
+     * 2. Summary Bar -> Mini Island's ".mini-content-wrapper"
      * 3. Main Content -> CLONED to Peek Island, MOVED to Expanded Island
      */
     populateSplitView(sourceWindow) {
         if (!this.topWindowEl || !this.miniIslandEl || !this.peekIslandEl || !this.expandedIslandEl) return;
 
         // Find content containers
+        const miniContentContainer = this.miniIslandEl.querySelector('.mini-content-wrapper'); // <-- NEW
         const peekContentContainer = this.peekIslandEl.querySelector('.drawer-content');
         const expandedContentContainer = this.expandedIslandEl.querySelector('.drawer-content');
-        if (!peekContentContainer || !expandedContentContainer) return;
+        if (!miniContentContainer || !peekContentContainer || !expandedContentContainer) return; // <-- UPDATED
 
         // Find original content pieces
         const topOverviewPanel = sourceWindow.querySelector('.aircraft-overview-panel');
@@ -521,8 +555,8 @@ const MobileUIHandler = {
         }
 
         // 2. Move Summary Bar to Mini Island
-        if (vsdSummaryBar) {
-            this.miniIslandEl.appendChild(vsdSummaryBar);
+        if (vsdSummaryBar && miniContentContainer) {
+            miniContentContainer.appendChild(vsdSummaryBar); // <-- MODIFIED
         }
         
         // 3. [CRITICAL] Clone and Move Main Content
@@ -721,9 +755,10 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.0]
+     * [REHAUL v6.2]
      * Animates out all islands, moves *original* content back,
      * *destroys* cloned content, and cleans up.
+     * * v6.2: Finds summary bar inside .mini-content-wrapper
      */
     closeActiveWindow(force = false) {
         if (this.contentObserver) this.contentObserver.disconnect();
@@ -731,7 +766,10 @@ const MobileUIHandler = {
         // [CRITICAL] Move content back and destroy clone
         if (this.activeWindow && this.topWindowEl && this.miniIslandEl && this.peekIslandEl && this.expandedIslandEl) {
             const topOverviewPanel = this.topWindowEl.querySelector('.aircraft-overview-panel');
-            const vsdSummaryBar = this.miniIslandEl.querySelector('#vsd-summary-bar');
+            
+            // [MODIFIED v6.2] Find summary bar in its wrapper
+            const miniContentWrapper = this.miniIslandEl.querySelector('.mini-content-wrapper');
+            const vsdSummaryBar = miniContentWrapper ? miniContentWrapper.querySelector('#vsd-summary-bar') : null;
             
             // Get the ORIGINAL content from the expanded island
             const mainFlightContent = this.expandedIslandEl.querySelector('.unified-display-main-content');
