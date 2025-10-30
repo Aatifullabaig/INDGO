@@ -1,29 +1,16 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v6.2 - Island Interiors)
+ * MobileUIHandler Module (Creative HUD Rehaul - v6.3 - Seamless Handle)
  *
  * This version implements the "clean islands" concept AND redesigns the
  * content *within* the islands for a smoother, more modern HUD.
  *
- * REHAUL v6.1 CHANGES (Interior Redesign):
- * 1. NEW HANDLE: The handle is restyled to be a minimal "pill" (like
- * the iOS Dynamic Island). The border is removed from the handle and
- * added to the top of the content area.
- * 2. STATE 0 (MINI): Typography is tightened and vertically centered
- * for a cleaner "data strip" look.
- * 3. STATE 1 (PEEK): The side-by-side layout is REMOVED. It is now a
- * stacked layout: PFD on top, and a horizontal row of key
- * live-data (in a module) at the bottom. This de-clutters the view.
- * 4. STATE 2 (EXPANDED): The main content area is now a flex-column
- * with a `gap`. Data panels (like live-data) and buttons are
- * styled as distinct ".hud-module" cards for better organization.
- *
- * REHAUL v6.2 CHANGES (Consistent Handle Design):
- * 1. Mini Island now has a .drawer-handle for interaction affordance.
- * 2. All bottom islands (.drawer-handle) now have a consistent
- * `border-bottom` to cleanly separate the handle from content.
- * 3. Implements "v4 Redesign" for Mini Island content:
- * - "Less cramped" layout with more gap.
- * - "Smaller texts" (1.6rem) for a more balanced feel.
+ * REHAUL v6.3 CHANGES (Seamless Handle):
+ * 1. REMOVED the 1px border separator from all .drawer-handle elements.
+ * 2. REALLOCATED vertical space on the Mini Island to "move the data up."
+ * - Handle height reduced to 20px (from 30px).
+ * - Mini Data height increased to 70px (from 60px).
+ * 3. This creates a "borderless" look that uses space more
+ * intelligently, as requested.
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -54,16 +41,15 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (HUD Rehaul v6.2 / Island Interiors) Initialized.");
+        console.log("Mobile UI Handler (HUD Rehaul v6.3 / Seamless Handle) Initialized.");
     },
 
     /**
      * Injects all the CSS for the new HUD-themed floating islands.
      * ---
-     * [REHAUL v6.2 / CONSISTENT HANDLES]
-     * 1. Adds handle structure to Mini Island.
-     * 2. Adds consistent separator line to all drawer handles.
-     * 3. Implements "v4" content design for Mini Island.
+     * [REHAUL v6.3 / SEAMLESS HANDLE]
+     * 1. Reduces handle height and increases mini-data height.
+     * 2. Removes border-bottom from .drawer-handle.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -77,11 +63,11 @@ const MobileUIHandler = {
                 --hud-accent: #00a8ff;
                 --hud-glow: 0 0 15px rgba(0, 168, 255, 0.5);
                 
-                /* [MODIFIED] Island Dimensions */
-                --drawer-handle-height: 30px; /* <-- Tighter handle */
+                /* [MODIFIED v6.3] Island Dimensions */
+                --drawer-handle-height: 20px; /* <-- v6.3 Tighter handle */
                 
-                /* [USER REDESIGN v6.2] Mini Island Data Area Height */
-                --drawer-mini-data-height: 60px; /* <-- Was 85px */
+                /* [USER REDESIGN v6.3] Mini Island Data Area Height */
+                --drawer-mini-data-height: 70px; /* <-- v6.3 More data room */
                 
                 --drawer-peek-content-height: 200px;
                 --island-bottom-margin: env(safe-area-inset-bottom, 15px);
@@ -170,7 +156,7 @@ const MobileUIHandler = {
                 opacity: 1;
             }
 
-            /* --- [MODIFIED v6.2] State 0: Mini Island --- */
+            /* --- [MODIFIED v6.3] State 0: Mini Island --- */
             #mobile-island-mini {
                 bottom: var(--island-bottom-margin);
                 /* [NEW] Total height is handle + data area */
@@ -189,9 +175,9 @@ const MobileUIHandler = {
                 opacity: 0.3;
             }
 
-            /* [NEW v6.2] Wrapper for the summary bar */
+            /* [NEW v6.3] Wrapper for the summary bar */
             .mini-content-wrapper {
-                height: var(--drawer-mini-data-height);
+                height: var(--drawer-mini-data-height); /* <-- Increased to 70px */
                 flex-grow: 1; /* Fill remaining space */
                 overflow: hidden;
             }
@@ -211,9 +197,9 @@ const MobileUIHandler = {
                 overflow: hidden; /* .drawer-content will scroll */
             }
 
-            /* --- [MODIFIED v6.2] Drawer Handle (Used in ALL Bottom Islands) --- */
+            /* --- [MODIFIED v6.3] Drawer Handle (Used in ALL Bottom Islands) --- */
             .drawer-handle {
-                height: var(--drawer-handle-height);
+                height: var(--drawer-handle-height); /* <-- Reduced to 20px */
                 flex-shrink: 0;
                 cursor: grab;
                 touch-action: none;
@@ -221,7 +207,7 @@ const MobileUIHandler = {
                 display: grid;
                 place-items: center;
                 box-sizing: border-box;
-                border-bottom: 1px solid var(--hud-border); /* [NEW] Consistent separator */
+                /* [REMOVED v6.3] border-bottom was here */
             }
             .drawer-handle::before {
                 content: '';
@@ -240,7 +226,6 @@ const MobileUIHandler = {
                 overflow-y: auto;
                 flex-grow: 1;
                 padding-bottom: env(safe-area-inset-bottom, 0);
-                /* [NOTE] Border is now on the handle, not here */
             }
             #mobile-island-peek .drawer-content {
                 overflow: hidden;
@@ -253,13 +238,14 @@ const MobileUIHandler = {
             --- [USER REDESIGN V4] State 0: "Balanced" Widget Look ---
             ==================================================================== */
 
-            /* [MODIFIED] The summary bar now lives inside the wrapper */
+            /* [MODIFIED v6.3] The summary bar now lives inside the wrapper */
             .mini-content-wrapper > #vsd-summary-bar {
                 display: grid;
                 grid-template-columns: 1fr 1fr 1fr;
                 gap: 0;
                 height: 100%;
-                padding: 8px 12px; /* Balanced padding */
+                /* [MODIFIED v6.3] More vertical padding due to 70px height */
+                padding: 12px 12px; 
                 box-sizing: border-box;
                 background: transparent;
                 border-bottom: none;
