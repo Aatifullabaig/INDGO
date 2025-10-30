@@ -1,18 +1,22 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v5.1 - User-Revised Handle)
+ * MobileUIHandler Module (Creative HUD Rehaul - v5.2 - 3-State Rehaul)
  *
- * This version implements the user's request for a re-hauled bottom panel,
- * creating a functional "mini-dashboard" in the "peek" (collapsed) state.
+ * This version implements the user's request for a 3-state drawer:
+ * 1. "Mini View" (State 0): A minimal "Apple Maps" style data strip.
+ * 2. "Peek View" (State 1): The side-by-side PFD + Live Data "mini-dashboard".
+ * 3. "Expanded View" (State 2): The full-content, scrollable view.
  *
- * REHAUL v5.1 CHANGES (Based on user feedback):
- * 1. REVERTED: The ".route-summary-overlay" is NO LONGER moved. It remains
- * in the top panel, as requested by the user.
- * 2. NEW HANDLE: A static, minimalist ".drawer-handle" (a "grab bar") is
- * re-introduced to the bottom drawer to control opening/closing.
- * 3. RETAINED: The side-by-side "mini-dashboard" layout for the "peek"
- * state (PFD left, Live Data right) is kept from v5.0.
- * 4. RE-WIRED: All event listeners (`click`, `touchstart`) are re-wired
- * to use the new ".drawer-handle".
+ * REHAUL v5.2 CHANGES:
+ * 1. NEW 3-STATE LOGIC: Replaced toggleExpansion() with setDrawerState() and
+ * updated swipe/click logic to cycle through states 0, 1, and 2.
+ * 2. NEW "MINI VIEW": The default state (0) now only shows the handle and
+ * a redesigned summary bar.
+ * 3. DOM RE-PARENTING: populateSplitView() now moves *three* elements:
+ * the overview, the summary bar, and the main content.
+ * 4. CSS RE-SCOPING: All v5.1 styles are re-scoped. Default is "Mini",
+ * .peek is "Peek", and .expanded is "Expanded".
+ * 5. CLEANUP: closeActiveWindow() now correctly re-parents all 3 elements
+ * and resets the state.
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -27,6 +31,7 @@ const MobileUIHandler = {
     bottomDrawerEl: null,
     overlayEl: null,
     contentObserver: null,
+    drawerState: 0, // 0 = Mini (data strip), 1 = Peek (PFD), 2 = Expanded
     swipeState: {
         touchStartY: 0,
         touchCurrentY: 0,
@@ -39,14 +44,16 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (HUD Rehaul v5.1) Initialized.");
+        console.log("Mobile UI Handler (HUD Rehaul v5.2 / 3-State) Initialized.");
     },
 
     /**
      * Injects all the CSS for the new HUD-themed floating windows.
      * ---
-     * [RENOVATED v5.1] This CSS now includes the static grab-bar handle
-     * and the peek/expanded layout overrides.
+     * [REHAUL v5.2 / 3-STATE]
+     * 1. Adds "Mini View" (State 0) as the default, styled like Apple Maps.
+     * 2. Re-scopes "Peek View" (State 1) to the new .peek class.
+     * 3. "Expanded View" (State 2) remains on the .expanded class.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -59,9 +66,15 @@ const MobileUIHandler = {
                 --hud-border: rgba(0, 168, 255, 0.3);
                 --hud-accent: #00a8ff;
                 --hud-glow: 0 0 15px rgba(0, 168, 255, 0.5);
+                
+                /* [NEW] 3-State Heights */
                 --drawer-handle-height: 35px;
-                --drawer-peek-content-height: 200px;
-                --drawer-peek-height: calc(var(--drawer-handle-height) + var(--drawer-peek-content-height)); /* 235px */
+                --drawer-mini-content-height: 65px; /* Height for Apple Maps-style data strip */
+                --drawer-peek-content-height: 200px; /* Height for PFD/Data side-by-side */
+                
+                --drawer-mini-height: calc(var(--drawer-handle-height) + var(--drawer-mini-content-height)); /* ~100px */
+                --drawer-peek-height: calc(var(--drawer-handle-height) + var(--drawer-peek-content-height)); /* ~235px */
+                /* Expanded height is 85vh (set below) */
             }
 
             #view-rosters.active {
@@ -83,7 +96,7 @@ const MobileUIHandler = {
 
             .mobile-aircraft-view {
                 position: absolute;
-                background: #1C1E2A; 
+                background: var(--hud-bg); /* [MODIFIED] Solid bg for unified look */
                 backdrop-filter: blur(var(--hud-blur));
                 -webkit-backdrop-filter: blur(var(--hud-blur));
                 border: 1px solid var(--hud-border);
@@ -116,31 +129,47 @@ const MobileUIHandler = {
                 height: 85vh;
                 max-height: calc(100vh - 80px);
                 border-radius: 20px 20px 0 0;
-                /* "Peek" state */
-                transform: translateY(calc(85vh - var(--drawer-peek-height))); 
+                
+                /* [NEW] Default state is "Mini View" (State 0) */
+                transform: translateY(calc(85vh - var(--drawer-mini-height))); 
+                
                 display: flex;
                 flex-direction: column;
                 transition-property: transform;
                 transition-duration: 0.45s;
                 transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
                 box-sizing: border-box;
+                
+                /* [NEW] Clip the .drawer-content when in Mini state */
+                overflow: hidden; 
             }
             #mobile-aircraft-bottom-drawer.dragging { transition: none; }
             #mobile-aircraft-bottom-drawer.off-screen { transform: translateY(100%); }
-            #mobile-aircraft-bottom-drawer.expanded { transform: translateY(0); }
+            
+            /* [NEW] "Peek View" (State 1) */
+            #mobile-aircraft-bottom-drawer.peek {
+                transform: translateY(calc(85vh - var(--drawer-peek-height)));
+            }
+            
+            /* [Unchanged] "Expanded View" (State 2) */
+            #mobile-aircraft-bottom-drawer.expanded {
+                transform: translateY(0);
+                /* [MODIFIED] Allow overflow when expanded for scrolling */
+                overflow: visible;
+            }
 
-            /* --- [REHAUL v5.1] New Drawer Handle --- */
+            /* --- Drawer Handle --- */
             .drawer-handle {
                 height: var(--drawer-handle-height);
                 flex-shrink: 0;
                 cursor: grab;
                 touch-action: none;
                 user-select: none;
-                padding: 10px; /* Click/touch area */
+                padding: 10px;
                 display: grid;
                 place-items: center;
                 border-bottom: 1px solid var(--hud-border);
-                background: rgba(18, 20, 38, 0.85); /* Match drawer bg */
+                background: transparent; /* [MODIFIED] Part of unified bg */
                 box-sizing: border-box;
             }
             .drawer-handle::before {
@@ -156,62 +185,107 @@ const MobileUIHandler = {
                 opacity: 0.4;
             }
 
-            /* --- Drawer Content Wrapper --- */
+            /* --- [NEW] State 0: "Mini View" / Apple Maps Style --- */
+            /* This is the #vsd-summary-bar, moved from crew-center.js */
+            #mobile-aircraft-bottom-drawer > #vsd-summary-bar {
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                gap: 10px;
+                height: var(--drawer-mini-content-height);
+                padding: 5px 16px 10px 16px;
+                box-sizing: border-box;
+                flex-shrink: 0;
+                background: transparent; /* [MODIFIED] Part of unified bg */
+                border-bottom: none; /* [REMOVED] */
+                margin-bottom: 0; /* [REMOVED] */
+            }
+            #vsd-summary-bar .vsd-summary-item {
+                flex-direction: column-reverse; /* [NEW] Value on top, Label on bottom */
+                text-align: center;
+                justify-content: center;
+            }
+            #vsd-summary-bar .vsd-summary-item .data-value {
+                font-size: 2.2rem; /* [NEW] Much larger value */
+                font-weight: 600;
+                line-height: 1.1;
+                color: #fff;
+            }
+            #vsd-summary-bar .vsd-summary-item .data-label {
+                font-size: 0.8rem; /* [NEW] Smaller, subtler label */
+                color: #9fa8da;
+                text-transform: uppercase;
+                font-weight: 500;
+            }
+            /* Hide the .unit (NM, fpm) in mini view */
+            #vsd-summary-bar .vsd-summary-item .data-value .unit {
+                display: none;
+            }
+            /* [END NEW MINI VIEW] */
+
+
+            /* --- Drawer Content Wrapper (for States 1 & 2) --- */
             .drawer-content {
                 overflow-y: auto;
                 flex-grow: 1;
-                /* [NEW] Add safe-area padding here */
                 padding-bottom: env(safe-area-inset-bottom, 0);
+                
+                /* [NEW] When expanded, add a top border to separate
+                   from the summary bar, which is now *above* it. */
+                #mobile-aircraft-bottom-drawer.expanded & {
+                    border-top: 1px solid var(--hud-border);
+                }
             }
-            /* Custom Scrollbar for the drawer */
             .drawer-content::-webkit-scrollbar { width: 6px; }
             .drawer-content::-webkit-scrollbar-track { background: transparent; }
             .drawer-content::-webkit-scrollbar-thumb { background-color: var(--hud-accent); border-radius: 10px; }
             
-            /* --- [REHAUL v5.1] Core Rehaul: Side-by-Side Peek Layout --- */
-            #mobile-aircraft-bottom-drawer .unified-display-main {
-                /* This is the PEEK state layout */
+            
+            /* --- [RE-SCOPED] State 1: "Peek View" Side-by-Side Layout --- */
+            /* All selectors here are now prefixed with .peek */
+            #mobile-aircraft-bottom-drawer.peek .unified-display-main {
                 display: grid !important;
-                grid-template-columns: 1.2fr 1fr !important; /* PFD slightly larger */
+                grid-template-columns: 1.2fr 1fr !important;
                 grid-template-rows: 1fr;
-                
-                /* Constrain height to fit in the peek view */
                 height: var(--drawer-peek-content-height); /* 200px */
                 padding: 10px;
                 box-sizing: border-box;
                 gap: 10px;
-                overflow: hidden; /* Clip anything below */
+                overflow: hidden;
                 transition: all 0.3s ease-in-out;
             }
             
-            #mobile-aircraft-bottom-drawer .pfd-main-panel {
-                /* Override centering from desktop-mobile */
+            #mobile-aircraft-bottom-drawer.peek .pfd-main-panel {
                 margin: 0 !important;
                 max-width: none !important;
-                justify-content: center; /* Keep it centered vertically */
+                justify-content: center;
             }
             
-            #mobile-aircraft-bottom-drawer .live-data-panel {
-                /* Override styles for peek view */
+            #mobile-aircraft-bottom-drawer.peek .live-data-panel {
                 justify-content: space-around !important;
                 padding: 0 !important;
                 background: none !important;
             }
             
-            #mobile-aircraft-bottom-drawer .live-data-item .data-label {
-                font-size: 0.6rem; /* Smaller label */
+            #mobile-aircraft-bottom-drawer.peek .live-data-item .data-label {
+                font-size: 0.6rem;
             }
-            #mobile-aircraft-bottom-drawer .live-data-item .data-value {
-                font-size: 1.1rem; /* Smaller value */
+            #mobile-aircraft-bottom-drawer.peek .live-data-item .data-value {
+                font-size: 1.1rem;
             }
-            #mobile-aircraft-bottom-drawer .live-data-item .data-value .unit {
+            #mobile-aircraft-bottom-drawer.peek .live-data-item .data-value .unit {
                 font-size: 0.7rem;
             }
-            #mobile-aircraft-bottom-drawer .live-data-item .data-value-ete {
-                font-size: 1.3rem; /* ETE still a bit bigger */
+            #mobile-aircraft-bottom-drawer.peek .live-data-item .data-value-ete {
+                font-size: 1.3rem;
             }
 
-            /* --- [REHAUL v5.1] Revert to stacked layout when EXPANDED --- */
+            /* [NEW] Hide the stats button in Mini and Peek states */
+            .pilot-stats-toggle-btn {
+                display: none;
+            }
+
+            /* --- [RE-SCOPED] State 2: "Expanded" Stacked Layout --- */
+            /* Selectors are prefixed with .expanded */
             #mobile-aircraft-bottom-drawer.expanded .unified-display-main {
                 grid-template-columns: 1fr !important; /* Stacked */
                 height: auto;
@@ -220,34 +294,38 @@ const MobileUIHandler = {
             }
             
             #mobile-aircraft-bottom-drawer.expanded .pfd-main-panel {
-                margin: 0 auto !important; /* Re-center the PFD */
+                margin: 0 auto !important;
                 max-width: 400px !important;
             }
 
             #mobile-aircraft-bottom-drawer.expanded .live-data-panel {
-                justify-content: space-around !important; /* Keep this */
-                padding: 0 !important; /* Keep this */
-                background: rgba(10, 12, 26, 0.5) !important; /* Restore bg */
+                justify-content: space-around !important;
+                padding: 0 !important;
+                background: rgba(10, 12, 26, 0.5) !important;
             }
 
             #mobile-aircraft-bottom-drawer.expanded .live-data-item .data-label {
-                font-size: 0.7rem; /* Restore label size */
+                font-size: 0.7rem;
             }
             #mobile-aircraft-bottom-drawer.expanded .live-data-item .data-value {
-                font-size: 1.5rem; /* Restore value size */
+                font-size: 1.5rem;
             }
              #mobile-aircraft-bottom-drawer.expanded .live-data-item .data-value .unit {
                 font-size: 0.8rem;
             }
             #mobile-aircraft-bottom-drawer.expanded .live-data-item .data-value-ete {
-                font-size: 1.7rem; /* Restore ETE size */
+                font-size: 1.7rem;
             }
-            /* --- [END REHAUL v5.1] --- */
+            
+            /* [NEW] Show stats button ONLY when expanded */
+            #mobile-aircraft-bottom-drawer.expanded .pilot-stats-toggle-btn {
+                display: flex;
+            }
+            /* --- [END REHAUL v5.2] --- */
 
 
             @media (max-width: ${this.CONFIG.breakpoint}px) {
                 #aircraft-info-window, #airport-info-window {
-                    /* This is the key that hides the original desktop window */
                     display: none !important;
                 }
             }
@@ -304,8 +382,7 @@ const MobileUIHandler = {
         this.overlayEl = document.createElement('div');
         this.overlayEl.id = 'mobile-window-overlay';
         viewContainer.appendChild(this.overlayEl);
-        this.overlayEl.addEventListener('click', () => this.toggleExpansion(false));
-
+        
         this.topWindowEl = document.createElement('div');
         this.topWindowEl.id = 'mobile-aircraft-top-window';
         this.topWindowEl.className = 'mobile-aircraft-view';
@@ -352,10 +429,11 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v5.1]
+     * [REHAUL v5.2]
      * Moves content from the original window into the new HUD components.
-     * 1. Moves .aircraft-overview-panel to top window. (Route summary stays inside)
-     * 2. Moves .unified-display-main-content to bottom drawer's content.
+     * 1. Moves .aircraft-overview-panel to top window.
+     * 2. [NEW] Moves #vsd-summary-bar to the bottom drawer's root.
+     * 3. Moves .unified-display-main-content to bottom drawer's content wrapper.
      */
     populateSplitView(sourceWindow) {
         if (!this.topWindowEl || !this.bottomDrawerEl) return;
@@ -365,18 +443,22 @@ const MobileUIHandler = {
 
         // Find original content pieces from crew-center.js
         const topOverviewPanel = sourceWindow.querySelector('.aircraft-overview-panel');
+        const vsdSummaryBar = sourceWindow.querySelector('#vsd-summary-bar');
         const mainFlightContent = sourceWindow.querySelector('.unified-display-main-content');
         
-        // [REVERTED] No longer moving the route summary handle
-
         // [CRITICAL] Move the elements, don't clone them
         if (topOverviewPanel) {
-            // The .route-summary-overlay is INSIDE this panel and will move with it,
-            // staying at the bottom of the top panel, as requested.
             this.topWindowEl.appendChild(topOverviewPanel);
+        }
+
+        // [NEW] Move the summary bar to be a direct child of the drawer,
+        // placing it between the handle and the content wrapper.
+        if (vsdSummaryBar) {
+            this.bottomDrawerEl.insertBefore(vsdSummaryBar, drawerContentContainer);
         }
         
         if (mainFlightContent) {
+            // This container now holds the PFD, VSD, stats button, etc.
             drawerContentContainer.appendChild(mainFlightContent);
         }
         
@@ -384,22 +466,26 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v5.1]
-     * Adds event listeners for mobile interactions (swipe) AND re-wires
-     * desktop-driven buttons. Now targets ".drawer-handle".
+     * [REHAUL v5.2]
+     * Adds event listeners. Click now cycles through 3 states.
      */
     wireUpInteractions() {
         if (!this.bottomDrawerEl || !this.topWindowEl) return;
 
-        // [REHAUL v5.1] Target the new static grab bar handle
         const drawerHandle = this.bottomDrawerEl.querySelector('.drawer-handle');
 
         // --- Mobile-specific interactions ---
         if (drawerHandle) {
             drawerHandle.addEventListener('click', (e) => {
-                this.toggleExpansion();
+                // [NEW] Cycle through states: 0 -> 1 -> 2 -> 0
+                this.setDrawerState(null, true); 
             });
             drawerHandle.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+        }
+        
+        // [NEW] Clicking the overlay always returns to the mini state
+        if (this.overlayEl) {
+            this.overlayEl.addEventListener('click', () => this.setDrawerState(0));
         }
         
         document.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
@@ -417,10 +503,10 @@ const MobileUIHandler = {
             }
 
             if (hideBtn) {
-                // This logic is from crew-center.js, adapted for mobile
                 this.topWindowEl.classList.remove('visible');
                 this.bottomDrawerEl.classList.add('off-screen');
                 this.overlayEl.classList.remove('visible');
+                this.setDrawerState(0); // Reset to mini state
                 
                 const recallBtn = document.getElementById('aircraft-recall-btn');
                 if (recallBtn) {
@@ -433,20 +519,17 @@ const MobileUIHandler = {
         // 2. Stats and Back buttons (in bottom drawer)
         this.bottomDrawerEl.addEventListener('click', async (e) => {
             const statsBtn = e.target.closest('.pilot-stats-toggle-btn');
-            const backBtn = e.target.closest('.back-to-flight-btn'); // Renamed in crew-center
+            const backBtn = e.target.closest('.back-to-flight-btn');
 
             if (statsBtn) {
                 const userId = statsBtn.dataset.userId;
                 const username = statsBtn.dataset.username;
                 
-                // This logic is from crew-center.js
                 if (userId) {
                     const statsDisplay = this.bottomDrawerEl.querySelector('#pilot-stats-display');
                     const flightDisplay = this.bottomDrawerEl.querySelector('#aircraft-display-main');
                     if (statsDisplay && flightDisplay) {
-                        // This function is global, defined in crew-center.js
                         await displayPilotStats(userId, username);
-                        // Ensure mobile UI shows the right panel
                         flightDisplay.style.display = 'none';
                         statsDisplay.style.display = 'block';
                     }
@@ -454,7 +537,6 @@ const MobileUIHandler = {
             }
 
             if (backBtn) {
-                // This logic is from crew-center.js
                 const statsDisplay = this.bottomDrawerEl.querySelector('#pilot-stats-display');
                 const flightDisplay = this.bottomDrawerEl.querySelector('#aircraft-display-main');
                 if (statsDisplay && flightDisplay) {
@@ -466,15 +548,36 @@ const MobileUIHandler = {
     },
     
     /**
-     * Toggles the drawer between its expanded and peek states.
+     * [NEW] Sets the drawer to a specific state (0=Mini, 1=Peek, 2=Expanded).
+     * @param {number | null} targetState - The state to snap to (0, 1, or 2).
+     * @param {boolean} [isClick=false] - If true, cycle to the next state.
      */
-    toggleExpansion(force) {
+    setDrawerState(targetState, isClick = false) {
         if (!this.bottomDrawerEl || this.swipeState.isDragging) return;
-        const isExpanded = this.bottomDrawerEl.classList.contains('expanded');
-        const shouldExpand = force === undefined ? !isExpanded : force;
+        
+        let newState;
+        if (isClick) {
+            newState = (this.drawerState + 1) % 3; // Cycle 0 -> 1 -> 2 -> 0
+        } else {
+            newState = targetState;
+        }
 
-        this.bottomDrawerEl.classList.toggle('expanded', shouldExpand);
-        if (this.overlayEl) this.overlayEl.classList.toggle('visible', shouldExpand);
+        if (newState === this.drawerState) return; // No change
+
+        this.drawerState = newState;
+
+        // Reset classes
+        this.bottomDrawerEl.classList.remove('peek', 'expanded');
+
+        if (this.drawerState === 1) {
+            this.bottomDrawerEl.classList.add('peek');
+        } else if (this.drawerState === 2) {
+            this.bottomDrawerEl.classList.add('expanded');
+        }
+        
+        // Overlay is only visible when fully expanded
+        const isFullyExpanded = (this.drawerState === 2);
+        if (this.overlayEl) this.overlayEl.classList.toggle('visible', isFullyExpanded);
     },
 
     // --- Swipe Gesture Handlers ---
@@ -517,33 +620,31 @@ const MobileUIHandler = {
         this.bottomDrawerEl.style.transform = ''; // Clear inline style
 
         const deltaY = this.swipeState.touchCurrentY - this.swipeState.touchStartY;
-        const isExpanded = this.bottomDrawerEl.classList.contains('expanded');
+        const currentState = this.drawerState;
 
-        if (deltaY > 150) { // Swiped down a lot
-             // If expanded, just collapse. If already collapsed, close everything.
-            if (isExpanded) {
-                 this.toggleExpansion(false);
-            } else {
-                 this.closeActiveWindow();
-                 return;
-            }
+        // [NEW] "Throw away" gesture: swipe down hard from the mini state
+        if (deltaY > 150 && currentState === 0) {
+             this.closeActiveWindow();
+             return;
         }
         
+        let newState = currentState;
         // Snap open or closed based on swipe direction
-        if (deltaY < -50) this.toggleExpansion(true); // Swiped up
-        else if (deltaY > 50) this.toggleExpansion(false); // Swiped down
-        else {
-             // Not a strong swipe, snap back to original state
-             this.toggleExpansion(isExpanded);
+        if (deltaY < -50) { // Swiped up
+             newState = Math.min(2, currentState + 1); // Go up one state, max 2
+        } else if (deltaY > 50) { // Swiped down
+             newState = Math.max(0, currentState - 1); // Go down one state, min 0
         }
+        
+        // Snap to the new (or old) state
+        this.setDrawerState(newState);
         
         this.swipeState = { ...this.swipeState, touchStartY: 0, touchCurrentY: 0 };
     },
 
     /**
-     * [REHAUL v5.1]
-     * Animates out, moves content back to the original hidden window,
-     * and removes all mobile UI components.
+     * [REHAUL v5.2]
+     * Animates out, moves content back (including summary bar), and cleans up.
      */
     closeActiveWindow(force = false) {
         if (this.contentObserver) this.contentObserver.disconnect();
@@ -551,15 +652,28 @@ const MobileUIHandler = {
         // [CRITICAL] Move content back to the original hidden window
         if (this.activeWindow && this.topWindowEl && this.bottomDrawerEl) {
             const topOverviewPanel = this.topWindowEl.querySelector('.aircraft-overview-panel');
+            
+            // [NEW] Find the summary bar and main content
+            const vsdSummaryBar = this.bottomDrawerEl.querySelector('#vsd-summary-bar');
             const mainFlightContent = this.bottomDrawerEl.querySelector('.unified-display-main-content');
             
-            // [REVERTED] No logic needed for route summary handle
-
             if (topOverviewPanel) {
-                // Move the entire top panel (with summary bar still inside) back
                 this.activeWindow.appendChild(topOverviewPanel);
             }
             
+            // [NEW] Put the summary bar back where it belongs
+            if (vsdSummaryBar && mainFlightContent) {
+                // Find its original parent container
+                const aircraftDisplayMain = mainFlightContent.querySelector('#aircraft-display-main');
+                if (aircraftDisplayMain) {
+                    // Prepend it so it's the first child
+                    aircraftDisplayMain.prepend(vsdSummaryBar); 
+                } else {
+                    // Fallback in case structure changed
+                    mainFlightContent.prepend(vsdSummaryBar);
+                }
+            }
+
             if (mainFlightContent) {
                 this.activeWindow.appendChild(mainFlightContent);
             }
@@ -567,61 +681,49 @@ const MobileUIHandler = {
 
         const animationDuration = force ? 0 : 500;
 
-        // --- [FIX #1 START] ---
-        // 1. Capture the *current* elements that need to be removed.
         const overlayToRemove = this.overlayEl;
         const topWindowToRemove = this.topWindowEl;
         const bottomDrawerToRemove = this.bottomDrawerEl;
 
-        // 2. Stop the PFD interval
         if (window.activePfdUpdateInterval) {
              clearInterval(window.activePfdUpdateInterval);
              window.activePfdUpdateInterval = null;
         }
 
-        // 3. Handle removal and cleanup based on 'force'
         if (force) {
-            // --- SYNCHRONOUS PATH ---
-            // Immediately remove elements
             overlayToRemove?.remove();
             topWindowToRemove?.remove();
             bottomDrawerToRemove?.remove();
             
-            // Immediately cleanup state
             this.activeWindow = null;
             this.contentObserver = null;
             this.topWindowEl = null;
             this.bottomDrawerEl = null;
             this.overlayEl = null;
+            this.drawerState = 0; // [NEW] Reset state
         } else {
-            // --- ASYNCHRONOUS PATH ---
-            // Animate out
             if (overlayToRemove) overlayToRemove.classList.remove('visible');
             if (topWindowToRemove) topWindowToRemove.classList.remove('visible');
             if (bottomDrawerToRemove) {
                 bottomDrawerToRemove.classList.add('off-screen');
-                bottomDrawerToRemove.classList.remove('expanded');
+                bottomDrawerToRemove.classList.remove('peek', 'expanded');
             }
 
-            // Schedule removal AND state cleanup
             setTimeout(() => {
                 overlayToRemove?.remove();
                 topWindowToRemove?.remove();
                 bottomDrawerToRemove?.remove();
                 
-                // [CRITICAL] Only reset the state if a new window
-                // hasn't already been created. We check if the *current*
-                // state element is the same one we intended to remove.
                 if (this.topWindowEl === topWindowToRemove) {
                     this.activeWindow = null;
                     this.contentObserver = null;
                     this.topWindowEl = null;
                     this.bottomDrawerEl = null;
                     this.overlayEl = null;
+                    this.drawerState = 0; // [NEW] Reset state
                 }
             }, animationDuration);
         }
-        // --- [FIX #1 END] ---
     }
 };
 
