@@ -220,44 +220,111 @@ const MobileUIHandler = {
             .drawer-content::-webkit-scrollbar-track { background: transparent; }
             .drawer-content::-webkit-scrollbar-thumb { background-color: var(--hud-accent); border-radius: 10px; }
 
-            /* --- [MODIFIED] State 0: Mini View Content --- */
+            /* ====================================================================
+            --- [REDESIGN] State 0: Mini Island (HUD Instrument Look) ---
+            ==================================================================== */
+
             #mobile-island-mini > #vsd-summary-bar {
                 display: grid;
+                /* [MODIFIED] Use 3-col grid *without* gap for separator-line logic */
                 grid-template-columns: 1fr 1fr 1fr;
-                gap: 10px;
+                gap: 0;
                 height: 100%;
-                padding: 10px 16px; /* <-- MODIFIED */
+                padding: 10px 12px; /* [MODIFIED] Tighter padding */
                 box-sizing: border-box;
                 background: transparent;
                 border-bottom: none;
                 margin-bottom: 0;
-                align-items: center; /* <-- ADDED */
+                align-items: center;
             }
+
+            /* [MODIFIED] Item layout */
             #vsd-summary-bar .vsd-summary-item {
-                flex-direction: column-reverse;
+                flex-direction: column-reverse; /* Value on top, label on bottom */
                 text-align: center;
                 justify-content: center;
+                position: relative; /* [NEW] For the separator line */
+                padding: 0 4px; /* [NEW] Add horizontal breathing room */
             }
-            #vsd-summary-bar .vsd-summary-item .data-value {
-                font-size: 2.0rem; /* <-- MODIFIED */
-                font-weight: 600;
-                line-height: 1.1;
-                color: #fff;
-                overflow: hidden; /* <-- ADDED */
-                text-overflow: ellipsis; /* <-- ADDED */
-                white-space: nowrap; /* <-- ADDED */
+
+            /* [NEW] Vertical separator lines */
+            #vsd-summary-bar .vsd-summary-item:not(:last-child)::after {
+                content: '';
+                position: absolute;
+                right: 0;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 1px;
+                height: 30px; /* Height of the separator */
+                background: var(--hud-border);
+                opacity: 0.4;
             }
+
+            /* [MODIFIED] Data Label styling (smaller) */
             #vsd-summary-bar .vsd-summary-item .data-label {
-                font-size: 0.8rem;
+                font-size: 0.7rem; /* [MODIFIED] Made smaller */
                 color: #9fa8da;
                 text-transform: uppercase;
                 font-weight: 500;
-                overflow: hidden; /* <-- ADDED */
-                text-overflow: ellipsis; /* <-- ADDED */
-                white-space: nowrap; /* <-- ADDED */
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
+
+            /* [MODIFIED] Data Value styling */
+            #vsd-summary-bar .vsd-summary-item .data-value {
+                font-size: 1.8rem; /* [MODIFIED] Reduced from 2.0rem to fit better */
+                font-weight: 600;
+                line-height: 1.2;
+                color: #fff;
+                
+                /* [NEW] Use Flexbox to align icon, value, and unit */
+                display: flex;
+                align-items: baseline; /* Aligns "100" and "NM" text */
+                justify-content: center;
+                gap: 4px; /* Space between items */
+                
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            /* [NEW] Icon for DIST. TO DEST. */
+            #vsd-summary-bar .vsd-summary-item .data-value#ac-dist::before {
+                font-family: "Font Awesome 6 Free";
+                font-weight: 900;
+                content: "\\f140"; /* fa-location-crosshairs */
+                font-size: 1.0rem; /* [NEW] Icon size */
+                color: var(--hud-accent);
+                line-height: 1; /* Helps vertical alignment */
+            }
+
+            /* [NEW] Icon for ETE TO DEST. */
+            #vsd-summary-bar .vsd-summary-item .data-value#ac-ete::before {
+                font-family: "Font Awesome 6 Free";
+                font-weight: 900;
+                content: "\\f017"; /* fa-clock */
+                font-size: 1.0rem; /* [NEW] Icon size */
+                color: var(--hud-accent);
+                line-height: 1;
+            }
+
+            /* [NEW] Style the *existing* HTML icon for VERTICAL SPEED */
+            #vsd-summary-bar .vsd-summary-item .data-value#ac-vs .fa-solid {
+                font-size: 1.0rem; /* [NEW] Icon size */
+                color: var(--hud-accent);
+                line-height: 1;
+                /* [FIX] Add a small right margin to separate from the number */
+                margin-right: 2px;
+            }
+
+            /* [MODIFIED] Show the units (was display: none) */
             #vsd-summary-bar .vsd-summary-item .data-value .unit {
-                display: none;
+                display: inline-block;
+                font-size: 0.8rem;
+                color: #9fa8da;
+                font-weight: 400;
+                margin-left: 1px; /* Small space from the number */
             }
 
             /* --- [REDESIGNED] State 1: "Peek View" Stacked Layout --- */
