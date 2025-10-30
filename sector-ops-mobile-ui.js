@@ -194,19 +194,18 @@ const MobileUIHandler = {
                 user-select: none;
                 display: grid;
                 place-items: center;
-                /* border-bottom: 1px solid var(--hud-border); <-- REMOVED */
                 box-sizing: border-box;
             }
             .drawer-handle::before {
                 content: '';
-                width: 40px; /* <-- MODIFIED */
-                height: 4px; /* <-- MODIFIED */
+                width: 40px; 
+                height: 4px; 
                 background: var(--hud-border);
-                border-radius: 2px; /* <-- MODIFIED */
-                opacity: 0.5; /* <-- MODIFIED */
+                border-radius: 2px; 
+                opacity: 0.5; 
             }
             #mobile-island-expanded .drawer-handle::before {
-                opacity: 0.5; /* <-- MODIFIED (consistent) */
+                opacity: 0.5; 
             }
             
             /* --- [MODIFIED] Drawer Content (Used in Peek & Expanded) --- */
@@ -214,7 +213,8 @@ const MobileUIHandler = {
                 overflow-y: auto;
                 flex-grow: 1;
                 padding-bottom: env(safe-area-inset-bottom, 0);
-                border-top: 1px solid var(--hud-border); /* <-- ADDED */
+                /* [USER REDESIGN] Removed separator line for seamless look */
+                /* border-top: 1px solid var(--hud-border); <-- REMOVED */
             }
             #mobile-island-peek .drawer-content {
                 overflow: hidden;
