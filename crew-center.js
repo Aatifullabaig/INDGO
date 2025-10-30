@@ -162,14 +162,14 @@ function injectCustomStyles() {
             grid-row: 1 / -1;
         }
 
-        /* * --- [USER REQUEST FIX - MOVED!] ---
+        /* * --- [ - MOVED!] ---
          * This rule is now GLOBAL (for desktop + mobile).
          * It makes the main content area fill the entire viewport 
          * ONLY when the Sector Ops map is active.
         */
         .main-content:has(#view-rosters.active) {
             padding: 0; /* Remove ALL padding (top, right, bottom, left) */
-            height: 100vh; /* Set height to 100% of the viewport height */
+            height: 100dvh; /* Set height to 100% of the viewport height */
             overflow: hidden; /* Prevent the main container from scrolling */
         }
         
@@ -1085,7 +1085,7 @@ function injectCustomStyles() {
             /*
             .main-content:has(#view-rosters.active) {
                 padding: 0; 
-                height: 100vh; 
+                height: 100dvh; 
                 overflow: hidden; 
             }
             */
