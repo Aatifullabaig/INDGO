@@ -71,7 +71,10 @@ const MobileUIHandler = {
                 
                 /* [MODIFIED] Island Dimensions */
                 --drawer-handle-height: 30px; /* <-- Tighter handle */
-                --drawer-mini-content-height: 65px;
+                
+                /* [USER REDESIGN] Made Mini Island taller */
+                --drawer-mini-content-height: 85px; /* <-- Was 65px */
+                
                 --drawer-peek-content-height: 200px;
                 --island-bottom-margin: env(safe-area-inset-bottom, 15px);
                 --island-side-margin: 15px;
@@ -221,16 +224,15 @@ const MobileUIHandler = {
             .drawer-content::-webkit-scrollbar-thumb { background-color: var(--hud-accent); border-radius: 10px; }
 
             /* ====================================================================
-            --- [REDESIGN] State 0: Mini Island (HUD Instrument Look) ---
+            --- [USER REDESIGN V2] State 0: Minimalist Widget Look ---
             ==================================================================== */
 
             #mobile-island-mini > #vsd-summary-bar {
                 display: grid;
-                /* [MODIFIED] Use 3-col grid *without* gap for separator-line logic */
                 grid-template-columns: 1fr 1fr 1fr;
-                gap: 0;
+                gap: 0; /* No gap, spacing is handled by padding */
                 height: 100%;
-                padding: 10px 12px; /* [MODIFIED] Tighter padding */
+                padding: 12px; /* [MODIFIED] More vertical padding */
                 box-sizing: border-box;
                 background: transparent;
                 border-bottom: none;
@@ -240,92 +242,59 @@ const MobileUIHandler = {
 
             /* [MODIFIED] Item layout */
             #vsd-summary-bar .vsd-summary-item {
-                flex-direction: column-reverse; /* Value on top, label on bottom */
+                flex-direction: column-reverse; /* [CRITICAL] Value on top, label on bottom */
                 text-align: center;
-                justify-content: center;
-                position: relative; /* [NEW] For the separator line */
-                padding: 0 4px; /* [NEW] Add horizontal breathing room */
+                justify-content: center; /* Center the stack vertically */
+                padding: 0 4px; 
             }
 
-            /* [NEW] Vertical separator lines */
-            #vsd-summary-bar .vsd-summary-item:not(:last-child)::after {
-                content: '';
-                position: absolute;
-                right: 0;
-                top: 50%;
-                transform: translateY(-50%);
-                width: 1px;
-                height: 30px; /* Height of the separator */
-                background: var(--hud-border);
-                opacity: 0.4;
-            }
+            /* [REMOVED] Vertical separator lines */
 
-            /* [MODIFIED] Data Label styling (smaller) */
+            /* [MODIFIED] Data Label styling */
             #vsd-summary-bar .vsd-summary-item .data-label {
-                font-size: 0.7rem; /* [MODIFIED] Made smaller */
+                font-size: 0.75rem; /* [MODIFIED] Slightly larger */
                 color: #9fa8da;
                 text-transform: uppercase;
                 font-weight: 500;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
+                margin-top: 4px; /* [NEW] Space between value and label */
             }
 
             /* [MODIFIED] Data Value styling */
             #vsd-summary-bar .vsd-summary-item .data-value {
-                font-size: 1.8rem; /* [MODIFIED] Reduced from 2.0rem to fit better */
+                font-size: 2.2rem; /* [MODIFIED] Increased for new height */
                 font-weight: 600;
-                line-height: 1.2;
+                line-height: 1.1; /* [MODIFIED] Tighter line height */
                 color: #fff;
                 
-                /* [NEW] Use Flexbox to align icon, value, and unit */
+                /* [MODIFIED] Use Flexbox *only* to align value and unit */
                 display: flex;
-                align-items: baseline; /* Aligns "100" and "NM" text */
+                align-items: baseline; 
                 justify-content: center;
-                gap: 4px; /* Space between items */
+                gap: 4px; /* Space between value and unit */
                 
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
 
-            /* [NEW] Icon for DIST. TO DEST. */
-            #vsd-summary-bar .vsd-summary-item .data-value#ac-dist::before {
-                font-family: "Font Awesome 6 Free";
-                font-weight: 900;
-                content: "\\f140"; /* fa-location-crosshairs */
-                font-size: 1.0rem; /* [NEW] Icon size */
-                color: var(--hud-accent);
-                line-height: 1; /* Helps vertical alignment */
-            }
-
-            /* [NEW] Icon for ETE TO DEST. */
-            #vsd-summary-bar .vsd-summary-item .data-value#ac-ete::before {
-                font-family: "Font Awesome 6 Free";
-                font-weight: 900;
-                content: "\\f017"; /* fa-clock */
-                font-size: 1.0rem; /* [NEW] Icon size */
-                color: var(--hud-accent);
-                line-height: 1;
-            }
-
-            /* [NEW] Style the *existing* HTML icon for VERTICAL SPEED */
-            #vsd-summary-bar .vsd-summary-item .data-value#ac-vs .fa-solid {
-                font-size: 1.0rem; /* [NEW] Icon size */
-                color: var(--hud-accent);
-                line-height: 1;
-                /* [FIX] Add a small right margin to separate from the number */
-                margin-right: 2px;
-            }
+            /* [REMOVED] All icon-related CSS */
 
             /* [MODIFIED] Show the units (was display: none) */
             #vsd-summary-bar .vsd-summary-item .data-value .unit {
                 display: inline-block;
-                font-size: 0.8rem;
+                font-size: 1.0rem; /* [MODIFIED] Increased size */
                 color: #9fa8da;
                 font-weight: 400;
-                margin-left: 1px; /* Small space from the number */
+                margin-left: 1px;
             }
+            
+            /* ====================================================================
+            --- [END V2 REDESIGN] ---
+            ==================================================================== */
+
 
             /* --- [REDESIGNED] State 1: "Peek View" Stacked Layout --- */
             #mobile-island-peek .unified-display-main {
