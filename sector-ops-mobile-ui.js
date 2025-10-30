@@ -1,30 +1,21 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v6.0 - Floating Islands)
+ * MobileUIHandler Module (Creative HUD Rehaul - v6.1 - Island Interiors)
  *
- * This version implements the user's "clean islands" concept. The single
- * bottom sheet has been REMOVED and replaced with three distinct, floating
- * island panels, similar to the top info window.
+ * This version implements the "clean islands" concept AND redesigns the
+ * content *within* the islands for a smoother, more modern HUD.
  *
- * 1. "Mini Island" (State 0): A minimal "Apple Maps" style data strip.
- * 2. "Peek Island" (State 1): A medium-sized panel with PFD + Live Data.
- * 3. "Expanded Island" (State 2): A large, scrollable panel for full content.
- *
- * REHAUL v6.0 CHANGES:
- * 1. NEW DOM STRUCTURE: createSplitViewUI() now builds 3 separate bottom
- * islands (#mobile-island-mini, #mobile-island-peek, #mobile-island-expanded)
- * instead of one #mobile-aircraft-bottom-drawer.
- * 2. NEW CSS "ISLAND" STYLING: injectMobileStyles() is rewritten to style these
- * new islands. They are all inset from the screen edges (left, right, bottom)
- * and have rounded corners.
- * 3. NEW STATE LOGIC: setDrawerState() no longer uses transforms. It simply
- * toggles an ".island-active" class on the correct of the three islands.
- * 4. NEW CONTENT PARENTING: populateSplitView() now MOVES the summary bar to
- * the mini-island, MOVES the *original* main content to the expanded-island,
- * and CLONES the main content into the peek-island.
- * 5. SIMPLIFIED SWIPES: All "drag-to-move" logic (handleTouchMove, .dragging)
- * has been REMOVED. Swipes now only "snap" to the next state on touchend.
- * 6. CLEANUP: closeActiveWindow() is updated to reparent the original content,
- * destroy the cloned content, and remove all 4 island elements.
+ * REHAUL v6.1 CHANGES (Interior Redesign):
+ * 1. NEW HANDLE: The handle is restyled to be a minimal "pill" (like
+ * the iOS Dynamic Island). The border is removed from the handle and
+ * added to the top of the content area.
+ * 2. STATE 0 (MINI): Typography is tightened and vertically centered
+ * for a cleaner "data strip" look.
+ * 3. STATE 1 (PEEK): The side-by-side layout is REMOVED. It is now a
+ * stacked layout: PFD on top, and a horizontal row of key
+ * live-data (in a module) at the bottom. This de-clutters the view.
+ * 4. STATE 2 (EXPANDED): The main content area is now a flex-column
+ * with a `gap`. Data panels (like live-data) and buttons are
+ * styled as distinct ".hud-module" cards for better organization.
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -55,18 +46,16 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (HUD Rehaul v6.0 / Floating Islands) Initialized.");
+        console.log("Mobile UI Handler (HUD Rehaul v6.1 / Island Interiors) Initialized.");
     },
 
     /**
      * Injects all the CSS for the new HUD-themed floating islands.
      * ---
-     * [REHAUL v6.0 / FLOATING ISLANDS]
-     * 1. Removes all #mobile-aircraft-bottom-drawer styles.
-     * 2. Adds new base class .mobile-island-bottom.
-     * 3. Adds styles for #mobile-island-mini, #mobile-island-peek,
-     * and #mobile-island-expanded, each positioned independently.
-     * 4. State is managed by a single .island-active class.
+     * [REHAUL v6.1 / INTERIOR REDESIGN]
+     * 1. Redesigns drawer handle to be a minimal "pill".
+     * 2. Redesigns State 1 (Peek) to be a stacked layout.
+     * 3. Adds ".hud-module" styling to State 2 (Expanded).
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -80,8 +69,8 @@ const MobileUIHandler = {
                 --hud-accent: #00a8ff;
                 --hud-glow: 0 0 15px rgba(0, 168, 255, 0.5);
                 
-                /* [NEW] Island Dimensions */
-                --drawer-handle-height: 35px;
+                /* [MODIFIED] Island Dimensions */
+                --drawer-handle-height: 30px; /* <-- Tighter handle */
                 --drawer-mini-content-height: 65px;
                 --drawer-peek-content-height: 200px;
                 --island-bottom-margin: env(safe-area-inset-bottom, 15px);
@@ -193,7 +182,7 @@ const MobileUIHandler = {
                 overflow: hidden; /* .drawer-content will scroll */
             }
 
-            /* --- Drawer Handle (Used in Peek & Expanded) --- */
+            /* --- [MODIFIED] Drawer Handle (Used in Peek & Expanded) --- */
             .drawer-handle {
                 height: var(--drawer-handle-height);
                 flex-shrink: 0;
@@ -202,26 +191,27 @@ const MobileUIHandler = {
                 user-select: none;
                 display: grid;
                 place-items: center;
-                border-bottom: 1px solid var(--hud-border);
+                /* border-bottom: 1px solid var(--hud-border); <-- REMOVED */
                 box-sizing: border-box;
             }
             .drawer-handle::before {
                 content: '';
-                width: 50px;
-                height: 5px;
+                width: 40px; /* <-- MODIFIED */
+                height: 4px; /* <-- MODIFIED */
                 background: var(--hud-border);
-                border-radius: 3px;
-                opacity: 0.8;
+                border-radius: 2px; /* <-- MODIFIED */
+                opacity: 0.5; /* <-- MODIFIED */
             }
             #mobile-island-expanded .drawer-handle::before {
-                opacity: 0.4;
+                opacity: 0.5; /* <-- MODIFIED (consistent) */
             }
             
-            /* --- Drawer Content (Used in Peek & Expanded) --- */
+            /* --- [MODIFIED] Drawer Content (Used in Peek & Expanded) --- */
             .drawer-content {
                 overflow-y: auto;
                 flex-grow: 1;
                 padding-bottom: env(safe-area-inset-bottom, 0);
+                border-top: 1px solid var(--hud-border); /* <-- ADDED */
             }
             #mobile-island-peek .drawer-content {
                 overflow: hidden;
@@ -230,18 +220,18 @@ const MobileUIHandler = {
             .drawer-content::-webkit-scrollbar-track { background: transparent; }
             .drawer-content::-webkit-scrollbar-thumb { background-color: var(--hud-accent); border-radius: 10px; }
 
-            /* --- State 0: Mini View Content (Summary Bar) --- */
-            /* This is the #vsd-summary-bar, now living in #mobile-island-mini */
+            /* --- [MODIFIED] State 0: Mini View Content --- */
             #mobile-island-mini > #vsd-summary-bar {
                 display: grid;
                 grid-template-columns: 1fr 1fr 1fr;
                 gap: 10px;
                 height: 100%;
-                padding: 5px 16px 10px 16px;
+                padding: 10px 16px; /* <-- MODIFIED */
                 box-sizing: border-box;
                 background: transparent;
                 border-bottom: none;
                 margin-bottom: 0;
+                align-items: center; /* <-- ADDED */
             }
             #vsd-summary-bar .vsd-summary-item {
                 flex-direction: column-reverse;
@@ -249,27 +239,31 @@ const MobileUIHandler = {
                 justify-content: center;
             }
             #vsd-summary-bar .vsd-summary-item .data-value {
-                font-size: 2.2rem;
+                font-size: 2.0rem; /* <-- MODIFIED */
                 font-weight: 600;
                 line-height: 1.1;
                 color: #fff;
+                overflow: hidden; /* <-- ADDED */
+                text-overflow: ellipsis; /* <-- ADDED */
+                white-space: nowrap; /* <-- ADDED */
             }
             #vsd-summary-bar .vsd-summary-item .data-label {
                 font-size: 0.8rem;
                 color: #9fa8da;
                 text-transform: uppercase;
                 font-weight: 500;
+                overflow: hidden; /* <-- ADDED */
+                text-overflow: ellipsis; /* <-- ADDED */
+                white-space: nowrap; /* <-- ADDED */
             }
             #vsd-summary-bar .vsd-summary-item .data-value .unit {
                 display: none;
             }
 
-            /* --- State 1: "Peek View" Side-by-Side Layout --- */
-            /* Selectors are now prefixed with #mobile-island-peek */
+            /* --- [REDESIGNED] State 1: "Peek View" Stacked Layout --- */
             #mobile-island-peek .unified-display-main {
-                display: grid !important;
-                grid-template-columns: 1.2fr 1fr !important;
-                grid-template-rows: 1fr;
+                display: flex !important; /* <-- MODIFIED */
+                flex-direction: column; /* <-- MODIFIED */
                 height: var(--drawer-peek-content-height); /* 200px */
                 padding: 10px;
                 box-sizing: border-box;
@@ -280,11 +274,22 @@ const MobileUIHandler = {
                 margin: 0 !important;
                 max-width: none !important;
                 justify-content: center;
+                flex-grow: 1; /* <-- ADDED */
+                min-height: 0; /* <-- ADDED */
+                width: 100%; /* <-- ADDED */
             }
             #mobile-island-peek .live-data-panel {
+                flex-direction: row; /* <-- ADDED */
                 justify-content: space-around !important;
-                padding: 0 !important;
-                background: none !important;
+                padding: 8px 0 !important; /* <-- MODIFIED */
+                background: rgba(10, 12, 26, 0.5) !important; /* <-- ADDED */
+                border-radius: 10px; /* <-- ADDED */
+                flex-shrink: 0; /* <-- ADDED */
+            }
+            /* [NEW] Style Peek items for horizontal row */
+            #mobile-island-peek .live-data-item {
+                flex-direction: column-reverse;
+                align-items: center;
             }
             #mobile-island-peek .live-data-item .data-label { font-size: 0.6rem; }
             #mobile-island-peek .live-data-item .data-value { font-size: 1.1rem; }
@@ -296,33 +301,57 @@ const MobileUIHandler = {
                 display: none;
             }
 
-            /* --- State 2: "Expanded" Stacked Layout --- */
-            /* Selectors are prefixed with #mobile-island-expanded */
+            /* --- [NEW] HUD Modules for Expanded View --- */
+            .hud-module {
+                background: rgba(10, 12, 26, 0.5);
+                border-radius: 12px;
+                padding: 16px;
+                box-sizing: border-box;
+            }
+
+            /* --- [REDESIGNED] State 2: "Expanded" Stacked Layout --- */
             #mobile-island-expanded .unified-display-main {
-                grid-template-columns: 1fr !important; /* Stacked */
+                display: flex !important; /* <-- ADDED */
+                flex-direction: column; /* <-- ADDED */
+                gap: 16px; /* <-- ADDED */
                 height: auto;
-                overflow: visible; /* Allow scrolling */
-                padding: 16px; /* Restore original padding */
+                overflow: hidden; /* <-- MODIFIED */
+                padding: 16px;
             }
             #mobile-island-expanded .pfd-main-panel {
                 margin: 0 auto !important;
                 max-width: 400px !important;
+                /* This is a display, not a module, so it has no BG */
             }
             #mobile-island-expanded .live-data-panel {
                 justify-content: space-around !important;
-                padding: 0 !important;
+                /* Apply module styles */
                 background: rgba(10, 12, 26, 0.5) !important;
+                border-radius: 12px; /* <-- ADDED */
+                padding: 16px !important; /* <-- ADDED */
             }
+            /* These styles are fine, they are for the *contents* of the module */
             #mobile-island-expanded .live-data-item .data-label { font-size: 0.7rem; }
             #mobile-island-expanded .live-data-item .data-value { font-size: 1.5rem; }
             #mobile-island-expanded .live-data-item .data-value .unit { font-size: 0.8rem; }
             #mobile-island-expanded .live-data-item .data-value-ete { font-size: 1.7rem; }
             
-            /* Show stats button ONLY when expanded */
+            /* [MODIFIED] Show stats button ONLY when expanded (as a module) */
             #mobile-island-expanded .pilot-stats-toggle-btn {
                 display: flex;
+                /* Apply module styles */
+                background: rgba(10, 12, 26, 0.5);
+                border-radius: 12px;
+                padding: 16px;
+                box-sizing: border-box;
+                justify-content: center;
+                align-items: center;
+                text-decoration: none;
+                color: var(--hud-accent);
+                font-weight: 600;
+                font-size: 1rem;
             }
-            /* --- [END REHAUL v6.0] --- */
+            /* --- [END REHAUL v6.1] --- */
 
             @media (max-width: ${this.CONFIG.breakpoint}px) {
                 #aircraft-info-window, #airport-info-window {
