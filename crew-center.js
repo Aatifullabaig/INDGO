@@ -1350,6 +1350,39 @@ function injectCustomStyles() {
         ====================================================================
         */
 
+        /* --- [NEW] Aircraft Window Tab Styles --- */
+        .ac-info-window-tabs {
+            display: flex;
+            background: rgba(10, 12, 26, 0.4);
+            padding: 5px 15px 0 15px;
+            /* Add a small margin to separate from content */
+            margin: 0 16px; 
+            margin-top: 16px;
+            border-radius: 8px 8px 0 0;
+        }
+        .ac-info-tab-btn {
+            padding: 14px 18px;
+            border: none;
+            background: none;
+            color: #c5cae9;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-bottom: 3px solid transparent;
+            transition: all 0.25s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .ac-info-tab-btn:hover { color: #fff; }
+        .ac-info-tab-btn.active { color: #00a8ff; border-bottom-color: #00a8ff; }
+
+        /* Hide the old toggle buttons, as tabs replace them */
+        .pilot-stats-toggle-btn,
+        .back-to-flight-btn {
+            display: none !important;
+        }
+
         /* --- [MODIFIED] VSD Disclaimer --- */
         .vsd-disclaimer {
             background: rgba(10, 12, 26, 0.5); /* --- [MODIFIED] Re-add bg --- */
@@ -3103,16 +3136,55 @@ function updatePfdDisplay(pfdData) {
         airportInfoWindow.dataset.eventsAttached = 'true';
     }
     
-// --- [MODIFIED] Event listener setup using Event Delegation ---
+// --- [MODIFIED] Event listener setup using Event Delegation for new Tabs ---
     function setupAircraftWindowEvents() {
         if (!aircraftInfoWindow || aircraftInfoWindow.dataset.eventsAttached === 'true') return;
     
         aircraftInfoWindow.addEventListener('click', async (e) => {
             const closeBtn = e.target.closest('.aircraft-window-close-btn');
             const hideBtn = e.target.closest('.aircraft-window-hide-btn');
-            const statsBtn = e.target.closest('.pilot-stats-toggle-btn');
-            const backBtn = e.target.closest('.back-to-flight-btn');
+            const tabBtn = e.target.closest('.ac-info-tab-btn'); // <-- NEW: Listen for tab clicks
 
+            // --- [NEW] Tab Switching Logic ---
+            if (tabBtn) {
+                e.preventDefault();
+                const tabId = tabBtn.dataset.tab;
+                if (!tabId || tabBtn.classList.contains('active')) {
+                    return; // Already on this tab or invalid button
+                }
+
+                // Find the main content container relative to the button
+                const windowContent = tabBtn.closest('.unified-display-main-content');
+                if (!windowContent) return;
+
+                // De-activate old tab and pane
+                windowContent.querySelector('.ac-info-tab-btn.active')?.classList.remove('active');
+                windowContent.querySelector('.ac-tab-pane.active')?.classList.remove('active');
+
+                // Activate new tab and pane
+                tabBtn.classList.add('active');
+                const newPane = windowContent.querySelector(`#${tabId}`);
+                
+                if (newPane) {
+                    newPane.classList.add('active');
+                }
+
+                // Check if we need to lazy-load the Pilot Report data
+                if (tabId === 'ac-tab-pilot-report') {
+                    const statsDisplay = newPane.querySelector('#pilot-stats-display');
+                    // Check if it's empty (has no child elements)
+                    if (statsDisplay && !statsDisplay.hasChildNodes()) { 
+                        const userId = tabBtn.dataset.userId;
+                        const username = tabBtn.dataset.username;
+                        if (userId) {
+                            // This function will fetch data and populate #pilot-stats-display
+                            await displayPilotStats(userId, username); 
+                        }
+                    }
+                }
+            }
+
+            // --- Original Close/Hide Logic (Unchanged) ---
             if (closeBtn) {
                 aircraftInfoWindow.classList.remove('visible');
                 MobileUIHandler.closeActiveWindow();
@@ -3134,21 +3206,7 @@ function updatePfdDisplay(pfdData) {
                 }
             }
 
-            // --- [RESTORED] Handle Stats Button Click ---
-            if (statsBtn) {
-                const userId = statsBtn.dataset.userId;
-                const username = statsBtn.dataset.username;
-                if (userId) {
-                    await displayPilotStats(userId, username);
-                }
-            }
-
-            // --- [RESTORED] Handle Back Button Click ---
-            if (backBtn) {
-                // Toggle visibility
-                document.getElementById('ac-tab-pilot-report').classList.remove('active');
-                document.getElementById('ac-tab-flight-data').classList.add('active');
-            }
+            // --- [REMOVED] Old button logic for statsBtn and backBtn ---
         });
     
         // The recall button logic remains the same.
@@ -3794,6 +3852,7 @@ async function handleAircraftClick(flightProps, sessionId) {
  * --- [MODIFIED] Replaced data list with Vertical Situation Display (VSD)
  * --- [MODIFIED v3] Added PFD Footer Panel
  * --- [MODIFIED v5] Implemented (USER REQUEST) (PFD | Data) over (VSD) layout
+ * --- [MODIFIED v6] Implemented (USER REQUEST) Tab-based navigation
  */
 function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     const windowEl = document.getElementById('aircraft-info-window');
@@ -3891,6 +3950,15 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
         </div>
 
         <div class="unified-display-main-content">
+            
+            <div class="ac-info-window-tabs">
+                <button class="ac-info-tab-btn active" data-tab="ac-tab-flight-data">
+                    <i class="fa-solid fa-gauge-high"></i> Flight Display
+                </button>
+                <button class="ac-info-tab-btn" data-tab="ac-tab-pilot-report" data-user-id="${baseProps.userId}" data-username="${baseProps.username || 'N/A'}">
+                    <i class="fa-solid fa-chart-simple"></i> Pilot Report
+                </button>
+            </div>
             
             <div id="ac-tab-flight-data" class="ac-tab-pane active">
                 
@@ -4071,17 +4139,15 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
                     <p><i class="fa-solid fa-circle-info"></i> The vertical profile may be inaccurate if your filed flight plan altitudes are incomplete or incorrect.</p>
                 </div>
 
-                <button class="pilot-stats-toggle-btn" data-user-id="${baseProps.userId}" data-username="${baseProps.username || 'N/A'}">
-                    <i class="fa-solid fa-chart-simple"></i>
-                    View Pilot Report for ${baseProps.username || 'N/A'}
-                </button>
-
-            </div> <div id="ac-tab-pilot-report" class="ac-tab-pane">
+                </div> 
+            
+            <div id="ac-tab-pilot-report" class="ac-tab-pane">
                 <div id="pilot-stats-display">
                     </div>
             </div>
 
-        </div> </div>
+        </div> 
+    </div>
     `;
     
     createPfdDisplay();
@@ -4092,9 +4158,9 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
     updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints);
 }
 
-    // --- [NEW - CORRECTED] Renders the creative Pilot Stats view inside the info window ---
 /**
  * --- [REHAULED v2.1] Renders the Pilot Report with collapsible sections and a case-sensitive profile link.
+ * --- [MODIFIED v2.2] Removed back button for new tabbed layout
  */
 function renderPilotStatsHTML(stats, username) {
     if (!stats) return '<p class="error-text">Could not load pilot statistics.</p>';
@@ -4197,8 +4263,7 @@ function renderPilotStatsHTML(stats, username) {
                 </div>
             </div>
             
-            <button class="back-to-pfd-btn"><i class="fa-solid fa-arrow-left"></i> Back to Flight Display</button>
-        </div>
+            </div>
     `;
 }
 
@@ -4207,18 +4272,18 @@ function renderPilotStatsHTML(stats, username) {
         if (!userId) return;
 
         // Get the containers
-        const statsPane = document.getElementById('ac-tab-pilot-report');
-        const flightPane = document.getElementById('ac-tab-flight-data');
+        // const statsPane = document.getElementById('ac-tab-pilot-report'); // No longer needed
+        // const flightPane = document.getElementById('ac-tab-flight-data'); // No longer needed
         const statsDisplay = document.getElementById('pilot-stats-display');
         
-        if (!statsPane || !flightPane || !statsDisplay) return;
+        if (!statsDisplay) return;
 
         // Show loading spinner in stats panel
         statsDisplay.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading pilot report for ${username}...</p>`;
         
-        // --- [RESTORED] Toggle visibility ---
-        flightPane.classList.remove('active');
-        statsPane.classList.add('active');
+        // --- [REMOVED] Toggle visibility ---
+        // flightPane.classList.remove('active');
+        // statsPane.classList.add('active');
 
         try {
             const res = await fetch(`${ACARS_USER_API_URL}/${userId}/grade`);
@@ -4253,11 +4318,10 @@ function renderPilotStatsHTML(stats, username) {
             }
         } catch (error) {
             console.error('Error fetching pilot stats:', error);
+            // [MODIFIED] Removed back button from error message
             statsDisplay.innerHTML = `<div class="stats-rehaul-container">
                 <p class="error-text">${error.message}</p>
-                <button class="back-to-flight-btn"><i class="fa-solid fa-arrow-left"></i> Back to Flight Display</button>
             </div>`;
-            // The main delegate will also catch this back button
         }
     }
 
