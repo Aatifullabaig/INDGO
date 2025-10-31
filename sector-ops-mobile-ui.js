@@ -51,17 +51,13 @@ const MobileUIHandler = {
      * 1. Reduces handle height and increases mini-data height.
      * 2. Removes border-bottom from .drawer-handle.
      * ---
-     * [USER MODIFICATION / PEEK REDESIGN]
-     * 1. Changed #mobile-island-peek .unified-display-main to flex-direction: row.
-     * 2. Assigned .pfd-main-panel a flex-basis of 55%.
-     * 3. Re-styled .live-data-panel to be a vertical column on the right,
-     * filling the remaining 45% (approx) of space.
-     * 4. Left-aligned and re-styled .live-data-item for the new panel layout.
-     * ---
-     * [USER MODIFICATION / PEEK RETOUCH V2]
-     * 1. Increased PFD panel basis to 60%.
-     * 2. Added "bubble" backgrounds to .live-data-item.
-     * 3. Added rule to hide VSD in Peek state.
+     * [USER MODIFICATION / PEEK REDESIGN V3 - 2025-10-30]
+     * 1. CORRECTED: This layout now applies to State 1 (Peek Island).
+     * 2. Changed #mobile-island-peek .unified-display-main to flex-direction: row.
+     * 3. PFD on left (60%), Data Panel on right (40%).
+     * 4. Data Panel items are now "bubbles".
+     * 5. VSD is now hidden in State 1 (Peek) only.
+     * 6. State 2 (Expanded) is restored to its original vertical stacking layout.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -321,7 +317,8 @@ const MobileUIHandler = {
 
 
             /* ====================================================================
-            --- [NEW PEEK VIEW REDESIGN V2] State 1: Side-by-Side Layout ---
+            --- [START OF USER REQUEST: 2025-10-30] ---
+            --- State 1: "Peek" Side-by-Side Layout ---
             ==================================================================== */
             #mobile-island-peek .unified-display-main {
                 display: flex !important;
@@ -339,10 +336,10 @@ const MobileUIHandler = {
                 max-width: none !important;
                 justify-content: center;
                 
-                flex-basis: 60%; /* <-- [MODIFIED] Increased PFD size */
+                flex-basis: 60%; /* <-- Increased PFD size */
                 flex-grow: 0;
                 flex-shrink: 0;
-                width: 60%; /* <-- [MODIFIED] Increased PFD size */
+                width: 60%; /* <-- Increased PFD size */
                 
                 min-height: 0; /* Allow flex to manage height */
                 height: 100%; /* <-- Fill the container height */
@@ -351,33 +348,33 @@ const MobileUIHandler = {
             /* Data Panel on the right */
             #mobile-island-peek .live-data-panel {
                 flex-direction: column; /* <-- Stack data items VERTICALLY */
-                justify-content: flex-start !important; /* <-- [MODIFIED] Align to top */
-                padding: 8px !important; /* <-- [MODIFIED] Adjusted padding */
+                justify-content: flex-start !important; /* <-- Align to top */
+                padding: 8px !important; /* <-- Adjusted padding */
                 background: rgba(10, 12, 26, 0.5) !important;
                 border-radius: 10px;
                 
                 flex-grow: 1; /* <-- Fill remaining space */
                 flex-shrink: 1;
-                flex-basis: 35%; /* <-- [MODIFIED] Reduced width */
+                flex-basis: 35%; /* <-- Reduced width */
                 
                 height: 100%; /* <-- Fill the container height */
                 box-sizing: border-box;
-                overflow: auto; /* <-- [NEW] Allow scroll if bubbles overflow */
-                gap: 6px; /* <-- [NEW] Space out the bubbles */
+                overflow: auto; /* <-- Allow scroll if bubbles overflow */
+                gap: 6px; /* <-- Space out the bubbles */
             }
             
-            /* [MODIFIED] Styling for the "bubble" items */
+            /* Styling for the "bubble" items */
             #mobile-island-peek .live-data-item {
                 flex-direction: column-reverse; /* Value on top, label on bottom */
                 align-items: flex-start; /* <-- LEFT-ALIGN text */
                 width: 100%;
                 
-                /* [NEW] Bubble styles */
+                /* Bubble styles */
                 background: rgba(20, 25, 40, 0.7);
                 padding: 6px 10px;
                 border-radius: 8px;
                 box-sizing: border-box;
-                flex-shrink: 0; /* <-- [NEW] Prevent bubbles from shrinking */
+                flex-shrink: 0; /* <-- Prevent bubbles from shrinking */
             }
             #mobile-island-peek .live-data-item .data-label { 
                 font-size: 0.6rem; 
@@ -401,16 +398,12 @@ const MobileUIHandler = {
                 color: var(--hud-accent); /* <-- Make ETE stand out */
             }
 
-            /* --- [NEW] Hide VSD in Peek State --- */
-            #mobile-island-peek .vsd-display-panel {
+            /* --- Hide VSD in Peek State --- */
+            #mobile-island-peek #vsd-panel {
                 display: none !important;
             }
-            /* NOTE: If the VSD is still visible, you may need to
-               update the selector '.vsd-display-panel' above
-               to match the VSD's actual class or ID.
-            */
             /* ====================================================================
-            --- [END PEEK VIEW REDESIGN V2] ---
+            --- [END OF USER REQUEST] ---
             ==================================================================== */
 
 
@@ -427,28 +420,30 @@ const MobileUIHandler = {
                 box-sizing: border-box;
             }
 
-            /* --- [REDESIGNED] State 2: "Expanded" Stacked Layout --- */
+            /* --- [RESTORED] State 2: "Expanded" Stacked Layout --- */
             #mobile-island-expanded .unified-display-main {
-                display: flex !important; /* <-- ADDED */
-                flex-direction: column; /* <-- ADDED */
-                gap: 16px; /* <-- ADDED */
+                display: flex !important;
+                flex-direction: column; /* <-- Original vertical stack */
+                gap: 16px; /* <-- Original gap */
                 height: auto;
-                overflow: hidden; /* <-- MODIFIED */
+                overflow: hidden;
                 padding: 16px;
             }
             #mobile-island-expanded .pfd-main-panel {
-                margin: 0 auto !important;
-                max-width: 400px !important;
-                /* This is a display, not a module, so it has no BG */
+                margin: 0 auto !important; /* <-- Original centered layout */
+                max-width: 400px !important; /* <-- Original max-width */
             }
             #mobile-island-expanded .live-data-panel {
-                justify-content: space-around !important;
+                justify-content: space-around !important; /* <-- Original layout */
                 /* Apply module styles */
                 background: rgba(10, 12, 26, 0.5) !important;
-                border-radius: 12px; /* <-- ADDED */
-                padding: 16px !important; /* <-- ADDED */
+                border-radius: 12px; /* <-- Original style */
+                padding: 16px !important; /* <-- Original style */
             }
-            /* These styles are fine, they are for the *contents* of the module */
+            /* Original styles for *contents* of the module */
+            #mobile-island-expanded .live-data-item {
+                 /* Uses default flex-direction (row) and alignment (center) */
+            }
             #mobile-island-expanded .live-data-item .data-label { font-size: 0.7rem; }
             #mobile-island-expanded .live-data-item .data-value { font-size: 1.5rem; }
             #mobile-island-expanded .live-data-item .data-value .unit { font-size: 0.8rem; }
@@ -468,8 +463,12 @@ const MobileUIHandler = {
                 color: var(--hud-accent);
                 font-weight: 600;
                 font-size: 1rem;
+                margin-top: 16px; /* Add space from the content above */
             }
-            /* --- [END REHAUL v6.1] --- */
+
+            /* --- VSD is visible by default in State 2 --- */
+            /* No rule needed */
+
 
             @media (max-width: ${this.CONFIG.breakpoint}px) {
                 #aircraft-info-window, #airport-info-window {
