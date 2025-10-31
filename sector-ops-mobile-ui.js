@@ -50,6 +50,13 @@ const MobileUIHandler = {
      * [REHAUL v6.3 / SEAMLESS HANDLE]
      * 1. Reduces handle height and increases mini-data height.
      * 2. Removes border-bottom from .drawer-handle.
+     * ---
+     * [USER MODIFICATION / PEEK REDESIGN]
+     * 1. Changed #mobile-island-peek .unified-display-main to flex-direction: row.
+     * 2. Assigned .pfd-main-panel a flex-basis of 55%.
+     * 3. Re-styled .live-data-panel to be a vertical column on the right,
+     * filling the remaining 45% (approx) of space.
+     * 4. Left-aligned and re-styled .live-data-item for the new panel layout.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -308,41 +315,82 @@ const MobileUIHandler = {
             ==================================================================== */
 
 
-            /* --- [REDESIGNED] State 1: "Peek View" Stacked Layout --- */
+            /* ====================================================================
+            --- [NEW PEEK VIEW REDESIGN] State 1: Side-by-Side Layout ---
+            ==================================================================== */
             #mobile-island-peek .unified-display-main {
-                display: flex !important; /* <-- MODIFIED */
-                flex-direction: column; /* <-- MODIFIED */
+                display: flex !important;
+                flex-direction: row !important; /* <-- Use horizontal layout */
                 height: var(--drawer-peek-content-height); /* 200px */
                 padding: 10px;
                 box-sizing: border-box;
                 gap: 10px;
                 overflow: hidden;
             }
+            
+            /* PFD on the left */
             #mobile-island-peek .pfd-main-panel {
                 margin: 0 !important;
                 max-width: none !important;
                 justify-content: center;
-                flex-grow: 1; /* <-- ADDED */
-                min-height: 0; /* <-- ADDED */
-                width: 100%; /* <-- ADDED */
+                
+                flex-basis: 55%; /* <-- PFD takes 55% of the width */
+                flex-grow: 0;
+                flex-shrink: 0;
+                width: 55%;
+                
+                min-height: 0; /* Allow flex to manage height */
+                height: 100%; /* <-- Fill the container height */
             }
+            
+            /* Data Panel on the right */
             #mobile-island-peek .live-data-panel {
-                flex-direction: row; /* <-- ADDED */
+                flex-direction: column; /* <-- Stack data items VERTICALLY */
                 justify-content: space-around !important;
-                padding: 8px 0 !important; /* <-- MODIFIED */
-                background: rgba(10, 12, 26, 0.5) !important; /* <-- ADDED */
-                border-radius: 10px; /* <-- ADDED */
-                flex-shrink: 0; /* <-- ADDED */
+                padding: 8px 10px !important; /* <-- Add horizontal padding */
+                background: rgba(10, 12, 26, 0.5) !important;
+                border-radius: 10px;
+                
+                flex-grow: 1; /* <-- Fill remaining space */
+                flex-shrink: 1;
+                flex-basis: 40%; /* <-- Start at 40% width */
+                
+                height: 100%; /* <-- Fill the container height */
+                box-sizing: border-box;
+                overflow: hidden;
             }
-            /* [NEW] Style Peek items for horizontal row */
+            
+            /* Styling for the items inside the new vertical data panel */
             #mobile-island-peek .live-data-item {
-                flex-direction: column-reverse;
-                align-items: center;
+                flex-direction: column-reverse; /* Value on top, label on bottom */
+                align-items: flex-start; /* <-- LEFT-ALIGN text */
+                width: 100%;
             }
-            #mobile-island-peek .live-data-item .data-label { font-size: 0.6rem; }
-            #mobile-island-peek .live-data-item .data-value { font-size: 1.1rem; }
-            #mobile-island-peek .live-data-item .data-value .unit { font-size: 0.7rem; }
-            #mobile-island-peek .live-data-item .data-value-ete { font-size: 1.3rem; }
+            #mobile-island-peek .live-data-item .data-label { 
+                font-size: 0.6rem; 
+                opacity: 0.7;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            #mobile-island-peek .live-data-item .data-value { 
+                font-size: 1.0rem; /* <-- Sized down */
+                font-weight: 600;
+                line-height: 1.1;
+            }
+            #mobile-island-peek .live-data-item .data-value .unit { 
+                font-size: 0.7rem; 
+                opacity: 0.7;
+            }
+            #mobile-island-peek .live-data-item .data-value-ete { 
+                font-size: 1.2rem; /* <-- Sized down */
+                font-weight: 600;
+                color: var(--hud-accent); /* <-- Make ETE stand out */
+            }
+            /* ====================================================================
+            --- [END PEEK VIEW REDESIGN] ---
+            ==================================================================== */
+
 
             /* Hide stats button in Mini and Peek states */
             .pilot-stats-toggle-btn {
