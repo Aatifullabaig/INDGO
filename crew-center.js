@@ -132,6 +132,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     
+// [REPLACE THIS FUNCTION]
 // --- [REHAULED] Helper to inject custom CSS for new features ---
 function injectCustomStyles() {
     const styleId = 'sector-ops-custom-styles';
@@ -1355,10 +1356,10 @@ function injectCustomStyles() {
             display: flex;
             background: rgba(10, 12, 26, 0.4);
             padding: 5px 15px 0 15px;
-            /* Add a small margin to separate from content */
-            margin: 0 16px; 
-            margin-top: 16px;
-            border-radius: 8px 8px 0 0;
+            /* --- [FIX] Removed margins that incorrectly placed it inside the content area --- */
+            /* margin: 0 16px; */ 
+            /* margin-top: 16px; */
+            border-radius: 0; /* --- [FIX] Removed border-radius --- */
         }
         .ac-info-tab-btn {
             padding: 14px 18px;
@@ -3136,6 +3137,7 @@ function updatePfdDisplay(pfdData) {
         airportInfoWindow.dataset.eventsAttached = 'true';
     }
     
+
 // --- [MODIFIED] Event listener setup using Event Delegation for new Tabs ---
     function setupAircraftWindowEvents() {
         if (!aircraftInfoWindow || aircraftInfoWindow.dataset.eventsAttached === 'true') return;
@@ -3154,11 +3156,14 @@ function updatePfdDisplay(pfdData) {
                 }
 
                 // Find the main content container relative to the button
-                const windowContent = tabBtn.closest('.unified-display-main-content');
+                // --- [FIX] The tab bar is no longer inside .unified-display-main-content
+                // We need to go up to the main .info-window-content
+                const windowContent = tabBtn.closest('.info-window-content');
                 if (!windowContent) return;
 
                 // De-activate old tab and pane
-                windowContent.querySelector('.ac-info-tab-btn.active')?.classList.remove('active');
+                // --- [FIX] Find tabs in the *new* location
+                tabBtn.closest('.ac-info-window-tabs').querySelector('.ac-info-tab-btn.active')?.classList.remove('active');
                 windowContent.querySelector('.ac-tab-pane.active')?.classList.remove('active');
 
                 // Activate new tab and pane
@@ -3172,8 +3177,15 @@ function updatePfdDisplay(pfdData) {
                 // Check if we need to lazy-load the Pilot Report data
                 if (tabId === 'ac-tab-pilot-report') {
                     const statsDisplay = newPane.querySelector('#pilot-stats-display');
-                    // Check if it's empty (has no child elements)
-                    if (statsDisplay && !statsDisplay.hasChildNodes()) { 
+
+                    // ======================================================
+                    // --- [BUG FIX] ---
+                    // Changed check from !statsDisplay.hasChildNodes() to
+                    // statsDisplay.innerHTML.trim() === ''
+                    // This prevents whitespace in the template from breaking
+                    // the lazy-load.
+                    // ======================================================
+                    if (statsDisplay && statsDisplay.innerHTML.trim() === '') { 
                         const userId = tabBtn.dataset.userId;
                         const username = tabBtn.dataset.username;
                         if (userId) {
@@ -3845,7 +3857,7 @@ async function handleAircraftClick(flightProps, sessionId) {
         cachedFlightDataForStatsView = { flightProps: null, plan: null };
     }
 }
-// crew-center.js
+
 
 /**
  * --- [REDESIGNED & UPDATED] Generates the "Unified Flight Display" with image overlay and aircraft type.
@@ -3853,6 +3865,7 @@ async function handleAircraftClick(flightProps, sessionId) {
  * --- [MODIFIED v3] Added PFD Footer Panel
  * --- [MODIFIED v5] Implemented (USER REQUEST) (PFD | Data) over (VSD) layout
  * --- [MODIFIED v6] Implemented (USER REQUEST) Tab-based navigation
+ * --- [MODIFIED v7] Fixed tab bar position and icon
  */
 function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     const windowEl = document.getElementById('aircraft-info-window');
@@ -3949,16 +3962,15 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
             </div>
         </div>
 
+        <div class="ac-info-window-tabs">
+            <button class="ac-info-tab-btn active" data-tab="ac-tab-flight-data">
+                <i class="fa-solid fa-gauge-high"></i> Flight Display
+            </button>
+            <button class="ac-info-tab-btn" data-tab="ac-tab-pilot-report" data-user-id="${baseProps.userId}" data-username="${baseProps.username || 'N/A'}">
+                <i class="fa-solid fa-chart-simple"></i> Pilot Report
+            </button>
+        </div>
         <div class="unified-display-main-content">
-            
-            <div class="ac-info-window-tabs">
-                <button class="ac-info-tab-btn active" data-tab="ac-tab-flight-data">
-                    <i class="fa-solid fa-gauge-high"></i> Flight Display
-                </button>
-                <button class="ac-info-tab-btn" data-tab="ac-tab-pilot-report" data-user-id="${baseProps.userId}" data-username="${baseProps.username || 'N/A'}">
-                    <i class="fa-solid fa-chart-simple"></i> Pilot Report
-                </button>
-            </div>
             
             <div id="ac-tab-flight-data" class="ac-tab-pane active">
                 
