@@ -132,7 +132,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     
-// [REPLACE THIS FUNCTION]
+
 // --- [REHAULED] Helper to inject custom CSS for new features ---
 function injectCustomStyles() {
     const styleId = 'sector-ops-custom-styles';
@@ -651,80 +651,65 @@ function injectCustomStyles() {
             font-family: "Font Awesome 6 Free";
         }
         
-        /* --- [NEW] Donut Chart Styles --- */
-        .donut-chart-container {
-            padding: 0; /* Remove padding, handled by items */
+        /* --- [REMOVED] Donut Chart Styles --- */
+        
+        /* --- [REMOVED] Odometer Styles --- */
+        
+        /* * --- [START] NEW FLIGHT TIMELINE STYLES (USER REQUEST) ---
+         */
+        .flight-timeline-display {
+            flex-grow: 1; /* Make it fill the right panel */
+            padding: 16px 12px;
+            justify-content: space-between; /* Pushes DEP to top, ARR to bottom */
+            align-items: center;
+            min-height: 200px; /* Give it space */
         }
-        .donut-chart {
-            width: 100px; /* Size of the donut */
-            height: 80px;
-            margin: 0 auto;
-            position: relative;
-            display: grid;
-            place-items: center;
-            margin-top: 10px; /* Make space for label */
+        .timeline-icao {
+            font-family: 'Courier New', monospace;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #fff;
         }
-        .donut-chart svg {
-            width: 100%;
-            height: 100%;
+        .timeline-line {
+            position: absolute;
+            top: 45px; /* Space below top ICAO */
+            bottom: 45px; /* Space above bottom ICAO */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+        .timeline-progress {
             position: absolute;
             top: 0;
             left: 0;
-            transform: rotate(-90deg);
+            width: 100%;
+            height: 0%; /* Will be set by JS */
+            background: #00a8ff;
+            border-radius: 2px;
+            transition: height 0.5s ease-out;
         }
-        .donut-chart-text {
-            /* This div centers the text inside the donut */
-            position: relative; 
-            z-index: 2;
-            text-align: center;
-            /* Adjust text position */
-            transform: translateY(2px); 
-        }
-        .donut-chart-text .data-value {
-             font-size: 1.3rem; /* Slightly smaller to fit */
-        }
-        .donut-bg, .donut-fg {
-            fill: none;
-            stroke-width: 3;
-            stroke-linecap: round;
-        }
-        .donut-bg {
-            stroke: rgba(255, 255, 255, 0.1);
-        }
-        .donut-fg {
-            stroke: #00a8ff;
-            /* This transition animates the stroke-dasharray property */
-            transition: stroke-dasharray 0.5s ease-out;
-        }
-
-        /* --- [NEW] Odometer Styles --- */
-        .odometer-container {
-            display: flex;
-            justify-content: center;
-            align-items: baseline;
-            gap: 4px;
-        }
-        .odometer-separator {
-             color: #9fa8da;
-             font-size: 1.2rem;
-             font-weight: 600;
-             animation: blink 2s infinite;
-        }
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-        .odometer-value {
-            display: inline-block;
-            /* This transition fades the number out and in */
-            transition: opacity 0.2s ease-in-out;
-            /* Ensure it respects the parent's font settings */
-            font-size: 1.5rem;
+        .timeline-ac-icon {
+            position: absolute;
+            left: 50%;
+            top: 0%; /* Will be set by JS */
+            transform: translate(-50%, -50%); /* Center icon on the line */
             color: #fff;
-            font-weight: 600;
-            font-family: 'Courier New', monospace;
-            line-height: 1.1;
+            background: #1C1E2A; /* Match window bg */
+            padding: 4px;
+            border-radius: 50%;
+            font-size: 1.1rem;
+            transition: top 0.5s ease-out;
+            z-index: 2;
         }
+        .timeline-ac-icon .fa-plane {
+            display: block;
+            transform: rotate(90deg); /* Point plane right */
+        }
+        /* * --- [END] NEW FLIGHT TIMELINE STYLES ---
+         */
+        
         
         /* [NEW] This is the full-width VSD card at the bottom */
         .ac-profile-card-new {
@@ -794,12 +779,13 @@ function injectCustomStyles() {
             transition: transform 0.5s ease-out;
         }
 
-        /* --- [NEW] PFD Footer Display --- */
+        /* * --- [START] NEW PFD FOOTER STYLES (USER REQUEST) ---
+         */
         .pfd-footer-display {
-            display: flex;
+            display: grid; /* Use Grid */
+            grid-template-columns: auto 1fr; /* Icon | VS */
             align-items: center;
-            justify-content: space-around;
-            gap: 10px;
+            gap: 12px;
             background: rgba(10, 12, 26, 0.5); /* Match PFD/VSD bg */
             padding: 8px 12px;
             border-bottom-left-radius: 12px;
@@ -817,33 +803,43 @@ function injectCustomStyles() {
             fill: #00a8ff;
             opacity: 0.7;
         }
-        .pfd-footer-nav-item {
+        .pfd-footer-vs-item {
             display: flex;
             flex-direction: column;
-            text-align: right;
-            min-width: 60px; /* Give it some space */
+            text-align: left;
+            overflow: hidden;
         }
-        .pfd-footer-nav-item .data-label {
+        .pfd-footer-vs-item .data-label {
             font-size: 0.7rem;
             color: #c5cae9;
             text-transform: uppercase;
             margin-bottom: 2px;
         }
-        .pfd-footer-nav-item .data-value {
-            font-size: 1.2rem;
+        .pfd-footer-vs-item .data-value {
+            font-size: 1.3rem; /* Larger font */
             color: #fff;
             font-weight: 600;
             font-family: 'Courier New', monospace;
             line-height: 1;
+            display: flex; /* Use flex for icon alignment */
+            align-items: center;
+            gap: 8px;
         }
-        .pfd-footer-nav-item .data-value .unit {
+        .pfd-footer-vs-item .data-value .fa-solid {
+            font-size: 0.9rem;
+            color: #00a8ff;
+            width: 14px; /* Give icon space */
+        }
+        .pfd-footer-vs-item .data-value .unit {
             font-size: 0.8rem; 
             color: #9fa8da; 
-            margin-left: 2px;
+            margin-left: 4px;
             font-family: 'Segoe UI', sans-serif; /* Match other units */
             font-weight: 400;
         }
-        /* --- [END NEW] --- */
+        /* --- [REMOVED] Old .pfd-footer-nav-item styles --- */
+        /* * --- [END] NEW PFD FOOTER STYLES ---
+         */
 
 
         /* Aircraft Type Readout (REMOVED) */
@@ -3975,6 +3971,7 @@ async function handleAircraftClick(flightProps, sessionId) {
 }
 
 
+// [REPLACE THIS FUNCTION]
 /**
  * --- [REDESIGNED & UPDATED] Generates the "Unified Flight Display" with image overlay and aircraft type.
  * --- [MODIFIED] Replaced data list with Vertical Situation Display (VSD)
@@ -3983,6 +3980,7 @@ async function handleAircraftClick(flightProps, sessionId) {
  * --- [MODIFIED v6] Implemented (USER REQUEST) Tab-based navigation
  * --- [MODIFIED v7] Fixed tab bar position and icon
  * --- [MODIFIED v8] Added Donut Chart and Odometer
+ * --- [MODIFIED v9] (USER REQUEST) Replaced right data panel with Flight Timeline and moved VS to PFD Footer.
  */
 function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     const windowEl = document.getElementById('aircraft-info-window');
@@ -4212,50 +4210,31 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
                             </defs>
                             </svg>
                         </div>
+
                         <div id="pfd-footer-display" class="pfd-footer-display">
                             <div class="pfd-footer-ac-icon">
                                 <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
                                     <path d="M50,85 C45,80 40,75 35,70 C30,65 25,60 20,55 C15,50 10,45 5,40 C10,40 15,40 20,40 C25,40 30,40 35,40 C35,35 35,30 35,25 C35,20 35,15 35,10 C40,15 45,20 50,25 C55,20 60,15 65,10 C65,15 65,20 65,25 C65,30 65,35 65,40 C70,40 75,40 80,40 C85,40 90,40 95,40 C90,45 85,50 80,55 C75,60 70,65 65,70 C60,75 55,80 50,85 Z" />
                                 </svg>
                             </div>
-                            <div class="pfd-footer-nav-item">
-                                <span class="data-label">NEXT WP</span>
-                                <span class="data-value" id="ac-next-wp">---</span>
-                            </div>
-                            <div class="pfd-footer-nav-item">
-                                <span class="data-label">DIST</span>
-                                <span class="data-value" id="ac-next-wp-dist">--.-<span class="unit">NM</span></span>
+                            <div class="pfd-footer-vs-item" id="ac-footer-vs-item">
+                                <span class="data-label">VERTICAL SPEED</span>
+                                <span class="data-value" id="ac-footer-vs">---</span>
                             </div>
                         </div>
-                    </div>
+                        </div>
 
                     <div class="live-data-panel-new">
                         
-                        <div class="ac-primary-data-item donut-chart-container">
-                            <span class="data-label">DIST. TO DEST.</span>
-                            <div class="donut-chart">
-                                <svg viewBox="0 0 36 36">
-                                    <path class="donut-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
-                                    <path class="donut-fg" id="ac-dist-donut" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
-                                </svg>
-                                <div class="donut-chart-text">
-                                    <span class="data-value" id="ac-dist">---</span>
+                        <div class="ac-primary-data-item flight-timeline-display">
+                            <span class="timeline-icao" id="timeline-dep-icao">---</span>
+                            <div class="timeline-line">
+                                <div class="timeline-progress" id="timeline-progress-bar"></div>
+                                <div class="timeline-ac-icon" id="timeline-aircraft-icon">
+                                    <i class="fa-solid fa-plane"></i>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="ac-primary-data-item">
-                            <span class="data-label">ETE TO DEST.</span>
-                            <div class="data-value odometer-container" id="ac-ete">
-                                <span id="ac-ete-hr" class="odometer-value">--</span>
-                                <span class="odometer-separator">:</span>
-                                <span id="ac-ete-min" class="odometer-value">--</span>
-                            </div>
-                        </div>
-
-                        <div class="ac-primary-data-item">
-                            <span class="data-label">VERTICAL SPEED</span>
-                            <span class="data-value" id="ac-vs">---</span>
+                            <span class="timeline-icao" id="timeline-arr-icao">---</span>
                         </div>
 
                     </div>
@@ -4477,6 +4456,7 @@ function renderPilotStatsHTML(stats, username) {
  * This update fixes the "vertical red line" bug introduced in V7.0.
  * --- [MODIFIED v2] Added PFD Footer data binding
  * --- [MODIFIED v8] Added Donut Chart and Odometer logic
+ * --- [MODIFIED v9] (USER REQUEST) Removed Donut, ETE, and Next WP logic. Added VS Footer and Timeline logic.
 */
 function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- Get all DOM elements ---
@@ -4486,9 +4466,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     
     // --- VSD Elements ---
     const vsdPanel = document.getElementById('vsd-panel');
-    const vsdSummaryVS = document.getElementById('ac-vs');
-    // const vsdSummaryDist = document.getElementById('ac-dist'); // Now in donut
-    // const vsdSummaryETE = document.getElementById('ac-ete'); // Now in odometer
+    // const vsdSummaryVS = document.getElementById('ac-vs'); // <-- OLD VS ELEMENT (REMOVED)
     const vsdAircraftIcon = document.getElementById('vsd-aircraft-icon');
     const vsdGraphWindow = document.getElementById('vsd-graph-window');
     const vsdGraphContent = document.getElementById('vsd-graph-content');
@@ -4497,14 +4475,13 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     const vsdWpLabels = document.getElementById('vsd-waypoint-labels');
 
     // --- [NEW] PFD Footer Elements ---
-    const nextWpEl = document.getElementById('ac-next-wp');
-    const nextWpDistValEl = document.getElementById('ac-next-wp-dist');
+    const footerVsEl = document.getElementById('ac-footer-vs');
 
     // --- [NEW] Animated Data Panel Elements ---
-    const distDonutEl = document.getElementById('ac-dist-donut');
-    const distTextEl = document.getElementById('ac-dist');
-    const eteHrEl = document.getElementById('ac-ete-hr');
-    const eteMinEl = document.getElementById('ac-ete-min');
+    const depIcaoEl = document.getElementById('timeline-dep-icao');
+    const arrIcaoEl = document.getElementById('timeline-arr-icao');
+    const timelineProgressEl = document.getElementById('timeline-progress-bar');
+    const timelineIconEl = document.getElementById('timeline-aircraft-icon');
 
 
     // --- Get Original Data ---
@@ -4640,15 +4617,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- [END MODIFIED in V7.1] ---
 
 
-    // --- [NEW] Update PFD Footer Display ---
-    const nextWpDisplay = nextWpName;
-    const nextWpDistDisplay = (nextWpDistNM === '---' || isNaN(parseFloat(nextWpDistNM))) ? '--.-' : Number(nextWpDistNM).toFixed(1);
-
-    if (nextWpEl) nextWpEl.textContent = nextWpDisplay;
-    if (nextWpDistValEl) {
-        nextWpDistValEl.innerHTML = `${nextWpDistDisplay}<span class="unit">NM</span>`;
-    }
-    // --- [END NEW] ---
+    // --- [REMOVED] PFD Footer Display logic for Next WP and Dist ---
 
 
     // --- Configuration Thresholds (Unchanged) ---
@@ -5046,9 +5015,13 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         // =================================================================
         
         // --- 5. Update Summary Bar ---
-        // if (vsdSummaryDist) vsdSummaryDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
-        // if (vsdSummaryETE) vsdSummaryETE.textContent = ete;
-        if (vsdSummaryVS) vsdSummaryVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
+        
+        // --- [NEW] Update PFD Footer VS ---
+        if (footerVsEl) {
+            footerVsEl.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
+        }
+        // --- [REMOVED] Old VS element update ---
+        // if (vsdSummaryVS) vsdSummaryVS.innerHTML = ...;
     }
     // --- [END NEW VSD LOGIC] ---
 
@@ -5061,20 +5034,21 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         phaseIndicator.innerHTML = `<i class="fa-solid ${phaseIcon}"></i> ${flightPhase}`;
     }
 
-    // --- [NEW] Update Donut and Odometer ---
-    if (distDonutEl) {
-        // Set the stroke-dasharray to (progress, 100)
-        distDonutEl.setAttribute('stroke-dasharray', `${progress.toFixed(0)}, 100`);
-    }
-    if (distTextEl) {
-        distTextEl.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
-    }
+    // --- [NEW] Update Flight Timeline ---
+    if (depIcaoEl) depIcaoEl.textContent = departureIcao || '---';
+    if (arrIcaoEl) arrIcaoEl.textContent = arrivalIcao || '---';
     
-    // Update ETE Odometer
-    const [eteHr, eteMin] = ete.split(':');
-    updateOdometerDigit(eteHrEl, eteHr);
-    updateOdometerDigit(eteMinEl, eteMin);
+    if (timelineProgressEl && timelineIconEl) {
+        // Progress is 0-100, where 100 is complete.
+        // Our timeline goes from top (0%) to bottom (100%).
+        // The progress bar fills from the top.
+        timelineProgressEl.style.height = `${progress.toFixed(1)}%`;
+        // The icon's position is also based on progress.
+        timelineIconEl.style.top = `${progress.toFixed(1)}%`;
+    }
     // --- [END NEW] ---
+
+    // --- [REMOVED] Donut and Odometer update logic ---
 
     // --- Update Aircraft Image (Unchanged) ---
     if (overviewPanel) {
