@@ -51,14 +51,15 @@ const MobileUIHandler = {
      * 1. Reduces handle height and increases mini-data height.
      * 2. Removes border-bottom from .drawer-handle.
      * ---
-     * [USER MODIFICATION / PEEK REDESIGN V5 - 2025-10-30]
+     * [USER MODIFICATION / PEEK REDESIGN V7 - 2025-10-30]
      * 1. This layout applies to State 1 (Peek Island).
-     * 2. PFD on left (50%), Data Panel on right (50%). <-- MODIFIED
-     * 3. Data Panel items are "bubbles".
-     * 4. VSD is hidden in State 1.
-     * 5. [NEW] PFD Footer is hidden in State 1.
-     * 6. [NEW] PFD container now grows to fill the panel height.
-     * 7. State 2 (Expanded) is restored to its original vertical stacking layout.
+     * 2. PFD on left (80%), Data Panel on right (20%). <-- MODIFIED (Made PFD "bigger")
+     * 3. Rules to force PFD content to scale 100% to its container are active.
+     * 4. Data Panel items are "bubbles".
+     * 5. VSD is hidden in State 1.
+     * 6. PFD Footer is hidden in State 1.
+     * 7. PFD container now grows to fill the panel height.
+     * 8. State 2 (Expanded) is restored to its original vertical stacking layout.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -318,7 +319,7 @@ const MobileUIHandler = {
 
 
             /* ====================================================================
-            --- [START OF USER REQUEST V5: 2025-10-30] ---
+            --- [START OF USER REQUEST V7: 2025-10-30] ---
             --- State 1: "Peek" Side-by-Side Layout ---
             ==================================================================== */
             #mobile-island-peek .unified-display-main {
@@ -336,10 +337,10 @@ const MobileUIHandler = {
                 margin: 0 !important;
                 max-width: none !important;
                 justify-content: center;
-                flex-basis: 50%; /* <-- [USER REQ 2025-10-30] Changed from 60% */
+                flex-basis: 80%; /* <-- [USER REQ V7] Changed to 80% */
                 flex-grow: 0;
                 flex-shrink: 0;
-                width: 50%; /* <-- [USER REQ 2025-10-30] Changed from 60% */
+                width: 80%; /* <-- [USER REQ V7] Changed to 80% */
                 min-height: 0;
                 height: 100%;
                 
@@ -348,11 +349,22 @@ const MobileUIHandler = {
                 flex-direction: column !important;
             }
             
-            /* [NEW] Make PFD container fill the panel */
+            /* [MODIFIED V6] Make PFD container fill AND scale its child */
             #mobile-island-peek #pfd-container {
                 flex-grow: 1;
-                /* [NEW] Restore border-radius since footer is gone */
                 border-radius: 12px !important;
+                
+                /* [NEW V6] Use grid to force child scaling */
+                display: grid; 
+                place-items: center;
+                overflow: hidden; /* Hide any overflow */
+            }
+            
+            /* [NEW V6] Force the PFD's canvas/svg to fill container */
+            #mobile-island-peek #pfd-container > * {
+                width: 100% !important;
+                height: 100% !important;
+                object-fit: contain; /* Good for scaling SVGs/Canvas */
             }
 
             /* [NEW] Hide PFD footer */
@@ -370,7 +382,7 @@ const MobileUIHandler = {
                 
                 flex-grow: 1; /* <-- Fill remaining space */
                 flex-shrink: 1;
-                flex-basis: 35%; 
+                flex-basis: auto; /* <-- [USER REQ V7] Let it fill remaining 20% */
                 
                 height: 100%; /* <-- Fill the container height */
                 box-sizing: border-box;
@@ -418,7 +430,7 @@ const MobileUIHandler = {
                 display: none !important;
             }
             /* ====================================================================
-            --- [END OF USER REQUEST V5] ---
+            --- [END OF USER REQUEST V7] ---
             ==================================================================== */
 
 
