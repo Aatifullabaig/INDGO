@@ -611,12 +611,24 @@ function injectCustomStyles() {
             background: rgba(0,0,0,0.2);
             padding: 12px 8px;
             border-radius: 8px;
+            /* --- [NEW] Added for donut chart layout --- */
+            position: relative;
+            justify-content: center;
+            /* --- [NEW] Ensure fixed height for layout --- */
+            min-height: 80px; 
+            box-sizing: border-box;
         }
         .ac-primary-data-item .data-label {
             font-size: 0.7rem;
             color: #c5cae9;
             text-transform: uppercase;
             margin-bottom: 4px;
+            /* --- [NEW] Added for donut layout --- */
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
         }
         .ac-primary-data-item .data-value {
             font-size: 1.5rem;
@@ -637,6 +649,81 @@ function injectCustomStyles() {
             margin-right: 4px;
             color: #00a8ff;
             font-family: "Font Awesome 6 Free";
+        }
+        
+        /* --- [NEW] Donut Chart Styles --- */
+        .donut-chart-container {
+            padding: 0; /* Remove padding, handled by items */
+        }
+        .donut-chart {
+            width: 100px; /* Size of the donut */
+            height: 80px;
+            margin: 0 auto;
+            position: relative;
+            display: grid;
+            place-items: center;
+            margin-top: 10px; /* Make space for label */
+        }
+        .donut-chart svg {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform: rotate(-90deg);
+        }
+        .donut-chart-text {
+            /* This div centers the text inside the donut */
+            position: relative; 
+            z-index: 2;
+            text-align: center;
+            /* Adjust text position */
+            transform: translateY(2px); 
+        }
+        .donut-chart-text .data-value {
+             font-size: 1.3rem; /* Slightly smaller to fit */
+        }
+        .donut-bg, .donut-fg {
+            fill: none;
+            stroke-width: 3;
+            stroke-linecap: round;
+        }
+        .donut-bg {
+            stroke: rgba(255, 255, 255, 0.1);
+        }
+        .donut-fg {
+            stroke: #00a8ff;
+            /* This transition animates the stroke-dasharray property */
+            transition: stroke-dasharray 0.5s ease-out;
+        }
+
+        /* --- [NEW] Odometer Styles --- */
+        .odometer-container {
+            display: flex;
+            justify-content: center;
+            align-items: baseline;
+            gap: 4px;
+        }
+        .odometer-separator {
+             color: #9fa8da;
+             font-size: 1.2rem;
+             font-weight: 600;
+             animation: blink 2s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .odometer-value {
+            display: inline-block;
+            /* This transition fades the number out and in */
+            transition: opacity 0.2s ease-in-out;
+            /* Ensure it respects the parent's font settings */
+            font-size: 1.5rem;
+            color: #fff;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+            line-height: 1.1;
         }
         
         /* [NEW] This is the full-width VSD card at the bottom */
@@ -1482,6 +1569,35 @@ async function fetchRunwaysData() {
     }
 
     /// --- Helper Functions ---
+
+/**
+     * --- [NEW] Helper function to update odometer-style text with a fade.
+     * Uses a transitionend listener for a smooth update without chained setTimeouts.
+     * @param {HTMLElement} el - The DOM element (span) to update.
+     * @param {string} newValue - The new text content to display.
+     */
+    function updateOdometerDigit(el, newValue) {
+        if (!el) return;
+        
+        const currentValue = el.textContent;
+        
+        if (currentValue !== newValue) {
+            // 1. Fade out the old value
+            el.style.opacity = 0;
+            
+            // 2. Listen for the fade-out to finish
+            el.addEventListener('transitionend', function handler() {
+                // 3. Once faded out, change the text
+                el.textContent = newValue;
+                
+                // 4. Fade back in
+                el.style.opacity = 1;
+                
+                // 5. Clean up the listener
+                el.removeEventListener('transitionend', handler);
+            }, { once: true });
+        }
+    }
 
 
 function getAircraftCategory(aircraftName) {
@@ -3866,6 +3982,7 @@ async function handleAircraftClick(flightProps, sessionId) {
  * --- [MODIFIED v5] Implemented (USER REQUEST) (PFD | Data) over (VSD) layout
  * --- [MODIFIED v6] Implemented (USER REQUEST) Tab-based navigation
  * --- [MODIFIED v7] Fixed tab bar position and icon
+ * --- [MODIFIED v8] Added Donut Chart and Odometer
  */
 function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     const windowEl = document.getElementById('aircraft-info-window');
@@ -4113,21 +4230,38 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
                     </div>
 
                     <div class="live-data-panel-new">
-                        <div class="ac-primary-data-item">
+                        
+                        <div class="ac-primary-data-item donut-chart-container">
                             <span class="data-label">DIST. TO DEST.</span>
-                            <span class="data-value" id="ac-dist">---</span>
+                            <div class="donut-chart">
+                                <svg viewBox="0 0 36 36">
+                                    <path class="donut-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
+                                    <path class="donut-fg" id="ac-dist-donut" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
+                                </svg>
+                                <div class="donut-chart-text">
+                                    <span class="data-value" id="ac-dist">---</span>
+                                </div>
+                            </div>
                         </div>
+
                         <div class="ac-primary-data-item">
                             <span class="data-label">ETE TO DEST.</span>
-                            <span class="data-value" id="ac-ete">--:--</span>
+                            <div class="data-value odometer-container" id="ac-ete">
+                                <span id="ac-ete-hr" class="odometer-value">--</span>
+                                <span class="odometer-separator">:</span>
+                                <span id="ac-ete-min" class="odometer-value">--</span>
+                            </div>
                         </div>
+
                         <div class="ac-primary-data-item">
                             <span class="data-label">VERTICAL SPEED</span>
                             <span class="data-value" id="ac-vs">---</span>
                         </div>
-                    </div>
 
-                </div> <div class="ac-profile-card-new">
+                    </div>
+                    </div> 
+                
+                <div class="ac-profile-card-new">
                     <h4>Vertical Profile</h4>
                     <div id="vsd-panel" class="vsd-panel" data-plan-id="" data-profile-built="false">
                         <div id="vsd-graph-window" class="vsd-graph-window">
@@ -4337,10 +4471,12 @@ function renderPilotStatsHTML(stats, username) {
         }
     }
 
+// [REPLACE THIS FUNCTION]
 /**
  * --- [MAJOR REVISION V7.1: Pre-Cache Progress Data]
  * This update fixes the "vertical red line" bug introduced in V7.0.
  * --- [MODIFIED v2] Added PFD Footer data binding
+ * --- [MODIFIED v8] Added Donut Chart and Odometer logic
 */
 function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- Get all DOM elements ---
@@ -4351,8 +4487,8 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- VSD Elements ---
     const vsdPanel = document.getElementById('vsd-panel');
     const vsdSummaryVS = document.getElementById('ac-vs');
-    const vsdSummaryDist = document.getElementById('ac-dist');
-    const vsdSummaryETE = document.getElementById('ac-ete');
+    // const vsdSummaryDist = document.getElementById('ac-dist'); // Now in donut
+    // const vsdSummaryETE = document.getElementById('ac-ete'); // Now in odometer
     const vsdAircraftIcon = document.getElementById('vsd-aircraft-icon');
     const vsdGraphWindow = document.getElementById('vsd-graph-window');
     const vsdGraphContent = document.getElementById('vsd-graph-content');
@@ -4363,6 +4499,13 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- [NEW] PFD Footer Elements ---
     const nextWpEl = document.getElementById('ac-next-wp');
     const nextWpDistValEl = document.getElementById('ac-next-wp-dist');
+
+    // --- [NEW] Animated Data Panel Elements ---
+    const distDonutEl = document.getElementById('ac-dist-donut');
+    const distTextEl = document.getElementById('ac-dist');
+    const eteHrEl = document.getElementById('ac-ete-hr');
+    const eteMinEl = document.getElementById('ac-ete-min');
+
 
     // --- Get Original Data ---
     const originalFlatWaypoints = (plan && plan.flightPlanItems) ? flattenWaypointsFromPlan(plan.flightPlanItems) : [];
@@ -4903,8 +5046,8 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         // =================================================================
         
         // --- 5. Update Summary Bar ---
-        if (vsdSummaryDist) vsdSummaryDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
-        if (vsdSummaryETE) vsdSummaryETE.textContent = ete;
+        // if (vsdSummaryDist) vsdSummaryDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
+        // if (vsdSummaryETE) vsdSummaryETE.textContent = ete;
         if (vsdSummaryVS) vsdSummaryVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
     }
     // --- [END NEW VSD LOGIC] ---
@@ -4917,6 +5060,21 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         phaseIndicator.className = `flight-phase-indicator ${phaseClass}`;
         phaseIndicator.innerHTML = `<i class="fa-solid ${phaseIcon}"></i> ${flightPhase}`;
     }
+
+    // --- [NEW] Update Donut and Odometer ---
+    if (distDonutEl) {
+        // Set the stroke-dasharray to (progress, 100)
+        distDonutEl.setAttribute('stroke-dasharray', `${progress.toFixed(0)}, 100`);
+    }
+    if (distTextEl) {
+        distTextEl.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
+    }
+    
+    // Update ETE Odometer
+    const [eteHr, eteMin] = ete.split(':');
+    updateOdometerDigit(eteHrEl, eteHr);
+    updateOdometerDigit(eteMinEl, eteMin);
+    // --- [END NEW] ---
 
     // --- Update Aircraft Image (Unchanged) ---
     if (overviewPanel) {
