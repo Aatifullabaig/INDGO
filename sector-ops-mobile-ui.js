@@ -51,9 +51,9 @@ const MobileUIHandler = {
      * 1. Reduces handle height and increases mini-data height.
      * 2. Removes border-bottom from .drawer-handle.
      * ---
-     * [USER MODIFICATION / PEEK REDESIGN V4 - 2025-10-30]
+     * [USER MODIFICATION / PEEK REDESIGN V5 - 2025-10-30]
      * 1. This layout applies to State 1 (Peek Island).
-     * 2. PFD on left (60%), Data Panel on right (40%).
+     * 2. PFD on left (50%), Data Panel on right (50%). <-- MODIFIED
      * 3. Data Panel items are "bubbles".
      * 4. VSD is hidden in State 1.
      * 5. [NEW] PFD Footer is hidden in State 1.
@@ -318,7 +318,7 @@ const MobileUIHandler = {
 
 
             /* ====================================================================
-            --- [START OF USER REQUEST V4: 2025-10-30] ---
+            --- [START OF USER REQUEST V5: 2025-10-30] ---
             --- State 1: "Peek" Side-by-Side Layout ---
             ==================================================================== */
             #mobile-island-peek .unified-display-main {
@@ -336,10 +336,10 @@ const MobileUIHandler = {
                 margin: 0 !important;
                 max-width: none !important;
                 justify-content: center;
-                flex-basis: 60%; 
+                flex-basis: 50%; /* <-- [USER REQ 2025-10-30] Changed from 60% */
                 flex-grow: 0;
                 flex-shrink: 0;
-                width: 60%; 
+                width: 50%; /* <-- [USER REQ 2025-10-30] Changed from 60% */
                 min-height: 0;
                 height: 100%;
                 
@@ -407,7 +407,7 @@ const MobileUIHandler = {
                 font-size: 0.7rem; 
                 opacity: 0.7;
             }
-            #mobile-island-peek .live-data-item .data-value-ete { 
+            #mobile-island-peek .live-data-item .data-value-ETE { 
                 font-size: 1.2rem; /* <-- Sized down */
                 font-weight: 600;
                 color: var(--hud-accent); /* <-- Make ETE stand out */
@@ -418,7 +418,7 @@ const MobileUIHandler = {
                 display: none !important;
             }
             /* ====================================================================
-            --- [END OF USER REQUEST V4] ---
+            --- [END OF USER REQUEST V5] ---
             ==================================================================== */
 
 
