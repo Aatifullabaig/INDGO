@@ -2,7 +2,7 @@
  * MobileUIHandler Module (Creative HUD Rehaul - v6.3 - Seamless Handle)
  *
  * This version implements the "clean islands" concept AND redesigns the
- * content *within* the islands for a smoother, more modern HUD.
+ * content *within* the islands for a smoother, in-depth HUD.
  *
  * REHAUL v6.3 CHANGES (Seamless Handle):
  * 1. REMOVED the 1px border separator from all .drawer-handle elements.
@@ -51,15 +51,14 @@ const MobileUIHandler = {
      * 1. Reduces handle height and increases mini-data height.
      * 2. Removes border-bottom from .drawer-handle.
      * ---
-     * [USER MODIFICATION / PEEK REDESIGN V7 - 2025-10-30]
+     * [USER MODIFICATION / PEEK REDESIGN V8 - 2025-10-30]
      * 1. This layout applies to State 1 (Peek Island).
-     * 2. PFD on left (80%), Data Panel on right (20%). <-- MODIFIED (Made PFD "bigger")
-     * 3. Rules to force PFD content to scale 100% to its container are active.
-     * 4. Data Panel items are "bubbles".
+     * 2. PFD on left (80%), Data Panel on right (20%).
+     * 3. [V8] Waypoint data (.pfd-footer-display) is MOVED from the PFD
+     * and placed *inside* the right-hand Data Panel.
+     * 4. Data Panel items and Waypoint footer are styled as "bubbles".
      * 5. VSD is hidden in State 1.
-     * 6. PFD Footer is hidden in State 1.
-     * 7. PFD container now grows to fill the panel height.
-     * 8. State 2 (Expanded) is restored to its original vertical stacking layout.
+     * 6. State 2 (Expanded) is restored to its original vertical stacking layout.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -319,7 +318,7 @@ const MobileUIHandler = {
 
 
             /* ====================================================================
-            --- [START OF USER REQUEST V7: 2025-10-30] ---
+            --- [START OF USER REQUEST V8: 2025-10-30] ---
             --- State 1: "Peek" Side-by-Side Layout ---
             ==================================================================== */
             #mobile-island-peek .unified-display-main {
@@ -367,10 +366,11 @@ const MobileUIHandler = {
                 object-fit: contain; /* Good for scaling SVGs/Canvas */
             }
 
-            /* [NEW] Hide PFD footer */
+            /* [REMOVED V8] This rule is GONE.
             #mobile-island-peek .pfd-footer-display {
                 display: none !important;
             }
+            */
             
             /* Data Panel on the right */
             #mobile-island-peek .live-data-panel {
@@ -425,12 +425,47 @@ const MobileUIHandler = {
                 color: var(--hud-accent); /* <-- Make ETE stand out */
             }
 
+            /* --- [NEW V8] Style the PFD footer (waypoint data)
+                   now that it's inside the live-data-panel --- */
+            #mobile-island-peek .live-data-panel > .pfd-footer-display {
+                display: flex !important; /* Ensure it's visible */
+                flex-direction: column; /* Stack waypoints vertically */
+                align-items: flex-start; /* Left-align */
+                
+                /* Make it look like a bubble */
+                background: rgba(20, 25, 40, 0.7);
+                padding: 6px 10px;
+                border-radius: 8px;
+                box-sizing: border-box;
+                width: 100%;
+                flex-shrink: 0;
+                
+                /* [V8] This element might have an original border */
+                border-top: none; 
+            }
+            
+            /* [NEW V8] Style the contents of the waypoint "bubble" */
+            #mobile-island-peek .live-data-panel .pfd-footer-display .waypoint-item {
+                font-size: 0.8rem;
+                padding: 2px 0;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                line-height: 1.2;
+                color: #c5cae9; /* Lighter color for waypoints */
+            }
+            #mobile-island-peek .live-data-panel .pfd-footer-display .waypoint-item.active {
+                color: var(--hud-accent); /* Highlight active waypoint */
+                font-weight: 600;
+            }
+
+
             /* --- Hide VSD in Peek State --- */
             #mobile-island-peek #vsd-panel {
                 display: none !important;
             }
             /* ====================================================================
-            --- [END OF USER REQUEST V7] ---
+            --- [END OF USER REQUEST V8] ---
             ==================================================================== */
 
 
@@ -460,6 +495,12 @@ const MobileUIHandler = {
                 margin: 0 auto !important; /* <-- Original centered layout */
                 max-width: 400px !important; /* <-- Original max-width */
             }
+            
+            /* [NEW V8] Crucially, the footer must be visible here */
+            #mobile-island-expanded .pfd-footer-display {
+                display: flex !important; 
+            }
+            
             #mobile-island-expanded .live-data-panel {
                 justify-content: space-around !important; /* <-- Original layout */
                 /* Apply module styles */
@@ -611,11 +652,12 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.2]
+     * [REHAUL v6.2 / MODIFIED V8]
      * Moves content from the original window into the new island components.
      * 1. Top Overview -> Top Window
      * 2. Summary Bar -> Mini Island's ".mini-content-wrapper"
      * 3. Main Content -> CLONED to Peek Island, MOVED to Expanded Island
+     * 4. [NEW V8] On the Peek clone, the PFD footer is moved into the live data panel.
      */
     populateSplitView(sourceWindow) {
         if (!this.topWindowEl || !this.miniIslandEl || !this.peekIslandEl || !this.expandedIslandEl) return;
@@ -647,6 +689,18 @@ const MobileUIHandler = {
             const clonedFlightContent = mainFlightContent.cloneNode(true);
             peekContentContainer.appendChild(clonedFlightContent);
             
+            // --- [NEW V8] ---
+            // On the PEEK CLONE ONLY: Find the PFD footer (waypoint data)
+            // and move it into the live data panel.
+            const peekFooter = clonedFlightContent.querySelector('.pfd-footer-display');
+            const peekLiveDataPanel = clonedFlightContent.querySelector('.live-data-panel');
+            
+            if (peekFooter && peekLiveDataPanel) {
+                // Move the footer to be an item *inside* the live data panel
+                peekLiveDataPanel.appendChild(peekFooter);
+            }
+            // --- [END V8] ---
+
             // Move the *original* content to the "Expanded" view
             expandedContentContainer.appendChild(mainFlightContent);
         }
@@ -837,10 +891,11 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.2]
+     * [REHAUL v6.2 / MODIFIED V8]
      * Animates out all islands, moves *original* content back,
      * *destroys* cloned content, and cleans up.
      * * v6.2: Finds summary bar inside .mini-content-wrapper
+     * * v8: Must move PFD footer *back* to PFD panel from *original* content
      */
     closeActiveWindow(force = false) {
         if (this.contentObserver) this.contentObserver.disconnect();
@@ -858,6 +913,12 @@ const MobileUIHandler = {
             // Get the CLONE from the peek island to destroy it
             const clonedFlightContent = this.peekIslandEl.querySelector('.unified-display-main-content');
             
+            // [NEW V8] Find the footer in the *original* content (it's still in the PFD panel)
+            // This logic now *also* handles re-attaching the summary bar correctly.
+            const pfdPanel = mainFlightContent ? mainFlightContent.querySelector('.pfd-main-panel') : null;
+            const pfdFooter = pfdPanel ? pfdPanel.querySelector('.pfd-footer-display') : null;
+
+
             if (topOverviewPanel) {
                 this.activeWindow.appendChild(topOverviewPanel);
             }
@@ -871,11 +932,16 @@ const MobileUIHandler = {
                 }
             }
 
+            // [MODIFIED V8] We must put the footer back if it exists.
+            // This logic is implicitly handled by just moving the entire
+            // mainFlightContent back, as the footer was never moved
+            // from the *original* element, only from the *clone*.
+
             if (mainFlightContent) {
                 this.activeWindow.appendChild(mainFlightContent);
             }
             
-            // Destroy the clone
+            // Destroy the clone (which contains the moved footer)
             if (clonedFlightContent) {
                 clonedFlightContent.remove();
             }
