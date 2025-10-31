@@ -4483,11 +4483,12 @@ function renderPilotStatsHTML(stats, username) {
     }
 
 
-// [REPLACE THIS FUNCTION]
+
 /**
  * --- [MAJOR REVISION V7.1: Pre-Cache Progress Data]
  * --- [MODIFIED v10] (USER REQUEST) Added Mapbox "Flying Over" feature
  * --- [MODIFIED v11] (USER REQUEST) Added Flight-Phase-Aware Location Logic
+ * --- [FIX v12] Corrected Mapbox query layers to prevent console errors
 */
 function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- Get all DOM elements ---
@@ -5009,12 +5010,11 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     
     
     // ==========================================================
-    // --- [START] NEW SMART MAPBOX QUERY LOGIC (v2) ---
+    // --- [START] REVISED SMART MAPBOX QUERY LOGIC (v3) ---
     // ==========================================================
     if (locationEl && sectorOpsMap && sectorOpsMap.isStyleLoaded()) {
         let newLocationText = '';
         
-        // --- Determine airborne vs. ground state ---
         // 'isOnGround' is already calculated by the flight phase state machine
         const isAirborne = !isOnGround;
         const isGround = isOnGround; 
@@ -5022,39 +5022,54 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         try {
             const point = sectorOpsMap.project([baseProps.position.lon, baseProps.position.lat]);
             
-            if (isAirborne) {
+            // --- [FIX] Define the *correct* layer names to query ---
+            // We also filter this list to ensure the layer exists in the style before querying
+            // to prevent the 'does not exist' error.
+            const airborneLayers = ['place_label', 'poi_label', 'natural_label']
+                .filter(l => sectorOpsMap.getLayer(l));
+            
+            const groundLayers = ['airport_label', 'poi_label']
+                .filter(l => sectorOpsMap.getLayer(l));
+
+            if (isAirborne && airborneLayers.length > 0) {
                 // --- AIRBORNE LOGIC: Look for City, then Country ---
                 const features = sectorOpsMap.queryRenderedFeatures(point, { 
-                    layers: ['place-label', 'settlement-label', 'country-label'] 
+                    layers: airborneLayers
                 });
 
                 if (features.length > 0) {
-                    // Prioritize cities/towns
+                    // Prioritize cities/towns from 'poi_label'
                     let cityFeature = features.find(f => 
-                        (f.layer.id === 'place-label' || f.layer.id === 'settlement-label') &&
-                        (f.properties.type === 'place' || f.properties.type === 'locality')
+                        f.layer.id === 'poi_label' && 
+                        (f.properties.type === 'City' || f.properties.type === 'Town' || f.properties.type === 'Settlement')
                     );
                     
                     if (cityFeature && cityFeature.properties.text) {
                         newLocationText = `Flying over ${cityFeature.properties.text}`;
                     } else {
-                        // Fallback to Country
-                        let countryFeature = features.find(f => f.layer.id === 'country-label');
+                        // Fallback to Country from 'place_label'
+                        let countryFeature = features.find(f => f.layer.id === 'place_label' && f.properties.type === 'country');
                         if (countryFeature && countryFeature.properties.text) {
                             newLocationText = `Flying over ${countryFeature.properties.text}`;
                         }
                     }
                 }
                 
-            } else if (isGround) {
+            } else if (isGround && groundLayers.length > 0) {
                 // --- GROUND LOGIC: Look for Airport Name ---
                 const features = sectorOpsMap.queryRenderedFeatures(point, { 
-                    layers: ['airport-label'] 
+                    layers: groundLayers 
                 });
                 
-                let airportFeature = features.find(f => f.properties.type === 'airport' && f.properties.text);
+                // Prioritize the specific 'airport_label'
+                let airportFeature = features.find(f => f.layer.id === 'airport_label' && f.properties.text);
                 
-                if (airportFeature) {
+                // Fallback to a POI that is an airport
+                if (!airportFeature) {
+                    airportFeature = features.find(f => f.layer.id === 'poi_label' && f.properties.maki === 'airport' && f.properties.text);
+                }
+
+                if (airportFeature && airportFeature.properties.text) {
                     newLocationText = `At ${airportFeature.properties.text}`;
                 } else {
                     // Fallback to ICAO from flight plan if no label is found
@@ -5068,8 +5083,9 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
             // If neither airborne nor ground (e.g., unknown state), newLocationText remains ''
 
         } catch (err) {
-            // Map query failed, do nothing, just hide the label
+            // Map query failed (e.g., map not ready), do nothing, just hide the label
             newLocationText = '';
+            console.warn('Mapbox query for location label failed:', err.message);
         }
 
         // --- Update the DOM ---
@@ -5080,7 +5096,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         }
     }
     // ==========================================================
-    // --- [END] NEW SMART MAPBOX QUERY LOGIC (v2) ---
+    // --- [END] REVISED SMART MAPBOX QUERY LOGIC (v3) ---
     // ==========================================================
 
 
