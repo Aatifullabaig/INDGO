@@ -57,6 +57,11 @@ const MobileUIHandler = {
      * 3. Re-styled .live-data-panel to be a vertical column on the right,
      * filling the remaining 45% (approx) of space.
      * 4. Left-aligned and re-styled .live-data-item for the new panel layout.
+     * ---
+     * [USER MODIFICATION / PEEK RETOUCH V2]
+     * 1. Increased PFD panel basis to 60%.
+     * 2. Added "bubble" backgrounds to .live-data-item.
+     * 3. Added rule to hide VSD in Peek state.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -316,7 +321,7 @@ const MobileUIHandler = {
 
 
             /* ====================================================================
-            --- [NEW PEEK VIEW REDESIGN] State 1: Side-by-Side Layout ---
+            --- [NEW PEEK VIEW REDESIGN V2] State 1: Side-by-Side Layout ---
             ==================================================================== */
             #mobile-island-peek .unified-display-main {
                 display: flex !important;
@@ -334,10 +339,10 @@ const MobileUIHandler = {
                 max-width: none !important;
                 justify-content: center;
                 
-                flex-basis: 55%; /* <-- PFD takes 55% of the width */
+                flex-basis: 60%; /* <-- [MODIFIED] Increased PFD size */
                 flex-grow: 0;
                 flex-shrink: 0;
-                width: 55%;
+                width: 60%; /* <-- [MODIFIED] Increased PFD size */
                 
                 min-height: 0; /* Allow flex to manage height */
                 height: 100%; /* <-- Fill the container height */
@@ -346,25 +351,33 @@ const MobileUIHandler = {
             /* Data Panel on the right */
             #mobile-island-peek .live-data-panel {
                 flex-direction: column; /* <-- Stack data items VERTICALLY */
-                justify-content: space-around !important;
-                padding: 8px 10px !important; /* <-- Add horizontal padding */
+                justify-content: flex-start !important; /* <-- [MODIFIED] Align to top */
+                padding: 8px !important; /* <-- [MODIFIED] Adjusted padding */
                 background: rgba(10, 12, 26, 0.5) !important;
                 border-radius: 10px;
                 
                 flex-grow: 1; /* <-- Fill remaining space */
                 flex-shrink: 1;
-                flex-basis: 40%; /* <-- Start at 40% width */
+                flex-basis: 35%; /* <-- [MODIFIED] Reduced width */
                 
                 height: 100%; /* <-- Fill the container height */
                 box-sizing: border-box;
-                overflow: hidden;
+                overflow: auto; /* <-- [NEW] Allow scroll if bubbles overflow */
+                gap: 6px; /* <-- [NEW] Space out the bubbles */
             }
             
-            /* Styling for the items inside the new vertical data panel */
+            /* [MODIFIED] Styling for the "bubble" items */
             #mobile-island-peek .live-data-item {
                 flex-direction: column-reverse; /* Value on top, label on bottom */
                 align-items: flex-start; /* <-- LEFT-ALIGN text */
                 width: 100%;
+                
+                /* [NEW] Bubble styles */
+                background: rgba(20, 25, 40, 0.7);
+                padding: 6px 10px;
+                border-radius: 8px;
+                box-sizing: border-box;
+                flex-shrink: 0; /* <-- [NEW] Prevent bubbles from shrinking */
             }
             #mobile-island-peek .live-data-item .data-label { 
                 font-size: 0.6rem; 
@@ -387,8 +400,17 @@ const MobileUIHandler = {
                 font-weight: 600;
                 color: var(--hud-accent); /* <-- Make ETE stand out */
             }
+
+            /* --- [NEW] Hide VSD in Peek State --- */
+            #mobile-island-peek .vsd-display-panel {
+                display: none !important;
+            }
+            /* NOTE: If the VSD is still visible, you may need to
+               update the selector '.vsd-display-panel' above
+               to match the VSD's actual class or ID.
+            */
             /* ====================================================================
-            --- [END PEEK VIEW REDESIGN] ---
+            --- [END PEEK VIEW REDESIGN V2] ---
             ==================================================================== */
 
 
