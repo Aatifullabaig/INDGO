@@ -51,13 +51,14 @@ const MobileUIHandler = {
      * 1. Reduces handle height and increases mini-data height.
      * 2. Removes border-bottom from .drawer-handle.
      * ---
-     * [USER MODIFICATION / PEEK REDESIGN V3 - 2025-10-30]
-     * 1. CORRECTED: This layout now applies to State 1 (Peek Island).
-     * 2. Changed #mobile-island-peek .unified-display-main to flex-direction: row.
-     * 3. PFD on left (60%), Data Panel on right (40%).
-     * 4. Data Panel items are now "bubbles".
-     * 5. VSD is now hidden in State 1 (Peek) only.
-     * 6. State 2 (Expanded) is restored to its original vertical stacking layout.
+     * [USER MODIFICATION / PEEK REDESIGN V4 - 2025-10-30]
+     * 1. This layout applies to State 1 (Peek Island).
+     * 2. PFD on left (60%), Data Panel on right (40%).
+     * 3. Data Panel items are "bubbles".
+     * 4. VSD is hidden in State 1.
+     * 5. [NEW] PFD Footer is hidden in State 1.
+     * 6. [NEW] PFD container now grows to fill the panel height.
+     * 7. State 2 (Expanded) is restored to its original vertical stacking layout.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -317,7 +318,7 @@ const MobileUIHandler = {
 
 
             /* ====================================================================
-            --- [START OF USER REQUEST: 2025-10-30] ---
+            --- [START OF USER REQUEST V4: 2025-10-30] ---
             --- State 1: "Peek" Side-by-Side Layout ---
             ==================================================================== */
             #mobile-island-peek .unified-display-main {
@@ -335,14 +336,28 @@ const MobileUIHandler = {
                 margin: 0 !important;
                 max-width: none !important;
                 justify-content: center;
-                
-                flex-basis: 60%; /* <-- Increased PFD size */
+                flex-basis: 60%; 
                 flex-grow: 0;
                 flex-shrink: 0;
-                width: 60%; /* <-- Increased PFD size */
+                width: 60%; 
+                min-height: 0;
+                height: 100%;
                 
-                min-height: 0; /* Allow flex to manage height */
-                height: 100%; /* <-- Fill the container height */
+                /* [NEW] Ensure flex properties for child growth */
+                display: flex !important;
+                flex-direction: column !important;
+            }
+            
+            /* [NEW] Make PFD container fill the panel */
+            #mobile-island-peek #pfd-container {
+                flex-grow: 1;
+                /* [NEW] Restore border-radius since footer is gone */
+                border-radius: 12px !important;
+            }
+
+            /* [NEW] Hide PFD footer */
+            #mobile-island-peek .pfd-footer-display {
+                display: none !important;
             }
             
             /* Data Panel on the right */
@@ -355,7 +370,7 @@ const MobileUIHandler = {
                 
                 flex-grow: 1; /* <-- Fill remaining space */
                 flex-shrink: 1;
-                flex-basis: 35%; /* <-- Reduced width */
+                flex-basis: 35%; 
                 
                 height: 100%; /* <-- Fill the container height */
                 box-sizing: border-box;
@@ -403,7 +418,7 @@ const MobileUIHandler = {
                 display: none !important;
             }
             /* ====================================================================
-            --- [END OF USER REQUEST] ---
+            --- [END OF USER REQUEST V4] ---
             ==================================================================== */
 
 
