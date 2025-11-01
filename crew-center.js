@@ -132,7 +132,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     
-// [REPLACE THIS FUNCTION]
+
 // --- [REHAULED] Helper to inject custom CSS for new features ---
 function injectCustomStyles() {
     const styleId = 'sector-ops-custom-styles';
@@ -492,12 +492,45 @@ function injectCustomStyles() {
             width: 100%;
             box-sizing: border-box; 
         }
-        .route-summary-overlay .icao {
+
+        /* --- [NEW] Styles for Flag/Time/ICAO --- */
+        .route-summary-airport {
+            display: flex;
+            flex-direction: column;
+        }
+        #route-summary-dep { text-align: left; }
+        #route-summary-arr { text-align: right; }
+        
+        .route-summary-airport .airport-line {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #route-summary-arr .airport-line {
+            justify-content: flex-end; /* Align arrival to the right */
+        }
+        
+        .route-summary-airport .icao {
             font-family: 'Courier New', monospace;
             font-size: 1.2rem;
             font-weight: 700;
             color: #fff;
         }
+        .route-summary-airport .time {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #c5cae9;
+            margin-top: 2px;
+        }
+        .route-summary-airport .country-flag {
+            width: 20px;
+            height: auto;
+            border-radius: 3px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: none; /* Hidden by default, shown by JS */
+        }
+        /* --- [END NEW] --- */
+
         .route-progress-container {
             /* --- MODIFIED: Use Grid for layering --- */
             display: grid;
@@ -3983,6 +4016,7 @@ async function handleAircraftClick(flightProps, sessionId) {
  * --- [MODIFIED v6] Implemented (USER REQUEST) Tab-based navigation
  * --- [MODIFIED v7] Fixed tab bar position and icon
  * --- [MODIFIED v8] Added Donut Chart and Odometer
+ * --- [MODIFIED v9] Added Flags and Times to Route Summary
  */
 function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     const windowEl = document.getElementById('aircraft-info-window');
@@ -4042,6 +4076,17 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
     // --- Set Aircraft Image (Handled by updateAircraftInfoWindow) ---
     // We set a temporary background
     const tempBg = `background-image: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('/CommunityPlanes/default.png');`;
+    
+    // --- [NEW] Get Times and Flags for Initial Render ---
+    const etdTime = plan && plan.times?.sched_out ? formatTimeFromTimestamp(plan.times.sched_out) : '--:--';
+    const etaTime = plan && plan.times?.sched_in ? formatTimeFromTimestamp(plan.times.sched_in) : '--:--';
+    const depCountryCode = plan && plan.origin?.country ? plan.origin.country.toLowerCase() : '';
+    const arrCountryCode = plan && plan.destination?.country ? plan.destination.country.toLowerCase() : '';
+    const depFlagSrc = depCountryCode ? `https://flagcdn.com/w20/${depCountryCode}.png` : '';
+    const arrFlagSrc = arrCountryCode ? `https://flagcdn.com/w20/${arrCountryCode}.png` : '';
+    const depFlagDisplay = depCountryCode ? 'block' : 'none';
+    const arrFlagDisplay = arrCountryCode ? 'block' : 'none';
+    // --- [END NEW] ---
 
     windowEl.innerHTML = `
     <div class="info-window-content">
@@ -4068,16 +4113,30 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
             </div>
 
             <div class="route-summary-overlay">
-                <span class="icao" id="ac-bar-dep">${departureIcao}</span>
+                <div class="route-summary-airport" id="route-summary-dep">
+                    <div class="airport-line">
+                        <img src="${depFlagSrc}" class="country-flag" id="ac-bar-dep-flag" alt="${depCountryCode}" style="display: ${depFlagDisplay};">
+                        <span class="icao" id="ac-bar-dep">${departureIcao}</span>
+                    </div>
+                    <span class="time" id="ac-bar-etd">${etdTime} Z</span>
+                </div>
+
                 <div class="route-progress-container">
                     <div class="route-progress-bar-container">
                         <div class="progress-bar-fill" id="ac-progress-bar"></div>
                     </div>
                     <div class="flight-phase-indicator" id="ac-phase-indicator">ENROUTE</div>
                 </div>
-                <span class="icao" id="ac-bar-arr">${arrivalIcao}</span>
+
+                <div class="route-summary-airport" id="route-summary-arr">
+                     <div class="airport-line">
+                        <span class="icao" id="ac-bar-arr">${arrivalIcao}</span>
+                        <img src="${arrFlagSrc}" class="country-flag" id="ac-bar-arr-flag" alt="${arrCountryCode}" style="display: ${arrFlagDisplay};">
+                    </div>
+                    <span class="time" id="ac-bar-eta">${etaTime} Z</span>
+                </div>
             </div>
-        </div>
+            </div>
 
         <div class="ac-info-window-tabs">
             <button class="ac-info-tab-btn active" data-tab="ac-tab-flight-data">
@@ -4471,12 +4530,13 @@ function renderPilotStatsHTML(stats, username) {
         }
     }
 
-// [REPLACE THIS FUNCTION]
+
 /**
  * --- [MAJOR REVISION V7.1: Pre-Cache Progress Data]
  * This update fixes the "vertical red line" bug introduced in V7.0.
  * --- [MODIFIED v2] Added PFD Footer data binding
  * --- [MODIFIED v8] Added Donut Chart and Odometer logic
+ * --- [MODIFIED v9] Added live updates for Flags and Times
 */
 function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- Get all DOM elements ---
@@ -4505,6 +4565,13 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     const distTextEl = document.getElementById('ac-dist');
     const eteHrEl = document.getElementById('ac-ete-hr');
     const eteMinEl = document.getElementById('ac-ete-min');
+
+    // --- [NEW] Route Summary Bar Elements ---
+    const etdEl = document.getElementById('ac-bar-etd');
+    const etaEl = document.getElementById('ac-bar-eta');
+    const depFlagEl = document.getElementById('ac-bar-dep-flag');
+    const arrFlagEl = document.getElementById('ac-bar-arr-flag');
+    // --- [END NEW] ---
 
 
     // --- Get Original Data ---
@@ -5076,6 +5143,29 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     updateOdometerDigit(eteMinEl, eteMin);
     // --- [END NEW] ---
 
+    // --- [NEW] Update Times and Flags ---
+    const etdTime = plan && plan.times?.sched_out ? formatTimeFromTimestamp(plan.times.sched_out) : '--:--';
+    const etaTime = plan && plan.times?.sched_in ? formatTimeFromTimestamp(plan.times.sched_in) : '--:--';
+    const depCountryCode = plan && plan.origin?.country ? plan.origin.country.toLowerCase() : '';
+    const arrCountryCode = plan && plan.destination?.country ? plan.destination.country.toLowerCase() : '';
+    const depFlagSrc = depCountryCode ? `https://flagcdn.com/w20/${depCountryCode}.png` : '';
+    const arrFlagSrc = arrCountryCode ? `https://flagcdn.com/w20/${arrCountryCode}.png` : '';
+
+    if (etdEl) etdEl.textContent = `${etdTime} Z`;
+    if (etaEl) etaEl.textContent = `${etaTime} Z`;
+    
+    if (depFlagEl) { 
+        depFlagEl.src = depFlagSrc; 
+        depFlagEl.alt = depCountryCode; 
+        depFlagEl.style.display = depCountryCode ? 'block' : 'none'; 
+    }
+    if (arrFlagEl) { 
+        arrFlagEl.src = arrFlagSrc; 
+        arrFlagEl.alt = arrCountryCode; 
+        arrFlagEl.style.display = arrCountryCode ? 'block' : 'none'; 
+    }
+    // --- [END NEW] ---
+
     // --- Update Aircraft Image (Unchanged) ---
     if (overviewPanel) {
         const sanitizeFilename = (name) => {
@@ -5105,7 +5195,6 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         }
     }
 }
-
     /**
      * (NEW) Clears old routes and draws all new routes originating from a selected airport.
      */
