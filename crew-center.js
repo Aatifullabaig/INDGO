@@ -325,25 +325,34 @@ function injectCustomStyles() {
             flex-direction: column;
             justify-content: space-between;
 
-            /* --- [NEW v12] ---
-              Add a mask to fade the bottom 30% of the image.
-              This lets the panel below blend into it.
+            /* --- [NEW SMOOTHER FADE] ---
+              This gradient now has an intermediate step for a
+              more gradual fade-out compared to the old 70%-100% linear fade.
             */
-            -webkit-mask-image: linear-gradient(180deg, black 70%, transparent 100%);
-            mask-image: linear-gradient(180deg, black 70%, transparent 100%);
+            -webkit-mask-image: linear-gradient(180deg, black 65%, rgba(0,0,0,0.7) 80%, transparent 100%);
+            mask-image: linear-gradient(180deg, black 65%, rgba(0,0,0,0.7) 80%, transparent 100%);
             
-            /* --- [NEW v12] ---
+            /* --- [MODIFIED v12] ---
               Pull the element below it (the summary bar) up by 40px
               so it overlaps with the faded-out image area.
             */
             margin-bottom: -40px; 
         }
-        /* Darkening overlay for text readability */
+        
+        /* --- [FIXED GRADIENT] ---
+           This overlay provides a *subtle* hint of darkness at the top
+           for text readability, without darkening the whole image.
+           It's now controlled here in CSS, not in JavaScript.
+        */
         .aircraft-overview-panel::before {
             content: '';
             position: absolute;
             inset: 0;
             z-index: 1;
+            background: linear-gradient(180deg, 
+                rgba(0, 0, 0, 0.4) 0%,  /* Hint of dark at the top */
+                rgba(0, 0, 0, 0) 35%   /* Fades out quickly */
+            );
         }
         
         /* Container for top-left/right text */
@@ -486,17 +495,17 @@ function injectCustomStyles() {
             */
             padding: 25px 20px 12px 20px;
             
-            /* --- [MODIFIED v12] --- 
-               This is the core change.
-               The background is now a gradient that starts transparent
-               (to show the image behind it), then fades to the
-               dark content background color (#1C1E2A).
+            /* --- [NEW COLOR MIX] --- 
+               This gradient now fades from transparent to a
+               subtle light blue (rgba(0, 168, 255, 0.15)), 
+               then to the dark UI color.
             */
             background: linear-gradient(
                 180deg, 
                 transparent 0%, 
-                rgba(18, 20, 38, 0.8) 35%, 
-                #1C1E2A 65%
+                rgba(0, 168, 255, 0.15) 30%, /* <-- Added light blue glow */
+                rgba(18, 20, 38, 0.8) 50%, 
+                #1C1E2A 70%
             );
             
             border-radius: 0; /* Flush with content above and below */
@@ -4055,6 +4064,7 @@ async function handleAircraftClick(flightProps, sessionId) {
  * --- [MODIFIED v9] Added Flags and Times to Route Summary
  * --- [MODIFIED v10] Moved Route Summary Bar out of image panel
  * --- [MODIFIED v11] Use airportsData for flags
+ * --- [MODIFIED v12.1] Removed inline gradient from tempBg
  */
 function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     const windowEl = document.getElementById('aircraft-info-window');
@@ -4111,9 +4121,9 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
     const logoHtml = logoPath ? `<img src="${logoPath}" alt="${liveryName}" class="ac-header-logo" onerror="this.style.display='none'">` : '';
     // --- End [NEW] ---
 
-    // --- Set Aircraft Image (Handled by updateAircraftInfoWindow) ---
-    // We set a temporary background
-    const tempBg = `background-image: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('/CommunityPlanes/default.png');`;
+    // --- [FIX: REMOVED GRADIENT] ---
+    // We only set a temporary background image. The gradient is now in CSS.
+    const tempBg = `background-image: url('/CommunityPlanes/default.png');`;
     
     // --- [NEW] Get Times and Flags for Initial Render ---
     const etdTime = plan && plan.times?.sched_out ? formatTimeFromTimestamp(plan.times.sched_out) : '--:--';
@@ -4581,6 +4591,7 @@ function renderPilotStatsHTML(stats, username) {
  * --- [MODIFIED v8] Added Donut Chart and Odometer logic
  * --- [MODIFIED v9] Added live updates for Flags and Times
  * --- [MODIFIED v11] Use airportsData for flags
+ * --- [MODIFIED v12.1] Removed inline gradient from image loading
 */
 function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- Get all DOM elements ---
@@ -5215,7 +5226,8 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     }
     // --- [END NEW] ---
 
-    // --- Update Aircraft Image (Unchanged) ---
+    // --- [FIX: REMOVED GRADIENT] ---
+    // Update Aircraft Image. The gradient is now handled in CSS.
     if (overviewPanel) {
         const sanitizeFilename = (name) => {
             if (!name || typeof name !== 'string') return 'unknown';
@@ -5232,13 +5244,14 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         if (overviewPanel.dataset.currentPath !== imagePath) {
             const img = new Image();
             img.src = imagePath;
-            const gradient = 'linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0) 40%)';
             img.onload = () => {
-                overviewPanel.style.backgroundImage = `${gradient}, ${newImageUrl}`;
+                // We no longer add the gradient variable here
+                overviewPanel.style.backgroundImage = newImageUrl;
                 overviewPanel.dataset.currentPath = imagePath;
             };
             img.onerror = () => {
-                overviewPanel.style.backgroundImage = `${gradient}, url('${fallbackPath}')`;
+                // We no longer add the gradient variable here
+                overviewPanel.style.backgroundImage = `url('${fallbackPath}')`;
                 overviewPanel.dataset.currentPath = fallbackPath;
             };
         }
