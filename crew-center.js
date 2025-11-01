@@ -132,7 +132,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     
-
 // --- [REHAULED] Helper to inject custom CSS for new features ---
 function injectCustomStyles() {
     const styleId = 'sector-ops-custom-styles';
@@ -611,10 +610,10 @@ function injectCustomStyles() {
 
 
         /* ====================================================================
-        --- [START] FDC REDESIGN (PFD + DATA BLOCKS) ---
+        --- [START] FDC REDESIGN (PFD + NEW FLIGHT STATUS PANEL) ---
         ==================================================================== */
 
-        /* [NEW] This is the new 2-column grid container */
+        /* [Unchanged] This is the 2-column grid container */
         .fdc-layout-grid {
             display: grid;
             grid-template-columns: 240px 1fr; /* PFD Left, Data Right */
@@ -630,13 +629,13 @@ function injectCustomStyles() {
             border-top: 3px solid #00a8ff; /* Blue accent */
         }
 
-        /* [MODIFIED] Column 1: PFD Panel */
+        /* [Unchanged] Column 1: PFD Panel */
         .fdc-pfd-panel {
             display: flex;
             min-width: 0;
         }
 
-        /* [MODIFIED] PFD Instrument Container */
+        /* [Unchanged] PFD Instrument Container */
         .fdc-pfd-instrument {
             display: grid;
             place-items: center;
@@ -683,102 +682,155 @@ function injectCustomStyles() {
          #pfd-container svg #attitude_group {
             transition: transform 0.5s ease-out;
         }
-
-        /* [REMOVED] All styles for .pfd-footer-display are gone */
-
-
-        /* [REDESIGNED] Column 2: Flight Data Computer */
-        .fdc-data-panel {
+        
+        /* --- [NEW] ---
+           Styles for the new animated "Flight Status Panel"
+           (Replaces all old .fdc-data-panel styles)
+        */
+        .flight-status-panel {
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
-            gap: 10px;
+            gap: 16px; /* Space between components */
+            padding: 8px 12px;
+            overflow: hidden;
         }
 
-        /* [NEW] Primary (VS) Readout */
-        .fdc-primary-readout {
+        /* 1. Next Waypoint Display (Top) */
+        .status-waypoint {
+            text-align: center;
             background: rgba(0,0,0,0.3);
             border-radius: 8px;
-            padding: 16px 12px;
-            text-align: center;
-            flex-grow: 1; /* Takes up available space */
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
+            padding: 12px 8px;
             border-left: 3px solid #00a8ff;
         }
-        .fdc-label {
+        
+        .status-label {
             font-size: 0.7rem;
             color: #c5cae9;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
             margin-bottom: 4px;
+            display: block;
         }
-        .fdc-primary-readout .fdc-value {
-            font-size: 2.2rem;
+
+        .status-wp-name {
+            font-size: 1.6rem;
             font-weight: 600;
             color: #fff;
             line-height: 1.1;
             font-family: 'Courier New', monospace;
-        }
-        .fdc-primary-readout .fdc-value .fa-solid {
-            font-size: 1.5rem;
-            margin-right: 8px;
-            vertical-align: middle;
-            transform: translateY(-2px);
-        }
-        .fdc-unit {
-            font-size: 0.8rem;
-            font-weight: 400;
-            color: #9fa8da;
-            margin-left: 4px;
-            font-family: 'Segoe UI', sans-serif;
-        }
-
-        /* [NEW] 2x2 Navigation Grid */
-        .fdc-data-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-        }
-        .fdc-data-item {
-            background: rgba(0,0,0,0.2);
-            border-radius: 8px;
-            padding: 12px 8px;
-            text-align: center;
-        }
-        .fdc-data-item .fdc-value {
-            font-size: 1.4rem;
-            color: #fff;
-            font-weight: 600;
-            font-family: 'Courier New', monospace;
-            line-height: 1.2;
-            
-            /* For long waypoint names */
+            display: block;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            display: block;
-        }
-        /* Smaller unit for the grid */
-        .fdc-data-item .fdc-value .fdc-unit {
-            font-size: 0.75rem;
+            transition: opacity 0.25s ease-in-out;
         }
 
-        /* [NEW] Tertiary (GS) Readout */
-        .fdc-tertiary-readout {
-            background: rgba(0,0,0,0.2);
-            border-radius: 8px;
-            padding: 10px 12px;
-            text-align: center;
-        }
-        .fdc-tertiary-readout .fdc-value {
-            font-size: 1.2rem;
-            color: #fff;
-            font-weight: 600;
+        .status-wp-dist {
+            font-size: 1.0rem;
+            font-weight: 400;
+            color: #00a8ff;
             font-family: 'Courier New', monospace;
+            display: block;
+            transition: opacity 0.25s ease-in-out;
         }
 
-        /* [REMOVED] All styles for donut charts and odometers are gone */
+        /* 2. Graphical Bar Group */
+        .status-bar-group {
+            display: flex;
+            flex-direction: column;
+            gap: 14px; /* Space between bars */
+            flex-grow: 1;
+        }
+
+        .status-bar-container {
+            position: relative;
+        }
+        
+        /* Shared styles for labels on all bars */
+        .status-bar-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .status-bar-label .label-text {
+            font-size: 0.7rem;
+            color: #c5cae9;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .status-bar-label .label-value {
+            font-size: 0.9rem;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            transition: opacity 0.25s ease-in-out;
+        }
+        .status-bar-label .label-value .unit {
+            font-size: 0.7rem;
+            color: #9fa8da;
+            margin-left: 3px;
+        }
+        
+        /* Shared styles for horizontal bar tracks */
+        .status-bar-track {
+            width: 100%;
+            height: 12px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid rgba(0,0,0,0.5);
+        }
+        
+        .status-bar-fill {
+            height: 100%;
+            width: 0%; /* Updated by JS */
+            border-radius: 6px;
+            transition: width 0.5s ease-out;
+        }
+
+        /* Specific bar styles */
+        #status-gs-bar { background: linear-gradient(90deg, #00a8ff, #50cfff); }
+        #status-dist-bar { background: linear-gradient(90deg, #a33ea3, #d76de2); }
+
+        /* 3. Vertical Speed Indicator */
+        .status-vsi-track {
+            width: 12px; /* Vertical track */
+            height: 80px; /* Fixed height */
+            background: rgba(0,0,0,0.4);
+            border-radius: 6px;
+            border: 1px solid rgba(0,0,0,0.5);
+            position: relative;
+            overflow: hidden;
+            margin: 0 auto; /* Center it */
+        }
+        
+        .status-vsi-bar {
+            position: absolute;
+            bottom: 50%; /* Starts at the 0 line */
+            left: 0;
+            right: 0;
+            height: 0%; /* Set by JS */
+            background-color: #28a745; /* Green for climb */
+            transition: height 0.3s ease-out, transform 0.3s ease-out, background-color 0.3s ease-out;
+        }
+        
+        .status-vsi-bar.descent {
+            transform-origin: bottom;
+            transform: scaleY(-1); /* Flips it to go down */
+            background-color: #ffc107; /* Yellow for descent */
+        }
+        
+        .status-vsi-zeroline {
+            position: absolute;
+            top: 50%;
+            left: -4px;
+            right: -4px;
+            height: 1px;
+            background: rgba(255,255,255,0.3);
+        }
+        /* --- [END NEW] --- */
 
         /* ====================================================================
         --- [END] FDC REDESIGN ---
@@ -3924,7 +3976,6 @@ async function handleAircraftClick(flightProps, sessionId) {
 }
 
 
-
 /**
  * --- [REDESIGNED & UPDATED] Generates the "Unified Flight Display" with image overlay and aircraft type.
  * --- [MODIFIED] Replaced data list with Vertical Situation Display (VSD)
@@ -3934,6 +3985,7 @@ async function handleAircraftClick(flightProps, sessionId) {
  * --- [MODIFIED v7] Fixed tab bar position and icon
  * --- [MODIFIED v8] Added Donut Chart and Odometer
  * --- [MODIFIED v9] Redesigned PFD data layout into "Flight Data Computer" (FDC)
+ * --- [MODIFIED v10] Replaced FDC with animated Flight Status Panel
  */
 function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     const windowEl = document.getElementById('aircraft-info-window');
@@ -4163,43 +4215,49 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
                             </defs>
                             </svg>
                         </div>
-                        </div>
+                    </div>
 
-                    <div class="fdc-data-panel">
+                    <div class="flight-status-panel">
                         
-                        <div class="fdc-primary-readout">
-                            <span class="fdc-label">Vertical Speed</span>
-                            <span class="fdc-value" id="ac-vs-new">
-                                <i class="fa-solid fa-minus"></i> 0 <span class="fdc-unit">FPM</span>
-                            </span>
+                        <div class="status-waypoint">
+                            <span class="status-label">NEXT WAYPOINT</span>
+                            <span class="status-wp-name" id="status-wp-name">---</span>
+                            <span class="status-wp-dist" id="status-wp-dist">--.- NM</span>
                         </div>
 
-                        <div class="fdc-data-grid">
-                            <div class="fdc-data-item">
-                                <span class="fdc-label">ETE</span>
-                                <span class="fdc-value" id="ac-ete-new">--:--</span>
+                        <div class="status-bar-group">
+                            
+                            <div class="status-bar-container">
+                                <div class="status-bar-label">
+                                    <span class="label-text">Groundspeed</span>
+                                    <span class="label-value" id="status-gs-value">0 <span class="unit">KTS</span></span>
+                                </div>
+                                <div class="status-bar-track">
+                                    <div class="status-bar-fill" id="status-gs-bar"></div>
+                                </div>
                             </div>
-                            <div class="fdc-data-item">
-                                <span class="fdc-label">To Dest</span>
-                                <span class="fdc-value" id="ac-dist-new">--- <span class="fdc-unit">NM</span></span>
+                            
+                            <div class="status-bar-container">
+                                <div class="status-bar-label">
+                                    <span class="label-text">To Destination</span>
+                                    <span class="label-value" id="status-dist-value">--- <span class="unit">NM</span></span>
+                                </div>
+                                <div class="status-bar-track">
+                                    <div class="status-bar-fill" id="status-dist-bar"></div>
+                                </div>
                             </div>
-                            <div class="fdc-data-item">
-                                <span class="fdc-label">Next WP</span>
-                                <span class="fdc-value" id="ac-next-wp-new">---</span>
-                            </div>
-                            <div class="fdc-data-item">
-                                <span class="fdc-label">To Next</span>
-                                <span class="fdc-value" id="ac-next-wp-dist-new">--.- <span class="fdc-unit">NM</span></span>
-                            </div>
-                        </div>
 
-                        <div class="fdc-tertiary-readout">
-                            <span class="fdc-label">Groundspeed</span>
-                            <span class="fdc-value" id="ac-gs-new">
-                                0 <span class="fdc-unit">KTS</span>
-                            </span>
-                        </div>
+                            <div class="status-bar-container" style="text-align: center;">
+                                <div class="status-bar-label" style="justify-content: center;">
+                                    <span class="label-value" id="status-vs-value">0 <span class="unit">FPM</span></span>
+                                </div>
+                                <div class="status-vsi-track">
+                                    <div class="status-vsi-zeroline"></div>
+                                    <div class="status-vsi-bar" id="status-vs-bar"></div>
+                                </div>
+                            </div>
 
+                        </div>
                     </div>
                 </div> 
                 
@@ -4418,6 +4476,8 @@ function renderPilotStatsHTML(stats, username) {
  * --- [MAJOR REVISION V8.0: FDC Redesign]
  * This update binds data to the new "Flight Data Computer" panel,
  * removing logic for the old donut, odometer, and PFD footer.
+ * --- [MAJOR REVISION V10.0: Animated Panel]
+ * This update now controls the new animated Flight Status Panel.
 */
 function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- Get all DOM elements ---
@@ -4434,15 +4494,18 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     const vsdFlownPath = document.getElementById('vsd-flown-path');
     const vsdWpLabels = document.getElementById('vsd-waypoint-labels');
 
-    // --- [NEW] FDC Data Panel Elements ---
-    const fdcVsEl = document.getElementById('ac-vs-new');
-    const fdcEteEl = document.getElementById('ac-ete-new');
-    const fdcDistDestEl = document.getElementById('ac-dist-new');
-    const fdcNextWpEl = document.getElementById('ac-next-wp-new');
-    const fdcNextWpDistEl = document.getElementById('ac-next-wp-dist-new');
-    const fdcGsEl = document.getElementById('ac-gs-new');
+    // --- [NEW] Animated Flight Status Panel Elements ---
+    const statusWpName = document.getElementById('status-wp-name');
+    const statusWpDist = document.getElementById('status-wp-dist');
+    const statusGsValue = document.getElementById('status-gs-value');
+    const statusGsBar = document.getElementById('status-gs-bar');
+    const statusDistValue = document.getElementById('status-dist-value');
+    const statusDistBar = document.getElementById('status-dist-bar');
+    const statusVsValue = document.getElementById('status-vs-value');
+    const statusVsBar = document.getElementById('status-vs-bar');
 
-    // --- [REMOVED] Old Donut, Odometer, and PFD Footer elements ---
+
+    // --- [REMOVED] Old FDC Data Panel Elements ---
 
 
     // --- Get Original Data (Unchanged) ---
@@ -4665,6 +4728,66 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     }
     // --- [End of unchanged section] ---
 
+
+    // --- [NEW] Update Animated Flight Status Panel ---
+
+    // 1. Waypoint
+    if (statusWpName) {
+        updateOdometerDigit(statusWpName, nextWpName);
+        const distVal = (nextWpDistNM === '---' || isNaN(parseFloat(nextWpDistNM))) ? '--.-' : Number(nextWpDistNM).toFixed(1);
+        updateOdometerDigit(statusWpDist, `${distVal} NM`);
+    }
+
+    // 2. Groundspeed Bar
+    if (statusGsBar && statusGsValue) {
+        const MAX_GS_FOR_BAR = 600; // Max speed (kts) for 100% bar
+        const gsPercent = Math.min(100, (gs / MAX_GS_FOR_BAR) * 100);
+        
+        statusGsBar.style.width = `${gsPercent}%`;
+        updateOdometerDigit(statusGsValue, `${Math.round(gs)} <span class="unit">KTS</span>`);
+    }
+
+    // 3. Distance Bar
+    if (statusDistBar && statusDistValue) {
+        let distPercent = 0;
+        if (totalDistanceNM > 0) {
+            distPercent = Math.min(100, (1 - (distanceToDestNM / totalDistanceNM)) * 100);
+        }
+        
+        statusDistBar.style.width = `${distPercent}%`;
+        updateOdometerDigit(statusDistValue, `${Math.round(distanceToDestNM)} <span class="unit">NM</span>`);
+    }
+    
+    // 4. Vertical Speed Bar
+    if (statusVsBar && statusVsValue) {
+        const MAX_VS_FOR_BAR = 4000; // Max FPM for 50% bar height
+        const vsRounded = Math.round(vs);
+        const vsPercent = Math.min(50, (Math.abs(vsRounded) / MAX_VS_FOR_BAR) * 50); // Capped at 50% height
+
+        if (vsRounded > 100) { // Climbing
+            statusVsBar.classList.remove('descent');
+            statusVsBar.style.height = `${vsPercent}%`;
+        } else if (vsRounded < -100) { // Descending
+            statusVsBar.classList.add('descent');
+            statusVsBar.style.height = `${vsPercent}%`;
+        } else { // Level
+            statusVsBar.style.height = '0%';
+        }
+
+        const vsSign = vsRounded > 50 ? '+' : vsRounded < -50 ? '' : '';
+        updateOdometerDigit(statusVsValue, `${vsSign}${vsRounded} <span class="unit">FPM</span>`);
+    }
+
+    // --- [END NEW] ---
+
+
+    // --- Update Other DOM Elements (Unchanged) ---
+    if (progressBarFill) progressBarFill.style.width = `${progress.toFixed(1)}%`;
+
+    if (phaseIndicator) {
+        phaseIndicator.className = `flight-phase-indicator ${phaseClass}`;
+        phaseIndicator.innerHTML = `<i class="fa-solid ${phaseIcon}"></i> ${flightPhase}`;
+    }
 
     // --- [NEW] VSD LOGIC (Unchanged, but vsdSummaryVS is now fdcVsEl) ---
     if (vsdPanel && hasPlan && vsdGraphContent && vsdAircraftIcon) {
@@ -4914,32 +5037,6 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         phaseIndicator.className = `flight-phase-indicator ${phaseClass}`;
         phaseIndicator.innerHTML = `<i class="fa-solid ${phaseIcon}"></i> ${flightPhase}`;
     }
-
-    // --- [NEW] Update FDC Data Panel ---
-    if (fdcVsEl) {
-        const vsRounded = Math.round(vs);
-        const vsSign = vsRounded > 50 ? '+' : vsRounded < -50 ? '' : '';
-        const vsIcon = vsRounded > 100 ? 'fa-arrow-up' : vsRounded < -100 ? 'fa-arrow-down' : 'fa-minus';
-        fdcVsEl.innerHTML = `<i class="fa-solid ${vsIcon}"></i> ${vsSign}${vsRounded} <span class="fdc-unit">FPM</span>`;
-    }
-    if (fdcEteEl) {
-        fdcEteEl.textContent = ete;
-    }
-    if (fdcDistDestEl) {
-        fdcDistDestEl.innerHTML = `${Math.round(distanceToDestNM)} <span class="fdc-unit">NM</span>`;
-    }
-    if (fdcNextWpEl) {
-        fdcNextWpEl.textContent = nextWpName;
-    }
-    if (fdcNextWpDistEl) {
-        const distVal = (nextWpDistNM === '---' || isNaN(parseFloat(nextWpDistNM))) ? '--.-' : Number(nextWpDistNM).toFixed(1);
-        fdcNextWpDistEl.innerHTML = `${distVal} <span classm="fdc-unit">NM</span>`;
-    }
-    if (fdcGsEl) {
-        fdcGsEl.innerHTML = `${Math.round(gs)} <span class="fdc-unit">KTS</span>`;
-    }
-    // --- [END NEW] ---
-
 
     // --- Update Aircraft Image (Unchanged) ---
     if (overviewPanel) {
