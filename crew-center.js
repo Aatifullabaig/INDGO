@@ -318,25 +318,31 @@ function injectCustomStyles() {
             height: 200px;
             background-size: cover;
             background-position: center;
-            /* --- [FIX V10] --- Remove bottom rounding to sit flush with bar */
             border-bottom-left-radius: 0;
             border-bottom-right-radius: 0;
             color: #fff;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+
+            /* --- [NEW v12] ---
+              Add a mask to fade the bottom 30% of the image.
+              This lets the panel below blend into it.
+            */
+            -webkit-mask-image: linear-gradient(180deg, black 70%, transparent 100%);
+            mask-image: linear-gradient(180deg, black 70%, transparent 100%);
+            
+            /* --- [NEW v12] ---
+              Pull the element below it (the summary bar) up by 40px
+              so it overlaps with the faded-out image area.
+            */
+            margin-bottom: -40px; 
         }
         /* Darkening overlay for text readability */
         .aircraft-overview-panel::before {
             content: '';
             position: absolute;
             inset: 0;
-            /* --- [FIX V10] ---
-              Removed the bottom-up gradient (linear-gradient(180deg,...))
-              as the bar is no longer an overlay. The top-down gradient
-              is still applied via JS for text readability.
-             --- [END FIX V10] ---
-            */
             z-index: 1;
         }
         
@@ -351,13 +357,10 @@ function injectCustomStyles() {
         }
         .overview-col-left h3 {
             margin: 0;
-            /* --- [MODIFIED] "Show-ish" text, callsign made smaller --- */
-            /* ⬇️ MODIFIED: Restored to 1.6rem for desktop base */
             font-size: 1.6rem; 
             font-weight: 700; 
             letter-spacing: 0.5px;
             text-shadow: 0 4px 10px rgba(0, 0, 0, 0.7), 0 0 2px rgba(255, 255, 255, 0.2);
-            /* --- [NEW] Convert to flex to align logo and text --- */
             display: flex;
             align-items: center;
             gap: 12px;
@@ -365,32 +368,22 @@ function injectCustomStyles() {
 
         /* --- [NEW] Style for Airline Logo in Header --- */
         .ac-header-logo {
-            /* ⬇️ MODIFIED: Restored to 1.8rem for desktop base */
             height: 1.8rem; 
             width: auto;
             max-width: 100px; /* Prevent huge logos */
             object-fit: contain;
-            /* ---
-              [USER REQUEST FIX]: This adds a subtle white glow for dark-on-dark,
-              while keeping a dark shadow for light-on-light.
-              ---
-            */
             filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7)) drop-shadow(0 0 5px rgba(255, 255, 255, 0.3));
         }
         
         /* --- [MODIFIED] Container for animating subtext --- */
         .overview-col-left p {
-            /* --- [NEW] Make it a relative container --- */
             position: relative; 
             margin: 0;
-            /* --- [FIX] "Show-ish" text --- */
             font-size: 1.0rem; 
             color: #e8eaf6; 
             font-weight: 400;
             text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
-            /* --- [NEW] Set height to prevent jump --- */
             min-height: 1.2em; /* 1.0rem * 1.2 line-height */
-            /* --- [NEW] Add margin to account for logo --- */
             margin-top: 4px; 
         }
 
@@ -437,7 +430,6 @@ function injectCustomStyles() {
 
         .overview-col-right {
             text-align: right;
-            /* --- [MODIFIED] --- */
             display: none; /* Hide the top-right ICAOs */
         }
         .overview-col-right .route-icao {
@@ -482,14 +474,31 @@ function injectCustomStyles() {
 
         /* 2. Route Summary Overlay (User Request) */
         .route-summary-overlay {
-            /* --- [FIX V10] ---
-             REMOVED: position, z-index, backdrop-filter, top/left/right
-             This is no longer an overlay. It's a standard block element.
-             --- [END FIX V10] ---
+            /* --- [NEW v12] --- 
+              Add position relative so it renders correctly 
+              when overlapping the image panel above it.
             */
-            padding: 12px 20px;
-            /* --- [FIX V10] --- Use a solid background matching the tabs */
-            background: rgba(10, 12, 26, 0.4);
+            position: relative;
+            
+            /* --- [MODIFIED v12] ---
+               Change padding to give more space at the top
+               for the elements sitting on the transparent area.
+            */
+            padding: 25px 20px 12px 20px;
+            
+            /* --- [MODIFIED v12] --- 
+               This is the core change.
+               The background is now a gradient that starts transparent
+               (to show the image behind it), then fades to the
+               dark content background color (#1C1E2A).
+            */
+            background: linear-gradient(
+                180deg, 
+                transparent 0%, 
+                rgba(18, 20, 38, 0.8) 35%, 
+                #1C1E2A 65%
+            );
+            
             border-radius: 0; /* Flush with content above and below */
             
             display: grid;
@@ -505,8 +514,20 @@ function injectCustomStyles() {
             display: flex;
             flex-direction: column;
         }
-        #route-summary-dep { text-align: left; }
-        #route-summary-arr { text-align: right; }
+        #route-summary-dep { 
+            text-align: left; 
+            /* --- [NEW v12] --- */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #route-summary-arr { 
+            text-align: right; 
+            /* --- [NEW v12] --- */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
         
         .route-summary-airport .airport-line {
             display: flex;
@@ -522,12 +543,20 @@ function injectCustomStyles() {
             font-size: 1.2rem;
             font-weight: 700;
             color: #fff;
+            /* --- [NEW v12] --- */
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5); 
         }
         .route-summary-airport .time {
             font-size: 0.85rem;
             font-weight: 600;
             color: #c5cae9;
-            margin-top: 2px;
+            margin-top: 4px; /* [MODIFIED v12] Added slightly more margin */
+            /* --- [NEW v12] --- 
+               Force it to be a block and center its own text.
+               This aligns it with the ICAO/flag line above.
+            */
+            display: block;
+            text-align: center;
         }
         .route-summary-airport .country-flag {
             width: 20px;
