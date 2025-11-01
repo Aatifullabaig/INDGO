@@ -4065,6 +4065,7 @@ async function handleAircraftClick(flightProps, sessionId) {
  * --- [MODIFIED v10] Moved Route Summary Bar out of image panel
  * --- [MODIFIED v11] Use airportsData for flags
  * --- [MODIFIED v12.1] Removed inline gradient from tempBg
+ * --- [MODIFIED v13 - YOUR FIX] Use Actual Departure Time (ATD) and prepare for live ETA.
  */
 function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     const windowEl = document.getElementById('aircraft-info-window');
@@ -4125,9 +4126,11 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
     // We only set a temporary background image. The gradient is now in CSS.
     const tempBg = `background-image: url('/CommunityPlanes/default.png');`;
     
-    // --- [NEW] Get Times and Flags for Initial Render ---
-    const etdTime = plan && plan.times?.sched_out ? formatTimeFromTimestamp(plan.times.sched_out) : '--:--';
-    const etaTime = plan && plan.times?.sched_in ? formatTimeFromTimestamp(plan.times.sched_in) : '--:--';
+    // --- [MODIFIED - YOUR FIX] Get Actual Departure Time and clear initial ETA ---
+    const atdTimestamp = (sortedRoutePoints && sortedRoutePoints.length > 0) ? sortedRoutePoints[0].date : null;
+    const atdTime = atdTimestamp ? formatTimeFromTimestamp(atdTimestamp) : '--:--'; // This is now ATD
+    const etaTime = '--:--'; // ETA will be calculated live
+    // --- [END FIX] ---
 
     // --- [FIX v11] ---
     // Get country code from our own airportsData using the ICAO, not the plan object.
@@ -4173,7 +4176,7 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
                     <img src="${depFlagSrc}" class="country-flag" id="ac-bar-dep-flag" alt="${depCountryCode}" style="display: ${depFlagDisplay};">
                     <span class="icao" id="ac-bar-dep">${departureIcao}</span>
                 </div>
-                <span class="time" id="ac-bar-etd">${etdTime} Z</span>
+                <span class="time" id="ac-bar-atd">${atdTime} Z</span>
             </div>
 
             <div class="route-progress-container">
@@ -4592,6 +4595,7 @@ function renderPilotStatsHTML(stats, username) {
  * --- [MODIFIED v9] Added live updates for Flags and Times
  * --- [MODIFIED v11] Use airportsData for flags
  * --- [MODIFIED v12.1] Removed inline gradient from image loading
+ * --- [MODIFIED v13 - YOUR FIX] Calculate live ETA and use ATD.
 */
 function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- Get all DOM elements ---
@@ -4621,8 +4625,8 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     const eteHrEl = document.getElementById('ac-ete-hr');
     const eteMinEl = document.getElementById('ac-ete-min');
 
-    // --- [NEW] Route Summary Bar Elements ---
-    const etdEl = document.getElementById('ac-bar-etd');
+    // --- [MODIFIED - YOUR FIX] Route Summary Bar Elements ---
+    const atdEl = document.getElementById('ac-bar-atd'); // <-- Changed ID
     const etaEl = document.getElementById('ac-bar-eta');
     const depFlagEl = document.getElementById('ac-bar-dep-flag');
     const arrFlagEl = document.getElementById('ac-bar-arr-flag');
@@ -5198,10 +5202,26 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     updateOdometerDigit(eteMinEl, eteMin);
     // --- [END NEW] ---
 
-    // --- [NEW] Update Times and Flags ---
-    const etdTime = plan && plan.times?.sched_out ? formatTimeFromTimestamp(plan.times.sched_out) : '--:--';
-    const etaTime = plan && plan.times?.sched_in ? formatTimeFromTimestamp(plan.times.sched_in) : '--:--';
+    // --- [MODIFIED - YOUR FIX] Update Times and Flags ---
     
+    // 1. Get Actual Departure Time (ATD) from the *first* route point
+    const atdTimestamp = (sortedRoutePoints && sortedRoutePoints.length > 0) ? sortedRoutePoints[0].date : null;
+    const atdTime = atdTimestamp ? formatTimeFromTimestamp(atdTimestamp) : '--:--';
+
+    // 2. Calculate live ETA (Current Time + ETE)
+    // 'ete' string ("HH:MM") is calculated earlier in this function. We need the raw hours.
+    let etaTime = '--:--';
+    if (baseProps.position.gs_kt > 50 && totalDistanceNM > 0) {
+        const eteHours = distanceToDestNM / baseProps.position.gs_kt;
+        // Check for valid ETE (e.g., less than 48 hours to avoid crazy numbers from AP+)
+        if (eteHours > 0 && eteHours < 48) { 
+            const eteMs = eteHours * 3600 * 1000;
+            const etaTimestamp = new Date(Date.now() + eteMs);
+            etaTime = formatTimeFromTimestamp(etaTimestamp);
+        }
+    }
+
+    // 3. Get Country Flags (logic is unchanged)
     // --- [FIX v11] ---
     // Get country code from our own airportsData using the ICAO, not the plan object.
     const depCountryCode = airportsData[departureIcao]?.country ? airportsData[departureIcao].country.toLowerCase() : '';
@@ -5211,7 +5231,8 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     const depFlagSrc = depCountryCode ? `https://flagcdn.com/w20/${depCountryCode}.png` : '';
     const arrFlagSrc = arrCountryCode ? `https://flagcdn.com/w20/${arrCountryCode}.png` : '';
 
-    if (etdEl) etdEl.textContent = `${etdTime} Z`;
+    // 4. Update the DOM
+    if (atdEl) atdEl.textContent = `${atdTime} Z`;
     if (etaEl) etaEl.textContent = `${etaTime} Z`;
     
     if (depFlagEl) { 
@@ -5224,7 +5245,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         arrFlagEl.alt = arrCountryCode; 
         arrFlagEl.style.display = arrCountryCode ? 'block' : 'none'; 
     }
-    // --- [END NEW] ---
+    // --- [END FIX] ---
 
     // --- [FIX: REMOVED GRADIENT] ---
     // Update Aircraft Image. The gradient is now handled in CSS.
