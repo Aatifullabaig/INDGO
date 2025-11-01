@@ -250,6 +250,10 @@ function injectCustomStyles() {
             overflow-y: auto; 
             flex-grow: 1; 
             padding: 0;
+            /* --- [NEW] Make content area a flex column for new layout --- */
+            display: flex;
+            flex-direction: column;
+            min-height: 0; /* Fix for flex-grow */
         }
         /* Custom Scrollbar */
         .info-window-content::-webkit-scrollbar { width: 8px; }
@@ -324,26 +328,17 @@ function injectCustomStyles() {
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            flex-shrink: 0; /* --- [NEW] --- */
 
-            /* --- [NEW SMOOTHER FADE] ---
-              This gradient now has an intermediate step for a
-              more gradual fade-out compared to the old 70%-100% linear fade.
-            */
+            /* --- [NEW SMOOTHER FADE] --- */
             -webkit-mask-image: linear-gradient(180deg, black 65%, rgba(0,0,0,0.7) 80%, transparent 100%);
             mask-image: linear-gradient(180deg, black 65%, rgba(0,0,0,0.7) 80%, transparent 100%);
             
-            /* --- [MODIFIED v12] ---
-              Pull the element below it (the summary bar) up by 40px
-              so it overlaps with the faded-out image area.
-            */
+            /* --- [MODIFIED v12] --- */
             margin-bottom: -40px; 
         }
         
-        /* --- [FIXED GRADIENT] ---
-           This overlay provides a *subtle* hint of darkness at the top
-           for text readability, without darkening the whole image.
-           It's now controlled here in CSS, not in JavaScript.
-        */
+        /* --- [FIXED GRADIENT] --- */
         .aircraft-overview-panel::before {
             content: '';
             position: absolute;
@@ -483,23 +478,14 @@ function injectCustomStyles() {
 
         /* 2. Route Summary Overlay (User Request) */
         .route-summary-overlay {
-            /* --- [NEW v12] --- 
-              Add position relative so it renders correctly 
-              when overlapping the image panel above it.
-            */
+            /* --- [NEW v12] --- */
             position: relative;
+            flex-shrink: 0; /* --- [NEW] --- */
             
-            /* --- [MODIFIED v12] ---
-               Change padding to give more space at the top
-               for the elements sitting on the transparent area.
-            */
+            /* --- [MODIFIED v12] --- */
             padding: 25px 20px 12px 20px;
             
-            /* --- [NEW COLOR MIX] --- 
-               This gradient now fades from transparent to a
-               subtle light blue (rgba(0, 168, 255, 0.15)), 
-               then to the dark UI color.
-            */
+            /* --- [NEW COLOR MIX] --- */
             background: linear-gradient(
                 180deg, 
                 transparent 0%, 
@@ -560,10 +546,7 @@ function injectCustomStyles() {
             font-weight: 600;
             color: #c5cae9;
             margin-top: 4px; /* [MODIFIED v12] Added slightly more margin */
-            /* --- [NEW v12] --- 
-               Force it to be a block and center its own text.
-               This aligns it with the ICAO/flag line above.
-            */
+            /* --- [NEW v12] --- */
             display: block;
             text-align: center;
         }
@@ -631,328 +614,141 @@ function injectCustomStyles() {
 
         /* 3. Main Content (PFD + Grids) */
         .unified-display-main-content {
-            padding: 16px;
+            /* --- [MODIFIED] --- */
+            padding: 0; /* Remove padding for flush layout */
             flex-grow: 1;
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 0; /* Remove gap */
+            min-height: 0; /* Fix for flex-grow */
         }
         
         /* ====================================================================
-        --- [START] NEW (PFD | Data) + VSD LAYOUT (USER REQUEST) ---
+        --- [START] NEW (IDEA 2) CONSOLIDATED DATA BAR LAYOUT ---
         ====================================================================
         */
         
-        /* --- [REMOVED] Tab styles --- */
-
-        /* --- [NEW] Simple Pane switching --- */
         .ac-tab-pane {
             display: none;
             flex-direction: column;
-            gap: 16px; /* <-- Matches gap of .unified-display-main-content */
+            gap: 0; /* --- [MODIFIED] --- */
             animation: fadeIn 0.4s;
+            flex-grow: 1; /* --- [NEW] --- */
+            min-height: 0; /* --- [NEW] --- */
         }
         .ac-tab-pane.active {
             display: flex;
         }
 
-        /* [NEW] This is the top grid (PFD | Data) */
-        .pfd-data-grid {
+        /* 1. The PFD Wrapper */
+        .idea2-pfd-wrapper {
+            flex-grow: 1; /* This makes the PFD area take all available vertical space */
+            min-height: 0; /* Fix for flex-grow */
+            width: 100%;
+            background: #1a1a1a; /* PFD background color */
             display: grid;
-            grid-template-columns: 240px 1fr; /* PFD Left, Data Right */
-            gap: 12px;
-            min-height: 0;
+            place-items: center;
             overflow: hidden;
+            padding: 0;
+            margin: 0;
+        }
+
+        /* 2. The PFD SVG itself */
+        #pfd-container {
+            /* Remove all old container styles */
+            background: none;
+            border-radius: 0;
+            overflow: visible;
+            width: 100%;
+            height: 100%;
+            display: grid; /* Use grid to center the SVG */
+            place-items: center;
+        }
+        #pfd-container svg {
+            /* Override old constraints */
+            max-width: none;
+            aspect-ratio: auto; /* Let it fill the space */
             
-            /* Give it the "card" look */
-            background: rgba(10, 12, 26, 0.5);
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 10px;
-            border-top: 3px solid #00a8ff; /* Colorful accent */
-        }
-        
-        /* [NEW] This is the right-hand data panel */
-        .live-data-panel-new {
-            display: flex;
-            flex-direction: column;
-            justify-content: space-around;
-            gap: 10px;
-            padding: 10px 0; /* Add some vertical padding */
-        }
-        
-        /* [NEW] Styles for the data items in the right panel */
-        .ac-primary-data-item {
-            display: flex;
-            flex-direction: column;
-            text-align: center;
-            background: rgba(0,0,0,0.2);
-            padding: 12px 8px;
-            border-radius: 8px;
-            /* --- [NEW] Added for donut chart layout --- */
+            /* Fill the container, maintaining aspect ratio */
+            width: 100%;
+            height: 100%;
+            object-fit: contain; /* Fit the PFD inside the wrapper */
+            background-color: #1a1a1a;
+            font-family: monospace, sans-serif;
+            color: white;
+            overflow: hidden;
             position: relative;
-            justify-content: center;
-            /* --- [NEW] Ensure fixed height for layout --- */
-            min-height: 80px; 
+        }
+        #pfd-container svg #attitude_group {
+            transition: transform 0.5s ease-out;
+        }
+
+        /* 3. The Bottom Data Bar */
+        .idea2-data-bar {
+            width: 100%;
+            flex-shrink: 0; /* Don't let it shrink */
+            background: rgba(10, 12, 26, 0.7); /* Dark bg */
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px 16px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); /* Responsive columns */
+            gap: 12px 16px;
             box-sizing: border-box;
         }
-        .ac-primary-data-item .data-label {
+        
+        .data-bar-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            text-align: left;
+            min-width: 0; /* Prevent flex overflow */
+        }
+        
+        .data-bar-item .data-label {
             font-size: 0.7rem;
             color: #c5cae9;
             text-transform: uppercase;
-            margin-bottom: 4px;
-            /* --- [NEW] Added for donut layout --- */
-            position: absolute;
-            top: 12px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 100%;
+            font-weight: 600;
         }
-        .ac-primary-data-item .data-value {
+        
+        .data-bar-item .data-value {
             font-size: 1.5rem;
             color: #fff;
             font-weight: 600;
             font-family: 'Courier New', monospace;
             line-height: 1.1;
+            
+            /* Handle overflow */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
-        .ac-primary-data-item .data-value .unit {
+        
+        .data-bar-item .data-value .unit {
             font-size: 0.8rem;
             font-weight: 400;
             color: #9fa8da;
             margin-left: 3px;
             font-family: 'Segoe UI', sans-serif;
         }
-        .ac-primary-data-item .data-value .fa-solid {
+        
+        .data-bar-item .data-value .fa-solid {
             font-size: 0.9rem;
             margin-right: 4px;
             color: #00a8ff;
             font-family: "Font Awesome 6 Free";
         }
-        
-        /* --- [NEW] Donut Chart Styles --- */
-        .donut-chart-container {
-            padding: 0; /* Remove padding, handled by items */
-        }
-        .donut-chart {
-            width: 100px; /* Size of the donut */
-            height: 80px;
-            margin: 0 auto;
-            position: relative;
-            display: grid;
-            place-items: center;
-            margin-top: 10px; /* Make space for label */
-        }
-        .donut-chart svg {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            top: 0;
-            left: 0;
-            transform: rotate(-90deg);
-        }
-        .donut-chart-text {
-            /* This div centers the text inside the donut */
-            position: relative; 
-            z-index: 2;
-            text-align: center;
-            /* Adjust text position */
-            transform: translateY(2px); 
-        }
-        .donut-chart-text .data-value {
-             font-size: 1.3rem; /* Slightly smaller to fit */
-        }
-        .donut-bg, .donut-fg {
-            fill: none;
-            stroke-width: 3;
-            stroke-linecap: round;
-        }
-        .donut-bg {
-            stroke: rgba(255, 255, 255, 0.1);
-        }
-        .donut-fg {
-            stroke: #00a8ff;
-            /* This transition animates the stroke-dasharray property */
-            transition: stroke-dasharray 0.5s ease-out;
-        }
 
-        /* --- [NEW] Odometer Styles --- */
-        .odometer-container {
-            display: flex;
-            justify-content: center;
-            align-items: baseline;
-            gap: 4px;
-        }
-        .odometer-separator {
-             color: #9fa8da;
-             font-size: 1.2rem;
-             font-weight: 600;
-             animation: blink 2s infinite;
-        }
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-        .odometer-value {
-            display: inline-block;
-            /* This transition fades the number out and in */
-            transition: opacity 0.2s ease-in-out;
-            /* Ensure it respects the parent's font settings */
-            font-size: 1.5rem;
-            color: #fff;
-            font-weight: 600;
-            font-family: 'Courier New', monospace;
-            line-height: 1.1;
-        }
-        
-        /* [NEW] This is the full-width VSD card at the bottom */
-        .ac-profile-card-new {
-            background: rgba(10, 12, 26, 0.5);
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 10px;
-            border-top: 3px solid #a33ea3; /* Colorful accent */
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .ac-profile-card-new h4 { /* Title for VSD */
-            margin: 0 0 5px 0;
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #e8eaf6;
-            text-align: center;
-        }
-        
         /* ====================================================================
-        --- [END] NEW (PFD | Data) + VSD LAYOUT ---
+        --- [END] NEW (IDEA 2) LAYOUT ---
         ====================================================================
         */
 
-        #aircraft-display-main {
-            /* --- [REMOVED] --- This ID is no longer used for layout --- */
-        }
-        .unified-display-main {
-            /* --- [REMOVED] --- Replaced by .pfd-data-grid --- */
-        }
-
-        /* 4. PFD Styles (Resized) */
-        .pfd-main-panel {
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start; 
-            min-width: 0;
-            gap: 0;
-        }
-        
-        #pfd-container {
-            display: grid;
-            place-items: center;
-            background: rgba(10, 12, 26, 0.5);
-            border-radius: 12px;
-            overflow: hidden;
-            min-width: 0;
-            /* --- [NEW] Weld PFD to footer --- */
-            border-bottom-left-radius: 0;
-            border-bottom-right-radius: 0;
-        }
-        #pfd-container svg {
-            width: 100%;
-            height: auto;
-            max-width: 350px;
-            /* --- MODIFIED: New aspect ratio based on cropped height --- */
-            aspect-ratio: 787 / 635; 
-            background-color: #1a1a1a;
-            font-family: monospace, sans-serif;
-            color: white;
-            overflow: hidden;
-            position: relative;
-            border-radius: 8px;
-        }
-        #pfd-container svg #attitude_group {
-            transition: transform 0.5s ease-out;
-        }
-
-        /* --- [NEW] PFD Footer Display --- */
-        .pfd-footer-display {
-            display: flex;
-            align-items: center;
-            justify-content: space-around;
-            gap: 10px;
-            background: rgba(10, 12, 26, 0.5); /* Match PFD/VSD bg */
-            padding: 8px 12px;
-            border-bottom-left-radius: 12px;
-            border-bottom-right-radius: 12px;
-            min-height: 46px; /* Fills the vertical gap */
-            box-sizing: border-box;
-        }
-        .pfd-footer-ac-icon {
-            width: 40px;
-            height: 40px;
-        }
-        .pfd-footer-ac-icon svg {
-            width: 100%;
-            height: 100%;
-            fill: #00a8ff;
-            opacity: 0.7;
-        }
-        .pfd-footer-nav-item {
-            display: flex;
-            flex-direction: column;
-            text-align: right;
-            min-width: 60px; /* Give it some space */
-        }
-        .pfd-footer-nav-item .data-label {
-            font-size: 0.7rem;
-            color: #c5cae9;
-            text-transform: uppercase;
-            margin-bottom: 2px;
-        }
-        .pfd-footer-nav-item .data-value {
-            font-size: 1.2rem;
-            color: #fff;
-            font-weight: 600;
-            font-family: 'Courier New', monospace;
-            line-height: 1;
-        }
-        .pfd-footer-nav-item .data-value .unit {
-            font-size: 0.8rem; 
-            color: #9fa8da; 
-            margin-left: 2px;
-            font-family: 'Segoe UI', sans-serif; /* Match other units */
-            font-weight: 400;
-        }
-        /* --- [END NEW] --- */
-
-
-        /* Aircraft Type Readout (REMOVED) */
-        #aircraft-type-readout {
-           display: none; /* This is no longer used */
-        }
-
-        /* --- [REMOVED] --- .live-data-panel styles (replaced by .live-data-panel-new) */
 
         /* 6. Pilot Stats Button */
-        /* --- [RESTORED] --- */
+        /* --- [REMOVED] --- */
         .pilot-stats-toggle-btn {
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(255,255,255,0.15);
-            color: #e8eaf6;
-            padding: 10px 12px;
-            width: 100%;
-            border-radius: 8px;
-            cursor: pointer;
-            text-align: center;
-            transition: all 0.2s;
-            font-size: 0.9rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        .pilot-stats-toggle-btn:hover {
-            background: #00a8ff;
-            color: #fff;
+           display: none !important;
         }
 
         /* 7. Pilot Stats View */
@@ -960,7 +756,8 @@ function injectCustomStyles() {
             /* --- [REMOVED] --- This is now handled by .ac-tab-pane */
         }
         .stats-rehaul-container {
-            padding: 0; /* Remove padding, handled by parent */
+            /* --- [NEW] --- Add padding back, since parent no longer has it */
+            padding: 16px;
             display: flex;
             flex-direction: column;
             gap: 16px;
@@ -1075,12 +872,8 @@ function injectCustomStyles() {
         .detail-label { color: #c5cae9; }
         .detail-value { color: #fff; font-weight: 600; }
         .back-to-flight-btn { /* Changed from back-to-pfd-btn */
-            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
-            color: #e8eaf6; padding: 10px 12px; width: 100%;
-            border-radius: 8px; cursor: pointer; text-align: center;
-            transition: all 0.2s; font-size: 0.9rem; font-weight: 600;
+           display: none !important;
         }
-        .back-to-flight-btn:hover { background: #00a8ff; color: #fff; }
 
         /* Stats Accordion */
         .stats-rehaul-container .stats-header {
@@ -1278,19 +1071,6 @@ function injectCustomStyles() {
                 padding-left: 0;
             }
             
-            /*
-             * --- [USER REQUEST FIX - REMOVED!] ---
-             * This rule was moved out of the media query
-             * to apply to all screen sizes.
-            */
-            /*
-            .main-content:has(#view-rosters.active) {
-                padding: 0; 
-                height: 100dvh; 
-                overflow: hidden; 
-            }
-            */
-
             /* --- [REDESIGN] Mobile layout for info window --- */
             .info-window {
                 width: 95vw; /* Almost full width */
@@ -1300,18 +1080,13 @@ function injectCustomStyles() {
                 max-height: calc(100vh - 20px);
             }
             
-            /* --- [MODIFIED] Stack (PFD | Data) grid on mobile --- */
+            /* --- [MODIFIED] --- */
             .pfd-data-grid {
-                grid-template-columns: 1fr; 
+                /* This class is no longer used */
             }
             .pfd-main-panel {
-                /* Ensure PFD isn't too large */
-                max-width: 400px;
-                margin: 0 auto;
-                width: 100%;
+                 /* This class is no longer used */
             }
-
-            /* --- [REMOVED] Mobile grid styles for deleted elements --- */
 
             /* ⬇️ --- [NEW FIX] --- ⬇️ */
             /* Selectively reduce callsign font size only on mobile */
@@ -1325,194 +1100,7 @@ function injectCustomStyles() {
         }
         
         /* ====================================================================
-        --- [START] VSD RE-DESIGN (USER REQUEST) --- 
-        ====================================================================
-        */
-        #vsd-panel {
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            background: transparent; /* --- [MODIFIED] Card bg handles this --- */
-            border-radius: 12px;
-            min-height: 240px; /* Give it a fixed height */
-            max-height: 240px;
-            overflow: hidden;
-            font-family: 'Courier New', monospace;
-            flex-grow: 1; /* --- [NEW] --- */
-            width: 100%; /* --- [NEW] --- */
-        }
-        
-        #vsd-summary-bar {
-           /* --- [REMOVED] --- This is no longer used --- */
-           display: none;
-        }
-
-        #vsd-graph-window {
-            position: relative;
-            width: 100%;
-            flex-grow: 1;
-            overflow: hidden;
-            border-radius: 12px;
-            
-            /* --- [MODIFIED] Add padding for the new Y-Axis --- */
-            padding-left: 35px;
-            box-sizing: border-box; /* Ensure padding is included in width */
-            
-            /* Add horizontal grid lines for altitude */
-            background: linear-gradient(
-                rgba(0, 168, 255, 0.1) 1px, 
-                transparent 1px
-            );
-            /* --- [MODIFIED] Adjusted background size to match 10k ft intervals --- */
-            background-size: 100% 53.3px; /* (240px / 45k ft) * 10k ft */
-        }
-
-        /* --- [NEW] Y-Axis (Altitude Scale) --- */
-        #vsd-y-axis {
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 35px; /* Matches padding-left */
-            font-size: 0.7rem;
-            color: #9fa8da;
-            font-weight: 600;
-            padding: 5px 0;
-            box-sizing: border-box;
-            border-right: 1px solid rgba(0, 168, 255, 0.1);
-            pointer-events: none; /* Let clicks pass through */
-        }
-        .y-axis-label {
-            position: absolute;
-            left: 5px;
-            transform: translateY(-50%); /* Center on its 'top' value */
-            text-shadow: 0 0 3px rgba(0,0,0,0.5);
-        }
-        /* --- [END NEW] --- */
-
-        /* --- [MODIFIED] Aircraft Icon (Added Dropline) --- */
-        #vsd-aircraft-icon {
-            position: absolute;
-            left: 0px; /* Will be set by JS */
-            top: 50%; /* Will be set by JS */
-            width: 30px;
-            height: 20px;
-            z-index: 10;
-            /* Simple '>' icon for aircraft */
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 20' fill='%2300a8ff'%3E%3Cpath d='M2,10 L10,2 L10,7 L28,7 L28,13 L10,13 L10,18 L2,10 Z' /%3E%3C/svg%3E");
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-            transform: translateY(-50%);
-            transition: top 0.5s ease-out, left 1s linear;
-        }
-        
-        /* --- [NEW] Vertical Dropline for aircraft --- */
-        #vsd-aircraft-icon::before {
-            content: '';
-            position: absolute;
-            top: 50%; /* Start at icon center */
-            left: 10px; /* Position horizontally within icon bounds */
-            width: 2px;
-            height: 500px; /* Arbitrarily long */
-            background: linear-gradient(to bottom, #00a8ff, transparent 80%);
-            opacity: 0.7;
-        }
-        /* --- [END NEW] --- */
-        
-        #vsd-graph-content {
-            position: absolute;
-            top: 0;
-            left: 35px; /* --- [MODIFIED] Start after Y-Axis --- */
-            height: 100%;
-            width: 1px; /* Will be set by JS */
-            will-change: transform;
-            transition: transform 1s linear; /* Smooth scroll */
-        }
-
-        #vsd-profile-svg {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            overflow: visible;
-        }
-        
-        #vsd-profile-path {
-            fill: none;
-            stroke: #00a8ff;
-            stroke-width: 3;
-            stroke-linejoin: round;
-        }
-
-        /* --- [MODIFIED] Style for the Flown Altitude Path --- */
-        #vsd-flown-path {
-            fill: none;
-            stroke: #dc3545; /* Red */
-            stroke-width: 4; /* <-- MODIFIED */
-            stroke-linejoin: round;
-            opacity: 0.9; /* <-- MODIFIED */
-        }
-        /* --- [END MODIFIED] --- */
-
-        #vsd-waypoint-labels {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-        }
-        
-        /* --- [MODIFIED] Waypoint Labels (Staggering) --- */
-        .vsd-wp-label {
-            position: absolute;
-            transform: translateX(-50%); /* Center the label on its 'left' pos */
-            color: #fff;
-            font-size: 0.8rem;
-            text-align: center;
-            text-shadow: 0 0 5px rgba(0,0,0,0.8);
-            line-height: 1.2;
-            padding: 2px 4px;
-            background: rgba(10, 12, 26, 0.5);
-            border-radius: 3px;
-            white-space: nowrap;
-        }
-        .vsd-wp-label .wp-name {
-            font-weight: 700;
-            font-size: 0.9rem;
-            color: #89f7fe;
-        }
-        .vsd-wp-label .wp-alt {
-            font-size: 0.75rem;
-            color: #c5cae9;
-        }
-
-        /* --- [NEW] Tick lines for labels --- */
-        .vsd-wp-label::after {
-            content: '';
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 1px;
-            height: 12px; /* Connects label to profile */
-            background: rgba(255, 255, 255, 0.3);
-        }
-        
-        /* High label: tick goes from bottom-center DOWN */
-        .vsd-wp-label.high-label::after {
-            top: 100%;
-        }
-
-        /* Low label: tick goes from top-center UP */
-        .vsd-wp-label.low-label::after {
-            bottom: 100%;
-        }
-        /* --- [END NEW] --- */
-
-        /* ====================================================================
-        --- [END] VSD RE-DESIGN --- 
+        --- [REMOVED] VSD STYLES --- 
         ====================================================================
         */
 
@@ -1521,10 +1109,8 @@ function injectCustomStyles() {
             display: flex;
             background: rgba(10, 12, 26, 0.4);
             padding: 5px 15px 0 15px;
-            /* --- [FIX] Removed margins that incorrectly placed it inside the content area --- */
-            /* margin: 0 16px; */ 
-            /* margin-top: 16px; */
-            border-radius: 0; /* --- [FIX] Removed border-radius --- */
+            flex-shrink: 0; /* --- [NEW] --- */
+            border-radius: 0; 
         }
         .ac-info-tab-btn {
             padding: 14px 18px;
@@ -1543,44 +1129,6 @@ function injectCustomStyles() {
         .ac-info-tab-btn:hover { color: #fff; }
         .ac-info-tab-btn.active { color: #00a8ff; border-bottom-color: #00a8ff; }
 
-        /* Hide the old toggle buttons, as tabs replace them */
-        .pilot-stats-toggle-btn,
-        .back-to-flight-btn {
-            display: none !important;
-        }
-
-        /* --- [MODIFIED] VSD Disclaimer --- */
-        .vsd-disclaimer {
-            background: rgba(10, 12, 26, 0.5); /* --- [MODIFIED] Re-add bg --- */
-            border: 1px solid rgba(255, 255, 255, 0.05); /* --- [MODIFIED] Re-add border --- */
-            border-radius: 8px; /* --- [NEW] --- */
-            padding: 10px 14px;
-            margin-top: 0; 
-        }
-        .disclaimer-legend {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin-bottom: 8px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-        .disclaimer-legend span {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .vsd-disclaimer p {
-            font-size: 0.75rem;
-            color: #9fa8da;
-            text-align: center;
-            margin: 0;
-            padding-top: 8px;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .vsd-disclaimer p .fa-solid {
-            margin-right: 4px;
-        }
     `;
 
     const style = document.createElement('style');
@@ -4066,6 +3614,7 @@ async function handleAircraftClick(flightProps, sessionId) {
  * --- [MODIFIED v11] Use airportsData for flags
  * --- [MODIFIED v12.1] Removed inline gradient from tempBg
  * --- [MODIFIED v13 - YOUR FIX] Use Actual Departure Time (ATD) and prepare for live ETA.
+ * --- [MODIFIED v14 - IDEA 2] Replaced (PFD|Data)+VSD with large PFD + Data Bar
  */
 function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     const windowEl = document.getElementById('aircraft-info-window');
@@ -4203,206 +3752,168 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
                 <i class="fa-solid fa-chart-simple"></i> Pilot Report
             </button>
         </div>
+        
         <div class="unified-display-main-content">
             
             <div id="ac-tab-flight-data" class="ac-tab-pane active">
                 
-                <div class="pfd-data-grid">
-                    
-                    <div class="pfd-main-panel">
-                        <div id="pfd-container">
-                            <svg width="787" height="635" viewBox="0 30 787 665" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <g id="PFD" clip-path="url(#clip0_1_2890)">
-                                <g id="attitude_group">
-                                    <rect id="Sky" x="-186" y="-222" width="1121" height="532" fill="#0596FF"/>
-                                    <rect id="Ground" x="-138" y="307" width="1024" height="527" fill="#9A4710"/>
-                                    </g>
-                                <rect id="Rectangle 1" x="-6" y="5" width="191" height="566" fill="#030309"/>
-                                <rect id="Rectangle 9" x="609" width="185" height="566" fill="#030309"/>
-                                <path id="Rectangle 2" d="M273.905 84.9424L180.983 183.181L-23 -9.76114L69.9218 -108L273.905 84.9424Z" fill="#030309"/>
-                                <path id="Rectangle 8" d="M303.215 77.0814L187.591 147.198L42 -92.8829L157.624 -163L303.215 77.0814Z" fill="#030309"/>
-                                <path id="Rectangle 7" d="M372.606 54.0171L244.59 97.5721L154.152 -168.242L282.169 -211.796L372.606 54.0171Z" fill="#030309"/>
-                                <rect id="Rectangle 10" x="25" y="487.905" width="168.696" height="262.947" transform="rotate(-31.8041 25 487.905)" fill="#030309"/>
-                                <rect id="Rectangle 14" width="67.3639" height="53.5561" transform="matrix(-0.972506 0.23288 0.23288 0.972506 482.512 537)" fill="#030309"/>
-                                <rect id="Rectangle 19" width="80.8905" height="53.5561" transform="matrix(-0.999899 0.0142423 0.0142423 0.999899 442.882 549.506)" fill="#030309"/>
-                                <rect id="Rectangle 18" width="46.2297" height="53.5561" transform="matrix(-0.988103 -0.153795 -0.153795 0.988103 369.916 549.11)" fill="#030309"/>
-                                <rect id="Rectangle 17" width="46.2297" height="53.5561" transform="matrix(-0.940186 -0.340662 -0.340662 0.940186 337.709 546.749)" fill="#030309"/>
-                                <rect id="Rectangle 16" width="46.2297" height="53.5561" transform="matrix(-0.940186 -0.340662 -0.340662 0.940186 299.709 531.749)" fill="#030309"/>
-                                <rect id="Rectangle 15" x="387" y="587.269" width="168.696" height="262.947" transform="rotate(-27.6434 387 587.269)" fill="#030309"/>
-                                <rect id="Rectangle 13" x="86" y="584.104" width="168.696" height="262.947" transform="rotate(-46.8648 86 584.104)" fill="#030309"/>
-                                <rect id="Rectangle 11" x="527" y="532.777" width="168.696" height="262.947" transform="rotate(-51.9135 527 532.777)" fill="#030309"/>
-                                <rect id="Rectangle 12" x="503" y="527.247" width="168.696" height="262.947" transform="rotate(-31.9408 503 527.247)" fill="#030309"/>
-                                <rect id="Rectangle 6" x="456.715" y="60.2651" width="131.991" height="278.153" transform="rotate(-177.303 456.715 60.2651)" fill="#030309"/>
-                                <rect id="Rectangle 5" x="525.118" y="90.4898" width="131.991" height="274.627" transform="rotate(-158.368 525.118 90.4898)" fill="#030309"/>
-                                <rect id="Rectangle 4" x="570.695" y="127.633" width="109.94" height="223.222" transform="rotate(-142.051 570.695 127.633)" fill="#030309"/>
-                                <rect id="Rectangle 3" x="613.292" y="189.098" width="99.2768" height="223.222" transform="rotate(-128.125 613.292 189.098)" fill="#030309"/>
-                                <path id="Vector 3" d="M609 183V422.5" stroke="#E7E6E8" stroke-width="4"/>
-                                <path id="Vector 1" d="M185.5 425.5L185 180" stroke="#DBDBDC" stroke-width="4"/>
-                                <path id="Vector 2" d="M185 181.502C185 181.502 269.8 52.0936 397 56.0907C524.2 60.0879 576.603 135.189 609 184" stroke="#DBDBDC" stroke-width="4"/>
-                                <path id="Vector 4" d="M608.5 424.5C608.5 424.5 557 548 396 550.5C235 553 185 424.5 185 424.5" stroke="#DBDBDC" stroke-width="4"/>
-                                <path id="Polygon 1" d="M396.252 65.2333L377.848 35.8138L414.647 35.8079L396.252 65.2333Z" fill="#E7F013"/>
-                                <path id="Polygon 2" d="M407.919 38.9482L396.431 59.4193L384.446 38.7244L407.919 38.9482Z" fill="#030309"/>
-                                <path id="Vector 6" d="M307 76L302 64.5L312 60.5L317 71" stroke="#E7E6E8" stroke-width="4"/>
-                                <path id="Vector 7" d="M279.5 91L268.5 73.5L259 79L269.5 97.5" stroke="#E7E6E8" stroke-width="4"/>
-                                <path id="Vector 8" d="M225 135L206.5 117" stroke="#E7E6E8" stroke-width="4"/>
-                                <path id="Vector 9" d="M477.153 71.5794L479.366 59.3018L489.886 61.5697L488.226 73.0218" stroke="#E7E6E8" stroke-width="4"/>
-                                <path id="Vector 10" d="M347.928 61.4888L346.352 49.0483L357.072 48.0112L358.929 59.4917" stroke="#E7E6E8" stroke-width="4"/>
-                                <path id="Vector 11" d="M435.153 59.5794L437.366 47.3018L447.886 49.5697L446.226 61.0218" stroke="#E7E6E8" stroke-width="4"/>
-                                <path id="Vector 12" d="M514.032 86.1754L522.756 72.2658L533.956 78.0405L525.5 93.5" stroke="#E7E6E8" stroke-width="4"/>
-                                <path id="Vector 13" d="M569.5 131.5L585.5 116" stroke="#E7E6E8" stroke-width="4"/>
-                                <path id="Vector 15" d="M183.5 193.5L173 187" stroke="#029705" stroke-width="4"/>
-                                <path id="Vector 16" d="M184 203L173.5 196.5" stroke="#029705" stroke-width="4"/>
-                                <path id="Vector 17" d="M610 193.5L619 188" stroke="#029705" stroke-width="3"/>
-                                <path id="Vector 18" d="M610 199.5L619 194" stroke="#029705" stroke-width="3"/>
-                                <line id="Line 1" x1="184" y1="211" x2="184" y2="184" stroke="#DBDBDC" stroke-width="2"/>
-                                <line id="Line 2" x1="610" y1="211" x2="610" y2="184" stroke="#DBDBDC" stroke-width="2"/>
-                                <rect id="altitude_bg" x="675" y="73" width="72" height="476" fill="#76767A"/>
-                                <svg x="675" y="73" width="72" height="476"><g id="altitude_tape_group"></g></svg>
-                                <g id="altitude_indicator_static">
-                                    <rect id="altitude_1" x="675" y="280" width="73" height="49" fill="#030309"/>
-                                    <text id="altitude_readout_hundreds" x="740" y="316" fill="#00FF00" font-size="32" text-anchor="end" font-weight="bold">0</text>
-                                    <g id="altitude_tens_reel_container" clip-path="url(#tensReelClip)"><g id="altitude_tens_reel_group"></g></g>
-                                    <line id="Line 8" x1="669" y1="307" x2="618" y2="307" stroke="#DDDF07" stroke-width="8"/>
+                <div class="idea2-pfd-wrapper">
+                    <div id="pfd-container">
+                        <svg width="787" height="635" viewBox="0 30 787 665" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <g id="PFD" clip-path="url(#clip0_1_2890)">
+                            <g id="attitude_group">
+                                <rect id="Sky" x="-186" y="-222" width="1121" height="532" fill="#0596FF"/>
+                                <rect id="Ground" x="-138" y="307" width="1024" height="527" fill="#9A4710"/>
                                 </g>
-                                <path id="limit" d="M636 336.08L621.413 307.511L650.858 307.651L636 336.08Z" fill="#C477C6"/>
-                                <path id="limit2" d="M636 279L650.722 307.5H621.278L636 279Z" fill="#C477C6"/>
-                                <path id="limit3" d="M636 285L643.794 303H628.206L636 285Z" fill="#100010"/>
-                                <path id="limit4" d="M636.191 329.14L628.276 311.242L643.534 310.999L636.191 329.14Z" fill="#030309"/>
-                                <line id="Line 6" x1="746.5" y1="263" x2="746.5" y2="281" stroke="#ECED06" stroke-width="3"/>
-                                <line id="Line 4" x1="746.5" y1="329" x2="746.5" y2="347" stroke="#ECED06" stroke-width="3"/>
-                                <path id="Ellipse 1" d="M636 481C636 484.866 632.866 488 629 488C625.134 488 622 484.866 622 481C622 477.134 625.134 474 629 474C632.866 474 636 477.134 636 481Z" fill="#D9D9D9"/>
-                                <path id="Ellipse 4" d="M636 147C636 150.866 632.866 154 629 154C625.134 154 622 150.866 622 147C622 143.134 625.134 140 629 140C632.866 140 636 143.134 636 147Z" fill="#D9D9D9"/>
-                                <g id="Ellipse 3">
-                                    <path d="M636 229C636 232.866 632.866 236 629 236C625.134 236 622 232.866 622 229C622 225.134 625.134 222 629 222C632.866 222 636 225.134 636 229Z" fill="#D9D9D9"/>
-                                    <path d="M636 395C636 398.866 632.866 402 629 402C625.134 402 622 398.866 622 395C622 391.134 625.134 388 629 388C632.866 388 636 391.134 636 395Z" fill="#D9D9D9"/>
-                                </g>
-                                <rect id="speed" x="28" y="73" width="97" height="477" fill="#76767A"/>
-                                <svg x="28" y="73" width="97" height="477"><g id="speed_tape_group"></g></svg>
-                                <g id="speed_indicator_static">
-                                    <path id="Polygon 9" d="M128.036 311.591L150.451 301.561L150.513 321.482L128.036 311.591Z" fill="#FDFD03"/>
-                                    <path id="Vector 20" d="M137 311H96.5" stroke="#FDFD03" stroke-width="4"/>
-                                    <rect x="50" y="296" width="45" height="30" fill="black" stroke="#999" stroke-width="1"/>
-                                    <text id="speed_readout" x="72.5" y="318" fill="#00FF00" font-size="20" text-anchor="middle" font-weight="bold">0</text>
-                                </g>
-                                <path id="Vector 19" d="M19.5 311H31" stroke="#FDFD03" stroke-width="4"/>
-                                <path id="Vector 21" d="M29 73H151.5" stroke="#E7E6E8" stroke-width="4"/>
-                                <path id="Vector 22" d="M28 549H151.5" stroke="#E7E6E8" stroke-width="4"/>
-                                <path id="Vector 23" d="M672.5 73H774" stroke="#E7E6E8" stroke-width="4"/>
-                                <path id="Vector 24" d="M672 548.5H773" stroke="#E7E6E8" stroke-width="4"/>
-                                <path id="Vector 25" d="M745 549.5L746 347" stroke="#E7E6E8" stroke-width="3"/>
-                                <path id="Vector 26" d="M745 73V265" stroke="#E7E6E8" stroke-width="3"/>
-                                <g id="wings">
-                                    <rect id="Rectangle 21" x="280" y="315" width="11" height="25" fill="#030309"/>
-                                    <rect id="Rectangle 23" x="522" y="304" width="71" height="12" fill="#030309"/>
-                                    <rect id="Rectangle 22" x="512" y="305" width="13" height="35" fill="#030309"/>
-                                    <rect id="Rectangle 20" x="208" y="304" width="83" height="13" fill="#030309"/>
-                                    <g id="wing">
-                                        <path d="M278.591 316.857H208V304H291.608V340H278.591V316.857Z" stroke="#FEFE03" stroke-width="3"/>
-                                        <path d="M511.392 340V304H595V316.857H524.409V340H511.392Z" stroke="#FEFE03" stroke-width="3"/>
-                                    </g>
-                                </g>
-                                <g id="middle">
-                                    <rect id="middle_2" x="393" y="304" width="17" height="17" fill="#0CC704"/>
-                                    <rect id="Rectangle 24" x="395" y="307" width="13" height="11" fill="#030309"/>
-                                </g>
-                                <rect id="Rectangle 25" y="571" width="787" height="140" fill="#030309"/>
-                                <rect id="header" x="243" y="599" width="326" height="66" fill="#76767A"/>
-                                <g id="heading_indicator">
-                                    <g id="heading_tape_container" clip-path="url(#headingClip)"><g id="heading_tape_group"></g></g>
-                                    <g id="heading_static_elements">
-                                        <line x1="406" y1="620" x2="406" y2="635" stroke="#FDFD03" stroke-width="3"/>
-                                        <rect x="381" y="599" width="50" height="20" fill="black" stroke="#FFFFFF" stroke-width="1"/>
-                                        <text id="heading_readout" x="406" y="615" fill="#00FF00" font-size="16" text-anchor="middle" font-weight="bold">000</text>
-                                    </g>
-                                </g>
-                                <path id="Vector 27" d="M243 599V667" stroke="#FCFCFF" stroke-width="4"/>
-                                <g id="Line 5"><line id="Line 5_2" x1="745" y1="264.5" x2="787" y2="264.5" stroke="#ECED06" stroke-width="3"/></g>
-                                <line id="Line 6_2" x1="671" y1="279.5" x2="748" y2="279.5" stroke="#ECED06" stroke-width="3"/>
-                                <line id="Line 7" x1="671" y1="329.5" x2="748" y2="329.5" stroke="#ECED06" stroke-width="3"/>
-                                <line id="Line 3" x1="746" y1="345.5" x2="786" y2="345.5" stroke="#ECED06" stroke-width="3"/>
+                            <rect id="Rectangle 1" x="-6" y="5" width="191" height="566" fill="#030309"/>
+                            <rect id="Rectangle 9" x="609" width="185" height="566" fill="#030309"/>
+                            <path id="Rectangle 2" d="M273.905 84.9424L180.983 183.181L-23 -9.76114L69.9218 -108L273.905 84.9424Z" fill="#030309"/>
+                            <path id="Rectangle 8" d="M303.215 77.0814L187.591 147.198L42 -92.8829L157.624 -163L303.215 77.0814Z" fill="#030309"/>
+                            <path id="Rectangle 7" d="M372.606 54.0171L244.59 97.5721L154.152 -168.242L282.169 -211.796L372.606 54.0171Z" fill="#030309"/>
+                            <rect id="Rectangle 10" x="25" y="487.905" width="168.696" height="262.947" transform="rotate(-31.8041 25 487.905)" fill="#030309"/>
+                            <rect id="Rectangle 14" width="67.3639" height="53.5561" transform="matrix(-0.972506 0.23288 0.23288 0.972506 482.512 537)" fill="#030309"/>
+                            <rect id="Rectangle 19" width="80.8905" height="53.5561" transform="matrix(-0.999899 0.0142423 0.0142423 0.999899 442.882 549.506)" fill="#030309"/>
+                            <rect id="Rectangle 18" width="46.2297" height="53.5561" transform="matrix(-0.988103 -0.153795 -0.153795 0.988103 369.916 549.11)" fill="#030309"/>
+                            <rect id="Rectangle 17" width="46.2297" height="53.5561" transform="matrix(-0.940186 -0.340662 -0.340662 0.940186 337.709 546.749)" fill="#030309"/>
+                            <rect id="Rectangle 16" width="46.2297" height="53.5561" transform="matrix(-0.940186 -0.340662 -0.340662 0.940186 299.709 531.749)" fill="#030309"/>
+                            <rect id="Rectangle 15" x="387" y="587.269" width="168.696" height="262.947" transform="rotate(-27.6434 387 587.269)" fill="#030309"/>
+                            <rect id="Rectangle 13" x="86" y="584.104" width="168.696" height="262.947" transform="rotate(-46.8648 86 584.104)" fill="#030309"/>
+                            <rect id="Rectangle 11" x="527" y="532.777" width="168.696" height="262.947" transform="rotate(-51.9135 527 532.777)" fill="#030309"/>
+                            <rect id="Rectangle 12" x="503" y="527.247" width="168.696" height="262.947" transform="rotate(-31.9408 503 527.247)" fill="#030309"/>
+                            <rect id="Rectangle 6" x="456.715" y="60.2651" width="131.991" height="278.153" transform="rotate(-177.303 456.715 60.2651)" fill="#030309"/>
+                            <rect id="Rectangle 5" x="525.118" y="90.4898" width="131.991" height="274.627" transform="rotate(-158.368 525.118 90.4898)" fill="#030309"/>
+                            <rect id="Rectangle 4" x="570.695" y="127.633" width="109.94" height="223.222" transform="rotate(-142.051 570.695 127.633)" fill="#030309"/>
+                            <rect id="Rectangle 3" x="613.292" y="189.098" width="99.2768" height="223.222" transform="rotate(-128.125 613.292 189.098)" fill="#030309"/>
+                            <path id="Vector 3" d="M609 183V422.5" stroke="#E7E6E8" stroke-width="4"/>
+                            <path id="Vector 1" d="M185.5 425.5L185 180" stroke="#DBDBDC" stroke-width="4"/>
+                            <path id="Vector 2" d="M185 181.502C185 181.502 269.8 52.0936 397 56.0907C524.2 60.0879 576.603 135.189 609 184" stroke="#DBDBDC" stroke-width="4"/>
+                            <path id="Vector 4" d="M608.5 424.5C608.5 424.5 557 548 396 550.5C235 553 185 424.5 185 424.5" stroke="#DBDBDC" stroke-width="4"/>
+                            <path id="Polygon 1" d="M396.252 65.2333L377.848 35.8138L414.647 35.8079L396.252 65.2333Z" fill="#E7F013"/>
+                            <path id="Polygon 2" d="M407.919 38.9482L396.431 59.4193L384.446 38.7244L407.919 38.9482Z" fill="#030309"/>
+                            <path id="Vector 6" d="M307 76L302 64.5L312 60.5L317 71" stroke="#E7E6E8" stroke-width="4"/>
+                            <path id="Vector 7" d="M279.5 91L268.5 73.5L259 79L269.5 97.5" stroke="#E7E6E8" stroke-width="4"/>
+                            <path id="Vector 8" d="M225 135L206.5 117" stroke="#E7E6E8" stroke-width="4"/>
+                            <path id="Vector 9" d="M477.153 71.5794L479.366 59.3018L489.886 61.5697L488.226 73.0218" stroke="#E7E6E8" stroke-width="4"/>
+                            <path id="Vector 10" d="M347.928 61.4888L346.352 49.0483L357.072 48.0112L358.929 59.4917" stroke="#E7E6E8" stroke-width="4"/>
+                            <path id="Vector 11" d="M435.153 59.5794L437.366 47.3018L447.886 49.5697L446.226 61.0218" stroke="#E7E6E8" stroke-width="4"/>
+                            <path id="Vector 12" d="M514.032 86.1754L522.756 72.2658L533.956 78.0405L525.5 93.5" stroke="#E7E6E8" stroke-width="4"/>
+                            <path id="Vector 13" d="M569.5 131.5L585.5 116" stroke="#E7E6E8" stroke-width="4"/>
+                            <path id="Vector 15" d="M183.5 193.5L173 187" stroke="#029705" stroke-width="4"/>
+                            <path id="Vector 16" d="M184 203L173.5 196.5" stroke="#029705" stroke-width="4"/>
+                            <path id="Vector 17" d="M610 193.5L619 188" stroke="#029705" stroke-width="3"/>
+                            <path id="Vector 18" d="M610 199.5L619 194" stroke="#029705" stroke-width="3"/>
+                            <line id="Line 1" x1="184" y1="211" x2="184" y2="184" stroke="#DBDBDC" stroke-width="2"/>
+                            <line id="Line 2" x1="610" y1="211" x2="610" y2="184" stroke="#DBDBDC" stroke-width="2"/>
+                            <rect id="altitude_bg" x="675" y="73" width="72" height="476" fill="#76767A"/>
+                            <svg x="675" y="73" width="72" height="476"><g id="altitude_tape_group"></g></svg>
+                            <g id="altitude_indicator_static">
+                                <rect id="altitude_1" x="675" y="280" width="73" height="49" fill="#030309"/>
+                                <text id="altitude_readout_hundreds" x="740" y="316" fill="#00FF00" font-size="32" text-anchor="end" font-weight="bold">0</text>
+                                <g id="altitude_tens_reel_container" clip-path="url(#tensReelClip)"><g id="altitude_tens_reel_group"></g></g>
+                                <line id="Line 8" x1="669" y1="307" x2="618" y2="307" stroke="#DDDF07" stroke-width="8"/>
                             </g>
-                            <defs>
-                                <clipPath id="clip0_1_2890"><rect width="787" height="695" fill="white"/></clipPath>
-                                <clipPath id="tensReelClip"><rect x="732" y="269" width="50" height="75"/></clipPath>
-                                <clipPath id="headingClip"><rect x="243" y="620" width="326" height="45"/></clipPath>
-                            </defs>
-                            </svg>
-                        </div>
-                        <div id="pfd-footer-display" class="pfd-footer-display">
-                            <div class="pfd-footer-ac-icon">
-                                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
-                                    <path d="M50,85 C45,80 40,75 35,70 C30,65 25,60 20,55 C15,50 10,45 5,40 C10,40 15,40 20,40 C25,40 30,40 35,40 C35,35 35,30 35,25 C35,20 35,15 35,10 C40,15 45,20 50,25 C55,20 60,15 65,10 C65,15 65,20 65,25 C65,30 65,35 65,40 C70,40 75,40 80,40 C85,40 90,40 95,40 C90,45 85,50 80,55 C75,60 70,65 65,70 C60,75 55,80 50,85 Z" />
-                                </svg>
-                            </div>
-                            <div class="pfd-footer-nav-item">
-                                <span class="data-label">NEXT WP</span>
-                                <span class="data-value" id="ac-next-wp">---</span>
-                            </div>
-                            <div class="pfd-footer-nav-item">
-                                <span class="data-label">DIST</span>
-                                <span class="data-value" id="ac-next-wp-dist">--.-<span class="unit">NM</span></span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="live-data-panel-new">
-                        
-                        <div class="ac-primary-data-item donut-chart-container">
-                            <span class="data-label">DIST. TO DEST.</span>
-                            <div class="donut-chart">
-                                <svg viewBox="0 0 36 36">
-                                    <path class="donut-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
-                                    <path class="donut-fg" id="ac-dist-donut" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"></path>
-                                </svg>
-                                <div class="donut-chart-text">
-                                    <span class="data-value" id="ac-dist">---</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="ac-primary-data-item">
-                            <span class="data-label">ETE TO DEST.</span>
-                            <div class="data-value odometer-container" id="ac-ete">
-                                <span id="ac-ete-hr" class="odometer-value">--</span>
-                                <span class="odometer-separator">:</span>
-                                <span id="ac-ete-min" class="odometer-value">--</span>
-                            </div>
-                        </div>
-
-                        <div class="ac-primary-data-item">
-                            <span class="data-label">VERTICAL SPEED</span>
-                            <span class="data-value" id="ac-vs">---</span>
-                        </div>
-
-                    </div>
-                    </div> 
-                
-                <div class="ac-profile-card-new">
-                    <h4>Vertical Profile</h4>
-                    <div id="vsd-panel" class="vsd-panel" data-plan-id="" data-profile-built="false">
-                        <div id="vsd-graph-window" class="vsd-graph-window">
-                            <div id="vsd-aircraft-icon"></div>
-                            <div id="vsd-graph-content">
-                                <svg id="vsd-profile-svg" xmlns="http://www.w3.org/2000/svg">
-                                    <path id="vsd-flown-path" d="" />
-                                    <path id="vsd-profile-path" d="" />
-                                </svg>
-                                <div id="vsd-waypoint-labels"></div>
-                            </div>
-                        </div>
+                            <path id="limit" d="M636 336.08L621.413 307.511L650.858 307.651L636 336.08Z" fill="#C477C6"/>
+                            <path id="limit2" d="M636 279L650.722 307.5H621.278L636 279Z" fill="#C477C6"/>
+                            <path id="limit3" d="M636 285L643.794 303H628.206L636 285Z" fill="#100010"/>
+                            <path id="limit4" d="M636.191 329.14L628.276 311.242L643.534 310.999L636.191 329.14Z" fill="#030309"/>
+                            <line id="Line 6" x1="746.5" y1="263" x2="746.5" y2="281" stroke="#ECED06" stroke-width="3"/>
+                            <line id="Line 4" x1="746.5" y1="329" x2="746.5" y2="347" stroke="#ECED06" stroke-width="3"/>
+                            <path id="Ellipse 1" d="M636 481C636 484.866 632.866 488 629 488C625.134 488 622 484.866 622 481C622 477.134 625.134 474 629 474C632.866 474 636 477.134 636 481Z" fill="#D9D9D9"/>
+                            <path id="Ellipse 4" d="M636 147C636 150.866 632.866 154 629 154C625.134 154 622 150.866 622 147C622 143.134 625.134 140 629 140C632.866 140 636 143.134 636 147Z" fill="#D9D9D9"/>
+                            <g id="Ellipse 3">
+                                <path d="M636 229C636 232.866 632.866 236 629 236C625.134 236 622 232.866 622 229C622 225.134 625.134 222 629 222C632.866 222 636 225.134 636 229Z" fill="#D9D9D9"/>
+                                <path d="M636 395C636 398.866 632.866 402 629 402C625.134 402 622 398.866 622 395C622 391.134 625.134 388 629 388C632.866 388 636 391.134 636 395Z" fill="#D9D9D9"/>
+                            </g>
+                            <rect id="speed" x="28" y="73" width="97" height="477" fill="#76767A"/>
+                            <svg x="28" y="73" width="97" height="477"><g id="speed_tape_group"></g></svg>
+                            <g id="speed_indicator_static">
+                                <path id="Polygon 9" d="M128.036 311.591L150.451 301.561L150.513 321.482L128.036 311.591Z" fill="#FDFD03"/>
+                                <path id="Vector 20" d="M137 311H96.5" stroke="#FDFD03" stroke-width="4"/>
+                                <rect x="50" y="296" width="45" height="30" fill="black" stroke="#999" stroke-width="1"/>
+                                <text id="speed_readout" x="72.5" y="318" fill="#00FF00" font-size="20" text-anchor="middle" font-weight="bold">0</text>
+                            </g>
+                            <path id="Vector 19" d="M19.5 311H31" stroke="#FDFD03" stroke-width="4"/>
+                            <path id="Vector 21" d="M29 73H151.5" stroke="#E7E6E8" stroke-width="4"/>
+                            <path id="Vector 22" d="M28 549H151.5" stroke="#E7E6E8" stroke-width="4"/>
+                            <path id="Vector 23" d="M672.5 73H774" stroke="#E7E6E8" stroke-width="4"/>
+                            <path id="Vector 24" d="M672 548.5H773" stroke="#E7E6E8" stroke-width="4"/>
+                            <path id="Vector 25" d="M745 549.5L746 347" stroke="#E7E6E8" stroke-width="3"/>
+                            <path id="Vector 26" d="M745 73V265" stroke="#E7E6E8" stroke-width="3"/>
+                            <g id="wings">
+                                <rect id="Rectangle 21" x="280" y="315" width="11" height="25" fill="#030309"/>
+                                <rect id="Rectangle 23" x="522" y="304" width="71" height="12" fill="#030309"/>
+                                <rect id="Rectangle 22" x="512" y="305" width="13" height="35" fill="#030309"/>
+                                <rect id="Rectangle 20" x="208" y="304" width="83" height="13" fill="#030309"/>
+                                <g id="wing">
+                                    <path d="M278.591 316.857H208V304H291.608V340H278.591V316.857Z" stroke="#FEFE03" stroke-width="3"/>
+                                    <path d="M511.392 340V304H595V316.857H524.409V340H511.392Z" stroke="#FEFE03" stroke-width="3"/>
+                                </g>
+                            </g>
+                            <g id="middle">
+                                <rect id="middle_2" x="393" y="304" width="17" height="17" fill="#0CC704"/>
+                                <rect id="Rectangle 24" x="395" y="307" width="13" height="11" fill="#030309"/>
+                            </g>
+                            <rect id="Rectangle 25" y="571" width="787" height="140" fill="#030309"/>
+                            <rect id="header" x="243" y="599" width="326" height="66" fill="#76767A"/>
+                            <g id="heading_indicator">
+                                <g id="heading_tape_container" clip-path="url(#headingClip)"><g id="heading_tape_group"></g></g>
+                                <g id="heading_static_elements">
+                                    <line x1="406" y1="620" x2="406" y2="635" stroke="#FDFD03" stroke-width="3"/>
+                                    <rect x="381" y="599" width="50" height="20" fill="black" stroke="#FFFFFF" stroke-width="1"/>
+                                    <text id="heading_readout" x="406" y="615" fill="#00FF00" font-size="16" text-anchor="middle" font-weight="bold">000</text>
+                                </g>
+                            </g>
+                            <path id="Vector 27" d="M243 599V667" stroke="#FCFCFF" stroke-width="4"/>
+                            <g id="Line 5"><line id="Line 5_2" x1="745" y1="264.5" x2="787" y2="264.5" stroke="#ECED06" stroke-width="3"/></g>
+                            <line id="Line 6_2" x1="671" y1="279.5" x2="748" y2="279.5" stroke="#ECED06" stroke-width="3"/>
+                            <line id="Line 7" x1="671" y1="329.5" x2="748" y2="329.5" stroke="#ECED06" stroke-width="3"/>
+                            <line id="Line 3" x1="746" y1="345.5" x2="786" y2="345.5" stroke="#ECED06" stroke-width="3"/>
+                        </g>
+                        <defs>
+                            <clipPath id="clip0_1_2890"><rect width="787" height="695" fill="white"/></clipPath>
+                            <clipPath id="tensReelClip"><rect x="732" y="269" width="50" height="75"/></clipPath>
+                            <clipPath id="headingClip"><rect x="243" y="620" width="326" height="45"/></clipPath>
+                        </defs>
+                        </svg>
                     </div>
                 </div>
 
-                <div class="vsd-disclaimer">
-                    <div class="disclaimer-legend">
-                        <span><i class="fa-solid fa-circle" style="color: #00a8ff;"></i> Planned FPL</span>
-                        <span><i class="fa-solid fa-circle" style="color: #dc3545;"></i> Flown Route</span>
+                <div class="idea2-data-bar">
+                    <div class="data-bar-item">
+                        <span class="data-label">NEXT WP</span>
+                        <span class="data-value" id="ac-next-wp">---</span>
                     </div>
-                    <p><i class="fa-solid fa-circle-info"></i> The vertical profile may be inaccurate if your filed flight plan altitudes are incomplete or incorrect.</p>
+                    <div class="data-bar-item">
+                        <span class="data-label">DIST TO WP</span>
+                        <span class="data-value" id="ac-next-wp-dist">--.-<span class="unit">NM</span></span>
+                    </div>
+                    <div class="data-bar-item">
+                        <span class="data-label">ETE TO WP</span>
+                        <span class="data-value" id="ac-ete-wp">--:--</span>
+                    </div>
+                    <div class="data-bar-item">
+                        <span class="data-label">GROUNDSPEED</span>
+                        <span class="data-value" id="ac-gs">---<span class="unit">KT</span></span>
+                    </div>
+                    <div class="data-bar-item">
+                        <span class="data-label">DESTINATION</span>
+                        <span class="data-value" id="ac-dest-icao">${arrivalIcao}</span>
+                    </div>
+                    <div class="data-bar-item">
+                        <span class="data-label">DIST TO DEST</span>
+                        <span class="data-value" id="ac-dist">---<span class="unit">NM</span></span>
+                    </div>
+                    <div class="data-bar-item">
+                        <span class="data-label">ETE TO DEST</span>
+                        <span class="data-value" id="ac-ete">--:--</span>
+                    </div>
+                    <div class="data-bar-item">
+                        <span class="data-label">VERTICAL SPEED</span>
+                        <span class="data-value" id="ac-vs">---<span class="unit">fpm</span></span>
+                    </div>
                 </div>
 
-                </div> 
-            
+            </div> 
             <div id="ac-tab-pilot-report" class="ac-tab-pane">
                 <div id="pilot-stats-display">
                     </div>
@@ -4589,13 +4100,13 @@ function renderPilotStatsHTML(stats, username) {
 
 /**
  * --- [MAJOR REVISION V7.1: Pre-Cache Progress Data]
- * This update fixes the "vertical red line" bug introduced in V7.0.
  * --- [MODIFIED v2] Added PFD Footer data binding
  * --- [MODIFIED v8] Added Donut Chart and Odometer logic
  * --- [MODIFIED v9] Added live updates for Flags and Times
  * --- [MODIFIED v11] Use airportsData for flags
  * --- [MODIFIED v12.1] Removed inline gradient from image loading
  * --- [MODIFIED v13 - YOUR FIX] Calculate live ETA and use ATD.
+ * --- [MODIFIED v14 - IDEA 2] Removed ALL VSD logic, re-routed data to new bar.
 */
 function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- Get all DOM elements ---
@@ -4603,28 +4114,18 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     const phaseIndicator = document.getElementById('ac-phase-indicator');
     const overviewPanel = document.getElementById('ac-overview-panel');
     
-    // --- VSD Elements ---
-    const vsdPanel = document.getElementById('vsd-panel');
-    const vsdSummaryVS = document.getElementById('ac-vs');
-    // const vsdSummaryDist = document.getElementById('ac-dist'); // Now in donut
-    // const vsdSummaryETE = document.getElementById('ac-ete'); // Now in odometer
-    const vsdAircraftIcon = document.getElementById('vsd-aircraft-icon');
-    const vsdGraphWindow = document.getElementById('vsd-graph-window');
-    const vsdGraphContent = document.getElementById('vsd-graph-content');
-    const vsdProfilePath = document.getElementById('vsd-profile-path');
-    const vsdFlownPath = document.getElementById('vsd-flown-path'); // <-- The red line
-    const vsdWpLabels = document.getElementById('vsd-waypoint-labels');
-
-    // --- [NEW] PFD Footer Elements ---
+    // --- [NEW] Data Bar Elements ---
     const nextWpEl = document.getElementById('ac-next-wp');
-    const nextWpDistValEl = document.getElementById('ac-next-wp-dist');
+    const nextWpDistEl = document.getElementById('ac-next-wp-dist');
+    const eteWpEl = document.getElementById('ac-ete-wp');
+    const gsEl = document.getElementById('ac-gs');
+    const destIcaoEl = document.getElementById('ac-dest-icao');
+    const destDistEl = document.getElementById('ac-dist');
+    const eteDestEl = document.getElementById('ac-ete');
+    const vsEl = document.getElementById('ac-vs');
 
-    // --- [NEW] Animated Data Panel Elements ---
-    const distDonutEl = document.getElementById('ac-dist-donut');
-    const distTextEl = document.getElementById('ac-dist');
-    const eteHrEl = document.getElementById('ac-ete-hr');
-    const eteMinEl = document.getElementById('ac-ete-min');
-
+    // --- [REMOVED] VSD, Donut, Odometer, and old PFD-footer elements ---
+    
     // --- [MODIFIED - YOUR FIX] Route Summary Bar Elements ---
     const atdEl = document.getElementById('ac-bar-atd'); // <-- Changed ID
     const etaEl = document.getElementById('ac-bar-eta');
@@ -4637,6 +4138,9 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     const originalFlatWaypoints = (plan && plan.flightPlanItems) ? flattenWaypointsFromPlan(plan.flightPlanItems) : [];
     const originalFlatWaypointObjects = (plan && plan.flightPlanItems) ? getFlatWaypointObjects(plan.flightPlanItems) : [];
     const hasPlan = originalFlatWaypoints.length >= 2;
+    // --- [NEW] Get arrival ICAO for the data bar ---
+    const arrivalIcao = hasPlan ? originalFlatWaypointObjects[originalFlatWaypointObjects.length - 1]?.name : 'N/A';
+
 
     let progress = 0, ete = '--:--', distanceToDestNM = 0;
     let totalDistanceNM = 0;
@@ -4666,8 +4170,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         }
     }
 
-    // --- [NEW in V7.1] Pre-calculate cumulative NM on the main waypoint objects ---
-    // This is required for the 'progressAlongRouteNM' calculation to work.
+    // --- [UNCHANGED] Pre-calculate cumulative NM on the main waypoint objects ---
     if (hasPlan) {
         let cumulativeDistNM = 0;
         let lastLat = originalFlatWaypointObjects[0].location.latitude;
@@ -4675,7 +4178,6 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
 
         for (let i = 0; i < originalFlatWaypointObjects.length; i++) {
             const wp = originalFlatWaypointObjects[i];
-            // Handle waypoints that might be missing location data
             if (!wp.location) continue; 
             const wpLat = wp.location.latitude;
             const wpLon = wp.location.longitude;
@@ -4687,14 +4189,14 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
             lastLat = wpLat;
             lastLon = wpLon;
         }
-        // Ensure totalDistanceNM matches the cumulative calculation
         totalDistanceNM = cumulativeDistNM;
     }
-    // --- [END NEW in V7.1] ---
+    // --- [END UNCHANGED] ---
 
     // --- Flight Plan Data Extraction (for flight phase) ---
     let nextWpName = '---';
     let nextWpDistNM = '---';
+    let eteWp = '--:--'; // <-- [NEW]
     let bestWpIndex = -1;
     let minScore = Infinity; // This will be distance in KM
     if (plan) { 
@@ -4723,6 +4225,16 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
             if (nextWp) {
                 nextWpName = nextWp.identifier || nextWp.name || 'N/A';
                 nextWpDistNM = (minScore / 1.852).toFixed(0);
+
+                // --- [NEW] Calculate ETE to Waypoint ---
+                const distToWpNM = minScore / 1.852;
+                if (baseProps.position.gs_kt > 50 && distToWpNM > 0) {
+                    const timeHours = distToWpNM / baseProps.position.gs_kt;
+                    const hours = Math.floor(timeHours);
+                    const minutes = Math.round((timeHours - hours) * 60);
+                    eteWp = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+                }
+                // --- [END NEW] ---
             }
         } else if (hasPlan && distanceToDestNM < 10 && distanceToDestNM > 0.5) {
             nextWpName = originalFlatWaypointObjects.length > 0 ? (originalFlatWaypointObjects[originalFlatWaypointObjects.length - 1].identifier || originalFlatWaypointObjects[originalFlatWaypointObjects.length - 1].name) : "DEST";
@@ -4730,17 +4242,16 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         } else if (hasPlan && distanceToDestNM <= 0.5) {
              nextWpName = "DEST";
              nextWpDistNM = "0";
+             eteWp = '00:00';
         }
     }
     
-    // --- [MODIFIED in V7.1] Calculate accurate progress along the planned route ---
-    // This logic now works because 'cumulativeNM' was pre-cached.
+    // --- [UNCHANGED] Calculate accurate progress along the planned route ---
     let progressAlongRouteNM = 0;
     if (hasPlan && bestWpIndex > 0) {
         const prevWp = originalFlatWaypointObjects[bestWpIndex - 1];
         const nextWp = originalFlatWaypointObjects[bestWpIndex];
         
-        // Check if cumulativeNM was successfully cached
         if (prevWp && nextWp && prevWp.cumulativeNM != null && nextWp.cumulativeNM != null) {
             const segmentTotalNM = nextWp.cumulativeNM - prevWp.cumulativeNM;
             const distToNextNM = minScore / 1.852; // minScore is distance in KM
@@ -4752,28 +4263,31 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
                 progressAlongRouteNM = prevWp.cumulativeNM;
             }
         } else {
-             // Fallback if caching somehow failed, ensure it's not 0
              progressAlongRouteNM = Math.max(0.01, totalDistanceNM - distanceToDestNM);
         }
     } else if (hasPlan && (bestWpIndex === 0 || bestWpIndex === -1) && distanceToDestNM >= 1.0) { 
-        // We are on the first leg or off-track, use the fallback.
-        // --- [FIX] --- Ensure fallback is never 0 at takeoff by comparing "as the crow flies" dist.
         progressAlongRouteNM = Math.max(0.01, totalDistanceNM - distanceToDestNM);
     } else if (hasPlan && distanceToDestNM < 1.0) { 
-        // We are at the destination
         progressAlongRouteNM = totalDistanceNM;
     }
-    // --- [END MODIFIED in V7.1] ---
+    // --- [END UNCHANGED] ---
 
 
-    // --- [NEW] Update PFD Footer Display ---
+    // --- [NEW] Update Data Bar Display ---
     const nextWpDisplay = nextWpName;
     const nextWpDistDisplay = (nextWpDistNM === '---' || isNaN(parseFloat(nextWpDistNM))) ? '--.-' : Number(nextWpDistNM).toFixed(1);
 
     if (nextWpEl) nextWpEl.textContent = nextWpDisplay;
-    if (nextWpDistValEl) {
-        nextWpDistValEl.innerHTML = `${nextWpDistDisplay}<span class="unit">NM</span>`;
-    }
+    if (nextWpDistEl) nextWpDistEl.innerHTML = `${nextWpDistDisplay}<span class="unit">NM</span>`;
+    if (eteWpEl) eteWpEl.textContent = eteWp;
+    if (gsEl) gsEl.innerHTML = `${Math.round(baseProps.position.gs_kt)}<span class="unit">KT</span>`;
+    
+    if (destIcaoEl) destIcaoEl.textContent = arrivalIcao;
+    if (destDistEl) destDistEl.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
+    if (eteDestEl) eteDestEl.textContent = ete;
+    
+    const vs = baseProps.position.vs_fpm || 0;
+    if (vsEl) vsEl.innerHTML = `${Math.round(vs)}<span class="unit">fpm</span>`;
     // --- [END NEW] ---
 
 
@@ -4793,21 +4307,21 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     let flightPhase = 'ENROUTE';
     let phaseClass = 'phase-enroute';
     let phaseIcon = 'fa-route';
-    const vs = baseProps.position.vs_fpm || 0;
+    // const vs = baseProps.position.vs_fpm || 0; // Already defined
     const altitude = baseProps.position.alt_ft || 0;
     const gs = baseProps.position.gs_kt || 0;
     let departureIcao = null;
-    let arrivalIcao = null;
+    let arrivalIcaoLocal = null; // Use local var to avoid conflict
     if (plan && Array.isArray(plan.flightPlanItems) && plan.flightPlanItems.length >= 2) {
         departureIcao = plan.flightPlanItems[0]?.identifier?.trim().toUpperCase();
-        arrivalIcao = plan.flightPlanItems[plan.flightPlanItems.length - 1]?.identifier?.trim().toUpperCase();
+        arrivalIcaoLocal = plan.flightPlanItems[plan.flightPlanItems.length - 1]?.identifier?.trim().toUpperCase();
     }
     const aircraftPos = { lat: baseProps.position.lat, lon: baseProps.position.lon, track_deg: baseProps.position.track_deg };
     let nearestRunwayInfo = null;
     if (hasPlan) {
         const distanceFlownKm = totalDistanceNM * 1.852 - distanceToDestNM * 1.852;
-        if (distanceToDestNM * 1.852 < distanceFlownKm && arrivalIcao) {
-             nearestRunwayInfo = getNearestRunway(aircraftPos, arrivalIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
+        if (distanceToDestNM * 1.852 < distanceFlownKm && arrivalIcaoLocal) {
+             nearestRunwayInfo = getNearestRunway(aircraftPos, arrivalIcaoLocal, THRESHOLD.RUNWAY_PROXIMITY_NM);
         } else if (departureIcao) {
              nearestRunwayInfo = getNearestRunway(aircraftPos, departureIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
         }
@@ -4826,7 +4340,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     const aglCheck = altitudeAGL !== null && altitudeAGL < THRESHOLD.ON_GROUND_AGL;
     const fallbackGroundCheck = altitudeAGL === null && gs < THRESHOLD.TAXI_MAX_GS && Math.abs(vs) < 150;
     const isOnGround = aglCheck || fallbackGroundCheck;
-    const isLinedUpForLanding = nearestRunwayInfo && nearestRunwayInfo.airport === arrivalIcao && nearestRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE;
+    const isLinedUpForLanding = nearestRunwayInfo && nearestRunwayInfo.airport === arrivalIcaoLocal && nearestRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE;
     if (isOnGround) {
         if (gs > THRESHOLD.TAXI_MAX_GS) {
             if (progress > 90) { flightPhase = 'LANDING ROLLOUT'; phaseClass = 'phase-approach'; phaseIcon = 'fa-plane-arrival';
@@ -4835,7 +4349,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         } else {
             const isStopped = gs <= THRESHOLD.HOLD_SHORT_GS;
             const isAtTerminal = (progress < THRESHOLD.PARKED_PROGRESS_START) || (progress > THRESHOLD.PARKED_PROGRESS_END);
-            const relevantIcao = progress < 50 ? departureIcao : arrivalIcao;
+            const relevantIcao = progress < 50 ? departureIcao : arrivalIcaoLocal;
             const closeRunwayInfo = getNearestRunway(aircraftPos, relevantIcao, THRESHOLD.HOLD_SHORT_PROXIMITY_NM);
             const isLinedUp = closeRunwayInfo && closeRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE;
             if (isLinedUp) { flightPhase = `LINED UP RWY ${closeRunwayInfo.ident}`; phaseIcon = 'fa-arrow-up'; phaseClass = 'phase-climb';
@@ -4872,311 +4386,8 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // ... (End of unchanged section) ...
 
 
-    // --- [NEW] VSD LOGIC ---
-    if (vsdPanel && hasPlan && vsdGraphContent && vsdAircraftIcon) {
-        // --- 1. Define VSD scales ---
-        const VSD_HEIGHT_PX = vsdGraphContent.clientHeight || 240; // Use 240 as fallback
-        const MAX_ALT_FT = 45000;
-        const Y_SCALE_PX_PER_FT = VSD_HEIGHT_PX / MAX_ALT_FT;
-        const FIXED_X_SCALE_PX_PER_NM = 4;
-        
-        // --- 2. Build the Profile (Only once per flight plan) ---
-        const planId = plan.flightPlanId || plan.id || 'unknown';
-        if (vsdPanel.dataset.profileBuilt !== 'true' || vsdPanel.dataset.planId !== planId) {
-            
-            // =================================================================
-            // --- [MODIFIED in V7.1] (Data sanitation for PLANNED line)
-            // =================================================================
-            // We use a deep copy because the altitude interpolation logic
-            // should not affect the original waypoint data.
-            let flatWaypointObjects = JSON.parse(JSON.stringify(originalFlatWaypointObjects));
-            
-            if (flatWaypointObjects.length > 0) {
-                const lastIdx = flatWaypointObjects.length - 1;
-
-                // --- Pass 1: Anchor Start and End Altitudes ---
-                if (flatWaypointObjects[0].altitude == null) {
-                    flatWaypointObjects[0].altitude = plan?.origin?.elevation_ft || 0;
-                }
-                if (flatWaypointObjects[lastIdx].altitude == null) {
-                    const prevAlt = (lastIdx > 0) ? flatWaypointObjects[lastIdx - 1]?.altitude : null;
-                    flatWaypointObjects[lastIdx].altitude = (prevAlt != null) ? prevAlt : (plan?.destination?.elevation_ft || 0);
-                }
-
-                // --- Pass 2: Sanitize implausible intermediate altitudes ---
-                for (let i = 1; i < lastIdx; i++) {
-                    const wp = flatWaypointObjects[i];
-                    if (wp.altitude == null || (typeof wp.altitude === 'number' && wp.altitude <= 0)) {
-                        wp.altitude = null;
-                    }
-                }
-                
-                // --- Pass 3: Interpolation Pass (Look-Ahead Gap Filler) ---
-                let lastValidAltIndex = 0; 
-                for (let i = 1; i < flatWaypointObjects.length; i++) {
-                    const wp = flatWaypointObjects[i];
-                    if (wp.altitude != null && typeof wp.altitude === 'number') {
-                        if (i > lastValidAltIndex + 1) {
-                            const gapStartIndex = lastValidAltIndex;
-                            const gapEndIndex = i;
-                            const startAlt = flatWaypointObjects[gapStartIndex].altitude;
-                            const endAlt = flatWaypointObjects[gapEndIndex].altitude;
-                            const numStepsInGap = gapEndIndex - gapStartIndex;
-
-                            for (let j = 1; j < numStepsInGap; j++) {
-                                const stepIndex = gapStartIndex + j;
-                                const fraction = j / numStepsInGap;
-                                const interpolatedAlt = startAlt + (endAlt - startAlt) * fraction;
-                                flatWaypointObjects[stepIndex].altitude = Math.round(interpolatedAlt);
-                            }
-                        }
-                        lastValidAltIndex = i;
-                    }
-                }
-            }
-            // =================================================================
-            // --- [END V6.5 FIX] ---
-            // =================================================================
-
-            // =================================================================
-            // --- [MODIFIED in V7.1] (Y-Axis & Label De-confliction)
-            // =================================================================
-
-            // --- Build Y-Axis ---
-            if (vsdGraphWindow && !vsdGraphWindow.querySelector('#vsd-y-axis')) {
-                let yAxisHtml = '<div id="vsd-y-axis">';
-                const altLabels = [10000, 20000, 30000, 40000];
-                for (const alt of altLabels) {
-                    const yPos = VSD_HEIGHT_PX - (alt * Y_SCALE_PX_PER_FT);
-                    yAxisHtml += `<div class="y-axis-label" style="top: ${yPos}px;">${alt / 1000}K</div>`;
-                }
-                yAxisHtml += '</div>';
-                vsdGraphWindow.insertAdjacentHTML('afterbegin', yAxisHtml);
-            }
-            
-            // --- Build Profile Path & Staggered Labels ---
-            let path_d = "";
-            let labels_html = "";
-            let current_x_px = 0;
-            
-            // --- De-confliction state ---
-            let last_label_x_px = -1000;
-            let stagger_level = 0; // 0 = high, 1 = low
-            const MIN_LABEL_SPACING_PX = 80; // Min px distance between label centers
-            
-            if (flatWaypointObjects.length === 0) return;
-
-            for (let i = 0; i < flatWaypointObjects.length; i++) {
-                const wp = flatWaypointObjects[i];
-                const wpAltFt = wp.altitude; 
-                const wpAltPx = VSD_HEIGHT_PX - (wpAltFt * Y_SCALE_PX_PER_FT);
-
-                // --- [MODIFIED in V7.1] Use pre-cached cumulativeNM ---
-                // wp.cumulativeNM was copied from originalFlatWaypointObjects
-                current_x_px = wp.cumulativeNM * FIXED_X_SCALE_PX_PER_NM;
-                // --- [END MODIFIED in V7.1] ---
-
-                if (i === 0) {
-                    path_d = `M ${current_x_px} ${wpAltPx}`; // Starts at X=0
-                } else {
-                    path_d += ` L ${current_x_px} ${wpAltPx}`;
-                }
-
-                // --- Label Staggering Logic ---
-                let label_top_px;
-                let label_class = '';
-                
-                if (current_x_px - last_label_x_px < MIN_LABEL_SPACING_PX) {
-                    // Too close! Use the other stagger level
-                    stagger_level = 1 - stagger_level; // Flip 0 to 1 or 1 to 0
-                } else {
-                    // Enough space, reset to default high
-                    stagger_level = 0;
-                }
-
-                if (stagger_level === 1) {
-                    // Low label
-                    label_class = 'low-label';
-                    label_top_px = wpAltPx + 12; // Position below line, plus 12px for tick
-                } else {
-                    // High label
-                    label_class = 'high-label';
-                    label_top_px = wpAltPx - 42; // Position above line, minus 42px (label height + tick)
-                }
-                
-                last_label_x_px = current_x_px; // Store this label's position
-
-                labels_html += `
-                    <div class="vsd-wp-label ${label_class}" style="left: ${current_x_px}px; top: ${label_top_px}px;">
-                        <span class="wp-name">${wp.identifier}</span>
-                        <span class="wp-alt">${Math.round(wpAltFt)}ft</span>
-                    </div>`;
-                // --- End Staggering Logic ---
-            }
-            
-            vsdGraphContent.style.width = `${current_x_px + 100}px`;
-            vsdProfilePath.closest('svg').style.width = `${current_x_px + 100}px`;
-            
-            vsdProfilePath.setAttribute('d', path_d);
-            vsdWpLabels.innerHTML = labels_html;
-            
-            vsdPanel.dataset.profileBuilt = 'true';
-            vsdPanel.dataset.planId = planId;
-            // =================================================================
-            // --- [END V6.6 FIX]
-            // =================================================================
-        }
-        
-        // =================================================================
-        // --- [MODIFIED in V7.0] (Build/Update Flown Altitude Path with SCALING)
-        // This logic is unchanged from V7.0, but will now work
-        // because `plannedProgressNM` is no longer 0.
-        // =================================================================
-        if (vsdFlownPath && hasPlan && originalFlatWaypointObjects.length > 0) {
-            let flown_path_d = "";
-            let lastFlownLat, lastFlownLon;
-
-            // --- [V6.9 FIX - START] (Filter stale data) ---
-            let currentFlightRoutePoints = [...sortedRoutePoints]; 
-            const originLat = plan?.origin?.latitude;
-            const originLon = plan?.origin?.longitude;
-            if (originLat != null && originLon != null && sortedRoutePoints.length > 10) {
-                let startIndex = -1;
-                for (let i = sortedRoutePoints.length - 1; i > 0; i--) {
-                    const point = sortedRoutePoints[i];
-                    if (!point.latitude || !point.longitude || point.altitude == null) continue;
-                    const distKm = getDistanceKm(point.latitude, point.longitude, originLat, originLon);
-                    if (point.altitude < 1000 && distKm < 25) {
-                        startIndex = i;
-                        break;
-                    }
-                }
-                if (startIndex !== -1) {
-                    currentFlightRoutePoints = sortedRoutePoints.slice(startIndex);
-                }
-            }
-            // --- [V6.9 FIX - END] ---
-
-            const fullFlownRoute = [];
-            if (currentFlightRoutePoints && currentFlightRoutePoints.length > 0) {
-                fullFlownRoute.push(...currentFlightRoutePoints); 
-                lastFlownLat = currentFlightRoutePoints[0].latitude;
-                lastFlownLon = currentFlightRoutePoints[0].longitude;
-            }
-            
-            fullFlownRoute.push({
-                latitude: baseProps.position.lat,
-                longitude: baseProps.position.lon,
-                altitude: baseProps.position.alt_ft
-            });
-
-            const flownPathPoints = []; // Store points for Pass 2
-            let totalActualFlownNM = 0; // Track total *actual* flown NM
-
-            if (fullFlownRoute.length > 0) {
-                if (!lastFlownLat) { // Handle case with no historical data
-                    lastFlownLat = fullFlownRoute[0].latitude;
-                    lastFlownLon = fullFlownRoute[0].longitude;
-                }
-
-                const startAltFt = originalFlatWaypointObjects[0]?.altitude || fullFlownRoute[0].altitude;
-                const startAltPx = VSD_HEIGHT_PX - (startAltFt * Y_SCALE_PX_PER_FT);
-
-                // --- Pass 1: Calculate actual flown distance and Y positions ---
-                for (let i = 0; i < fullFlownRoute.length; i++) {
-                    const point = fullFlownRoute[i];
-                    const wpAltFt = typeof point.altitude === 'number' ? point.altitude : 0;
-                    const wpAltPx = VSD_HEIGHT_PX - (wpAltFt * Y_SCALE_PX_PER_FT);
-                    const wpLat = point.latitude;
-                    const wpLon = point.longitude;
-                    
-                    let segmentDistNM = 0;
-                    if (i > 0) { 
-                        segmentDistNM = getDistanceKm(lastFlownLat, lastFlownLon, wpLat, wpLon) / 1.852;
-                    }
-                    totalActualFlownNM += segmentDistNM;
-
-                    flownPathPoints.push({ x_nm: totalActualFlownNM, y_px: wpAltPx }); // Store NM and Px
-
-                    lastFlownLat = wpLat;
-                    lastFlownLon = wpLon;
-                }
-                
-                // --- Pass 2: Build the scaled SVG path ---
-                const plannedProgressNM = progressAlongRouteNM;
-                
-                // [FIX] Ensure scaleFactor is never 0, even if plannedProgressNM is
-                const scaleFactor = (totalActualFlownNM > 0.1 && plannedProgressNM > 0.01) ? (plannedProgressNM / totalActualFlownNM) : 1;
-                
-                for (let i = 0; i < flownPathPoints.length; i++) {
-                    const point = flownPathPoints[i];
-                    const scaled_x_px = point.x_nm * scaleFactor * FIXED_X_SCALE_PX_PER_NM; 
-                    
-                    if (i === 0) {
-                        flown_path_d = `M 0 ${startAltPx}`;
-                        if (flownPathPoints.length === 1) {
-                            flown_path_d += ` L ${scaled_x_px} ${point.y_px}`;
-                        }
-                    } else {
-                        flown_path_d += ` L ${scaled_x_px} ${point.y_px}`;
-                    }
-                }
-                
-                vsdFlownPath.setAttribute('d', flown_path_d);
-            }
-        }
-        // =================================================================
-        // --- [END V7.0 LOGIC]
-        // =================================================================
-
-
-        // --- 3. Update Aircraft Icon Position (Vertical) ---
-        const currentAltPx = VSD_HEIGHT_PX - (altitude * Y_SCALE_PX_PER_FT);
-        vsdAircraftIcon.style.top = `${currentAltPx}px`;
-
-        // =================================================================
-        // --- 4. [MODIFIED in V7.0] Scroll the Graph (Horizontal) ---
-        // =================================================================
-        if (vsdGraphWindow && vsdGraphWindow.clientWidth > 0) {
-            // --- [FIX] Use the new accurate progress metric ---
-            const distanceFlownNM = progressAlongRouteNM; 
-            const scrollOffsetPx = (distanceFlownNM * FIXED_X_SCALE_PX_PER_NM);
-
-            const vsdViewportWidth = vsdGraphWindow.clientWidth;
-            const totalProfileWidthPx = vsdGraphContent.scrollWidth;
-            
-            const centerOffset = (vsdViewportWidth / 2) + 35; // 35px is Y-axis width
-            const desiredTranslateX = centerOffset - scrollOffsetPx;
-            
-            const maxTranslateX = 0;
-            const minTranslateX = Math.min(0, vsdViewportWidth - totalProfileWidthPx);
-
-            const finalTranslateX = Math.max(minTranslateX, Math.min(maxTranslateX, desiredTranslateX));
-
-            vsdGraphContent.style.transform = `translateX(${finalTranslateX - 35}px)`;
-
-            const iconLeftPx = scrollOffsetPx + finalTranslateX;
-            vsdAircraftIcon.style.left = `${iconLeftPx}px`;
-
-        } else {
-            // Fallback (unchanged)
-            // --- [FIX] Use the new accurate progress metric ---
-            const distanceFlownNM = progressAlongRouteNM;
-            const scrollOffsetPx = (distanceFlownNM * FIXED_X_SCALE_PX_PER_NM);
-            const translateX = 75 - scrollOffsetPx; 
-            vsdGraphContent.style.transform = `translateX(${translateX - 35}px)`;
-            vsdAircraftIcon.style.left = `75px`; // Set fallback icon pos
-        }
-        // =================================================================
-        // --- [END V7.0 FIX]
-        // =================================================================
-        
-        // --- 5. Update Summary Bar ---
-        // if (vsdSummaryDist) vsdSummaryDist.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
-        // if (vsdSummaryETE) vsdSummaryETE.textContent = ete;
-        if (vsdSummaryVS) vsdSummaryVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
-    }
-    // --- [END NEW VSD LOGIC] ---
+    // --- [REMOVED] ALL VSD LOGIC ---
+    // (The entire `if (vsdPanel...)` block has been removed)
 
 
     // --- Update Other DOM Elements ---
@@ -5187,20 +4398,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         phaseIndicator.innerHTML = `<i class="fa-solid ${phaseIcon}"></i> ${flightPhase}`;
     }
 
-    // --- [NEW] Update Donut and Odometer ---
-    if (distDonutEl) {
-        // Set the stroke-dasharray to (progress, 100)
-        distDonutEl.setAttribute('stroke-dasharray', `${progress.toFixed(0)}, 100`);
-    }
-    if (distTextEl) {
-        distTextEl.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
-    }
-    
-    // Update ETE Odometer
-    const [eteHr, eteMin] = ete.split(':');
-    updateOdometerDigit(eteHrEl, eteHr);
-    updateOdometerDigit(eteMinEl, eteMin);
-    // --- [END NEW] ---
+    // --- [REMOVED] Donut and Odometer logic ---
 
     // --- [MODIFIED - YOUR FIX] Update Times and Flags ---
     
