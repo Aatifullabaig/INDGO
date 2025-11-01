@@ -132,7 +132,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     
-
 // --- [REHAULED] Helper to inject custom CSS for new features ---
 function injectCustomStyles() {
     const styleId = 'sector-ops-custom-styles';
@@ -319,7 +318,9 @@ function injectCustomStyles() {
             height: 200px;
             background-size: cover;
             background-position: center;
-            border-radius: 0; /* Top window corners are already rounded */
+            /* --- [FIX V10] --- Remove bottom rounding to sit flush with bar */
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
             color: #fff;
             display: flex;
             flex-direction: column;
@@ -330,8 +331,12 @@ function injectCustomStyles() {
             content: '';
             position: absolute;
             inset: 0;
-            /* --- [FIX] Removed redundant background gradient --- */
-            /* This is now handled *only* by the JS function */
+            /* --- [FIX V10] ---
+              Removed the bottom-up gradient (linear-gradient(180deg,...))
+              as the bar is no longer an overlay. The top-down gradient
+              is still applied via JS for text readability.
+             --- [END FIX V10] ---
+            */
             z-index: 1;
         }
         
@@ -477,13 +482,15 @@ function injectCustomStyles() {
 
         /* 2. Route Summary Overlay (User Request) */
         .route-summary-overlay {
-            position: relative; 
-            z-index: 2;
+            /* --- [FIX V10] ---
+             REMOVED: position, z-index, backdrop-filter, top/left/right
+             This is no longer an overlay. It's a standard block element.
+             --- [END FIX V10] ---
+            */
             padding: 12px 20px;
-            /* --- [USER REQUEST FIX] Fade from transparent to solid --- */
-            background: linear-gradient(180deg, rgba(28, 30, 42, 0.0) 0%, #1C1E2A 100%);
-            backdrop-filter: blur(10px);
-            /* --- REMOVED: border-top --- */
+            /* --- [FIX V10] --- Use a solid background matching the tabs */
+            background: rgba(10, 12, 26, 0.4);
+            border-radius: 0; /* Flush with content above and below */
             
             display: grid;
             grid-template-columns: auto 1fr auto;
@@ -4017,6 +4024,8 @@ async function handleAircraftClick(flightProps, sessionId) {
  * --- [MODIFIED v7] Fixed tab bar position and icon
  * --- [MODIFIED v8] Added Donut Chart and Odometer
  * --- [MODIFIED v9] Added Flags and Times to Route Summary
+ * --- [MODIFIED v10] Moved Route Summary Bar out of image panel
+ * --- [MODIFIED v11] Use airportsData for flags
  */
 function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     const windowEl = document.getElementById('aircraft-info-window');
@@ -4080,8 +4089,13 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
     // --- [NEW] Get Times and Flags for Initial Render ---
     const etdTime = plan && plan.times?.sched_out ? formatTimeFromTimestamp(plan.times.sched_out) : '--:--';
     const etaTime = plan && plan.times?.sched_in ? formatTimeFromTimestamp(plan.times.sched_in) : '--:--';
-    const depCountryCode = plan && plan.origin?.country ? plan.origin.country.toLowerCase() : '';
-    const arrCountryCode = plan && plan.destination?.country ? plan.destination.country.toLowerCase() : '';
+
+    // --- [FIX v11] ---
+    // Get country code from our own airportsData using the ICAO, not the plan object.
+    const depCountryCode = airportsData[departureIcao]?.country ? airportsData[departureIcao].country.toLowerCase() : '';
+    const arrCountryCode = airportsData[arrivalIcao]?.country ? airportsData[arrivalIcao].country.toLowerCase() : '';
+    // --- [END FIX v11] ---
+
     const depFlagSrc = depCountryCode ? `https://flagcdn.com/w20/${depCountryCode}.png` : '';
     const arrFlagSrc = arrCountryCode ? `https://flagcdn.com/w20/${arrCountryCode}.png` : '';
     const depFlagDisplay = depCountryCode ? 'block' : 'none';
@@ -4112,31 +4126,32 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
                 </div>
             </div>
 
-            <div class="route-summary-overlay">
-                <div class="route-summary-airport" id="route-summary-dep">
-                    <div class="airport-line">
-                        <img src="${depFlagSrc}" class="country-flag" id="ac-bar-dep-flag" alt="${depCountryCode}" style="display: ${depFlagDisplay};">
-                        <span class="icao" id="ac-bar-dep">${departureIcao}</span>
-                    </div>
-                    <span class="time" id="ac-bar-etd">${etdTime} Z</span>
-                </div>
-
-                <div class="route-progress-container">
-                    <div class="route-progress-bar-container">
-                        <div class="progress-bar-fill" id="ac-progress-bar"></div>
-                    </div>
-                    <div class="flight-phase-indicator" id="ac-phase-indicator">ENROUTE</div>
-                </div>
-
-                <div class="route-summary-airport" id="route-summary-arr">
-                     <div class="airport-line">
-                        <span class="icao" id="ac-bar-arr">${arrivalIcao}</span>
-                        <img src="${arrFlagSrc}" class="country-flag" id="ac-bar-arr-flag" alt="${arrCountryCode}" style="display: ${arrFlagDisplay};">
-                    </div>
-                    <span class="time" id="ac-bar-eta">${etaTime} Z</span>
-                </div>
             </div>
+
+        <div class="route-summary-overlay">
+            <div class="route-summary-airport" id="route-summary-dep">
+                <div class="airport-line">
+                    <img src="${depFlagSrc}" class="country-flag" id="ac-bar-dep-flag" alt="${depCountryCode}" style="display: ${depFlagDisplay};">
+                    <span class="icao" id="ac-bar-dep">${departureIcao}</span>
+                </div>
+                <span class="time" id="ac-bar-etd">${etdTime} Z</span>
             </div>
+
+            <div class="route-progress-container">
+                <div class="route-progress-bar-container">
+                    <div class="progress-bar-fill" id="ac-progress-bar"></div>
+                </div>
+                <div class="flight-phase-indicator" id="ac-phase-indicator">ENROUTE</div>
+            </div>
+
+            <div class="route-summary-airport" id="route-summary-arr">
+                 <div class="airport-line">
+                    <span class="icao" id="ac-bar-arr">${arrivalIcao}</span>
+                    <img src="${arrFlagSrc}" class="country-flag" id="ac-bar-arr-flag" alt="${arrCountryCode}" style="display: ${arrFlagDisplay};">
+                </div>
+                <span class="time" id="ac-bar-eta">${etaTime} Z</span>
+            </div>
+        </div>
 
         <div class="ac-info-window-tabs">
             <button class="ac-info-tab-btn active" data-tab="ac-tab-flight-data">
@@ -4530,13 +4545,13 @@ function renderPilotStatsHTML(stats, username) {
         }
     }
 
-
 /**
  * --- [MAJOR REVISION V7.1: Pre-Cache Progress Data]
  * This update fixes the "vertical red line" bug introduced in V7.0.
  * --- [MODIFIED v2] Added PFD Footer data binding
  * --- [MODIFIED v8] Added Donut Chart and Odometer logic
  * --- [MODIFIED v9] Added live updates for Flags and Times
+ * --- [MODIFIED v11] Use airportsData for flags
 */
 function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- Get all DOM elements ---
@@ -5146,8 +5161,13 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     // --- [NEW] Update Times and Flags ---
     const etdTime = plan && plan.times?.sched_out ? formatTimeFromTimestamp(plan.times.sched_out) : '--:--';
     const etaTime = plan && plan.times?.sched_in ? formatTimeFromTimestamp(plan.times.sched_in) : '--:--';
-    const depCountryCode = plan && plan.origin?.country ? plan.origin.country.toLowerCase() : '';
-    const arrCountryCode = plan && plan.destination?.country ? plan.destination.country.toLowerCase() : '';
+    
+    // --- [FIX v11] ---
+    // Get country code from our own airportsData using the ICAO, not the plan object.
+    const depCountryCode = airportsData[departureIcao]?.country ? airportsData[departureIcao].country.toLowerCase() : '';
+    const arrCountryCode = airportsData[arrivalIcao]?.country ? airportsData[arrivalIcao].country.toLowerCase() : '';
+    // --- [END FIX v11] ---
+
     const depFlagSrc = depCountryCode ? `https://flagcdn.com/w20/${depCountryCode}.png` : '';
     const arrFlagSrc = arrCountryCode ? `https://flagcdn.com/w20/${arrCountryCode}.png` : '';
 
@@ -5195,6 +5215,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         }
     }
 }
+
     /**
      * (NEW) Clears old routes and draws all new routes originating from a selected airport.
      */
