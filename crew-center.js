@@ -132,6 +132,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     
+// --- [REHAULED] Helper to inject custom CSS for new features ---
 function injectCustomStyles() {
     const styleId = 'sector-ops-custom-styles';
     if (document.getElementById(styleId)) return;
@@ -338,26 +339,20 @@ function injectCustomStyles() {
             margin-bottom: -40px; 
         }
         
-        /* --- [MODIFIED GRADIENT] ---
-           This overlay now darkens the top (for text readability)
-           AND the bottom (for a smoother blend into the summary bar).
+        /* --- [FIXED GRADIENT] ---
+           This overlay provides a *subtle* hint of darkness at the top
+           for text readability, without darkening the whole image.
+           It's now controlled here in CSS, not in JavaScript.
         */
         .aircraft-overview-panel::before {
             content: '';
             position: absolute;
             inset: 0;
             z-index: 1;
-            background: 
-                /* Top gradient (for text readability) */
-                linear-gradient(180deg, 
-                    rgba(0, 0, 0, 0.4) 0%, 
-                    rgba(0, 0, 0, 0) 35%
-                ),
-                /* Bottom gradient (for smooth fade-out) */
-                linear-gradient(0deg, /* 0deg = bottom to top */
-                    rgba(0, 0, 0, 0.6) 0%,   /* Dark at the bottom */
-                    rgba(0, 0, 0, 0) 40%   /* Fades to transparent 40% up */
-                );
+            background: linear-gradient(180deg, 
+                rgba(0, 0, 0, 0.4) 0%,  /* Hint of dark at the top */
+                rgba(0, 0, 0, 0) 35%   /* Fades out quickly */
+            );
         }
         
         /* Container for top-left/right text */

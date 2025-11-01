@@ -1,16 +1,16 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v6.3 - Seamless Handle)
+ * MobileUIHandler Module (Creative HUD Rehaul - v6.4 - Route Bar Top)
  *
- * This version implements the "clean islands" concept AND redesigns the
- * content *within* the islands for a smoother, more modern HUD.
- *
- * REHAUL v6.3 CHANGES (Seamless Handle):
- * 1. REMOVED the 1px border separator from all .drawer-handle elements.
- * 2. REALLOCATED vertical space on the Mini Island to "move the data up."
- * - Handle height reduced to 20px (from 30px).
- * - Mini Data height increased to 70px (from 60px).
- * 3. This creates a "borderless" look that uses space more
- * intelligently, as requested.
+ * REHAUL v6.4 CHANGES (Route Bar Top):
+ * 1. MOVED the `.route-summary-overlay` (KSFO -> EKCH bar) to the top
+ * of all three bottom islands (Mini, Peek, and Expanded).
+ * 2. This element is now cloned into all three states for a consistent header.
+ * 3. REMOVED the old `#vsd-summary-bar` (3-widget layout) from the
+ * Mini Island (State 0) to fulfill the "erase anything else" request.
+ * 4. The Mini Island (State 0) now *only* shows the Route Summary Bar
+ * and the drawer handle.
+ * 5. CSS from V4 redesign has been removed, and new CSS for the
+ * mobile route bar has been added.
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -41,25 +41,18 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (HUD Rehaul v6.3 / Seamless Handle) Initialized.");
+        console.log("Mobile UI Handler (HUD Rehaul v6.4 / Route Bar Top) Initialized.");
     },
 
     /**
      * Injects all the CSS for the new HUD-themed floating islands.
      * ---
-     * [REHAUL v6.3 / SEAMLESS HANDLE]
-     * 1. Reduces handle height and increases mini-data height.
-     * 2. Removes border-bottom from .drawer-handle.
+     * [REHAUL v6.4 / ROUTE BAR TOP]
+     * 1. Removes all V4 redesign styles for the old mini-island content.
+     * 2. Sets #mobile-island-mini height to 'auto'.
+     * 3. Adds new styles for `.route-summary-wrapper-mobile` to style
+     * the route bar inside the islands.
      * ---
-     * [USER MODIFICATION / PEEK REDESIGN V7 - 2025-10-30]
-     * 1. This layout applies to State 1 (Peek Island).
-     * 2. PFD on left (80%), Data Panel on right (20%). <-- MODIFIED (Made PFD "bigger")
-     * 3. Rules to force PFD content to scale 100% to its container are active.
-     * 4. Data Panel items are "bubbles".
-     * 5. VSD is hidden in State 1.
-     * 6. PFD Footer is hidden in State 1.
-     * 7. PFD container now grows to fill the panel height.
-     * 8. State 2 (Expanded) is restored to its original vertical stacking layout.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -76,8 +69,8 @@ const MobileUIHandler = {
                 /* [MODIFIED v6.3] Island Dimensions */
                 --drawer-handle-height: 20px; /* <-- v6.3 Tighter handle */
                 
-                /* [USER REDESIGN v6.3] Mini Island Data Area Height */
-                --drawer-mini-data-height: 70px; /* <-- v6.3 More data room */
+                /* [REMOVED v6.4] Mini Island Data Area Height */
+                /* --drawer-mini-data-height: 70px; */
                 
                 --drawer-peek-content-height: 200px;
                 --island-bottom-margin: env(safe-area-inset-bottom, 15px);
@@ -158,6 +151,9 @@ const MobileUIHandler = {
                 transform: translateY(120%);
                 opacity: 0;
                 z-index: 1045;
+                
+                /* [NEW v6.4] All bottom islands must overflow hidden */
+                overflow: hidden;
             }
             
             /* Active State for ALL Bottom Islands */
@@ -166,18 +162,16 @@ const MobileUIHandler = {
                 opacity: 1;
             }
 
-            /* --- [MODIFIED v6.3] State 0: Mini Island --- */
+            /* --- [MODIFIED v6.4] State 0: Mini Island --- */
             #mobile-island-mini {
                 bottom: var(--island-bottom-margin);
-                /* [NEW] Total height is handle + data area */
-                height: calc(var(--drawer-handle-height) + var(--drawer-mini-data-height)); 
+                /* [MODIFIED v6.4] Height is auto-sized by content */
+                height: auto; 
                 cursor: pointer;
-                overflow: hidden;
                 
-                /* [NEW] Use flex to stack handle and content */
+                /* [NEW] Use flex to stack route bar and handle */
                 display: flex;
                 flex-direction: column; 
-                padding: 0; /* Handle/content have their own padding */
             }
 
             /* [NEW v6.2] Make the "pill" fainter on the mini-island */
@@ -185,18 +179,13 @@ const MobileUIHandler = {
                 opacity: 0.3;
             }
 
-            /* [NEW v6.3] Wrapper for the summary bar */
-            .mini-content-wrapper {
-                height: var(--drawer-mini-data-height); /* <-- Increased to 70px */
-                flex-grow: 1; /* Fill remaining space */
-                overflow: hidden;
-            }
+            /* [REMOVED v6.4] .mini-content-wrapper was here */
             
             /* --- [NEW] State 1: Peek Island --- */
             #mobile-island-peek {
                 bottom: var(--island-bottom-margin);
-                height: calc(var(--drawer-handle-height) + var(--drawer-peek-content-height));
-                overflow: hidden;
+                /* [MODIFIED v6.4] Height is now auto (route bar + handle + content) */
+                height: auto; 
             }
             
             /* --- [NEW] State 2: Expanded Island --- */
@@ -204,8 +193,67 @@ const MobileUIHandler = {
                 top: 280px; /* Sits below the top window */
                 bottom: var(--island-bottom-margin);
                 height: auto; /* Fills the space */
-                overflow: hidden; /* .drawer-content will scroll */
             }
+
+            /* ====================================================================
+            --- [NEW v6.4] Route Summary Bar Styling (Mobile)
+            ==================================================================== */
+            
+            /* [NEW] Wrapper for the Route Summary Bar */
+            .route-summary-wrapper-mobile {
+                flex-shrink: 0;
+                overflow: hidden;
+                /* [NEW] Ensure top corners are rounded */
+                border-top-left-radius: 16px;
+                border-top-right-radius: 16px;
+            }
+
+            /* [NEW] Override desktop styles for the route bar on mobile */
+            .route-summary-wrapper-mobile .route-summary-overlay {
+                /* Reset properties that fight the mobile layout */
+                position: relative; 
+                margin-bottom: 0;
+                
+                /* Use a simpler background, the gradient overlap is complex */
+                background: var(--hud-bg);
+                border-radius: 0; /* Wrapper handles rounding */
+                
+                /* Adjust padding for a tighter mobile look */
+                padding: 12px 15px;
+                
+                /* Force grid to 3 columns and scale down text */
+                grid-template-columns: auto 1fr auto;
+                gap: 12px;
+            }
+            .route-summary-wrapper-mobile .route-summary-airport .icao {
+                font-size: 1.0rem;
+            }
+            .route-summary-wrapper-mobile .route-summary-airport .time {
+                font-size: 0.75rem;
+                margin-top: 2px;
+            }
+            .route-summary-wrapper-mobile .route-summary-airport .country-flag {
+                width: 16px;
+            }
+            .route-summary-wrapper-mobile .flight-phase-indicator {
+                padding: 3px 10px;
+                font-size: 0.7rem;
+            }
+            /* [NEW] Hide the progress bar fill on Mini and Peek islands */
+            #mobile-island-mini .route-summary-wrapper-mobile .progress-bar-fill,
+            #mobile-island-peek .route-summary-wrapper-mobile .progress-bar-fill {
+                display: none;
+            }
+            /* [NEW] Make progress bar bg fainter on Mini/Peek */
+            #mobile-island-mini .route-summary-wrapper-mobile .route-progress-bar-container,
+            #mobile-island-peek .route-summary-wrapper-mobile .route-progress-bar-container {
+                 background: rgba(10, 12, 26, 0.4);
+            }
+            
+            /* ====================================================================
+            --- [END V6.4 NEW STYLES] ---
+            ==================================================================== */
+
 
             /* --- [MODIFIED v6.3] Drawer Handle (Used in ALL Bottom Islands) --- */
             .drawer-handle {
@@ -236,85 +284,23 @@ const MobileUIHandler = {
                 overflow-y: auto;
                 flex-grow: 1;
                 padding-bottom: env(safe-area-inset-bottom, 0);
+                /* [NEW v6.4] Explicitly set height for peek content */
+                height: var(--drawer-peek-content-height);
             }
             #mobile-island-peek .drawer-content {
                 overflow: hidden;
             }
+            /* [NEW v6.4] Expanded content must fill remaining space */
+            #mobile-island-expanded .drawer-content {
+                height: auto;
+            }
+            
             .drawer-content::-webkit-scrollbar { width: 6px; }
             .drawer-content::-webkit-scrollbar-track { background: transparent; }
             .drawer-content::-webkit-scrollbar-thumb { background-color: var(--hud-accent); border-radius: 10px; }
 
             /* ====================================================================
-            --- [USER REDESIGN V4] State 0: "Balanced" Widget Look ---
-            ==================================================================== */
-
-            /* [MODIFIED v6.3] The summary bar now lives inside the wrapper */
-            .mini-content-wrapper > #vsd-summary-bar {
-                display: grid;
-                grid-template-columns: 1fr 1fr 1fr;
-                gap: 0;
-                height: 100%;
-                /* [MODIFIED v6.3] More vertical padding due to 70px height */
-                padding: 12px 12px; 
-                box-sizing: border-box;
-                background: transparent;
-                border-bottom: none;
-                margin-bottom: 0;
-                align-items: center;
-            }
-
-            /* [MODIFIED v4] Item layout: Value on top, Label on bottom */
-            #vsd-summary-bar .vsd-summary-item {
-                flex-direction: column-reverse; /* [MODIFIED] Flipped back to Value on Top */
-                text-align: center;
-                justify-content: center;
-                padding: 0 4px;
-                gap: 6px; /* [MODIFIED] Increased gap for a "less cramped" feel */
-                overflow: hidden;
-            }
-
-            /* [MODIFIED v4] Data Label styling */
-            #vsd-summary-bar .vsd-summary-item .data-label {
-                font-size: 0.7rem; /* [MODIFIED] Smaller text */
-                color: #9fa8da;
-                text-transform: uppercase;
-                font-weight: 500; /* [MODIFIED] Lighter weight */
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                margin-top: 0;
-                opacity: 0.7; /* [NEW] De-emphasize for a cleaner look */
-            }
-
-            /* [MODIFIED v4] Data Value styling */
-            #vsd-summary-bar .vsd-summary-item .data-value {
-                font-size: 1.6rem; /* [MODIFIED] Smaller text */
-                font-weight: 600;
-                line-height: 1.1;
-                color: #fff;
-                
-                display: flex;
-                align-items: baseline;
-                justify-content: center;
-                gap: 4px;
-                
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-
-            /* [MODIFIED v4] Unit styling */
-            #vsd-summary-bar .vsd-summary-item .data-value .unit {
-                display: inline-block;
-                font-size: 0.9rem; /* [MODIFIED] Good companion size */
-                color: #9fa8da;
-                font-weight: 400;
-                margin-left: 1px;
-                opacity: 0.7; /* [NEW] Match the label's opacity */
-            }
-
-            /* ====================================================================
-            --- [END V4 REDESIGN] ---
+            --- [REMOVED v6.4] V4 REDESIGN WAS HERE ---
             ==================================================================== */
 
 
@@ -537,12 +523,12 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.2]
+     * [REHAUL v6.4]
      * Creates the new DOM structure for the HUD:
      * 1 Top Window + 3 Bottom Islands (Mini, Peek, Expanded).
      *
-     * v6.2 Change: Adds a drawer handle and content wrapper
-     * directly into the Mini Island for better UX affordance.
+     * v6.4 Change: Adds a `.route-summary-wrapper-mobile` to the top of
+     * ALL THREE bottom islands. Removes `.mini-content-wrapper` from Mini Island.
      */
     createSplitViewUI() {
         const viewContainer = document.getElementById('view-rosters');
@@ -559,32 +545,34 @@ const MobileUIHandler = {
         this.topWindowEl.className = 'mobile-aircraft-view';
         viewContainer.appendChild(this.topWindowEl);
 
-        // 3. [MODIFIED v6.2] Bottom Island - State 0 (Mini)
+        // 3. [MODIFIED v6.4] Bottom Island - State 0 (Mini)
         this.miniIslandEl = document.createElement('div');
         this.miniIslandEl.id = 'mobile-island-mini';
         this.miniIslandEl.className = 'mobile-island-bottom';
-        // [NEW v6.2] Add handle and content wrapper
+        // [MODIFIED v6.4] Add route bar wrapper + handle
         this.miniIslandEl.innerHTML = `
+            <div class="route-summary-wrapper-mobile"></div>
             <div class="drawer-handle"></div>
-            <div class="mini-content-wrapper"></div>
         `;
         viewContainer.appendChild(this.miniIslandEl);
 
-        // 4. [NEW] Bottom Island - State 1 (Peek)
+        // 4. [MODIFIED v6.4] Bottom Island - State 1 (Peek)
         this.peekIslandEl = document.createElement('div');
         this.peekIslandEl.id = 'mobile-island-peek';
         this.peekIslandEl.className = 'mobile-island-bottom';
         this.peekIslandEl.innerHTML = `
+            <div class="route-summary-wrapper-mobile"></div>
             <div class="drawer-handle"></div>
             <div class="drawer-content"></div>
         `;
         viewContainer.appendChild(this.peekIslandEl);
         
-        // 5. [NEW] Bottom Island - State 2 (Expanded)
+        // 5. [MODIFIED v6.4] Bottom Island - State 2 (Expanded)
         this.expandedIslandEl = document.createElement('div');
         this.expandedIslandEl.id = 'mobile-island-expanded';
         this.expandedIslandEl.className = 'mobile-island-bottom';
         this.expandedIslandEl.innerHTML = `
+            <div class="route-summary-wrapper-mobile"></div>
             <div class="drawer-handle"></div>
             <div class="drawer-content"></div>
         `;
@@ -611,34 +599,46 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.2]
+     * [REHAUL v6.4]
      * Moves content from the original window into the new island components.
      * 1. Top Overview -> Top Window
-     * 2. Summary Bar -> Mini Island's ".mini-content-wrapper"
+     * 2. Route Summary Bar -> CLONED to Mini, Peek, and Expanded Islands
      * 3. Main Content -> CLONED to Peek Island, MOVED to Expanded Island
+     * 4. VSD Summary Bar (old) -> Is NO LONGER MOVED. Stays in Main Content.
      */
     populateSplitView(sourceWindow) {
         if (!this.topWindowEl || !this.miniIslandEl || !this.peekIslandEl || !this.expandedIslandEl) return;
 
         // Find content containers
-        const miniContentContainer = this.miniIslandEl.querySelector('.mini-content-wrapper'); // <-- NEW
+        const miniRouteContainer = this.miniIslandEl.querySelector('.route-summary-wrapper-mobile'); // <-- NEW
+        const peekRouteContainer = this.peekIslandEl.querySelector('.route-summary-wrapper-mobile'); // <-- NEW
+        const expandedRouteContainer = this.expandedIslandEl.querySelector('.route-summary-wrapper-mobile'); // <-- NEW
+        
         const peekContentContainer = this.peekIslandEl.querySelector('.drawer-content');
         const expandedContentContainer = this.expandedIslandEl.querySelector('.drawer-content');
-        if (!miniContentContainer || !peekContentContainer || !expandedContentContainer) return; // <-- UPDATED
+        if (!peekContentContainer || !expandedContentContainer || !miniRouteContainer || !peekRouteContainer || !expandedRouteContainer) return;
 
         // Find original content pieces
         const topOverviewPanel = sourceWindow.querySelector('.aircraft-overview-panel');
-        const vsdSummaryBar = sourceWindow.querySelector('#vsd-summary-bar');
+        const routeSummaryBar = sourceWindow.querySelector('.route-summary-overlay'); // <-- NEW
         const mainFlightContent = sourceWindow.querySelector('.unified-display-main-content');
         
+        // [REMOVED v6.4] VSD Summary Bar logic is gone
+
         // 1. Move Top Panel
         if (topOverviewPanel) {
             this.topWindowEl.appendChild(topOverviewPanel);
         }
-
-        // 2. Move Summary Bar to Mini Island
-        if (vsdSummaryBar && miniContentContainer) {
-            miniContentContainer.appendChild(vsdSummaryBar); // <-- MODIFIED
+        
+        // 2. [NEW v6.4] Clone and Move Route Summary Bar to ALL three islands
+        if (routeSummaryBar) {
+            const clonedRouteBar1 = routeSummaryBar.cloneNode(true);
+            const clonedRouteBar2 = routeSummaryBar.cloneNode(true);
+            const clonedRouteBar3 = routeSummaryBar.cloneNode(true);
+            
+            miniRouteContainer.appendChild(clonedRouteBar1);
+            peekRouteContainer.appendChild(clonedRouteBar2);
+            expandedRouteContainer.appendChild(clonedRouteBar3);
         }
         
         // 3. [CRITICAL] Clone and Move Main Content
@@ -837,10 +837,11 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.2]
+     * [REHAUL v6.4]
      * Animates out all islands, moves *original* content back,
      * *destroys* cloned content, and cleans up.
-     * * v6.2: Finds summary bar inside .mini-content-wrapper
+     * v6.4: Removes all logic for `#vsd-summary-bar` as it is
+     * no longer moved separately from its parent.
      */
     closeActiveWindow(force = false) {
         if (this.contentObserver) this.contentObserver.disconnect();
@@ -849,27 +850,21 @@ const MobileUIHandler = {
         if (this.activeWindow && this.topWindowEl && this.miniIslandEl && this.peekIslandEl && this.expandedIslandEl) {
             const topOverviewPanel = this.topWindowEl.querySelector('.aircraft-overview-panel');
             
-            // [MODIFIED v6.2] Find summary bar in its wrapper
-            const miniContentWrapper = this.miniIslandEl.querySelector('.mini-content-wrapper');
-            const vsdSummaryBar = miniContentWrapper ? miniContentWrapper.querySelector('#vsd-summary-bar') : null;
+            // [REMOVED v6.4] Logic for vsdSummaryBar removed
             
             // Get the ORIGINAL content from the expanded island
             const mainFlightContent = this.expandedIslandEl.querySelector('.unified-display-main-content');
             // Get the CLONE from the peek island to destroy it
             const clonedFlightContent = this.peekIslandEl.querySelector('.unified-display-main-content');
             
+            // [REMOVED v6.4] Destroy route bar clones (happens when islands are removed)
+
             if (topOverviewPanel) {
                 this.activeWindow.appendChild(topOverviewPanel);
             }
             
-            if (vsdSummaryBar && mainFlightContent) {
-                const aircraftDisplayMain = mainFlightContent.querySelector('#aircraft-display-main');
-                if (aircraftDisplayMain) {
-                    aircraftDisplayMain.prepend(vsdSummaryBar); 
-                } else {
-                    mainFlightContent.prepend(vsdSummaryBar);
-                }
-            }
+            // [REMOVED v6.4] Logic to re-prepend vsdSummaryBar is gone.
+            // It now stays inside mainFlightContent, where it belongs.
 
             if (mainFlightContent) {
                 this.activeWindow.appendChild(mainFlightContent);
