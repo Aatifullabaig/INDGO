@@ -5734,6 +5734,7 @@ async function updateSectorOpsSecondaryData() {
     // END: NEW LIVE FLIGHTS & ATC/NOTAM LOGIC FOR SECTOR OPS MAP
     // ====================================================================
 
+
     /**
      * Main view switching logic.
      */
@@ -5741,10 +5742,10 @@ async function updateSectorOpsSecondaryData() {
         sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
         mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
         
-        // --- [NEW] Theme Switching Logic ---
-        // Remove the light theme class from the main container
+        // --- [MODIFIED] Theme Switching Logic ---
+        // Remove the light theme class from the main container by default
         mainContentContainer.classList.remove('hub-light-theme');
-        // --- [END NEW] ---
+        // --- [END MODIFIED] ---
 
         // --- FIX: START ---
         // Explicitly hide Sector Ops pop-out windows and their recall buttons
@@ -5792,15 +5793,21 @@ async function updateSectorOpsSecondaryData() {
 
         // Conditionally start the correct loop based on the new view
         if (viewId === 'view-duty-status') {
-            // --- [NEW] ---
+            // --- [MODIFIED] ---
             // Add the light theme class for the hub
             mainContentContainer.classList.add('hub-light-theme');
-            // --- [END NEW] ---
+            // --- [END MODIFIED] ---
             
             // initializeLiveMap(); // <-- This was for the old map, no longer needed here.
         } else if (viewId === 'view-rosters') {
             initializeSectorOpsView();
+        
+        // --- [NEW BLOCK] ---
+        // Add the light theme for the dispatch page as well
+        } else if (viewId === 'view-flight-plan') {
+            mainContentContainer.classList.add('hub-light-theme');
         }
+        // --- [END NEW BLOCK] ---
     };
 
     // --- New function to fetch fleet data ---
