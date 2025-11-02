@@ -2762,126 +2762,241 @@ ul.notam-list li:last-child {
 /* END: AIRPORT INFO POPUP REVAMP                             */
 /* ========================================================== */
 /* ================================================== */
-/* START: V3 PILOT HUB REDESIGN STYLES                */
+/* START: V4 PILOT HUB REHAUL (LIGHT THEME)           */
 /* ================================================== */
 
-/* --- 1. The new "Welcome Home" Greeting --- */
-.hub-welcome-header {
-    padding: 1rem 0 2rem 0;
-    text-align: left;
+/* --- 1. Main Page Theme --- */
+.main-content.hub-light-theme {
+    /* This is the new page background */
+    background-color: #f4f7fa;
+    /* This is the new base text color */
+    color: #4a5568; 
 }
 
-.hub-welcome-header h1 {
-    font-size: 2.5rem;
+/* --- 2. New Page Header (Replaces Glass Card) --- */
+.hub-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start; /* Align to top for pills */
+    flex-wrap: wrap; /* Stack on mobile */
+    gap: 1.5rem;
+    padding: 1rem 0 2rem 0; /* Match old welcome header padding */
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid #e2e8f0; /* Subtle divider */
+}
+
+.hub-page-header h1 {
+    font-size: 2.25rem;
     font-weight: 700;
-    color: #ffffff;
+    color: #1a202c; /* Darker heading text */
     margin: 0;
     line-height: 1.2;
 }
 
-.hub-welcome-header h2 {
-    font-size: 1.5rem;
-    font-weight: 400;
-    color: var(--dashboard-text-muted);
+.hub-page-header .hub-stat-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.hub-stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    color: #4a5568;
+}
+
+.hub-stat-pill .rank-badge-img {
+    height: 18px;
+}
+
+.hub-stat-pill strong {
+    color: #1a202c;
+    font-family: 'monospace', sans-serif;
+}
+
+.hub-stat-pill .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+.hub-stat-pill .status-dot.on-duty {
+    background-color: #28a745;
+    box-shadow: 0 0 6px #28a745;
+}
+.hub-stat-pill .status-dot.on-rest {
+    background-color: #dc3545;
+    box-shadow: 0 0 6px #dc3545;
+}
+
+/* --- 3. New 2-Column Grid Layout --- */
+.hub-grid-layout {
+    display: grid;
+    grid-template-columns: 1fr; /* Mobile-first (stacking) */
+    gap: 2rem;
+}
+
+@media (min-width: 992px) {
+    .hub-grid-layout {
+        /* 2-column layout on desktop */
+        grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    }
+}
+
+.hub-main-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.hub-sidebar-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+/* --- 4. New Light Theme Card Style --- */
+.hub-card {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+}
+.hub-card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+.hub-card-header h3 {
     margin: 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #1a202c;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.hub-card-body {
+    padding: 1.5rem;
 }
 
+/* --- 5. Component Restyling for Light Theme --- */
 
-/* --- 2. The Standalone Status Header (Formerly inside the card) --- */
-.hub-header.redesigned {
-    /* This section is now a standalone full-width bar */
-    background: var(--primary-glass);
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 1.5rem 2rem;
-    border-top: 5px solid var(--rank-accent-color, transparent);
-    box-shadow: 0 0 25px var(--rank-glow-color, rgba(0,0,0,0));
-    transition: all 0.4s ease;
-    margin-bottom: 2rem; /* Add margin to separate from content below */
+/* Pending Test Banner (no change, looks good) */
+.pending-test-banner {
+    border-radius: 12px;
 }
 
-/* --- 3. The New "White" Content Wrapper --- */
-.hub-content-wrapper.light-theme {
-    background-color: #f8f9fa; /* The "white" background */
-    color: #212529; /* Dark text for contrast */
-    border-radius: 10px;
-    padding: 2rem;
-    margin-bottom: 2rem;
-    border: 1px solid #dee2e6;
-    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-}
-
-/* --- 4. Overrides for content inside the new light wrapper --- */
-.hub-content-wrapper.light-theme .on-duty-header {
-    margin-bottom: 1.5rem;
-}
-.hub-content-wrapper.light-theme .on-duty-header p {
-    color: #212529;
-}
-.hub-content-wrapper.light-theme .on-duty-header .muted {
-    color: #6c757d;
-}
-
-/* Style the checklist for the light theme */
-.hub-content-wrapper.light-theme .roster-checklist {
+/* Roster Checklist (On Duty) */
+.hub-card-body .roster-checklist {
     gap: 0.5rem;
 }
-.hub-content-wrapper.light-theme .roster-leg-item {
-    background-color: #ffffff;
-    border: 1px solid #e9ecef;
-    color: #212529;
+.hub-card-body .roster-leg-item {
+    background-color: #f8f9fa;
+    border: 1px solid #e2e8f0;
+    color: #4a5568;
 }
-.hub-content-wrapper.light-theme .roster-leg-item .flight-number {
-    color: #000;
+.hub-card-body .roster-leg-item .flight-number {
+    color: #1a202c;
+    font-weight: 600;
 }
-.hub-content-wrapper.light-theme .roster-leg-item.completed {
+.hub-card-body .roster-leg-item.completed {
     background-color: #e6f7ec;
-    border-left-color: var(--success-color);
+    border-left-color: #28a745;
 }
-.hub-content-wrapper.light-theme .roster-leg-item.completed .flight-number {
+.hub-card-body .roster-leg-item.completed .flight-number {
     color: #6c757d;
-    text-decoration: line-through;
 }
 
-/* Style the crew rest notice for the light theme */
-.hub-content-wrapper.light-theme .crew-rest-notice {
-    background-color: #fff9e6;
-    border-left-color: var(--warning-color);
-    color: #594b2d;
+/* Crew Rest Timer (On Rest) */
+.hub-card-body .crew-rest-notice {
+    padding: 0;
+    background: none;
+    border: none;
+    color: #4a5568;
 }
-.hub-content-wrapper.light-theme .crew-rest-timer-display {
-    background-color: #ffffff;
-    border: 1px solid #e9ecef;
+.hub-card-body .crew-rest-timer-display {
+    background-color: #f8f9fa;
+    border: 1px solid #e2e8f0;
     color: var(--warning-color);
 }
 
-/* Style the "Ready for Duty" cards for the light theme */
-.hub-content-wrapper.light-theme .hub-action-grid {
-    margin-top: 0; /* No extra margin needed */
+/* Next Assignment / Location (On Rest) */
+.hub-card-body .hub-action-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-top: 0;
 }
-.hub-content-wrapper.light-theme .hub-action-grid h4 {
-    color: #000;
+.hub-card-body .location-card,
+.hub-card-body .next-step-card {
+    background-color: #f8f9fa;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1rem;
 }
-.hub-content-wrapper.light-theme .hub-action-grid p {
-    color: #495057;
+.hub-card-body h4 {
+    color: #1a202c;
+    margin-top: 0;
+    margin-bottom: 1rem;
+}
+.hub-card-body p {
+    color: #4a5568;
+}
+.hub-card-body .location-card .weather-details p {
+    margin-bottom: 0.5rem;
+}
+.hub-card-body .location-card .weather-details code {
+    background-color: #e2e8f0;
+    color: #4a5568;
+}
+.hub-card-body .next-step-card .featured-roster-summary {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+}
+.hub-card-body .next-step-card .featured-roster-summary strong {
+    color: #1a202c;
+}
+.hub-card-body .next-step-card .featured-roster-summary span {
+    color: #4a5568;
 }
 
-/* --- 5. Remove the old card style --- */
-.pilot-hub-card {
-    /* This class is no longer used as the main wrapper, */
-    /* but we remove its padding/border just in case. */
-    padding: 0;
-    border: none;
-    background: none;
-    box-shadow: none;
-    border-top: none;
+/* Leaderboards (Restyled for Light Theme) */
+.leaderboard-card.redesigned {
+    background-color: #ffffff; /* Use new card bg */
+    border: 1px solid #e2e8f0; /* Use new border */
+    box-shadow: none; /* Shadow is on .hub-card */
+    padding: 0; /* Padding is handled by .hub-card-body */
 }
-
-/* --- 6. Remove the map section --- */
-.live-map-section {
-    display: none !important;
+.leaderboard-card.redesigned h3 {
+    display: none; /* Hide redundant "This Week" title */
+}
+.leaderboard-card.redesigned h4 {
+    color: var(--rank-accent-color, #001B94); /* Use accent */
+}
+.leaderboard-entry {
+    padding: 0.5rem 0.25rem;
+}
+.leaderboard-entry .pilot-info strong {
+    color: #1a202c;
+}
+.leaderboard-entry.rank-1 {
+    background-color: #fffbeb;
+    border: 1px solid #fde68a;
+    padding: 0.5rem;
+}
+.leaderboard-entry.rank-1 .pilot-info strong {
+    color: #78350f;
+}
+.leaderboard-entry.rank-1 .rank-position {
+    color: #f59e0b;
 }
 
 /* ================================================== */
-/* END: V3 PILOT HUB REDESIGN STYLES                  */
+/* END: V4 PILOT HUB REHAUL                           */
 /* ================================================== */

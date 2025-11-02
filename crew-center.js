@@ -5740,6 +5740,11 @@ async function updateSectorOpsSecondaryData() {
     const switchView = (viewId) => {
         sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
         mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
+        
+        // --- [NEW] Theme Switching Logic ---
+        // Remove the light theme class from the main container
+        mainContentContainer.classList.remove('hub-light-theme');
+        // --- [END NEW] ---
 
         // --- FIX: START ---
         // Explicitly hide Sector Ops pop-out windows and their recall buttons
@@ -5787,12 +5792,16 @@ async function updateSectorOpsSecondaryData() {
 
         // Conditionally start the correct loop based on the new view
         if (viewId === 'view-duty-status') {
-            initializeLiveMap();
+            // --- [NEW] ---
+            // Add the light theme class for the hub
+            mainContentContainer.classList.add('hub-light-theme');
+            // --- [END NEW] ---
+            
+            // initializeLiveMap(); // <-- This was for the old map, no longer needed here.
         } else if (viewId === 'view-rosters') {
             initializeSectorOpsView();
         }
     };
-
 
     // --- New function to fetch fleet data ---
     async function fetchFleetData() {
@@ -5906,67 +5915,110 @@ async function updateSectorOpsSecondaryData() {
         </div>
     `;
 
-    const createHubHeaderHTML = (pilot, statusText) => `
-        <div class="hub-header redesigned">
-            <div class="hub-main-info">
-                <div class="hub-rank-display">
-                    ${getRankBadgeHTML(pilot.rank, { showImage: true, showName: true, containerClass: 'rank-badge hub-rank-badge' })}
+    const createHubHeaderHTML = (pilot, statusText) => {
+        // --- NEW: V4 Header Bar ---
+        
+        // Determine duty status text and class
+        let statusClass, statusLabel;
+        if (pilot.dutyStatus === 'ON_DUTY') {
+            statusClass = 'on-duty';
+            statusLabel = 'On Duty';
+        } else {
+            statusClass = 'on-rest';
+            statusLabel = 'On Rest';
+        }
+
+        return `
+            <div class="hub-page-header">
+                <div class="hub-header-greeting">
+                    <h1>Welcome, ${pilot.name.split(' ')[0]}</h1>
                 </div>
-                <div class="hub-hours-display">
-                    <span class="hours-label">Flight Hours</span>
-                    <span class="hours-value">${(pilot.flightHours || 0).toFixed(1)}</span>
+                <div class="hub-stat-pills">
+                    <div class="hub-stat-pill">
+                        ${getRankBadgeHTML(pilot.rank, { showImage: true, imageClass: 'rank-badge-img' })}
+                        <span>${pilot.rank}</span>
+                    </div>
+                    <div class="hub-stat-pill">
+                        <i class="fa-solid fa-clock"></i>
+                        <span>Hours: <strong>${(pilot.flightHours || 0).toFixed(1)}</strong></span>
+                    </div>
+                    <div class="hub-stat-pill">
+                        <div class="status-dot ${statusClass}"></div>
+                        <span>Status: <strong>${statusLabel}</strong></span>
+                    </div>
                 </div>
             </div>
-            <div class="hub-status-bar">
-                ${statusText}
-            </div>
-        </div>
-    `;
+        `;
+    };
+
 
     // [REPLACE THIS FUNCTION]
     const renderPilotHubView = async (pilot, leaderboardsHTML) => {
         const dutyStatusView = document.getElementById('view-duty-status');
         if (crewRestInterval) clearInterval(crewRestInterval);
 
+        // --- NEW V4 Rehaul ---
+
         // 1. Get the optional "Pending" banner
         const pendingBanner = pilot.promotionStatus === 'PENDING_TEST' ? getPendingTestBannerHTML() : '';
         
-        // 2. Get the new "Welcome" greeting
-        const welcomeGreeting = `
-            <div class="hub-welcome-header">
-                <h1>Hello ${pilot.name.split(' ')[0]},</h1>
-                <h2>Welcome Home.</h2>
-            </div>
-        `;
-
-        // 3. Get the correct status text for the header
-        let statusText = '';
-        let dutyStatusHTML = ''; // This will hold the *content* for the new light-themed card
-
+        // 2. Determine Duty Status
+        let statusText = ''; // This is no longer used for the header
+        let mainContentHTML = ''; // This will hold the "main column" content
+        
         if (pilot.dutyStatus === 'ON_DUTY') {
-            statusText = '<i class="fa-solid fa-plane-departure"></i> Current Status: 🟢 On Duty';
-            dutyStatusHTML = await renderOnDutyContent(pilot);
+            statusText = 'On Duty';
+            mainContentHTML = await renderOnDutyContent(pilot);
         } else {
-            dutyStatusHTML = await renderOnRestContent(pilot);
-            // This logic is now inside renderOnRestContent's return
-            statusText = (pilot.timeUntilNextDutyMs > 0) ?
-                '<i class="fa-solid fa-bed"></i> Current Status: 🔴 On Rest (Mandatory)' :
-                '<i class="fa-solid fa-user-clock"></i> Current Status: 🔴 On Rest';
+            mainContentHTML = await renderOnRestContent(pilot);
+            statusText = (pilot.timeUntilNextDutyMs > 0) ? 'On Rest (Mandatory)' : 'On Rest';
         }
         
-        // 4. Create the standalone header bar
+        // 3. Create the new V4 Page Header
         const hubHeaderHTML = createHubHeaderHTML(pilot, statusText);
 
-        // 5. Assemble the new, open layout
-        //    (Welcome -> Banner -> Status Header -> Duty Content -> Leaderboards)
-        dutyStatusView.innerHTML = `
-            ${welcomeGreeting}
-            ${pendingBanner}
-            ${hubHeaderHTML}
-            ${dutyStatusHTML}
-            ${leaderboardsHTML}
-        `; // The Live Map HTML is removed
+        // 4. Get Weather/Location Card (for the sidebar)
+        const locationICAO = (await (await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } })).json()).searchCriteria?.searched?.[0];
+        let locationCardHTML = '';
+        if (locationICAO) {
+            const weather = await window.WeatherService.fetchAndParseMetar(locationICAO);
+            locationCardHTML = `
+                <div class="hub-card">
+                    <div class="hub-card-header">
+                        <h3><i class="fa-solid fa-location-dot"></i> Location & Weather</h3>
+                    </div>
+                    <div class="hub-card-body">
+                        <div class="location-card" style="padding: 0; border: none; background: none;">
+                            <strong style="font-size: 1.8rem; font-family: monospace; color: var(--rank-accent-color, #001B94);">${locationICAO}</strong>
+                            <div class="weather-details" style="margin-top: 1rem; font-size: 0.9rem;">
+                                <p><strong>Wind:</strong> ${weather.wind}</p>
+                                <p><strong>Temp:</strong> ${weather.temp}</p>
+                                <p><strong>Cond:</strong> ${weather.condition}</p>
+                                <code style="font-family: monospace; opacity: 0.7; margin-top: 0.5rem; color: #6c757d; display: block; padding: 0.5rem; border-radius: 4px; background: #f8f9fa; border: 1px solid #e2e8f0;">${weather.raw}</code>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
 
+        // 5. Assemble the new 2-column layout
+        dutyStatusView.innerHTML = `
+            ${hubHeaderHTML}
+            ${pendingBanner}
+            
+            <div class="hub-grid-layout">
+                <div class="hub-main-col">
+                    ${mainContentHTML}
+                </div>
+                
+                <div class="hub-sidebar-col">
+                    ${locationCardHTML}
+                    ${leaderboardsHTML}
+                </div>
+            </div>
+        `; 
+        
         // 6. Set dashboard theme (Unchanged)
         const dashboardContainer = document.querySelector('.dashboard-container');
         if (dashboardContainer && pilot.rank) {
@@ -6004,16 +6056,23 @@ async function updateSectorOpsSecondaryData() {
 
     const renderOnRestContent = async (pilot) => {
         let content = '';
-        // Removed title logic, as it's handled in renderPilotHubView
-
+        
         if (pilot.timeUntilNextDutyMs > 0) {
             // --- This content is for the "Mandatory Rest" state ---
             content = `
-                <div class="crew-rest-notice">
-                    <p>A minimum <strong>8-hour rest period</strong> is required after completing a duty. You may go on duty again after this period has elapsed.</p>
-                    <p>Time remaining until next duty:</p>
-                    <div class="crew-rest-timer-display" id="crew-rest-timer">--:--:--</div>
-                </div>`;
+                <div class="hub-card">
+                    <div class="hub-card-header">
+                        <h3><i class="fa-solid fa-bed"></i> Mandatory Crew Rest</h3>
+                    </div>
+                    <div class="hub-card-body">
+                        <div class="crew-rest-notice">
+                            <p>A minimum <strong>8-hour rest period</strong> is required after completing a duty. You may go on duty again after this period has elapsed.</p>
+                            <p>Time remaining until next duty:</p>
+                            <div class="crew-rest-timer-display" id="crew-rest-timer">--:--:--</div>
+                        </div>
+                    </div>
+                </div>
+            `;
         } else {
             // --- This content is for the "Ready for Duty" state ---
             try {
@@ -6022,78 +6081,60 @@ async function updateSectorOpsSecondaryData() {
 
                 const rosterData = await rosterResponse.json();
                 const topRoster = rosterData.rosters?.[0];
-                const locationICAO = rosterData.searchCriteria?.searched?.[0];
 
-                const weather = await window.WeatherService.fetchAndParseMetar(locationICAO);
-
-                let locationCardHTML = '';
-                if (locationICAO) {
-                    locationCardHTML = `
-                        <div class="location-card" style="flex: 1; min-width: 280px; background-color: #ffffff; padding: 1.5rem; border-radius: 8px; border: 1px solid #e9ecef;">
-                            <h4 style="margin-top:0; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-location-dot"></i> Current Location</h4>
-                            <strong style="font-size: 1.8rem; font-family: monospace; color: var(--accent-color);">${locationICAO}</strong>
-                            <div class="weather-details" style="margin-top: 1rem; font-size: 0.9rem;">
-                                <p><strong>Wind:</strong> ${weather.wind}</p>
-                                <p><strong>Temp:</strong> ${weather.temp}</p>
-                                <p><strong>Cond:</strong> ${weather.condition}</p>
-                                <p style="font-family: monospace; opacity: 0.7; margin-top: 0.5rem; color: #6c757d;">${weather.raw}</p>
-                            </div>
-                        </div>
-                    `;
-                }
-
-                let rosterCardHTML = '';
                 if (topRoster) {
                     const firstLeg = topRoster.legs[0];
                     const lastLeg = topRoster.legs[topRoster.legs.length - 1];
                     const fullRoute = `${firstLeg.departure} → ${lastLeg.arrival}`;
 
-                    rosterCardHTML = `
-                        <div class="next-step-card" style="flex: 1.5; min-width: 300px; background-color: #ffffff; padding: 1.5rem; border-radius: 8px; border: 1px solid #e9ecef; border-left: 3px solid var(--rank-accent-color, var(--accent-color));">
-                            <h4 style="margin-top: 0;">Ready for Your Next Assignment?</h4>
-                            <p>Based on your location, we recommend this roster:</p>
-                            <div class="featured-roster-summary" style="background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 1rem; border-radius: 5px; margin: 1rem 0; display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <strong style="display: block; font-size: 1.2rem;">${topRoster.name}</strong>
-                                    <span style="color: #6c757d;">${fullRoute}</span>
-                                </div>
-                                <span style="font-size: 1.1rem; font-weight: bold; color: var(--accent-color);">${(topRoster.totalFlightTime || 0).toFixed(1)} hrs</span>
+                    content = `
+                        <div class="hub-card">
+                            <div class="hub-card-header">
+                                <h3><i class="fa-solid fa-suitcase-rolling"></i> Next Assignment</h3>
                             </div>
-                            <button class="cta-button" id="go-to-roster-btn">View Roster</button>
+                            <div class="hub-card-body">
+                                <div class="next-step-card" style="padding: 0; border: none; background: none;">
+                                    <h4>Ready for Your Next Assignment?</h4>
+                                    <p>Based on your location, we recommend this roster:</p>
+                                    <div class="featured-roster-summary">
+                                        <div>
+                                            <strong style="display: block; font-size: 1.2rem;">${topRoster.name}</strong>
+                                            <span style="color: #6c757d;">${fullRoute}</span>
+                                        </div>
+                                        <span style="font-size: 1.1rem; font-weight: bold; color: var(--rank-accent-color, #001B94);">${(topRoster.totalFlightTime || 0).toFixed(1)} hrs</span>
+                                    </div>
+                                    <button class="cta-button" id="go-to-roster-btn" style="margin-top: 1rem;">View Roster</button>
+                                </div>
+                            </div>
                         </div>
                     `;
                 } else {
-                    rosterCardHTML = `<p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>`;
+                    content = `
+                        <div class="hub-card">
+                            <div class="hub-card-header">
+                                <h3><i class="fa-solid fa-plane-up"></i> Ready for Duty</h3>
+                            </div>
+                            <div class="hub-card-body">
+                                <p>You are eligible for your next assignment. To begin, please select a roster from the <strong>Sector Ops</strong> page.</p>
+                            </div>
+                        </div>
+                    `;
                 }
-
-                content = `
-                    <div class="hub-action-grid" style="display: flex; flex-wrap: wrap; gap: 1.5rem;">
-                        ${locationCardHTML}
-                        ${rosterCardHTML}
-                    </div>
-                `;
 
             } catch (error) {
                 console.error("Failed to fetch hub details:", error);
-                content = `<p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>`;
+                content = `<div class="hub-card"><div class="hub-card-body"><p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p></div></div>`;
             }
         }
         
-        // Removed the liveMapHTML
-        
-        // --- NEW: Wrap content in the light-theme card ---
-        return `
-            <div class="hub-content-wrapper light-theme">
-                ${content}
-            </div>
-        `;
+        return content;
     };
 
 
     const renderOnDutyContent = async (pilot) => {
         // The pilot.currentRoster field holds the ID of the active roster.
         if (!pilot.currentRoster) {
-            return `<div class="hub-content-wrapper light-theme"><p>Error: On duty but no roster data found.</p></div>`;
+            return `<div class="hub-card"><div class="hub-card-body"><p>Error: On duty but no roster data found.</p></div></div>`;
         }
 
         try {
@@ -6113,38 +6154,37 @@ async function updateSectorOpsSecondaryData() {
             const filedPirepsForRoster = allPireps.filter(p => p.rosterLeg?.rosterId === currentRoster.rosterId);
             const filedFlightNumbers = new Set(filedPirepsForRoster.map(p => p.flightNumber));
 
-            // Removed headerTitle and hubHeaderHTML creation
-            // Removed liveMapHTML
-
-            // --- NEW: Wrap content in the light-theme card ---
+            // --- NEW: V4 Card Layout ---
             return `
-                <div class="hub-content-wrapper light-theme">
-                    <div class="on-duty-header">
-                        <div>
-                            <p style="margin: 0;"><strong>Active Roster:</strong> ${currentRoster.name}</p>
-                            <p class="muted" style="margin: 0;">Complete your assigned flights via the <strong>Dispatch</strong> page.</p>
-                        </div>
-                        <button id="end-duty-btn" class="end-duty-btn">Complete Duty Day</button>
+                <div class="hub-card">
+                    <div class="hub-card-header">
+                        <h3><i class="fa-solid fa-list-check"></i> Active Roster: ${currentRoster.name}</h3>
                     </div>
-                    <div class="roster-checklist">
-                        ${currentRoster.legs.map(leg => {
-                const isCompleted = filedFlightNumbers.has(leg.flightNumber);
-                const reqRank = leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft);
-                return `
-                              <div class="roster-leg-item ${isCompleted ? 'completed' : ''}">
-                                <span class="status-icon">${isCompleted ? '✅' : '➡️'}</span>
-                                <strong class="flight-number">${leg.flightNumber}</strong>
-                                <span class="route">${leg.departure} - ${leg.arrival}</span>
-                                <span class="leg-badges">
-                                    ${getRankBadgeHTML(reqRank, { showImage: true, showName: false, imageClass: 'roster-req-rank-badge' })}
-                                </span>
-                              </div>`;
-            }).join('')}
+                    <div class="hub-card-body">
+                        <div class="on-duty-header" style="padding: 0; margin-bottom: 1.5rem;">
+                            <p class="muted" style="margin: 0;">Complete your assigned flights via the <strong>Dispatch</strong> page.</p>
+                            <button id="end-duty-btn" class="end-duty-btn">Complete Duty Day</button>
+                        </div>
+                        <div class="roster-checklist">
+                            ${currentRoster.legs.map(leg => {
+                    const isCompleted = filedFlightNumbers.has(leg.flightNumber);
+                    const reqRank = leg.rankUnlock || deduceRankFromAircraftFE(leg.aircraft);
+                    return `
+                                  <div class="roster-leg-item ${isCompleted ? 'completed' : ''}">
+                                    <span class="status-icon">${isCompleted ? '<i class="fa-solid fa-check-circle" style="color: #28a745;"></i>' : '<i class="fa-solid fa-circle-notch" style="color: #6c757d;"></i>'}</span>
+                                    <strong class="flight-number">${leg.flightNumber}</strong>
+                                    <span class="route">${leg.departure} - ${leg.arrival}</span>
+                                    <span class="leg-badges">
+                                        ${getRankBadgeHTML(reqRank, { showImage: true, showName: false, imageClass: 'roster-req-rank-badge' })}
+                                    </span>
+                                  </div>`;
+                }).join('')}
+                        </div>
                     </div>
                 </div>
                 `;
         } catch (error) {
-            return `<div class="hub-content-wrapper light-theme"><p class="error-text">${error.message}</p></div>`;
+            return `<div class="hub-card"><div class="hub-card-body"><p class="error-text">${error.message}</p></div></div>`;
         }
     };
 
@@ -6261,25 +6301,31 @@ async function updateSectorOpsSecondaryData() {
             if (!weeklyRes.ok || !monthlyRes.ok) throw new Error('Could not load leaderboard data.');
             const weeklyData = await weeklyRes.json();
             const monthlyData = await monthlyRes.json();
+            
+            // --- NEW: V4 Layout ---
             return `
-                <div class="content-card">
-                    <h2><i class="fa-solid fa-trophy"></i> Leaderboards</h2>
-                    <div class="leaderboards-container">
-                        <div class="leaderboard-card redesigned">
-                            <h3>This Week</h3>
-                            ${renderLeaderboardList('Hours', weeklyData.topByHours, 'weeklyFlightHours')}
-                            ${renderLeaderboardList('Sectors', weeklyData.topBySectors, 'weeklySectors')}
-                        </div>
-                        <div class="leaderboard-card redesigned">
-                            <h3>This Month</h3>
-                            ${renderLeaderboardList('Hours', monthlyData.topByHours, 'leaderboardMonthlyFlightHours')}
-                            ${renderLeaderboardList('Sectors', monthlyData.topBySectors, 'monthlySectors')}
+                <div class="hub-card">
+                    <div class="hub-card-header">
+                        <h3><i class="fa-solid fa-trophy"></i> Leaderboards</h3>
+                    </div>
+                    <div class="hub-card-body">
+                        <div class="leaderboards-container" style="grid-template-columns: 1fr; gap: 0;">
+                            <div class="leaderboard-card redesigned">
+                                ${renderLeaderboardList('Hours', weeklyData.topByHours, 'weeklyFlightHours')}
+                                ${renderLeaderboardList('Sectors', weeklyData.topBySectors, 'weeklySectors')}
+                            </div>
+                            <div class="leaderboard-card redesigned">
+                                ${renderLeaderboardList('Hours', monthlyData.topByHours, 'leaderboardMonthlyFlightHours')}
+                                ${renderLeaderboardList('Sectors', monthlyData.topBySectors, 'monthlySectors')}
+                            </div>
                         </div>
                     </div>
-                </div>`;
+                </div>
+            `;
+            // --- END V4 ---
         } catch (error) {
             console.error('Leaderboard fetch error:', error);
-            return `<div class="content-card"><h2><i class="fa-solid fa-trophy"></i> Leaderboards</h2><p>Could not load leaderboards.</p></div>`;
+            return `<div class="hub-card"><div class="hub-card-header"><h3><i class="fa-solid fa-trophy"></i> Leaderboards</h3></div><div class="hub-card-body"><p>Could not load leaderboards.</p></div></div>`;
         }
     };
 
