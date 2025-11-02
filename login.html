@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Staff Login - INDGO AIR Virtual</title>
+    <title>Crew Center Login - INDGO AIR Virtual</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,7 +11,96 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
     <link rel="icon" href="/images/indgo.png" type="image/x-icon">
     <style>
-        /* CSS for password toggle icon */
+        /* === NEW: Body & Layout Enhancement === */
+        html, body {
+            height: 100%; /* Ensure html and body take full height */
+        }
+        
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .main-container {
+            /* * NEW: Use Flexbox to center content
+             * This replaces the old inline style
+             */
+            flex-grow: 1; /* Takes up remaining vertical space */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem; /* Padding for small screens */
+            text-align: center;
+        }
+
+        /* === NEW: Animation === */
+        @keyframes slideUpFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in {
+            /* Apply the new, smoother animation */
+            animation: slideUpFadeIn 0.6s ease-out forwards;
+        }
+        
+        /* === NEW: Title Styling === */
+        .fade-in > h2 {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-size: 2.25rem; /* Slightly larger title */
+            margin-bottom: 2rem;
+            color: #333; /* Darker text */
+        }
+
+        /* === NEW: Modern Form Card === */
+        /* Target only the main login form, not the footer link */
+        #login-form.form-container {
+            max-width: 420px;
+            width: 100%;
+            background: #ffffff;
+            /* Softer shadow for depth */
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+            border-radius: 12px; /* Softer corners */
+            padding: 2.5rem;
+            text-align: left; /* Align form content left */
+            border: 1px solid #e9ecef; /* Subtle border */
+        }
+
+        /* === NEW: Smoother Inputs === */
+        .form-input {
+            /* Add transitions for smooth focus effect */
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .form-input:focus {
+            /* Add a "glow" effect when focused */
+            border-color: #0d6efd; /* Example: Bootstrap primary blue */
+            box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.15);
+            outline: none; /* Remove default outline */
+        }
+
+        /* === NEW: Interactive Button === */
+        .cta-button {
+            /* Add transitions for smooth hover/click */
+            transition: background-color 0.3s ease, transform 0.2s ease, opacity 0.3s ease;
+        }
+        .cta-button:hover {
+            opacity: 0.9; /* Standard hover effect */
+        }
+        .cta-button:active {
+            /* "Press" effect when clicked */
+            transform: scale(0.98);
+        }
+
+        /* === Password Toggle (Moved from old style) === */
         .password-container {
             position: relative;
         }
@@ -21,9 +110,18 @@
             right: 15px;
             transform: translateY(-50%);
             cursor: pointer;
-            /* CHANGED: Darker color for better visibility */
-            color: #6c757d; 
+            color: #6c757d; /* Darker color for better visibility */
+            transition: color 0.2s ease;
         }
+        .password-toggle-icon:hover {
+            color: #333;
+        }
+        
+        /* Footer link styling */
+        .form-footer-link {
+            margin-top: 1.5rem; /* Give it space from the card */
+        }
+
     </style>
 </head>
 <body>
@@ -60,9 +158,10 @@
         </nav>
     </header>
 
-    <main class="main-container" style="padding-top: 5rem; text-align: center;">
+    <main class="main-container">
         <div class="fade-in">
-            <h2>Staff Portal Login</h2>
+            <h2>Crew Center Login</h2>
+            
             <form id="login-form" class="form-container">
                 <div class="form-group">
                     <label for="email">Email</label>
@@ -99,7 +198,7 @@
                     Have an invite code? <a href="register.html">Create an account</a>.
                 </p>
             </div>
-            </div>
+        </div>
     </main>
     
     <footer class="site-footer">
