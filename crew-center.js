@@ -4001,14 +4001,20 @@ async function handleAircraftClick(flightProps, sessionId) {
                 type: 'line',
                 source: flownLayerId,
                 paint: {
-                    // --- [NEW] Color-code line based on 'avgAltitude' property ---
+                    // --- [MODIFIED] ---
+                    // Switched from 'step' to 'interpolate' for a smooth gradient
+                    // and added more color stops.
                     'line-color': [
-                        'step',
+                        'interpolate',
+                        ['linear'],
                         ['get', 'avgAltitude'],
-                        '#e6e600', // Yellow for < 10,000 ft
-                        10000, '#ff9900', // Orange for 10,000 - 28,999 ft
-                        29000, '#00BFFF'  // Deep Sky Blue for >= 29,000 ft
+                        0,     '#e6e600', // Yellow (Ground / Low)
+                        10000, '#ff9900', // Orange (Climb)
+                        20000, '#ff3300', // Red (Mid-Climb)
+                        29000, '#00BFFF', // Blue (Cruise)
+                        38000, '#9400D3'  // Purple (High Cruise)
                     ],
+                    // --- [END MODIFICATION] ---
                     'line-width': 4,
                     'line-opacity': 0.9
                 }
