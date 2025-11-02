@@ -3846,7 +3846,64 @@ function getFlatWaypointObjects(items) {
 
 
 
-// --- [REPLACE THIS FUNCTION] ---
+/**
+ * --- [NEW HELPER] Generates an altitude-segmented GeoJSON FeatureCollection for the flown route.
+ * Breaks the route into segments, each with an 'avgAltitude' property for color-coding.
+ * @param {Array} sortedPoints - Array of historical route point objects.
+ * @param {object} currentPosition - The aircraft's current position object.
+ * @returns {object} A GeoJSON FeatureCollection.
+ */
+function generateAltitudeColoredRoute(sortedPoints, currentPosition) {
+    const features = [];
+    
+    // Create a single array of all points
+    const allPoints = [
+        ...sortedPoints.map(p => ({
+            longitude: p.longitude,
+            latitude: p.latitude,
+            altitude: p.altitude
+        })),
+        {
+            longitude: currentPosition.lon,
+            latitude: currentPosition.lat,
+            altitude: currentPosition.alt_ft
+        }
+    ];
+
+    for (let i = 0; i < allPoints.length - 1; i++) {
+        const p1 = allPoints[i];
+        const p2 = allPoints[i + 1];
+
+        // Skip segments with invalid data
+        if (!p1 || !p2 || p1.longitude == null || p1.latitude == null || p2.longitude == null || p2.latitude == null) {
+            continue;
+        }
+
+        const coords = [
+            [p1.longitude, p1.latitude],
+            [p2.longitude, p2.latitude]
+        ];
+        
+        const alt1 = p1.altitude || 0;
+        const alt2 = p2.altitude || 0;
+        const avgAltitude = (alt1 + alt2) / 2;
+
+        features.push({
+            type: 'Feature',
+            geometry: {
+                type: 'LineString',
+                coordinates: coords
+            },
+            properties: {
+                avgAltitude: avgAltitude
+            }
+        });
+    }
+
+    return { type: 'FeatureCollection', features: features };
+}
+
+
 async function handleAircraftClick(flightProps, sessionId) {
     if (!flightProps || !flightProps.flightId) return;
 
@@ -3901,6 +3958,9 @@ async function handleAircraftClick(flightProps, sessionId) {
     windowEl.innerHTML = `<div class="spinner-small" style="margin: 2rem auto;"></div><p style="text-align: center;">Loading flight data...</p>`;
 
     try {
+        // --- [NEW] Define the layer ID for the flown path ---
+        const flownLayerId = `flown-path-${flightProps.flightId}`;
+        
         const [planRes, routeRes] = await Promise.all([
             fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/plan`),
             fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/route`)
@@ -3910,8 +3970,6 @@ async function handleAircraftClick(flightProps, sessionId) {
         const plan = (planData && planData.ok) ? planData.plan : null;
         const routeData = routeRes.ok ? await routeRes.json() : null;
         
-        // --- [MODIFIED] ---
-        // Get the *initial* sorted route points for the first render
         let sortedRoutePoints = [];
         if (routeData && routeData.ok && Array.isArray(routeData.route) && routeData.route.length > 0) {
             sortedRoutePoints = routeData.route.sort((a, b) => {
@@ -3920,72 +3978,49 @@ async function handleAircraftClick(flightProps, sessionId) {
                 return timeA - timeB;
             });
         }
-        // --- [END MODIFIED] ---
 
         // NEW: Cache data for stats view
         cachedFlightDataForStatsView = { flightProps, plan };
         
-        // --- [MODIFIED] ---
         // Pass the *initial* historical route data to the info window builder
         populateAircraftInfoWindow(flightProps, plan, sortedRoutePoints);
         
         // --- [NEW] Perform the *first* geocode call immediately ---
         fetchAndDisplayGeocode(flightProps.position.lat, flightProps.position.lon);
-        // --- [END NEW] ---
 
-        const currentPosition = [flightProps.position.lon, flightProps.position.lat];
-        const flownLayerId = `flown-path-${flightProps.flightId}`;
-        let allCoordsForBounds = [currentPosition];
+        // --- [NEW] Generate the initial altitude-colored route ---
+        const routeFeatureCollection = generateAltitudeColoredRoute(sortedRoutePoints, flightProps.position);
 
-        // ⬇️ === START OF DATA PLOTTING FIX ===
-        let historicalRoute = [];
-        // --- [MODIFIED] Use the pre-sorted 'sortedRoutePoints' ---
-        if (sortedRoutePoints.length > 0) {
-            // 2. Now map the (chronologically sorted) points to [lon, lat]
-            historicalRoute = sortedRoutePoints.map(p => [p.longitude, p.latitude]);
+        if (!sectorOpsMap.getSource(flownLayerId)) {
+            sectorOpsMap.addSource(flownLayerId, {
+                type: 'geojson',
+                data: routeFeatureCollection
+            });
+            sectorOpsMap.addLayer({
+                id: flownLayerId,
+                type: 'line',
+                source: flownLayerId,
+                paint: {
+                    // --- [NEW] Color-code line based on 'avgAltitude' property ---
+                    'line-color': [
+                        'step',
+                        ['get', 'avgAltitude'],
+                        '#e6e600', // Yellow for < 10,000 ft
+                        10000, '#ff9900', // Orange for 10,000 - 28,999 ft
+                        29000, '#00BFFF'  // Deep Sky Blue for >= 29,000 ft
+                    ],
+                    'line-width': 4,
+                    'line-opacity': 0.9
+                }
+            }, 'sector-ops-live-flights-layer'); // Ensure it's drawn below aircraft
         }
-        // ⬆️ === END OF DATA PLOTTING FIX ===
+
+        // --- [NEW] Store layer ID for live updates ---
+        sectorOpsLiveFlightPathLayers[flightProps.flightId] = {
+            flown: flownLayerId
+        };
         
-        if (historicalRoute.length > 0) {
-            
-            // The map projection is now 'globe', so we no longer need densifyRoute.
-            // We just use the original (but now sorted) sparse points.
-            const completeFlownPath = [...historicalRoute, currentPosition];
-            
-            // Use the sorted, non-densified path for calculating the map bounds
-            allCoordsForBounds.push(...historicalRoute);
-
-            if (!sectorOpsMap.getSource(flownLayerId)) {
-                sectorOpsMap.addSource(flownLayerId, {
-                    type: 'geojson',
-                    data: { 
-                        type: 'Feature', 
-                        geometry: { 
-                            type: 'LineString', 
-                            // Use the sorted, non-densified path
-                            coordinates: completeFlownPath 
-                        } 
-                    }
-                });
-                sectorOpsMap.addLayer({
-                    id: flownLayerId,
-                    type: 'line',
-                    source: flownLayerId,
-                    paint: { 'line-color': '#00b894', 'line-width': 4, 'line-opacity': 0.9 }
-                }, 'sector-ops-live-flights-layer');
-            }
-
-            // --- Store the layer ID and the coordinates array for future updates ---
-            sectorOpsLiveFlightPathLayers[flightProps.flightId] = {
-                flown: flownLayerId,
-                coordinates: completeFlownPath // Store the sorted path
-            };
-        }
-        
-        if (allCoordsForBounds.length > 1) {
-            const bounds = allCoordsForBounds.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(allCoordsForBounds[0], allCoordsForBounds[0]));
-            sectorOpsMap.fitBounds(bounds, { padding: 80, maxZoom: 10, duration: 1000 });
-        }
+        // --- [REMOVED] The automatic zoom-to-fit block (`fitBounds`) ---
         
         // --- [NEW] Start the slow geocode update interval (e.g., 60 seconds) ---
         activeGeocodeUpdateInterval = setInterval(() => {
@@ -4036,13 +4071,18 @@ async function handleAircraftClick(flightProps, sessionId) {
                     // --- Logic to update the info window (Unchanged) ---
                     updatePfdDisplay(updatedFlight.position);
                     
-                    // --- [MODIFIED] ---
                     // Pass the NEWLY fetched historical data
                     updateAircraftInfoWindow(updatedFlight, plan, updatedSortedRoutePoints);
                     
-                    // --- [START OF USER MODIFICATION] ---
-                    // Map icon and trail updates are handled globally.
-                    // --- [END OF USER MODIFICATION] ---
+                    // --- [NEW] Live update for the 2D altitude-colored trail ---
+                    const layerId = sectorOpsLiveFlightPathLayers[flightProps.flightId]?.flown;
+                    const source = layerId ? sectorOpsMap.getSource(layerId) : null;
+                    
+                    if (source) {
+                        const newRouteData = generateAltitudeColoredRoute(updatedSortedRoutePoints, updatedFlight.position);
+                        source.setData(newRouteData);
+                    }
+                    // --- [END NEW] ---
 
                 } else {
                     // Flight no longer found, stop the interval
