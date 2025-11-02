@@ -3537,9 +3537,8 @@ function setupAircraftWindowEvents() {
         }
     }
 
-// [REPLACE THIS FUNCTION]
-// ⬇️ MODIFIED: This function is modified to load 21 icons (regular, member, staff)
-// and use a 'case' expression to select the correct icon.
+
+// ⬇️ MODIFIED: Added 'wrap: true' to the map constructor
 async function initializeSectorOpsMap(centerICAO) {
     if (!MAPBOX_ACCESS_TOKEN) {
         document.getElementById('sector-ops-map-fullscreen').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
@@ -3555,9 +3554,8 @@ async function initializeSectorOpsMap(centerICAO) {
         center: centerCoords,
         zoom: 4.5,
         interactive: true,
-        // ⬇️ === RECOMMENDED RENDERING FIX ===
-        projection: 'globe' 
-        // ⬆️ === END OF RECOMMENDED RENDERING FIX ===
+        projection: 'globe',
+        wrap: true // ⬅️ *** ADD THIS LINE ***
     });
 
     // --- [NEW] Set globe-specific settings on style load ---
@@ -3846,12 +3844,11 @@ function getFlatWaypointObjects(items) {
 
 
 
+// [REPLACE THIS FUNCTION]
 /**
- * --- [NEW HELPER] Generates an altitude-segmented GeoJSON FeatureCollection for the flown route.
+ * --- [FIXED HELPER] Generates an altitude-segmented GeoJSON FeatureCollection for the flown route.
  * Breaks the route into segments, each with an 'avgAltitude' property for color-coding.
- * @param {Array} sortedPoints - Array of historical route point objects.
- * @param {object} currentPosition - The aircraft's current position object.
- * @returns {object} A GeoJSON FeatureCollection.
+ * --- [MODIFIED] Now densifies long segments to prevent polar/antimeridian wrapping issues.
  */
 function generateAltitudeColoredRoute(sortedPoints, currentPosition) {
     const features = [];
@@ -3870,6 +3867,10 @@ function generateAltitudeColoredRoute(sortedPoints, currentPosition) {
         }
     ];
 
+    // --- NEW: Configuration for densification ---
+    const DENSITY_THRESHOLD_KM = 200; // Densify any segment longer than 200km
+    const NUM_INTERMEDIATE_POINTS = 5; // Add 5 intermediate points for each long segment
+
     for (let i = 0; i < allPoints.length - 1; i++) {
         const p1 = allPoints[i];
         const p2 = allPoints[i + 1];
@@ -3879,25 +3880,63 @@ function generateAltitudeColoredRoute(sortedPoints, currentPosition) {
             continue;
         }
 
-        const coords = [
-            [p1.longitude, p1.latitude],
-            [p2.longitude, p2.latitude]
-        ];
-        
         const alt1 = p1.altitude || 0;
         const alt2 = p2.altitude || 0;
-        const avgAltitude = (alt1 + alt2) / 2;
 
-        features.push({
-            type: 'Feature',
-            geometry: {
-                type: 'LineString',
-                coordinates: coords
-            },
-            properties: {
-                avgAltitude: avgAltitude
+        // --- NEW: Densification Logic ---
+        const distanceKm = getDistanceKm(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
+
+        if (distanceKm > DENSITY_THRESHOLD_KM) {
+            // Segment is long, densify it
+            let segmentPoints = [p1]; // Start with the first point
+
+            // Create intermediate points
+            for (let j = 1; j <= NUM_INTERMEDIATE_POINTS; j++) {
+                const fraction = j / (NUM_INTERMEDIATE_POINTS + 1);
+                const interPoint = getIntermediatePoint(p1.latitude, p1.longitude, p2.latitude, p2.longitude, fraction);
+                
+                // We also need to interpolate the altitude for the color gradient
+                const interAlt = alt1 + (alt2 - alt1) * fraction;
+                
+                segmentPoints.push({
+                    longitude: interPoint.lon,
+                    latitude: interPoint.lat,
+                    altitude: interAlt
+                });
             }
-        });
+            segmentPoints.push(p2); // Add the final point
+
+            // Now create features for each *new* sub-segment
+            for (let k = 0; k < segmentPoints.length - 1; k++) {
+                const sp1 = segmentPoints[k];
+                const sp2 = segmentPoints[k + 1];
+                
+                features.push({
+                    type: 'Feature',
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: [ [sp1.longitude, sp1.latitude], [sp2.longitude, sp2.latitude] ]
+                    },
+                    properties: {
+                        avgAltitude: (sp1.altitude + sp2.altitude) / 2
+                    }
+                });
+            }
+            
+        } else {
+            // Segment is short, add it directly (original logic)
+            features.push({
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: [ [p1.longitude, p1.latitude], [p2.longitude, p2.latitude] ]
+                },
+                properties: {
+                    avgAltitude: (alt1 + alt2) / 2
+                }
+            });
+        }
+        // --- END: Densification Logic ---
     }
 
     return { type: 'FeatureCollection', features: features };
