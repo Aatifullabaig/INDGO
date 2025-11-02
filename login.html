@@ -11,31 +11,40 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
     <link rel="icon" href="/images/indgo.png" type="image/x-icon">
     <style>
-        /* === NEW: Body & Layout Enhancement === */
-        html, body {
-            height: 100%; /* Ensure html and body take full height */
+        /* CSS for password toggle icon */
+        .password-container {
+            position: relative;
+        }
+        .password-toggle-icon {
+            position: absolute;
+            top: 50%;
+            right: 15px;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #6c757d; 
+        }
+
+        /* --- NEW: Animation for Greeting --- */
+        .animated-greeting {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 0.5rem;
+            /* Apply the animation */
+            animation: fadeInUp 1s ease-out forwards;
         }
         
-        body {
-            display: flex;
-            flex-direction: column;
+        /* The 'IN' part will be styled by the JS */
+        .animated-greeting .highlight {
+            color: #0033a0; /* INDGO Blue */
+            display: inline-block;
+            /* Add a subtle pulse to 'IN' */
+            animation: pulse 2s infinite ease-in-out;
         }
 
-        .main-container {
-            /* * NEW: Use Flexbox to center content
-             * This replaces the old inline style
-             */
-            flex-grow: 1; /* Takes up remaining vertical space */
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem 1rem; /* Padding for small screens */
-            text-align: center;
-        }
-
-        /* === NEW: Animation === */
-        @keyframes slideUpFadeIn {
+        /* Animation Keyframes */
+        @keyframes fadeInUp {
             from {
                 opacity: 0;
                 transform: translateY(20px);
@@ -46,82 +55,17 @@
             }
         }
 
-        .fade-in {
-            /* Apply the new, smoother animation */
-            animation: slideUpFadeIn 0.6s ease-out forwards;
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+            100% {
+                transform: scale(1);
+            }
         }
-        
-        /* === NEW: Title Styling === */
-        .fade-in > h2 {
-            font-family: 'Montserrat', sans-serif;
-            font-weight: 700;
-            font-size: 2.25rem; /* Slightly larger title */
-            margin-bottom: 2rem;
-            color: #333; /* Darker text */
-        }
-
-        /* === NEW: Modern Form Card === */
-        /* Target only the main login form, not the footer link */
-        #login-form.form-container {
-            max-width: 420px;
-            width: 100%;
-            background: #ffffff;
-            /* Softer shadow for depth */
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
-            border-radius: 12px; /* Softer corners */
-            padding: 2.5rem;
-            text-align: left; /* Align form content left */
-            border: 1px solid #e9ecef; /* Subtle border */
-        }
-
-        /* === NEW: Smoother Inputs === */
-        .form-input {
-            /* Add transitions for smooth focus effect */
-            transition: border-color 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .form-input:focus {
-            /* Add a "glow" effect when focused */
-            border-color: #0d6efd; /* Example: Bootstrap primary blue */
-            box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.15);
-            outline: none; /* Remove default outline */
-        }
-
-        /* === NEW: Interactive Button === */
-        .cta-button {
-            /* Add transitions for smooth hover/click */
-            transition: background-color 0.3s ease, transform 0.2s ease, opacity 0.3s ease;
-        }
-        .cta-button:hover {
-            opacity: 0.9; /* Standard hover effect */
-        }
-        .cta-button:active {
-            /* "Press" effect when clicked */
-            transform: scale(0.98);
-        }
-
-        /* === Password Toggle (Moved from old style) === */
-        .password-container {
-            position: relative;
-        }
-        .password-toggle-icon {
-            position: absolute;
-            top: 50%;
-            right: 15px;
-            transform: translateY(-50%);
-            cursor: pointer;
-            color: #6c757d; /* Darker color for better visibility */
-            transition: color 0.2s ease;
-        }
-        .password-toggle-icon:hover {
-            color: #333;
-        }
-        
-        /* Footer link styling */
-        .form-footer-link {
-            margin-top: 1.5rem; /* Give it space from the card */
-        }
-
     </style>
 </head>
 <body>
@@ -158,10 +102,13 @@
         </nav>
     </header>
 
-    <main class="main-container">
+    <main class="main-container" style="padding-top: 5rem; text-align: center;">
         <div class="fade-in">
-            <h2>Crew Center Login</h2>
             
+            <h3 class="animated-greeting" id="animated-greeting"></h3>
+
+            <h2>Crew Center Login</h2>
+
             <form id="login-form" class="form-container">
                 <div class="form-group">
                     <label for="email">Email</label>
@@ -195,10 +142,10 @@
 
             <div class="form-container" style="background: transparent; border: none; padding-top: 0; padding-bottom: 0;">
                 <p class="form-footer-link">
-                    Have an invite code? <a href="register.html">Create an account</a>.
+                    Not a member yet? <a href="apply.html">Join us</a>.
                 </p>
             </div>
-        </div>
+            </div>
     </main>
     
     <footer class="site-footer">
