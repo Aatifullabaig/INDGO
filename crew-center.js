@@ -85,6 +85,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const DATA_REFRESH_INTERVAL_MS = 50000; // Your current refresh interval
     const ACARS_SOCKET_URL = 'https://site--acars-backend--6dmjph8ltlhv.code.run'; // <-- NEW: For WebSocket
     let isAircraftWindowLoading = false;
+    let ALL_MY_PIREPS = []; // NEW: To store all PIREPs for pagination
 
     // --- Map-related State ---
     let liveFlightsMap = null;
@@ -135,7 +136,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     
-// --- [REPLACE THIS FUNCTION] ---
+
+// This function is inside the main document.addEventListener('DOMContentLoaded', ...)
 function injectCustomStyles() {
     const styleId = 'sector-ops-custom-styles';
     if (document.getElementById(styleId)) return;
@@ -5738,77 +5740,79 @@ async function updateSectorOpsSecondaryData() {
     /**
      * Main view switching logic.
      */
-    const switchView = (viewId) => {
-        sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
-        mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
-        
-        // --- [MODIFIED] Theme Switching Logic ---
-        // Remove the light theme class from the main container by default
-        mainContentContainer.classList.remove('hub-light-theme');
+const switchView = (viewId) => {
+    sidebarNav.querySelector('.nav-link.active')?.classList.remove('active');
+    mainContentContainer.querySelector('.content-view.active')?.classList.remove('active');
+    
+    // --- [MODIFIED] Theme Switching Logic ---
+    // Remove the light theme class from the main container by default
+    mainContentContainer.classList.remove('hub-light-theme');
+    // --- [END MODIFIED] ---
+
+    // --- FIX: START ---
+    // Explicitly hide Sector Ops pop-out windows and their recall buttons
+    // when switching away to prevent them from appearing over other tabs.
+    if (viewId !== 'view-rosters') {
+        const airportWindow = document.getElementById('airport-info-window');
+        const aircraftWindow = document.getElementById('aircraft-info-window');
+        const airportRecall = document.getElementById('airport-recall-btn');
+        const aircraftRecall = document.getElementById('aircraft-recall-btn');
+
+        if (airportWindow) airportWindow.classList.remove('visible');
+        if (aircraftWindow) aircraftWindow.classList.remove('visible');
+        if (airportRecall) airportRecall.classList.remove('visible');
+        if (aircraftRecall) aircraftRecall.classList.remove('visible');
+
+        // NEW: Stop the PFD update interval when leaving the view
+        if (activePfdUpdateInterval) {
+            clearInterval(activePfdUpdateInterval);
+            activePfdUpdateInterval = null;
+        }
+    }
+    // --- FIX: END ---
+
+    const newLink = sidebarNav.querySelector(`.nav-link[data-view="${viewId}"]`);
+    const newView = document.getElementById(viewId);
+
+    if (newLink && newView) {
+        newLink.classList.add('active');
+        newView.classList.add('active');
+    }
+
+    // Stop the dashboard live map loop
+    if (liveFlightsInterval) {
+        clearInterval(liveFlightsInterval);
+        liveFlightsInterval = null;
+    }
+    
+    // Stop the Sector Ops live map loop
+    stopSectorOpsLiveLoop();
+
+    if (sectorOpsMap) {
+        // Ensure map is resized if sidebar state changes while view is inactive
+        setTimeout(() => sectorOpsMap.resize(), 400); 
+    }
+
+    // Conditionally start the correct loop based on the new view
+    if (viewId === 'view-duty-status') {
+        // --- [MODIFIED] ---
+        // Add the light theme class for the hub
+        mainContentContainer.classList.add('hub-light-theme');
         // --- [END MODIFIED] ---
-
-        // --- FIX: START ---
-        // Explicitly hide Sector Ops pop-out windows and their recall buttons
-        // when switching away to prevent them from appearing over other tabs.
-        if (viewId !== 'view-rosters') {
-            const airportWindow = document.getElementById('airport-info-window');
-            const aircraftWindow = document.getElementById('aircraft-info-window');
-            const airportRecall = document.getElementById('airport-recall-btn');
-            const aircraftRecall = document.getElementById('aircraft-recall-btn');
-
-            if (airportWindow) airportWindow.classList.remove('visible');
-            if (aircraftWindow) aircraftWindow.classList.remove('visible');
-            if (airportRecall) airportRecall.classList.remove('visible');
-            if (aircraftRecall) aircraftRecall.classList.remove('visible');
-
-            // NEW: Stop the PFD update interval when leaving the view
-            if (activePfdUpdateInterval) {
-                clearInterval(activePfdUpdateInterval);
-                activePfdUpdateInterval = null;
-            }
-        }
-        // --- FIX: END ---
-
-        const newLink = sidebarNav.querySelector(`.nav-link[data-view="${viewId}"]`);
-        const newView = document.getElementById(viewId);
-
-        if (newLink && newView) {
-            newLink.classList.add('active');
-            newView.classList.add('active');
-        }
-
-        // Stop the dashboard live map loop
-        if (liveFlightsInterval) {
-            clearInterval(liveFlightsInterval);
-            liveFlightsInterval = null;
-        }
         
-        // Stop the Sector Ops live map loop
-        stopSectorOpsLiveLoop();
-
-        if (sectorOpsMap) {
-            // Ensure map is resized if sidebar state changes while view is inactive
-            setTimeout(() => sectorOpsMap.resize(), 400); 
-        }
-
-        // Conditionally start the correct loop based on the new view
-        if (viewId === 'view-duty-status') {
-            // --- [MODIFIED] ---
-            // Add the light theme class for the hub
-            mainContentContainer.classList.add('hub-light-theme');
-            // --- [END MODIFIED] ---
-            
-            // initializeLiveMap(); // <-- This was for the old map, no longer needed here.
-        } else if (viewId === 'view-rosters') {
-            initializeSectorOpsView();
-        
-        // --- [NEW BLOCK] ---
-        // Add the light theme for the dispatch page as well
-        } else if (viewId === 'view-flight-plan') {
-            mainContentContainer.classList.add('hub-light-theme');
-        }
-        // --- [END NEW BLOCK] ---
-    };
+        // initializeLiveMap(); // <-- This was for the old map, no longer needed here.
+    } else if (viewId === 'view-rosters') {
+        initializeSectorOpsView();
+    
+    // --- [NEW BLOCK] ---
+    // Add the light theme for the dispatch and logs pages as well
+    } else if (viewId === 'view-flight-plan') {
+        mainContentContainer.classList.add('hub-light-theme');
+    } else if (viewId === 'view-pirep-history') {
+        mainContentContainer.classList.add('hub-light-theme');
+    }
+    // --- [END NEW BLOCK] ---
+};
 
     // --- New function to fetch fleet data ---
     async function fetchFleetData() {
@@ -5828,58 +5832,76 @@ async function updateSectorOpsSecondaryData() {
     }
 
 
-    // --- Main Data Fetch & Render Cycle ---
-    const fetchPilotData = async () => {
-        try {
-            const oldRank = CURRENT_PILOT ? CURRENT_PILOT.rank : null;
 
-            const [pilotResponse] = await Promise.all([
-                fetch(`${API_BASE_URL}/api/me`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetchFleetData()
-            ]);
+const fetchPilotData = async () => {
+    try {
+        const oldRank = CURRENT_PILOT ? CURRENT_PILOT.rank : null;
 
-            if (!pilotResponse.ok) {
-                localStorage.removeItem('authToken');
-                window.location.href = 'login.html';
-                throw new Error('Session invalid. Please log in again.');
-            }
-            const pilot = await pilotResponse.json();
-            CURRENT_PILOT = pilot;
-            ACTIVE_FLIGHT_PLANS = pilot.currentFlightPlans || [];
+        // --- [MODIFIED] Fetch PIREPs along with pilot data ---
+        const [pilotResponse, pirepsResponse] = await Promise.all([
+            fetch(`${API_BASE_URL}/api/me`, { headers: { 'Authorization': `Bearer ${token}` } }),
+            fetch(`${API_BASE_URL}/api/me/pireps`, { headers: { 'Authorization': `Bearer ${token}` } }),
+            fetchFleetData()
+        ]);
+        // --- [END MODIFIED] ---
 
-            if (typeof window.initializeGlobalDebugger === 'function') {
-                window.initializeGlobalDebugger(pilot.role);
-            }
-
-            pilotNameElem.textContent = pilot.name || 'N/A';
-            pilotCallsignElem.textContent = pilot.callsign || 'N/A';
-            profilePictureElem.src = pilot.imageUrl || 'Images/default-avatar.png';
-
-            const badge = notificationsBell.querySelector('.notification-badge');
-            if (pilot.unreadNotifications && pilot.unreadNotifications.length > 0) {
-                badge.textContent = pilot.unreadNotifications.length;
-                badge.style.display = 'flex';
-            } else {
-                badge.style.display = 'none';
-            }
-
-            await renderAllViews(pilot);
-
-            if (oldRank && pilot.rank !== oldRank && rankIndex(pilot.rank) > rankIndex(oldRank)) {
-                showPromotionModal(pilot.rank);
-            }
-
-            await handleSimbriefReturn();
-
-        } catch (error) {
-            console.error('Error fetching pilot data:', error);
-            showNotification(error.message, 'error');
-        } finally {
-            if (mainContentLoader) {
-                mainContentLoader.classList.remove('active');
-            }
+        if (!pilotResponse.ok) {
+            localStorage.removeItem('authToken');
+            window.location.href = 'login.html';
+            throw new Error('Session invalid. Please log in again.');
         }
-    };
+        const pilot = await pilotResponse.json();
+        CURRENT_PILOT = pilot;
+        ACTIVE_FLIGHT_PLANS = pilot.currentFlightPlans || [];
+
+        // --- [NEW] Store PIREPs in the global variable ---
+        if (pirepsResponse.ok) {
+            ALL_MY_PIREPS = await pirepsResponse.json();
+        } else {
+            console.error('Could not fetch PIREP history.');
+            ALL_MY_PIREPS = [];
+        }
+        // --- [END NEW] ---
+
+        if (typeof window.initializeGlobalDebugger === 'function') {
+            window.initializeGlobalDebugger(pilot.role);
+        }
+
+        pilotNameElem.textContent = pilot.name || 'N/A';
+        pilotCallsignElem.textContent = pilot.callsign || 'N/A';
+        profilePictureElem.src = pilot.imageUrl || 'Images/default-avatar.png';
+
+        const badge = notificationsBell.querySelector('.notification-badge');
+        if (pilot.unreadNotifications && pilot.unreadNotifications.length > 0) {
+            badge.textContent = pilot.unreadNotifications.length;
+            badge.style.display = 'flex';
+        } else {
+            badge.style.display = 'none';
+        }
+
+        // --- [MODIFIED] ---
+        // renderAllViews no longer fetches PIREPs
+        await renderAllViews(pilot);
+        // --- [NEW] ---
+        // Manually call the PIREP renderer to render page 1
+        fetchPirepHistory(1); 
+        // --- [END NEW] ---
+
+        if (oldRank && pilot.rank !== oldRank && rankIndex(pilot.rank) > rankIndex(oldRank)) {
+            showPromotionModal(pilot.rank);
+        }
+
+        await handleSimbriefReturn();
+
+    } catch (error) {
+        console.error('Error fetching pilot data:', error);
+        showNotification(error.message, 'error');
+    } finally {
+        if (mainContentLoader) {
+            mainContentLoader.classList.remove('active');
+        }
+    }
+};
 
     const showPromotionModal = (newRank) => {
         const rankNameElem = document.getElementById('promo-rank-name');
@@ -5912,7 +5934,6 @@ async function updateSectorOpsSecondaryData() {
 
         renderPilotHubView(pilot, leaderboardsHTML);
         await renderFlightPlanView(pilot);
-        await fetchPirepHistory();
     };
 
     const getPendingTestBannerHTML = () => `
@@ -6336,40 +6357,115 @@ async function updateSectorOpsSecondaryData() {
         }
     };
 
-    const fetchPirepHistory = async () => {
-        const container = document.getElementById('pirep-history-list');
-        container.innerHTML = '<p>Loading history...</p>';
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/me/pireps`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!response.ok) throw new Error('Could not fetch PIREP history.');
-            const pireps = await response.json();
-            if (pireps.length === 0) {
-                container.innerHTML = '<p>You have not filed any flight reports yet.</p>';
-                return;
-            }
-            container.innerHTML = pireps.map(p => {
-                const created = new Date(p.createdAt).toLocaleDateString();
-                const reqRank = deduceRankFromAircraftFE(p.aircraft);
-                return `
-                <div class="pirep-history-item status-${p.status.toLowerCase()}">
-                    <div class="pirep-info">
-                        <strong>${p.flightNumber}</strong> (${p.departure} - ${p.arrival})
-                        <small>${created}</small>
-                        <div class="pirep-chips">
-                           ${getRankBadgeHTML(reqRank, { showImage: true, showName: false, imageClass: 'roster-req-rank-badge' })}
+    // [REPLACE THIS FUNCTION]
+const fetchPirepHistory = async (page = 1) => {
+    const container = document.getElementById('view-pirep-history');
+    if (!container) return;
+
+    // --- NEW: Pagination Logic ---
+    const pireps = ALL_MY_PIREPS; // Use the globally fetched data
+    const ITEMS_PER_PAGE = 6;
+    const totalPages = Math.ceil(pireps.length / ITEMS_PER_PAGE);
+    const currentPage = Math.max(1, Math.min(page, totalPages));
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = currentPage * ITEMS_PER_PAGE;
+    const pirepsToShow = pireps.slice(startIndex, endIndex);
+
+    let listHTML = '';
+
+    if (pireps.length === 0) {
+        listHTML = '<p class="muted" style="text-align: center; padding: 2rem;">You have not filed any flight reports yet.</p>';
+    } else {
+        listHTML = pirepsToShow.map(p => {
+            const createdDate = new Date(p.createdAt).toLocaleDateString('en-US', {
+                year: 'numeric', month: 'short', day: 'numeric'
+            });
+            const reqRank = deduceRankFromAircraftFE(p.aircraft);
+            const airlineCode = extractAirlineCode(p.flightNumber);
+            
+            // Get airport names from the already-loaded airportsData
+            const depAirportName = airportsData[p.departure]?.name || 'Unknown Airport';
+            const arrAirportName = airportsData[p.arrival]?.name || 'Unknown Airport';
+
+            return `
+            <div class="pirep-ticket status-${p.status.toLowerCase()}">
+                <div class="ticket-stub">
+                    <span class="ticket-airline">${airlineCode}</span>
+                    <i class="fa-solid fa-plane-departure"></i>
+                    <div class="ticket-qr-placeholder">
+                        <i class="fa-solid fa-qrcode"></i>
+                    </div>
+                    <span class="ticket-stub-label">IndiGo Flight Log</span>
+                </div>
+                <div class="ticket-main">
+                    <div class="ticket-header">
+                        <span class="ticket-flight-num">${p.flightNumber}</span>
+                        <div class="ticket-header-badges">
+                            ${getRankBadgeHTML(reqRank, { showImage: true, showName: false, imageClass: 'roster-req-rank-badge' })}
+                            <span class="status-badge status-${p.status.toLowerCase()}">${p.status}</span>
                         </div>
                     </div>
-                    <div class="pirep-details">
-                        <span>${p.aircraft}</span>
-                        <span>${Number(p.flightTime || 0).toFixed(1)} hrs</span>
-                        <span class="status-badge status-${p.status.toLowerCase()}">${p.status}</span>
+                    <div class="ticket-route">
+                        <div class="ticket-airport">
+                            <span class="ticket-icao">${p.departure}</span>
+                            <span class="ticket-airport-name">${depAirportName}</span>
+                        </div>
+                        <div class="ticket-route-line">
+                            <i class="fa-solid fa-plane"></i>
+                        </div>
+                        <div class="ticket-airport arrival">
+                            <span class="ticket-icao">${p.arrival}</span>
+                            <span class="ticket-airport-name">${arrAirportName}</span>
+                        </div>
                     </div>
-                </div>`;
-            }).join('');
-        } catch (error) {
-            container.innerHTML = `<p class="error-text">${error.message}</p>`;
-        }
-    };
+                    <div class="ticket-footer">
+                        <span><i class="fa-solid fa-calendar-days"></i> ${createdDate}</span>
+                        <span><i class="fa-solid fa-plane-up"></i> ${p.aircraft}</span>
+                        <span><i class="fa-solid fa-stopwatch"></i> ${Number(p.flightTime || 0).toFixed(1)} hrs</span>
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // --- NEW: Pagination Controls HTML ---
+    let paginationHTML = '';
+    if (totalPages > 1) {
+        paginationHTML = `
+            <div class="pirep-pagination-controls">
+                <button class="cta-button pirep-page-btn" data-page-num="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>
+                    <i class="fa-solid fa-arrow-left"></i> Previous
+                </button>
+                <span class="pirep-page-info">Page ${currentPage} of ${totalPages}</span>
+                <button class="cta-button pirep-page-btn" data-page-num="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>
+                    Next <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        `;
+    }
+
+    // --- NEW: Assemble the full .hub-card structure ---
+    container.innerHTML = `
+        <div class="hub-page-header">
+            <div class="hub-header-greeting">
+                <h1>My Flight Logs</h1>
+            </div>
+        </div>
+        <div class="hub-card">
+            <div class="hub-card-header">
+                <h3><i class="fa-solid fa-book-journal-whills"></i> Logbook</h3>
+            </div>
+            <div class="hub-card-body">
+                <div class="pirep-ticket-list">
+                    ${listHTML}
+                </div>
+            </div>
+            <div class="hub-card-footer">
+                ${paginationHTML}
+            </div>
+        </div>
+    `;
+};
 
     // --- Navigation ---
     sidebarNav.addEventListener('click', (e) => {
