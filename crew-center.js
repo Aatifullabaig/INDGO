@@ -3537,8 +3537,9 @@ function setupAircraftWindowEvents() {
         }
     }
 
-
-// ⬇️ MODIFIED: Added 'wrap: true' to the map constructor
+// [REPLACE THIS FUNCTION]
+// ⬇️ MODIFIED: This function is modified to load 21 icons (regular, member, staff)
+// and use a 'case' expression to select the correct icon.
 async function initializeSectorOpsMap(centerICAO) {
     if (!MAPBOX_ACCESS_TOKEN) {
         document.getElementById('sector-ops-map-fullscreen').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
@@ -3554,8 +3555,9 @@ async function initializeSectorOpsMap(centerICAO) {
         center: centerCoords,
         zoom: 4.5,
         interactive: true,
-        projection: 'globe',
-        wrap: true // ⬅️ *** ADD THIS LINE ***
+        // ⬇️ === RECOMMENDED RENDERING FIX ===
+        projection: 'globe' 
+        // ⬆️ === END OF RECOMMENDED RENDERING FIX ===
     });
 
     // --- [NEW] Set globe-specific settings on style load ---
@@ -3844,11 +3846,12 @@ function getFlatWaypointObjects(items) {
 
 
 
-// [REPLACE THIS FUNCTION]
 /**
- * --- [FIXED HELPER] Generates an altitude-segmented GeoJSON FeatureCollection for the flown route.
+ * --- [NEW HELPER] Generates an altitude-segmented GeoJSON FeatureCollection for the flown route.
  * Breaks the route into segments, each with an 'avgAltitude' property for color-coding.
- * --- [MODIFIED] Now densifies long segments to prevent polar/antimeridian wrapping issues.
+ * @param {Array} sortedPoints - Array of historical route point objects.
+ * @param {object} currentPosition - The aircraft's current position object.
+ * @returns {object} A GeoJSON FeatureCollection.
  */
 function generateAltitudeColoredRoute(sortedPoints, currentPosition) {
     const features = [];
@@ -3867,10 +3870,6 @@ function generateAltitudeColoredRoute(sortedPoints, currentPosition) {
         }
     ];
 
-    // --- NEW: Configuration for densification ---
-    const DENSITY_THRESHOLD_KM = 200; // Densify any segment longer than 200km
-    const NUM_INTERMEDIATE_POINTS = 5; // Add 5 intermediate points for each long segment
-
     for (let i = 0; i < allPoints.length - 1; i++) {
         const p1 = allPoints[i];
         const p2 = allPoints[i + 1];
@@ -3880,63 +3879,25 @@ function generateAltitudeColoredRoute(sortedPoints, currentPosition) {
             continue;
         }
 
+        const coords = [
+            [p1.longitude, p1.latitude],
+            [p2.longitude, p2.latitude]
+        ];
+        
         const alt1 = p1.altitude || 0;
         const alt2 = p2.altitude || 0;
+        const avgAltitude = (alt1 + alt2) / 2;
 
-        // --- NEW: Densification Logic ---
-        const distanceKm = getDistanceKm(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
-
-        if (distanceKm > DENSITY_THRESHOLD_KM) {
-            // Segment is long, densify it
-            let segmentPoints = [p1]; // Start with the first point
-
-            // Create intermediate points
-            for (let j = 1; j <= NUM_INTERMEDIATE_POINTS; j++) {
-                const fraction = j / (NUM_INTERMEDIATE_POINTS + 1);
-                const interPoint = getIntermediatePoint(p1.latitude, p1.longitude, p2.latitude, p2.longitude, fraction);
-                
-                // We also need to interpolate the altitude for the color gradient
-                const interAlt = alt1 + (alt2 - alt1) * fraction;
-                
-                segmentPoints.push({
-                    longitude: interPoint.lon,
-                    latitude: interPoint.lat,
-                    altitude: interAlt
-                });
+        features.push({
+            type: 'Feature',
+            geometry: {
+                type: 'LineString',
+                coordinates: coords
+            },
+            properties: {
+                avgAltitude: avgAltitude
             }
-            segmentPoints.push(p2); // Add the final point
-
-            // Now create features for each *new* sub-segment
-            for (let k = 0; k < segmentPoints.length - 1; k++) {
-                const sp1 = segmentPoints[k];
-                const sp2 = segmentPoints[k + 1];
-                
-                features.push({
-                    type: 'Feature',
-                    geometry: {
-                        type: 'LineString',
-                        coordinates: [ [sp1.longitude, sp1.latitude], [sp2.longitude, sp2.latitude] ]
-                    },
-                    properties: {
-                        avgAltitude: (sp1.altitude + sp2.altitude) / 2
-                    }
-                });
-            }
-            
-        } else {
-            // Segment is short, add it directly (original logic)
-            features.push({
-                type: 'Feature',
-                geometry: {
-                    type: 'LineString',
-                    coordinates: [ [p1.longitude, p1.latitude], [p2.longitude, p2.latitude] ]
-                },
-                properties: {
-                    avgAltitude: (alt1 + alt2) / 2
-                }
-            });
-        }
-        // --- END: Densification Logic ---
+        });
     }
 
     return { type: 'FeatureCollection', features: features };
@@ -5962,35 +5923,64 @@ async function updateSectorOpsSecondaryData() {
         </div>
     `;
 
+    // [REPLACE THIS FUNCTION]
     const renderPilotHubView = async (pilot, leaderboardsHTML) => {
         const dutyStatusView = document.getElementById('view-duty-status');
         if (crewRestInterval) clearInterval(crewRestInterval);
 
+        // 1. Get the optional "Pending" banner
         const pendingBanner = pilot.promotionStatus === 'PENDING_TEST' ? getPendingTestBannerHTML() : '';
-        let dutyStatusHTML = '';
+        
+        // 2. Get the new "Welcome" greeting
+        const welcomeGreeting = `
+            <div class="hub-welcome-header">
+                <h1>Hello ${pilot.name.split(' ')[0]},</h1>
+                <h2>Welcome Home.</h2>
+            </div>
+        `;
+
+        // 3. Get the correct status text for the header
+        let statusText = '';
+        let dutyStatusHTML = ''; // This will hold the *content* for the new light-themed card
 
         if (pilot.dutyStatus === 'ON_DUTY') {
+            statusText = '<i class="fa-solid fa-plane-departure"></i> Current Status: 🟢 On Duty';
             dutyStatusHTML = await renderOnDutyContent(pilot);
         } else {
             dutyStatusHTML = await renderOnRestContent(pilot);
+            // This logic is now inside renderOnRestContent's return
+            statusText = (pilot.timeUntilNextDutyMs > 0) ?
+                '<i class="fa-solid fa-bed"></i> Current Status: 🔴 On Rest (Mandatory)' :
+                '<i class="fa-solid fa-user-clock"></i> Current Status: 🔴 On Rest';
         }
+        
+        // 4. Create the standalone header bar
+        const hubHeaderHTML = createHubHeaderHTML(pilot, statusText);
 
-        dutyStatusView.innerHTML = `${pendingBanner}${dutyStatusHTML}${leaderboardsHTML}`;
+        // 5. Assemble the new, open layout
+        //    (Welcome -> Banner -> Status Header -> Duty Content -> Leaderboards)
+        dutyStatusView.innerHTML = `
+            ${welcomeGreeting}
+            ${pendingBanner}
+            ${hubHeaderHTML}
+            ${dutyStatusHTML}
+            ${leaderboardsHTML}
+        `; // The Live Map HTML is removed
 
+        // 6. Set dashboard theme (Unchanged)
         const dashboardContainer = document.querySelector('.dashboard-container');
         if (dashboardContainer && pilot.rank) {
             const rankSlug = 'rank-' + pilot.rank.toLowerCase().replace(/\s+/g, '-');
-
             const classList = Array.from(dashboardContainer.classList);
             for (const c of classList) {
                 if (c.startsWith('rank-')) {
                     dashboardContainer.classList.remove(c);
                 }
             }
-
             dashboardContainer.classList.add(rankSlug);
         }
 
+        // 7. Start crew rest timer if needed (Unchanged)
         if (pilot.dutyStatus === 'ON_REST' && pilot.timeUntilNextDutyMs > 0) {
             const timerElement = document.getElementById('crew-rest-timer');
             if (timerElement) {
@@ -6010,12 +6000,14 @@ async function updateSectorOpsSecondaryData() {
         }
     };
 
+    
+
     const renderOnRestContent = async (pilot) => {
         let content = '';
-        let title = '';
+        // Removed title logic, as it's handled in renderPilotHubView
 
         if (pilot.timeUntilNextDutyMs > 0) {
-            title = '<i class="fa-solid fa-bed"></i> Current Status: 🔴 On Rest (Mandatory)';
+            // --- This content is for the "Mandatory Rest" state ---
             content = `
                 <div class="crew-rest-notice">
                     <p>A minimum <strong>8-hour rest period</strong> is required after completing a duty. You may go on duty again after this period has elapsed.</p>
@@ -6023,7 +6015,7 @@ async function updateSectorOpsSecondaryData() {
                     <div class="crew-rest-timer-display" id="crew-rest-timer">--:--:--</div>
                 </div>`;
         } else {
-            title = '<i class="fa-solid fa-user-clock"></i> Current Status: 🔴 On Rest';
+            // --- This content is for the "Ready for Duty" state ---
             try {
                 const rosterResponse = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
                 if (!rosterResponse.ok) throw new Error('Could not fetch recommended roster.');
@@ -6037,14 +6029,14 @@ async function updateSectorOpsSecondaryData() {
                 let locationCardHTML = '';
                 if (locationICAO) {
                     locationCardHTML = `
-                        <div class="location-card" style="flex: 1; min-width: 280px; background-color: rgba(13, 16, 28, 0.5); padding: 1.5rem; border-radius: 8px;">
+                        <div class="location-card" style="flex: 1; min-width: 280px; background-color: #ffffff; padding: 1.5rem; border-radius: 8px; border: 1px solid #e9ecef;">
                             <h4 style="margin-top:0; display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-location-dot"></i> Current Location</h4>
-                            <strong style="font-size: 1.8rem; font-family: monospace;">${locationICAO}</strong>
+                            <strong style="font-size: 1.8rem; font-family: monospace; color: var(--accent-color);">${locationICAO}</strong>
                             <div class="weather-details" style="margin-top: 1rem; font-size: 0.9rem;">
                                 <p><strong>Wind:</strong> ${weather.wind}</p>
                                 <p><strong>Temp:</strong> ${weather.temp}</p>
                                 <p><strong>Cond:</strong> ${weather.condition}</p>
-                                <p style="font-family: monospace; opacity: 0.7; margin-top: 0.5rem;">${weather.raw}</p>
+                                <p style="font-family: monospace; opacity: 0.7; margin-top: 0.5rem; color: #6c757d;">${weather.raw}</p>
                             </div>
                         </div>
                     `;
@@ -6057,15 +6049,15 @@ async function updateSectorOpsSecondaryData() {
                     const fullRoute = `${firstLeg.departure} → ${lastLeg.arrival}`;
 
                     rosterCardHTML = `
-                        <div class="next-step-card" style="flex: 1.5; min-width: 300px; background-color: rgba(0, 27, 148, 0.1); padding: 1.5rem; border-radius: 8px; border-left: 3px solid var(--rank-accent-color, var(--accent-color));">
+                        <div class="next-step-card" style="flex: 1.5; min-width: 300px; background-color: #ffffff; padding: 1.5rem; border-radius: 8px; border: 1px solid #e9ecef; border-left: 3px solid var(--rank-accent-color, var(--accent-color));">
                             <h4 style="margin-top: 0;">Ready for Your Next Assignment?</h4>
                             <p>Based on your location, we recommend this roster:</p>
-                            <div class="featured-roster-summary" style="background-color: rgba(13, 16, 28, 0.5); padding: 1rem; border-radius: 5px; margin: 1rem 0; display: flex; justify-content: space-between; align-items: center;">
+                            <div class="featured-roster-summary" style="background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 1rem; border-radius: 5px; margin: 1rem 0; display: flex; justify-content: space-between; align-items: center;">
                                 <div>
                                     <strong style="display: block; font-size: 1.2rem;">${topRoster.name}</strong>
-                                    <span style="color: var(--dashboard-text-muted);">${fullRoute}</span>
+                                    <span style="color: #6c757d;">${fullRoute}</span>
                                 </div>
-                                <span style="font-size: 1.1rem; font-weight: bold;">${(topRoster.totalFlightTime || 0).toFixed(1)} hrs</span>
+                                <span style="font-size: 1.1rem; font-weight: bold; color: var(--accent-color);">${(topRoster.totalFlightTime || 0).toFixed(1)} hrs</span>
                             </div>
                             <button class="cta-button" id="go-to-roster-btn">View Roster</button>
                         </div>
@@ -6075,7 +6067,7 @@ async function updateSectorOpsSecondaryData() {
                 }
 
                 content = `
-                    <div class="hub-action-grid" style="display: flex; flex-wrap: wrap; gap: 1.5rem; margin-top: 1.5rem;">
+                    <div class="hub-action-grid" style="display: flex; flex-wrap: wrap; gap: 1.5rem;">
                         ${locationCardHTML}
                         ${rosterCardHTML}
                     </div>
@@ -6086,28 +6078,22 @@ async function updateSectorOpsSecondaryData() {
                 content = `<p>You are eligible for your next assignment. To begin, please select a roster from the Sector Ops page.</p>`;
             }
         }
-
-        const liveMapHTML = `
-            <div class="content-card live-map-section" style="margin-top: 1.5rem;">
-                <h2><i class="fa-solid fa-tower-broadcast"></i> Live Operations Map</h2>
-                <div id="live-flights-map-container" style="height: 450px; border-radius: 8px; margin-top: 1rem; background-color: #191a1a;">
-                    <p class="map-loader" style="text-align: center; padding-top: 2rem; color: #ccc;">Loading Live Map...</p>
-                </div>
-            </div>
-        `;
-
+        
+        // Removed the liveMapHTML
+        
+        // --- NEW: Wrap content in the light-theme card ---
         return `
-            <div class="pilot-hub-card">
-                ${createHubHeaderHTML(pilot, title)}
+            <div class="hub-content-wrapper light-theme">
                 ${content}
             </div>
-            ${liveMapHTML}`;
+        `;
     };
+
 
     const renderOnDutyContent = async (pilot) => {
         // The pilot.currentRoster field holds the ID of the active roster.
         if (!pilot.currentRoster) {
-            return `<div class="content-card"><p>Error: On duty but no roster data found.</p></div>`;
+            return `<div class="hub-content-wrapper light-theme"><p>Error: On duty but no roster data found.</p></div>`;
         }
 
         try {
@@ -6127,20 +6113,12 @@ async function updateSectorOpsSecondaryData() {
             const filedPirepsForRoster = allPireps.filter(p => p.rosterLeg?.rosterId === currentRoster.rosterId);
             const filedFlightNumbers = new Set(filedPirepsForRoster.map(p => p.flightNumber));
 
-            const headerTitle = '<i class="fa-solid fa-plane-departure"></i> Current Status: 🟢 On Duty';
+            // Removed headerTitle and hubHeaderHTML creation
+            // Removed liveMapHTML
 
-            const liveMapHTML = `
-                <div class="content-card live-map-section" style="margin-top: 1.5rem;">
-                    <h2><i class="fa-solid fa-tower-broadcast"></i> Live Operations Map</h2>
-                    <div id="live-flights-map-container" style="height: 450px; border-radius: 8px; margin-top: 1rem; background-color: #191a1a;">
-                        <p class="map-loader" style="text-align: center; padding-top: 2rem; color: #ccc;">Loading Live Map...</p>
-                    </div>
-                </div>
-            `;
-
+            // --- NEW: Wrap content in the light-theme card ---
             return `
-                <div class="pilot-hub-card">
-                    ${createHubHeaderHTML(pilot, headerTitle)}
+                <div class="hub-content-wrapper light-theme">
                     <div class="on-duty-header">
                         <div>
                             <p style="margin: 0;"><strong>Active Roster:</strong> ${currentRoster.name}</p>
@@ -6164,9 +6142,9 @@ async function updateSectorOpsSecondaryData() {
             }).join('')}
                     </div>
                 </div>
-                ${liveMapHTML}`;
+                `;
         } catch (error) {
-            return `<div class="content-card"><p class="error-text">${error.message}</p></div>`;
+            return `<div class="hub-content-wrapper light-theme"><p class="error-text">${error.message}</p></div>`;
         }
     };
 

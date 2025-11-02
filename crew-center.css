@@ -2761,3 +2761,127 @@ ul.notam-list li:last-child {
 /* ========================================================== */
 /* END: AIRPORT INFO POPUP REVAMP                             */
 /* ========================================================== */
+/* ================================================== */
+/* START: V3 PILOT HUB REDESIGN STYLES                */
+/* ================================================== */
+
+/* --- 1. The new "Welcome Home" Greeting --- */
+.hub-welcome-header {
+    padding: 1rem 0 2rem 0;
+    text-align: left;
+}
+
+.hub-welcome-header h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.hub-welcome-header h2 {
+    font-size: 1.5rem;
+    font-weight: 400;
+    color: var(--dashboard-text-muted);
+    margin: 0;
+}
+
+
+/* --- 2. The Standalone Status Header (Formerly inside the card) --- */
+.hub-header.redesigned {
+    /* This section is now a standalone full-width bar */
+    background: var(--primary-glass);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1.5rem 2rem;
+    border-top: 5px solid var(--rank-accent-color, transparent);
+    box-shadow: 0 0 25px var(--rank-glow-color, rgba(0,0,0,0));
+    transition: all 0.4s ease;
+    margin-bottom: 2rem; /* Add margin to separate from content below */
+}
+
+/* --- 3. The New "White" Content Wrapper --- */
+.hub-content-wrapper.light-theme {
+    background-color: #f8f9fa; /* The "white" background */
+    color: #212529; /* Dark text for contrast */
+    border-radius: 10px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+/* --- 4. Overrides for content inside the new light wrapper --- */
+.hub-content-wrapper.light-theme .on-duty-header {
+    margin-bottom: 1.5rem;
+}
+.hub-content-wrapper.light-theme .on-duty-header p {
+    color: #212529;
+}
+.hub-content-wrapper.light-theme .on-duty-header .muted {
+    color: #6c757d;
+}
+
+/* Style the checklist for the light theme */
+.hub-content-wrapper.light-theme .roster-checklist {
+    gap: 0.5rem;
+}
+.hub-content-wrapper.light-theme .roster-leg-item {
+    background-color: #ffffff;
+    border: 1px solid #e9ecef;
+    color: #212529;
+}
+.hub-content-wrapper.light-theme .roster-leg-item .flight-number {
+    color: #000;
+}
+.hub-content-wrapper.light-theme .roster-leg-item.completed {
+    background-color: #e6f7ec;
+    border-left-color: var(--success-color);
+}
+.hub-content-wrapper.light-theme .roster-leg-item.completed .flight-number {
+    color: #6c757d;
+    text-decoration: line-through;
+}
+
+/* Style the crew rest notice for the light theme */
+.hub-content-wrapper.light-theme .crew-rest-notice {
+    background-color: #fff9e6;
+    border-left-color: var(--warning-color);
+    color: #594b2d;
+}
+.hub-content-wrapper.light-theme .crew-rest-timer-display {
+    background-color: #ffffff;
+    border: 1px solid #e9ecef;
+    color: var(--warning-color);
+}
+
+/* Style the "Ready for Duty" cards for the light theme */
+.hub-content-wrapper.light-theme .hub-action-grid {
+    margin-top: 0; /* No extra margin needed */
+}
+.hub-content-wrapper.light-theme .hub-action-grid h4 {
+    color: #000;
+}
+.hub-content-wrapper.light-theme .hub-action-grid p {
+    color: #495057;
+}
+
+/* --- 5. Remove the old card style --- */
+.pilot-hub-card {
+    /* This class is no longer used as the main wrapper, */
+    /* but we remove its padding/border just in case. */
+    padding: 0;
+    border: none;
+    background: none;
+    box-shadow: none;
+    border-top: none;
+}
+
+/* --- 6. Remove the map section --- */
+.live-map-section {
+    display: none !important;
+}
+
+/* ================================================== */
+/* END: V3 PILOT HUB REDESIGN STYLES                  */
+/* ================================================== */
