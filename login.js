@@ -1,41 +1,58 @@
-// login.js (Updated for Universal Redirection, Animation, and Remember Me)
+// login.js (Updated for Language Cycling and Correct Links)
 
 document.addEventListener('DOMContentLoaded', () => {
     const loginForm = document.getElementById('login-form');
 
-    // --- NEW: Animated Greeting with Internationalization (i18n) ---
+    // --- UPDATED: Animated Greeting with Language Cycling ---
     
     // 1. Define translations
-    // The text is split to style "IN" separately
     const translations = {
-        'en': ["Let's fly higher ", "IN"], // English (Default)
+        'en': ["Let's fly higher ", "IN"], // English
         'es': ["Volemos más alto ", "IN"], // Spanish
         'fr': ["Volons plus haut ", "IN"], // French
         'de': ["Fliegen wir höher ", "IN"]  // German
     };
 
-    // 2. Get browser language
-    // 'en-US' becomes 'en'
-    const userLang = navigator.language.split('-')[0]; 
-    
-    // 3. Select translation (default to 'en' if lang not found)
-    const greeting = translations[userLang] || translations['en'];
-
-    // 4. Set the HTML
+    const languages = Object.keys(translations); // ['en', 'es', 'fr', 'de']
+    let currentLangIndex = 0;
     const greetingElement = document.getElementById('animated-greeting');
-    if (greetingElement) {
-        // We use innerHTML to add the <span> for styling
-        greetingElement.innerHTML = `${greeting[0]}<span class="highlight">${greeting[1]}</span>`;
+
+    function changeGreeting() {
+        // Get the current language key (e.g., 'en')
+        const langKey = languages[currentLangIndex];
+        // Get the translation array (e.g., ["Let's fly higher ", "IN"])
+        const greeting = translations[langKey];
+        
+        if (greetingElement) {
+            // 1. Fade out the text
+            greetingElement.style.opacity = '0';
+            
+            // 2. Wait for the fade-out to finish
+            setTimeout(() => {
+                // 3. Change the text
+                greetingElement.innerHTML = `${greeting[0]}<span class="highlight">${greeting[1]}</span>`;
+                
+                // 4. Fade the text back in
+                greetingElement.style.opacity = '1';
+                
+                // 5. Move to the next language for the next cycle
+                currentLangIndex = (currentLangIndex + 1) % languages.length; // This loops the index
+            }, 400); // 400ms - must match the transition in CSS
+        }
     }
 
-    // --- Login Form Submission Logic ---
+    // 1. Set the initial greeting immediately
+    changeGreeting();
+    
+    // 2. Set an interval to change it every 3.5 seconds
+    setInterval(changeGreeting, 3500); // 3500ms = 3.5 seconds
+
+    // --- Login Form Submission Logic (Includes "Remember Me") ---
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            
-            // UPDATED: Get the "Remember Me" checkbox status
             const rememberMe = document.getElementById('remember-me').checked;
             
             try {
@@ -51,12 +68,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (response.ok) {
                     
-                    // --- UPDATED: "Remember Me" Logic ---
+                    // "Remember Me" Logic
                     if (rememberMe) {
-                        // localStorage persists after the browser is closed
                         localStorage.setItem('authToken', data.token); 
                     } else {
-                        // sessionStorage is cleared when the browser is closed
                         sessionStorage.setItem('authToken', data.token);
                     }
                     
@@ -82,7 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const eyeClosed = document.getElementById('eye-closed');
 
     if (togglePassword && passwordInput && eyeOpen && eyeClosed) {
-        togglePassword.addEventListener('click', () => {
+        togglePassword.addEventListener('click', () => {.
             const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
             passwordInput.setAttribute('type', type);
 

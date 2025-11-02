@@ -24,22 +24,23 @@
             color: #6c757d; 
         }
 
-        /* --- NEW: Animation for Greeting --- */
+        /* --- Animation for Greeting --- */
         .animated-greeting {
             font-family: 'Montserrat', sans-serif;
             font-size: 1.75rem;
             font-weight: 700;
             color: #333;
             margin-bottom: 0.5rem;
-            /* Apply the animation */
+            /* Initial page load animation */
             animation: fadeInUp 1s ease-out forwards;
+            
+            /* UPDATED: Add transition for smooth language change */
+            transition: opacity 0.4s ease-in-out;
         }
         
-        /* The 'IN' part will be styled by the JS */
         .animated-greeting .highlight {
             color: #0033a0; /* INDGO Blue */
             display: inline-block;
-            /* Add a subtle pulse to 'IN' */
             animation: pulse 2s infinite ease-in-out;
         }
 
@@ -141,9 +142,14 @@
             </form>
 
             <div class="form-container" style="background: transparent; border: none; padding-top: 0; padding-bottom: 0;">
+                
                 <p class="form-footer-link">
+                    Have an invite code? <a href="register.html">Create an account</a>.
+                </p>
+                <p class="form-footer-link" style="padding-top: 0.5rem;">
                     Not a member yet? <a href="apply.html">Join us</a>.
                 </p>
+
             </div>
             </div>
     </main>
