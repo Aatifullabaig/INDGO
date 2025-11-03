@@ -1,4 +1,4 @@
-// login.js (Updated with "Cover" Animation & More Languages)
+// login.js (Updated with Global Routes from VA Map)
 
 document.addEventListener('DOMContentLoaded', () => {
     const loginForm = document.getElementById('login-form');
@@ -6,12 +6,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Animated Greeting with Language Cycling (UPDATED) ---
     const translations = {
         'en': ["Let's fly higher ", "IN"],
-        'es': ["Volemos más alto ", "IN"],
-        'fr': ["Volons plus haut ", "IN"],
-        'de': ["Fliegen wir höher ", "IN"],
-        'it': ["Voliamo più in alto ", "IN"],
-        'pt': ["Vamos voar mais alto ", "IN"],
-        'nl': ["Laten we hoger vliegen ", "IN"]
+        'ar': ["لنحلق أعلى ", "IN"],
+        'he': ["בואו נטוס גבוה יותר ", "IN"],
+        'hi': ["चलो ऊंची उड़ान भरें ", "IN"],
+        'bn': ["চলো আরও উঁচুতে উড়ি ", "IN"],
+        'mr': ["चला उंच उडूया ", "IN"],
+        'te': ["మనం మరింత ఉన్నత స్థాయికి వెళ్దాం ", "IN"],
+        'ta': ["நாம் உயரமாக பறப்போம் ", "IN"],
+        'zh': ["让我们飞得更高 ", "IN"],    // NEW: Chinese
+        'ja': ["より高く飛びましょう ", "IN"], // NEW: Japanese
+        'ko': ["더 높이 날자 ", "IN"],         // NEW: Korean
+        'th': ["ไปบินให้สูงขึ้น ", "IN"],   // NEW: Thai
+        'vi': ["Bay cao hơn nữa ", "IN"],     // NEW: Vietnamese
+        'id': ["Mari terbang lebih tinggi ", "IN"], // NEW: Indonesian
+        'tr': ["Daha yükseğe uçalım ", "IN"], // NEW: Turkish
+        'sw': ["Tupae juu zaidi ", "IN"],      // NEW: Swahili
+        'ru': ["Полетим выше ", "IN"]         // NEW: Russian
     };
     const languages = Object.keys(translations);
     let currentLangIndex = 0;
@@ -20,8 +30,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function changeGreeting() {
         const langKey = languages[currentLangIndex];
         const greeting = translations[langKey];
+        
         if (greetingElement) {
             greetingElement.style.opacity = '0';
+
+            // --- RTL/LTR Direction Handling (Unchanged) ---
+            // Sets direction based on the language key
+            if (langKey === 'ar' || langKey === 'he') {
+                greetingElement.setAttribute('dir', 'rtl');
+            } else {
+                greetingElement.setAttribute('dir', 'ltr');
+            }
+
             setTimeout(() => {
                 greetingElement.innerHTML = `${greeting[0]}<span class="highlight">${greeting[1]}</span>`;
                 greetingElement.style.opacity = '1';
@@ -33,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
     changeGreeting();
     setInterval(changeGreeting, 3500); 
 
-    // --- Login Form Submission Logic ---
+    // --- Login Form Submission Logic (Unchanged) ---
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -60,9 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     showNotification('Login successful! Redirecting...', 'success');
                     
-                    // --- UPDATED: 2-Stage Success Animation ("Cover") ---
-                    // This JS logic remains the same, but the CSS
-                    // it triggers has been completely changed.
+                    // 2-Stage Success Animation ("Cover")
                     const loginContainer = document.querySelector('.login-container');
                     
                     if (loginContainer) {
@@ -72,10 +90,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Stage 2: Wait for Stage 1, then fade out the whole card
                         setTimeout(() => {
                             loginContainer.classList.add('success-anim-end');
-                        }, 800); // 800ms delay for Stage 1 to play
+                        }, 800); // 800ms delay
                     }
                     
-                    // Set final timeout for redirect (must be > total animation time)
+                    // Set final timeout for redirect
                     setTimeout(() => {
                         window.location.href = 'crew-center.html';
                     }, 1500); // 1.5s total delay
