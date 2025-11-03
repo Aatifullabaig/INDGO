@@ -15,7 +15,7 @@
             background-color: #f4f7f6; 
         }
 
-        /* --- UPDATED: Login Container (No size change) --- */
+        /* --- UPDATED: Login Container --- */
         .login-container {
             display: grid;
             grid-template-columns: 1fr 1fr; 
@@ -29,11 +29,8 @@
             
             position: relative; 
             
-            /* * [FIX 1 of 3]
-             * Added 'grid-template-columns' to the transition.
-             * This allows the grid itself to animate smoothly.
-             */
-            transition: opacity 0.5s ease, grid-template-columns 0.7s ease-in-out;
+            /* [FIX 1 of 4] Removed 'grid-template-columns' from transition */
+            transition: opacity 0.5s ease;
         }
 
         /* --- UPDATED: Branding Side (Left) --- */
@@ -46,23 +43,25 @@
             border-right: 1px solid #eef0f2;
             text-align: left;
             
-            /* This transition will now smoothly handle border/background changes */
-            transition: all 0.7s ease-in-out;
+            /* [FIX 2 of 4] Added 'align-items' to transition for smooth centering */
+            transition: align-items 0.7s ease-in-out;
             z-index: 10;
             position: relative; 
+            
+            /* Added base alignment for the transition to work */
+            align-items: flex-start;
         }
         
-        /* --- UPDATED: Form Side (Right) --- */
+        /* --- Form Side (Right) - Unchanged --- */
         .login-form-area {
             padding: 2.25rem; 
             display: flex;
             flex-direction: column;
             justify-content: center;
             
-            /* This will fade the form out */
             transition: opacity 0.5s ease-out;
             opacity: 1;
-            overflow: hidden; /* Important: Hides content as it's "squashed" */
+            overflow: hidden; 
             position: relative; 
             z-index: 5;
         }
@@ -93,6 +92,9 @@
                 border-right: none;
                 border-bottom: 1px solid #eef0f2;
                 padding: 2.5rem;
+                
+                /* Center on mobile by default */
+                align-items: center;
             }
             .login-form-area {
                 padding: 2.5rem 1.5rem;
@@ -120,7 +122,9 @@
             color: #333;
             margin-bottom: 0.5rem;
             line-height: 1.3;
-            transition: opacity 0.4s ease-in-out;
+            
+            /* [FIX 3 of 4] Added 'transform' to transition for smooth scaling */
+            transition: opacity 0.4s ease-in-out, transform 0.7s ease-in-out;
         }
         
         .animated-greeting .highlight {
@@ -153,35 +157,31 @@
             }
         }
 
-        /* * [FIX 2 of 3]
-         * This rule now animates the grid to 'squash' the right (form) column
-         * and expand the left (branding) column.
-         */
-        .login-container.success-anim-start {
-            grid-template-columns: 1fr 0fr;
-        }
+        /* --- [FIX 4 of 4] REPLACED Success Animation Classes --- */
         
-        /* * [FIX 3 of 3]
-         * REMOVED the 'position: absolute' and related properties.
-         * The grid animation handles the expansion, so we only
-         * need to center the text and remove the border.
-         */
+        /* This rule is no longer needed, as the container doesn't change */
+        /* .login-container.success-anim-start { } */
+        
+        /* This rule animates the text on the left */
         .login-container.success-anim-start .login-branding {
+            align-items: center; /* This animates smoothly to center the text */
             text-align: center;
-            border-right: none; /* Remove border during animation */
         }
 
+        /* This rule "pops" the text size */
+        .login-container.success-anim-start .animated-greeting {
+            transform: scale(1.1);
+        }
+
+        /* This rule fades out the form (Unchanged from original) */
         .login-container.success-anim-start .login-form-area {
-            /* This fades out the form BEHIND the branding panel */
             opacity: 0;
         }
         
-        /* --- UPDATED: Success Animation (Stage 2) --- */
+        /* --- Success Animation (Stage 2) - Unchanged --- */
         .login-container.success-anim-end {
-            /* This fades out the whole card */
             opacity: 0;
             transform: translateY(-20px);
-            /* Added transform to the transition */
             transition: opacity 0.5s ease-out, transform 0.5s ease-out;
         }
 
@@ -250,7 +250,7 @@
                                     <path d="M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
                                     <path d="M0 8s3-5.5 8-5.5S16 8 16 8s-3 5.5-8 5.5S0 8 0 8zm8 3.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
                                 </svg>
-                                <svg id="eye-closed" xmlns="http://www.w3.org/2G/2G/svg" width="20" height="20" fill="currentColor" class="bi bi-eye-slash-fill" viewBox="0 0 16 16" style="display: none;">
+                                <svg id="eye-closed" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-eye-slash-fill" viewBox="0 0 16 16" style="display: none;">
                                     <path d="m10.79 12.912-1.614-1.615a3.5 3.5 0 0 1-4.474-4.474l-2.06-2.06C.938 6.278 0 8 0 8s3 5.5 8 5.5a7.029 7.029 0 0 0 2.79-.588zM5.21 3.088A7.028 7.028 0 0 1 8 2.5c5 0 8 5.5 8 5.5s-.939 1.721-2.641 3.238l-2.062-2.062a3.5 3.5 0 0 0-4.474-4.474L5.21 3.089z"/>
                                     <path d="M5.525 7.646a2.5 2.5 0 0 0 2.829 2.829l-2.83-2.829zm4.95.708-2.829-2.83a2.5 2.5 0 0 1 2.829 2.829zm3.171 6-12-12 .708-.708 12 12-.708.708z"/>
                                 </svg>
