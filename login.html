@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crew Center Login - INDGO AIR Virtual</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <link rel="stylesheet" type="text" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
@@ -15,45 +15,53 @@
             background-color: #f4f7f6; 
         }
 
-        /* --- UPDATED: Even Slimmer Login Container --- */
+        /* --- UPDATED: Login Container (No size change) --- */
         .login-container {
             display: grid;
             grid-template-columns: 1fr 1fr; 
-            max-width: 780px; /* UPDATED: Was 850px */
+            max-width: 780px; 
             margin: 5rem auto; 
             background: #ffffff;
             border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
             overflow: hidden; 
             animation: fadeInUp 1s ease-out forwards;
-            /* NEW: Add transition for grid-template-columns */
-            transition: grid-template-columns 0.7s ease-in-out, opacity 0.5s ease;
+            
+            /* NEW: Added position relative for absolute children */
+            position: relative; 
+            /* REMOVED: No longer transitioning grid-template-columns */
+            transition: opacity 0.5s ease;
         }
 
-        /* --- UPDATED: Tighter Branding Side (Left) --- */
+        /* --- UPDATED: Branding Side (Left) --- */
         .login-branding {
             display: flex;
             flex-direction: column;
             justify-content: center;
-            padding: 2.25rem; /* UPDATED: Was 2.5rem */
+            padding: 2.25rem; 
             background: #fdfdfd; 
             border-right: 1px solid #eef0f2;
             text-align: left;
-            /* NEW: Transition for alignment */
-            transition: text-align 0.7s ease-in-out;
+            
+            /* NEW: Transition for expansion and z-index for layering */
+            transition: all 0.7s ease-in-out;
+            z-index: 10;
+            position: relative; /* Added for stacking context */
         }
         
-        /* --- UPDATED: Tighter Form Side (Right) --- */
+        /* --- UPDATED: Form Side (Right) --- */
         .login-form-area {
-            padding: 2.25rem; /* UPDATED: Was 2.5rem */
+            padding: 2.25rem; 
             display: flex;
             flex-direction: column;
             justify-content: center;
-            /* NEW: Add transition for opacity and overflow */
-            transition: opacity 0.5s ease-out, max-height 0.7s ease-out;
+            
+            /* NEW: Transition for fade-out and z-index for layering */
+            transition: opacity 0.5s ease-out;
             opacity: 1;
-            overflow: hidden; /* Helps with the collapse */
-            max-height: 600px; /* Set a max height for transition */
+            overflow: hidden; 
+            position: relative; /* Added for stacking context */
+            z-index: 5;
         }
         
         .login-form-area .form-container {
@@ -142,30 +150,33 @@
             }
         }
 
-        /* --- NEW: Success Animation Classes (Stage 1) --- */
+        /* --- NEW: Success Animation Classes (Stage 1) - "Cover" Animation --- */
         .login-container.success-anim-start {
-            /* This makes the branding 100% width and form 0% width */
-            grid-template-columns: 1fr 0fr;
+            /* We NO LONGER change the grid. The container size stays fixed. */
         }
         
         .login-container.success-anim-start .login-branding {
-            /* Center the text when it's full-width */
+            /* The branding panel expands to cover the whole container */
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             text-align: center;
+            border-right: none; /* Remove border during animation */
         }
 
         .login-container.success-anim-start .login-form-area {
-            /* This fades out the form */
+            /* This fades out the form BEHIND the branding panel */
             opacity: 0;
-            padding-top: 0;
-            padding-bottom: 0;
-            max-height: 0; /* Collapse the form */
         }
         
-        /* --- NEW: Success Animation (Stage 2) --- */
+        /* --- UPDATED: Success Animation (Stage 2) --- */
         .login-container.success-anim-end {
             /* This fades out the whole card */
             opacity: 0;
             transform: translateY(-20px);
+            /* Added transform to the transition */
             transition: opacity 0.5s ease-out, transform 0.5s ease-out;
         }
 

@@ -1,12 +1,17 @@
-// login.js (Updated with 2-Stage "Expand" Animation)
+// login.js (Updated with "Cover" Animation & More Languages)
 
 document.addEventListener('DOMContentLoaded', () => {
     const loginForm = document.getElementById('login-form');
 
-    // --- Animated Greeting with Language Cycling (Unchanged) ---
+    // --- Animated Greeting with Language Cycling (UPDATED) ---
     const translations = {
-        'en': ["Let's fly higher ", "IN"], 'es': ["Volemos más alto ", "IN"],
-        'fr': ["Volons plus haut ", "IN"], 'de': ["Fliegen wir höher ", "IN"]
+        'en': ["Let's fly higher ", "IN"],
+        'es': ["Volemos más alto ", "IN"],
+        'fr': ["Volons plus haut ", "IN"],
+        'de': ["Fliegen wir höher ", "IN"],
+        'it': ["Voliamo più in alto ", "IN"],
+        'pt': ["Vamos voar mais alto ", "IN"],
+        'nl': ["Laten we hoger vliegen ", "IN"]
     };
     const languages = Object.keys(translations);
     let currentLangIndex = 0;
@@ -24,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 400); 
         }
     }
+    // Initial call and interval are unchanged
     changeGreeting();
     setInterval(changeGreeting, 3500); 
 
@@ -54,7 +60,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     showNotification('Login successful! Redirecting...', 'success');
                     
-                    // --- UPDATED: 2-Stage Success Animation ---
+                    // --- UPDATED: 2-Stage Success Animation ("Cover") ---
+                    // This JS logic remains the same, but the CSS
+                    // it triggers has been completely changed.
                     const loginContainer = document.querySelector('.login-container');
                     
                     if (loginContainer) {
