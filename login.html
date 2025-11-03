@@ -11,22 +11,23 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
     <link rel="icon" href="/images/indgo.png" type="image/x-icon">
     <style>
-        /* --- Page Body Style (Unchanged) --- */
         body {
             background-color: #f4f7f6; 
         }
 
-        /* --- UPDATED: Slimmer Login Container --- */
+        /* --- UPDATED: Even Slimmer Login Container --- */
         .login-container {
             display: grid;
             grid-template-columns: 1fr 1fr; 
-            max-width: 850px; /* UPDATED: Was 900px */
+            max-width: 780px; /* UPDATED: Was 850px */
             margin: 5rem auto; 
             background: #ffffff;
             border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
             overflow: hidden; 
             animation: fadeInUp 1s ease-out forwards;
+            /* NEW: Add transition for grid-template-columns */
+            transition: grid-template-columns 0.7s ease-in-out, opacity 0.5s ease;
         }
 
         /* --- UPDATED: Tighter Branding Side (Left) --- */
@@ -34,21 +35,27 @@
             display: flex;
             flex-direction: column;
             justify-content: center;
-            padding: 2.5rem; /* UPDATED: Was 3rem */
+            padding: 2.25rem; /* UPDATED: Was 2.5rem */
             background: #fdfdfd; 
             border-right: 1px solid #eef0f2;
             text-align: left;
+            /* NEW: Transition for alignment */
+            transition: text-align 0.7s ease-in-out;
         }
         
         /* --- UPDATED: Tighter Form Side (Right) --- */
         .login-form-area {
-            padding: 2.5rem; /* UPDATED: Was 3rem */
+            padding: 2.25rem; /* UPDATED: Was 2.5rem */
             display: flex;
             flex-direction: column;
             justify-content: center;
+            /* NEW: Add transition for opacity and overflow */
+            transition: opacity 0.5s ease-out, max-height 0.7s ease-out;
+            opacity: 1;
+            overflow: hidden; /* Helps with the collapse */
+            max-height: 600px; /* Set a max height for transition */
         }
         
-        /* --- Form Container (Unchanged) --- */
         .login-form-area .form-container {
             width: 100%;
             padding: 0;
@@ -59,7 +66,7 @@
         }
         .login-form-area h2 {
             text-align: center;
-            margin-bottom: 1.25rem; /* UPDATED: Was 1.5rem */
+            margin-bottom: 1.25rem;
             font-family: 'Montserrat', sans-serif;
             color: #333;
         }
@@ -135,22 +142,33 @@
             }
         }
 
-        /* --- NEW: Success Animation Keyframes --- */
-        @keyframes flyOut {
-            from {
-                opacity: 1;
-                transform: translateY(0);
-            }
-            to {
-                opacity: 0;
-                transform: translateY(-80px);
-            }
+        /* --- NEW: Success Animation Classes (Stage 1) --- */
+        .login-container.success-anim-start {
+            /* This makes the branding 100% width and form 0% width */
+            grid-template-columns: 1fr 0fr;
+        }
+        
+        .login-container.success-anim-start .login-branding {
+            /* Center the text when it's full-width */
+            text-align: center;
         }
 
-        /* --- NEW: Success Animation Class --- */
-        .login-container.success-animation {
-            animation: flyOut 0.8s ease-in forwards;
+        .login-container.success-anim-start .login-form-area {
+            /* This fades out the form */
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            max-height: 0; /* Collapse the form */
         }
+        
+        /* --- NEW: Success Animation (Stage 2) --- */
+        .login-container.success-anim-end {
+            /* This fades out the whole card */
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+        }
+
     </style>
 </head>
 <body>
