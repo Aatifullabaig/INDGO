@@ -11,7 +11,77 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
     <link rel="icon" href="/images/indgo.png" type="image/x-icon">
     <style>
-        /* CSS for password toggle icon */
+        /* --- NEW: Page Body Style --- */
+        body {
+            background-color: #f4f7f6; /* Light gray background to make card pop */
+        }
+
+        /* --- NEW: Two-Column Login Container --- */
+        .login-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* 50/50 split */
+            max-width: 900px;
+            margin: 5rem auto; /* Center the card */
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
+            overflow: hidden; /* To keep border-radius on children */
+            animation: fadeInUp 1s ease-out forwards;
+        }
+
+        /* --- NEW: Branding Side (Left) --- */
+        .login-branding {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 3rem;
+            background: #fdfdfd; /* Slightly off-white */
+            border-right: 1px solid #eef0f2;
+            text-align: left;
+        }
+        
+        /* --- NEW: Form Side (Right) --- */
+        .login-form-area {
+            padding: 3rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        /* --- UPDATED: Make form-container styles apply here --- */
+        .login-form-area .form-container {
+            width: 100%;
+            padding: 0;
+            margin: 0;
+            border: none;
+            box-shadow: none;
+            background: transparent;
+        }
+        .login-form-area h2 {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            font-family: 'Montserrat', sans-serif;
+            color: #333;
+        }
+
+        /* --- UPDATED: Responsive behavior --- */
+        @media (max-width: 800px) {
+            .login-container {
+                grid-template-columns: 1fr; /* Stack columns on mobile */
+                margin: 2rem auto;
+            }
+            .login-branding {
+                text-align: center;
+                border-right: none;
+                border-bottom: 1px solid #eef0f2;
+                padding: 2.5rem;
+            }
+            .login-form-area {
+                padding: 2.5rem 1.5rem;
+            }
+        }
+
+        /* --- Password toggle icon (Unchanged) --- */
         .password-container {
             position: relative;
         }
@@ -24,17 +94,18 @@
             color: #6c757d; 
         }
 
-        /* --- Animation for Greeting --- */
+        /* --- Animation for Greeting (Unchanged) --- */
         .animated-greeting {
             font-family: 'Montserrat', sans-serif;
-            font-size: 1.75rem;
+            font-size: 2.25rem; /* Made larger */
             font-weight: 700;
             color: #333;
             margin-bottom: 0.5rem;
-            /* Initial page load animation */
-            animation: fadeInUp 1s ease-out forwards;
+            line-height: 1.3;
+            /* UPDATED: Remove initial animation, as container does it */
+            /* animation: fadeInUp 1s ease-out forwards; */
             
-            /* UPDATED: Add transition for smooth language change */
+            /* This transition is what makes the language change smooth */
             transition: opacity 0.4s ease-in-out;
         }
         
@@ -44,7 +115,7 @@
             animation: pulse 2s infinite ease-in-out;
         }
 
-        /* Animation Keyframes */
+        /* Animation Keyframes (Unchanged) */
         @keyframes fadeInUp {
             from {
                 opacity: 0;
@@ -103,55 +174,65 @@
         </nav>
     </header>
 
-    <main class="main-container" style="padding-top: 5rem; text-align: center;">
-        <div class="fade-in">
+    <main class="main-container" style="padding-top: 0; text-align: left;">
+        
+        <div class="login-container">
             
-            <h3 class="animated-greeting" id="animated-greeting"></h3>
-
-            <h2>Crew Center Login</h2>
-
-            <form id="login-form" class="form-container">
-                <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" class="form-input" required>
-                </div>
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <div class="password-container">
-                        <input type="password" id="password" class="form-input" required>
-                        <span id="togglePassword" class="password-toggle-icon">
-                            <svg id="eye-open" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-eye-fill" viewBox="0 0 16 16">
-                                <path d="M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
-                                <path d="M0 8s3-5.5 8-5.5S16 8 16 8s-3 5.5-8 5.5S0 8 0 8zm8 3.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
-                            </svg>
-                            <svg id="eye-closed" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-eye-slash-fill" viewBox="0 0 16 16" style="display: none;">
-                                <path d="m10.79 12.912-1.614-1.615a3.5 3.5 0 0 1-4.474-4.474l-2.06-2.06C.938 6.278 0 8 0 8s3 5.5 8 5.5a7.029 7.029 0 0 0 2.79-.588zM5.21 3.088A7.028 7.028 0 0 1 8 2.5c5 0 8 5.5 8 5.5s-.939 1.721-2.641 3.238l-2.062-2.062a3.5 3.5 0 0 0-4.474-4.474L5.21 3.089z"/>
-                                <path d="M5.525 7.646a2.5 2.5 0 0 0 2.829 2.829l-2.83-2.829zm4.95.708-2.829-2.83a2.5 2.5 0 0 1 2.829 2.829zm3.171 6-12-12 .708-.708 12 12-.708.708z"/>
-                            </svg>
-                        </span>
-                    </div>
-                </div>
-                <div class="form-options">
-                    <div class="remember-me">
-                        <input type="checkbox" id="remember-me">
-                        <label for="remember-me">Remember Me</label>
-                    </div>
-                    <a href="#">Forgot Password?</a>
-                </div>
-                <button type="submit" class="cta-button" style="width: 100%;">Login</button>
-            </form>
-
-            <div class="form-container" style="background: transparent; border: none; padding-top: 0; padding-bottom: 0;">
-                
-                <p class="form-footer-link">
-                    Have an invite code? <a href="register.html">Create an account</a>.
+            <div class="login-branding">
+                <h3 class="animated-greeting" id="animated-greeting">
+                    </h3>
+                <p style="font-size: 1rem; color: #555;">
+                    Welcome to the INDGO AIR Virtual Crew Center.
                 </p>
-                <p class="form-footer-link" style="padding-top: 0.5rem;">
-                    Not a member yet? <a href="apply.html">Join us</a>.
-                </p>
+            </div>
 
+            <div class="login-form-area">
+                <h2>Crew Center Login</h2>
+
+                <form id="login-form" class="form-container">
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <div class="password-container">
+                            <input type="password" id="password" class="form-input" required>
+                            <span id="togglePassword" class="password-toggle-icon">
+                                <svg id="eye-open" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-eye-fill" viewBox="0 0 16 16">
+                                    <path d="M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
+                                    <path d="M0 8s3-5.5 8-5.5S16 8 16 8s-3 5.5-8 5.5S0 8 0 8zm8 3.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
+                                </svg>
+                                <svg id="eye-closed" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-eye-slash-fill" viewBox="0 0 16 16" style="display: none;">
+                                    <path d="m10.79 12.912-1.614-1.615a3.5 3.5 0 0 1-4.474-4.474l-2.06-2.06C.938 6.278 0 8 0 8s3 5.5 8 5.5a7.029 7.029 0 0 0 2.79-.588zM5.21 3.088A7.028 7.028 0 0 1 8 2.5c5 0 8 5.5 8 5.5s-.939 1.721-2.641 3.238l-2.062-2.062a3.5 3.5 0 0 0-4.474-4.474L5.21 3.089z"/>
+                                    <path d="M5.525 7.646a2.5 2.5 0 0 0 2.829 2.829l-2.83-2.829zm4.95.708-2.829-2.83a2.5 2.5 0 0 1 2.829 2.829zm3.171 6-12-12 .708-.708 12 12-.708.708z"/>
+                                </svg>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="form-options">
+                        <div class="remember-me">
+                            <input type="checkbox" id="remember-me">
+                            <label for="remember-me">Remember Me</label>
+                        </div>
+                        <a href="#">Forgot Password?</a>
+                    </div>
+                    <button type="submit" class="cta-button" style="width: 100%;">Login</button>
+                </form>
+
+                <div class="form-container" style="background: transparent; border: none; padding-top: 0; padding-bottom: 0;">
+                    
+                    <p class="form-footer-link">
+                        Have an invite code? <a href="register.html">Create an account</a>.
+                    </p>
+                    <p class="form-footer-link" style="padding-top: 0.5rem;">
+                        Not a member yet? <a href="apply.html">Join us</a>.
+                    </p>
+
+                </div>
             </div>
-            </div>
+
+        </div>
     </main>
     
     <footer class="site-footer">
