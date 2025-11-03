@@ -24,9 +24,9 @@ function showNotification(message, type = 'success') {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const token = localStorage.getItem('authToken');
+    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken'); // <-- FIX
     const navMenu = document.querySelector('.nav-menu');
-
+    
     const showLoggedOutButtons = () => {
         const authLinks = document.querySelectorAll('.auth-link');
         authLinks.forEach(link => {

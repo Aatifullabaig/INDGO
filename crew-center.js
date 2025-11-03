@@ -3073,7 +3073,7 @@ function updatePfdDisplay(pfdData) {
     const arriveFlightModal = document.getElementById('arrive-flight-modal');
 
     // --- Auth Check ---
-    const token = localStorage.getItem('authToken');
+    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken'); // <-- FIX
     if (!token) {
         window.location.href = 'login.html';
         return;
