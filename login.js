@@ -1,9 +1,9 @@
-// login.js (Updated for Language Cycling and Correct Links)
+// login.js (Updated with Success Animation)
 
 document.addEventListener('DOMContentLoaded', () => {
     const loginForm = document.getElementById('login-form');
 
-    // --- UPDATED: Animated Greeting with Language Cycling ---
+    // --- Animated Greeting with Language Cycling (Unchanged) ---
     
     // 1. Define translations
     const translations = {
@@ -18,26 +18,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const greetingElement = document.getElementById('animated-greeting');
 
     function changeGreeting() {
-        // Get the current language key (e.g., 'en')
         const langKey = languages[currentLangIndex];
-        // Get the translation array (e.g., ["Let's fly higher ", "IN"])
         const greeting = translations[langKey];
         
         if (greetingElement) {
-            // 1. Fade out the text
             greetingElement.style.opacity = '0';
             
-            // 2. Wait for the fade-out to finish
             setTimeout(() => {
-                // 3. Change the text
                 greetingElement.innerHTML = `${greeting[0]}<span class="highlight">${greeting[1]}</span>`;
-                
-                // 4. Fade the text back in
                 greetingElement.style.opacity = '1';
-                
-                // 5. Move to the next language for the next cycle
-                currentLangIndex = (currentLangIndex + 1) % languages.length; // This loops the index
-            }, 400); // 400ms - must match the transition in CSS
+                currentLangIndex = (currentLangIndex + 1) % languages.length;
+            }, 400); 
         }
     }
 
@@ -45,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     changeGreeting();
     
     // 2. Set an interval to change it every 3.5 seconds
-    setInterval(changeGreeting, 3500); // 3500ms = 3.5 seconds
+    setInterval(changeGreeting, 3500); 
 
     // --- Login Form Submission Logic (Includes "Remember Me") ---
     if (loginForm) {
@@ -77,9 +68,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     showNotification('Login successful! Redirecting...', 'success');
                     
+                    // --- UPDATED: Trigger Success Animation ---
+                    // 1. Find the main login card
+                    const loginContainer = document.querySelector('.login-container');
+                    if (loginContainer) {
+                        // 2. Add the animation class (defined in login.html)
+                        loginContainer.classList.add('success-animation');
+                    }
+                    
+                    // 3. Set timeout for redirect (gives animation time to play)
                     setTimeout(() => {
                         window.location.href = 'crew-center.html';
-                    }, 1500); 
+                    }, 1500); // 1.5s total delay. Animation takes 0.8s.
+                
                 } else {
                     showNotification(`Login Failed: ${data.message}`, 'error');
                 }
@@ -97,7 +98,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const eyeClosed = document.getElementById('eye-closed');
 
     if (togglePassword && passwordInput && eyeOpen && eyeClosed) {
-        // **FIXED HERE:** Removed the '.' after () =>
         togglePassword.addEventListener('click', () => {
             const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
             passwordInput.setAttribute('type', type);

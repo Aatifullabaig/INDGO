@@ -11,44 +11,44 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
     <link rel="icon" href="/images/indgo.png" type="image/x-icon">
     <style>
-        /* --- NEW: Page Body Style --- */
+        /* --- Page Body Style (Unchanged) --- */
         body {
-            background-color: #f4f7f6; /* Light gray background to make card pop */
+            background-color: #f4f7f6; 
         }
 
-        /* --- NEW: Two-Column Login Container --- */
+        /* --- UPDATED: Slimmer Login Container --- */
         .login-container {
             display: grid;
-            grid-template-columns: 1fr 1fr; /* 50/50 split */
-            max-width: 900px;
-            margin: 5rem auto; /* Center the card */
+            grid-template-columns: 1fr 1fr; 
+            max-width: 850px; /* UPDATED: Was 900px */
+            margin: 5rem auto; 
             background: #ffffff;
             border-radius: 12px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
-            overflow: hidden; /* To keep border-radius on children */
+            overflow: hidden; 
             animation: fadeInUp 1s ease-out forwards;
         }
 
-        /* --- NEW: Branding Side (Left) --- */
+        /* --- UPDATED: Tighter Branding Side (Left) --- */
         .login-branding {
             display: flex;
             flex-direction: column;
             justify-content: center;
-            padding: 3rem;
-            background: #fdfdfd; /* Slightly off-white */
+            padding: 2.5rem; /* UPDATED: Was 3rem */
+            background: #fdfdfd; 
             border-right: 1px solid #eef0f2;
             text-align: left;
         }
         
-        /* --- NEW: Form Side (Right) --- */
+        /* --- UPDATED: Tighter Form Side (Right) --- */
         .login-form-area {
-            padding: 3rem;
+            padding: 2.5rem; /* UPDATED: Was 3rem */
             display: flex;
             flex-direction: column;
             justify-content: center;
         }
         
-        /* --- UPDATED: Make form-container styles apply here --- */
+        /* --- Form Container (Unchanged) --- */
         .login-form-area .form-container {
             width: 100%;
             padding: 0;
@@ -59,15 +59,15 @@
         }
         .login-form-area h2 {
             text-align: center;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.25rem; /* UPDATED: Was 1.5rem */
             font-family: 'Montserrat', sans-serif;
             color: #333;
         }
 
-        /* --- UPDATED: Responsive behavior --- */
+        /* --- Responsive behavior (Unchanged) --- */
         @media (max-width: 800px) {
             .login-container {
-                grid-template-columns: 1fr; /* Stack columns on mobile */
+                grid-template-columns: 1fr; 
                 margin: 2rem auto;
             }
             .login-branding {
@@ -97,25 +97,21 @@
         /* --- Animation for Greeting (Unchanged) --- */
         .animated-greeting {
             font-family: 'Montserrat', sans-serif;
-            font-size: 2.25rem; /* Made larger */
+            font-size: 2.25rem; 
             font-weight: 700;
             color: #333;
             margin-bottom: 0.5rem;
             line-height: 1.3;
-            /* UPDATED: Remove initial animation, as container does it */
-            /* animation: fadeInUp 1s ease-out forwards; */
-            
-            /* This transition is what makes the language change smooth */
             transition: opacity 0.4s ease-in-out;
         }
         
         .animated-greeting .highlight {
-            color: #0033a0; /* INDGO Blue */
+            color: #0033a0; 
             display: inline-block;
             animation: pulse 2s infinite ease-in-out;
         }
 
-        /* Animation Keyframes (Unchanged) */
+        /* --- Animation Keyframes (Unchanged) --- */
         @keyframes fadeInUp {
             from {
                 opacity: 0;
@@ -137,6 +133,23 @@
             100% {
                 transform: scale(1);
             }
+        }
+
+        /* --- NEW: Success Animation Keyframes --- */
+        @keyframes flyOut {
+            from {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateY(-80px);
+            }
+        }
+
+        /* --- NEW: Success Animation Class --- */
+        .login-container.success-animation {
+            animation: flyOut 0.8s ease-in forwards;
         }
     </style>
 </head>
