@@ -27,10 +27,13 @@
             overflow: hidden; 
             animation: fadeInUp 1s ease-out forwards;
             
-            /* NEW: Added position relative for absolute children */
             position: relative; 
-            /* REMOVED: No longer transitioning grid-template-columns */
-            transition: opacity 0.5s ease;
+            
+            /* * [FIX 1 of 3]
+             * Added 'grid-template-columns' to the transition.
+             * This allows the grid itself to animate smoothly.
+             */
+            transition: opacity 0.5s ease, grid-template-columns 0.7s ease-in-out;
         }
 
         /* --- UPDATED: Branding Side (Left) --- */
@@ -43,10 +46,10 @@
             border-right: 1px solid #eef0f2;
             text-align: left;
             
-            /* NEW: Transition for expansion and z-index for layering */
+            /* This transition will now smoothly handle border/background changes */
             transition: all 0.7s ease-in-out;
             z-index: 10;
-            position: relative; /* Added for stacking context */
+            position: relative; 
         }
         
         /* --- UPDATED: Form Side (Right) --- */
@@ -56,11 +59,11 @@
             flex-direction: column;
             justify-content: center;
             
-            /* NEW: Transition for fade-out and z-index for layering */
+            /* This will fade the form out */
             transition: opacity 0.5s ease-out;
             opacity: 1;
-            overflow: hidden; 
-            position: relative; /* Added for stacking context */
+            overflow: hidden; /* Important: Hides content as it's "squashed" */
+            position: relative; 
             z-index: 5;
         }
         
@@ -150,18 +153,20 @@
             }
         }
 
-        /* --- NEW: Success Animation Classes (Stage 1) - "Cover" Animation --- */
+        /* * [FIX 2 of 3]
+         * This rule now animates the grid to 'squash' the right (form) column
+         * and expand the left (branding) column.
+         */
         .login-container.success-anim-start {
-            /* We NO LONGER change the grid. The container size stays fixed. */
+            grid-template-columns: 1fr 0fr;
         }
         
+        /* * [FIX 3 of 3]
+         * REMOVED the 'position: absolute' and related properties.
+         * The grid animation handles the expansion, so we only
+         * need to center the text and remove the border.
+         */
         .login-container.success-anim-start .login-branding {
-            /* The branding panel expands to cover the whole container */
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
             text-align: center;
             border-right: none; /* Remove border during animation */
         }
@@ -245,7 +250,7 @@
                                     <path d="M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
                                     <path d="M0 8s3-5.5 8-5.5S16 8 16 8s-3 5.5-8 5.5S0 8 0 8zm8 3.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
                                 </svg>
-                                <svg id="eye-closed" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-eye-slash-fill" viewBox="0 0 16 16" style="display: none;">
+                                <svg id="eye-closed" xmlns="http://www.w3.org/2G/2G/svg" width="20" height="20" fill="currentColor" class="bi bi-eye-slash-fill" viewBox="0 0 16 16" style="display: none;">
                                     <path d="m10.79 12.912-1.614-1.615a3.5 3.5 0 0 1-4.474-4.474l-2.06-2.06C.938 6.278 0 8 0 8s3 5.5 8 5.5a7.029 7.029 0 0 0 2.79-.588zM5.21 3.088A7.028 7.028 0 0 1 8 2.5c5 0 8 5.5 8 5.5s-.939 1.721-2.641 3.238l-2.062-2.062a3.5 3.5 0 0 0-4.474-4.474L5.21 3.089z"/>
                                     <path d="M5.525 7.646a2.5 2.5 0 0 0 2.829 2.829l-2.83-2.829zm4.95.708-2.829-2.83a2.5 2.5 0 0 1 2.829 2.829zm3.171 6-12-12 .708-.708 12 12-.708.708z"/>
                                 </svg>

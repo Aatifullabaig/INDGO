@@ -10,18 +10,18 @@ document.addEventListener('DOMContentLoaded', () => {
         'he': ["בואו נטוס גבוה יותר ", "IN"],
         'hi': ["चलो ऊंची उड़ान भरें ", "IN"],
         'bn': ["চলো আরও উঁচুতে উড়ি ", "IN"],
-        'mr': ["चला उंच उडूया ", "IN"],
-        'te': ["మనం మరింత ఉన్నత స్థాయికి వెళ్దాం ", "IN"],
-        'ta': ["நாம் உயரமாக பறப்போம் ", "IN"],
-        'zh': ["让我们飞得更高 ", "IN"],    // NEW: Chinese
-        'ja': ["より高く飛びましょう ", "IN"], // NEW: Japanese
-        'ko': ["더 높이 날자 ", "IN"],         // NEW: Korean
-        'th': ["ไปบินให้สูงขึ้น ", "IN"],   // NEW: Thai
-        'vi': ["Bay cao hơn nữa ", "IN"],     // NEW: Vietnamese
-        'id': ["Mari terbang lebih tinggi ", "IN"], // NEW: Indonesian
-        'tr': ["Daha yükseğe uçalım ", "IN"], // NEW: Turkish
-        'sw': ["Tupae juu zaidi ", "IN"],      // NEW: Swahili
-        'ru': ["Полетим выше ", "IN"]         // NEW: Russian
+        'mr': ["चला आणखी उंच उडूया ", "IN"],        // FIXED
+        'te': ["మనం మరింత ఎత్తుకు ఎగురుదాం ", "IN"],     // FIXED
+        'ta': ["நாம் இன்னும் உயரமாக பறப்போம் ", "IN"], // FIXED
+        'zh': ["让我们飞得更高 ", "IN"],
+        'ja': ["より高く飛びましょう ", "IN"],
+        'ko': ["더 높이 날자 ", "IN"],
+        'th': ["เรามาบินให้สูงขึ้นกันเถอะ ", "IN"],   // FIXED
+        'vi': ["Chúng ta hãy bay cao hơn nữa ", "IN"], // FIXED
+        'id': ["Mari terbang lebih tinggi ", "IN"],
+        'tr': ["Daha yükseğe uçalım ", "IN"],
+        'sw': ["Tupae juu zaidi ", "IN"],
+        'ru': ["Полетим выше ", "IN"]
     };
     const languages = Object.keys(translations);
     let currentLangIndex = 0;
