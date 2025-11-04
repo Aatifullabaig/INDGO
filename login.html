@@ -225,6 +225,10 @@
             justify-content: center;
             text-align: center;
             
+            /* --- NEW FIX: Prevents text reflow during success animation --- */
+            /* This value is based on the original 1.2fr column width */
+            max-width: 400px;
+            width: 100%; 
         }
         
         .animated-greeting .highlight {

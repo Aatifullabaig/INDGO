@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'ar': ["لنحلق أعلى ", "IN"],
         'he': ["בואו נטוס גבוה יותר ", "IN"],
         'hi': ["चलो ऊंची उड़ान भरें ", "IN"],
-        'bn': ["চলো আরও উঁচুতে উড়ি ", "IN"],
+        'bn': ["चলো আরও উঁচুতে উড়ি ", "IN"],
         'mr': ["चला आणखी उंच उडूया ", "IN"],        // FIXED
         'te': ["మనం మరింత ఎత్తుకు ఎగురుదాం ", "IN"],     // FIXED
         'ta': ["நாம் இன்னும் உயரமாக பறப்போம் ", "IN"], // FIXED
@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const languages = Object.keys(translations);
     let currentLangIndex = 0;
     const greetingElement = document.getElementById('animated-greeting');
+    
+    // --- NEW (1/2): Variable to store the interval ID ---
+    let greetingInterval;
 
     function changeGreeting() {
         const langKey = languages[currentLangIndex];
@@ -49,11 +52,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 400); 
         }
     }
-    // Initial call and interval are unchanged
+    // Initial call
     changeGreeting();
-    setInterval(changeGreeting, 3500); 
+    // --- NEW (2/2): Store the interval ID when it's created ---
+    greetingInterval = setInterval(changeGreeting, 3500); 
 
-    // --- Login Form Submission Logic (Unchanged) ---
+    // --- Login Form Submission Logic ---
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -79,6 +83,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     showNotification('Login successful! Redirecting...', 'success');
+
+                    // --- NEW: Stop the greeting cycler immediately on success ---
+                    clearInterval(greetingInterval);
                     
                     // 2-Stage Success Animation ("Cover")
                     const loginContainer = document.querySelector('.login-container');
