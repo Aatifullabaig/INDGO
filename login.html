@@ -26,7 +26,9 @@
             overflow: hidden; 
             animation: fadeInUp 1s ease-out forwards;
             position: relative; 
-            transition: opacity 0.5s ease;
+            
+            /* --- CHANGED (1/4): Added grid-template-columns to the transition --- */
+            transition: opacity 0.5s ease, grid-template-columns 0.7s ease-in-out;
 
             /* --- NEW: Background Image --- */
             /* ===> REPLACE THIS URL with your dark image <=== */
@@ -62,11 +64,14 @@
             padding: 2.5rem; 
             background: transparent !important;
             border-right: 1px solid rgba(255, 255, 255, 0.15); 
-            text-align: center; /* <-- CHANGED from 'left' */
-            transition: align-items 0.7s ease-in-out;
+            text-align: center; 
+            
+            /* --- CHANGED (2/4): Animate the border-color --- */
+            transition: border-color 0.7s ease-in-out;
+            
             z-index: 10; /* Above the overlay */
             position: relative; 
-            align-items: center; /* <-- CHANGED from 'flex-start' */
+            align-items: center; 
         }
         
         /* --- UPDATED: Styling for the <p> tag --- */
@@ -92,7 +97,10 @@
             display: flex;
             flex-direction: column;
             justify-content: center;
-            transition: opacity 0.5s ease-out;
+            
+            /* --- CHANGED (3/4): Added padding to the transition --- */
+            transition: opacity 0.5s ease-out, padding 0.7s ease-in-out;
+            
             opacity: 1;
             overflow: hidden; 
             position: relative; 
@@ -236,17 +244,27 @@
             100% { transform: scale(1); }
         }
 
-        /* --- Success Animation (Unchanged) --- */
-        .login-container.success-anim-start .login-branding {
-            align-items: center; 
-            text-align: center;
+        /* --- CHANGED (4/4): Fully updated success animation rules --- */
+        .login-container.success-anim-start {
+            /* This collapses the grid, making the 1st column (branding) 
+               take up all the space and the 2nd column (form) disappear. */
+            grid-template-columns: 1fr 0fr;
         }
+
+        .login-container.success-anim-start .login-branding {
+            /* Content is already centered, just fade out the border */
+            border-right-color: rgba(255, 255, 255, 0); 
+        }
+
         .login-container.success-anim-start .animated-greeting {
             transform: scale(1.1);
         }
+
         .login-container.success-anim-start .login-form-area {
             opacity: 0;
+            padding: 0; /* Helps the grid column collapse smoothly */
         }
+        
         .login-container.success-anim-end {
             opacity: 0;
             transform: translateY(-20px);
@@ -309,12 +327,12 @@
                 <form id="login-form" class="form-container">
                     <div class="form-group">
                         <label for="email">Email</label>
-                        <input type="email" id="email" class="form-input" required>
+                        <input type="email" id="email" class_name="form-input" required>
                     </div>
                     <div class="form-group">
                         <label for="password">Password</label>
                         <div class="password-container">
-                            <input type="password" id="password" class="form-input" required>
+                            <input type="password" id="password" class_name="form-input" required>
                             <span id="togglePassword" class="password-toggle-icon">
                                 <svg id="eye-open" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-eye-fill" viewBox="0 0 16 16">
                                     <path d="M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
