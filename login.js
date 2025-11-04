@@ -101,6 +101,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     const loginContainer = document.querySelector('.login-container');
                     
                     if (loginContainer) {
+                        
+                        // --- 
+                        // --- THE FIX IS HERE (2 LINES) ---
+                        // ---
+                        // 1. Get the container's current rendered width
+                        const currentWidth = loginContainer.offsetWidth;
+                        // 2. Lock the container to that exact pixel width
+                        loginContainer.style.width = `${currentWidth}px`;
+                        // ---
+                        // --- END OF FIX ---
+                        // ---
+
                         // Stage 1: Fade out form, expand branding side
                         loginContainer.classList.add('success-anim-start');
                         
