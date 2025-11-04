@@ -225,7 +225,7 @@
             justify-content: center;
             text-align: center;
             
-            /* --- FIX (2/3): Added width 100% to prevent horizontal resizing --- */
+            /* --- FIX: Added width 100% to prevent horizontal resizing --- */
             width: 100%;
         }
         
@@ -266,7 +266,8 @@
         }
 
         .login-container.success-anim-start .animated-greeting {
-             /* --- FIX (3/3): Removed transform: scale(1.1) to prevent container growth --- */
+             /* --- FINAL FIX: This line MUST be removed or commented out --- */
+             /* transform: scale(1.1); */
         }
 
         .login-container.success-anim-start .login-form-area {
