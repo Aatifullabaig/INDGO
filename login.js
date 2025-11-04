@@ -83,8 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     // --- NEW: PREFETCH THE CREW CENTER PAGE ---
-                    // This tells the browser to start downloading the next
-                    // page in the background during the animation.
                     const prefetchLink = document.createElement('link');
                     prefetchLink.rel = 'prefetch';
                     prefetchLink.href = 'crew-center.html';
@@ -103,12 +101,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (loginContainer) {
                         
                         // --- 
-                        // --- THE FIX IS HERE (2 LINES) ---
+                        // --- THE FIX IS HERE (4 LINES) ---
                         // ---
-                        // 1. Get the container's current rendered width
+                        // 1. Get the container's current rendered dimensions
                         const currentWidth = loginContainer.offsetWidth;
-                        // 2. Lock the container to that exact pixel width
+                        const currentHeight = loginContainer.offsetHeight; // <-- NEW
+                        
+                        // 2. Lock the container to those exact pixel dimensions
                         loginContainer.style.width = `${currentWidth}px`;
+                        loginContainer.style.height = `${currentHeight}px`; // <-- NEW
                         // ---
                         // --- END OF FIX ---
                         // ---
