@@ -259,8 +259,9 @@
         }
 
         .login-container.success-anim-start .login-branding {
-            /* Content is already centered, just fade out the border */
-            border-right-color: rgba(255, 255, 255, 0); 
+            /* --- FIX: Instantly hide border to conceal the column resize --- */
+            border-right: 1px solid transparent; 
+            transition: none; /* IMPORTANT: Stop all transitions on this element */
         }
 
         .login-container.success-anim-start .animated-greeting {
