@@ -26,7 +26,7 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken'); // <-- FIX
     const navMenu = document.querySelector('.nav-menu');
-    
+
     const showLoggedOutButtons = () => {
         const authLinks = document.querySelectorAll('.auth-link');
         authLinks.forEach(link => {
@@ -88,11 +88,18 @@ document.addEventListener('DOMContentLoaded', () => {
     logoutButton.href = '#';
     logoutButton.className = 'nav-link nav-button';
     logoutButton.textContent = 'Logout';
+    
+    // --- THIS IS THE FIX ---
     logoutButton.onclick = () => {
+        // Clear the token from BOTH storage locations
         localStorage.removeItem('authToken');
+        sessionStorage.removeItem('authToken'); // <-- ADDED THIS LINE
+
         // Redirect to home and force a reload to clear state
         window.location.href = 'index.html'; 
     };
+    // --- END OF FIX ---
+    
     logoutLi.appendChild(logoutButton);
 
     // 3. Add the new elements to the navbar, but only if they aren't already there.
