@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'th': ["เรามาบินให้สูงขึ้นกันเถอะ ", "IN"],   // FIXED
         'vi': ["Chúng ta hãy bay cao hơn nữa ", "IN"], // FIXED
         'id': ["Mari terbang lebih tinggi ", "IN"],
-        'tr': ["Daha yükseğe uçalım ", "IN"],
+        'tr': ["Daha yükseqe uçalım ", "IN"],
         'sw': ["Tupae juu zaidi ", "IN"],
         'ru': ["Полетим выше ", "IN"]
     };
@@ -82,6 +82,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         sessionStorage.setItem('authToken', data.token);
                     }
                     
+                    // --- NEW: PREFETCH THE CREW CENTER PAGE ---
+                    // This tells the browser to start downloading the next
+                    // page in the background during the animation.
+                    const prefetchLink = document.createElement('link');
+                    prefetchLink.rel = 'prefetch';
+                    prefetchLink.href = 'crew-center.html';
+                    prefetchLink.as = 'document';
+                    document.head.appendChild(prefetchLink);
+                    // --- END OF PREFETCH ---
+
                     showNotification('Login successful! Redirecting...', 'success');
 
                     // --- NEW: Stop the greeting cycler immediately on success ---
