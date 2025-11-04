@@ -98,8 +98,13 @@
             flex-direction: column;
             justify-content: center;
             
-            /* --- CHANGED (3/4): Added padding to the transition --- */
-            transition: opacity 0.5s ease-out, padding 0.7s ease-in-out;
+            /* --- 
+             * --- THE FIX IS HERE ---
+             * REMOVED 'padding 0.7s ease-in-out' from the transition
+             * to prevent it from fighting the grid-template-columns animation.
+             * ---
+             */
+            transition: opacity 0.5s ease-out;
             
             opacity: 1;
             overflow: hidden; 
@@ -225,8 +230,7 @@
             justify-content: center;
             text-align: center;
             
-            /* --- NEW FIX: Prevents text reflow during success animation --- */
-            /* This value is based on the original 1.2fr column width */
+            /* --- This fix is still good, it prevents text reflow --- */
             max-width: 400px;
             width: 100%; 
         }
@@ -275,7 +279,7 @@
 
         .login-container.success-anim-start .login-form-area {
             opacity: 0;
-            padding: 0; /* Helps the grid column collapse smoothly */
+            padding: 0; /* This no longer animates, it's instant, which is correct */
         }
         
         .login-container.success-anim-end {
