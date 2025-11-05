@@ -5735,6 +5735,7 @@ async function updateSectorOpsSecondaryData() {
     // ====================================================================
 
 
+    // --- [REPLACE THIS FUNCTION] ---
     /**
      * Main view switching logic.
      */
@@ -5806,8 +5807,13 @@ async function updateSectorOpsSecondaryData() {
         // Add the light theme for the dispatch page as well
         } else if (viewId === 'view-flight-plan') {
             mainContentContainer.classList.add('hub-light-theme');
+        
+        // === THIS IS THE FIX ===
+        // This line tells the PIREP history page to use the light theme
+        } else if (viewId === 'view-pirep-history') {
+            mainContentContainer.classList.add('hub-light-theme');
         }
-        // --- [END NEW BLOCK] ---
+        // === END OF FIX ===
     };
 
     // --- New function to fetch fleet data ---
