@@ -3189,3 +3189,61 @@ ul.notam-list li:last-child {
 /* END: REDESIGNED DISPATCH UI STYLES (V4)            */
 /* ================================================== */
 
+/* ================================================== */
+/* START: V4 PIREP HISTORY (FLIGHT LOGS) RE-SKIN      */
+/* ================================================== */
+
+/* 1. Make the main content card light-themed */
+/* This rule re-styles the main card on the PIREP History page */
+.main-content.hub-light-theme #view-pirep-history .content-card {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+    color: #4a5568;
+}
+
+/* 2. Style the card header */
+.main-content.hub-light-theme #view-pirep-history .content-card h2 {
+    color: #1a202c; /* Dark heading */
+    border-bottom: 1px solid #e2e8f0; /* Light border */
+}
+
+/* 3. Re-style the list items to match the V4 theme */
+.main-content.hub-light-theme #pirep-history-list .pirep-history-item {
+    background-color: #f8f9fa; /* Light gray item background */
+    border: 1px solid #e2e8f0; /* Light border */
+    border-left-width: 4px; /* Keep the status border */
+    border-radius: 8px;
+    color: #4a5568;
+}
+
+/* 4. Update text colors inside the item */
+.main-content.hub-light-theme .pirep-info strong {
+    color: #1a202c; /* Dark text for flight number */
+}
+.main-content.hub-light-theme .pirep-info small {
+    color: #6c757d; /* Muted text for date */
+    opacity: 1;
+}
+.main-content.hub-light-theme .pirep-details {
+    color: #4a5568; /* Standard text for details */
+}
+
+/* 5. Ensure status colors override the new border color */
+.main-content.hub-light-theme .pirep-history-item.status-approved {
+    border-left-color: var(--success-color);
+    background-color: #e6f7ec; /* Optional: light green bg */
+}
+.main-content.hub-light-theme .pirep-history-item.status-pending {
+    border-left-color: var(--warning-color);
+    background-color: #fffbeb; /* Optional: light yellow bg */
+}
+.main-content.hub-light-theme .pirep-history-item.status-rejected {
+    border-left-color: var(--error-color);
+    background-color: #feefef; /* Optional: light red bg */
+}
+
+/* ================================================== */
+/* END: V4 PIREP HISTORY (FLIGHT LOGS) RE-SKIN        */
+/* ================================================== */
