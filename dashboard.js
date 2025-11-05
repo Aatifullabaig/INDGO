@@ -68,7 +68,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let unreadNotifications = [];
 
     // --- APP STATE & CONFIG ---
-    const token = localStorage.getItem('authToken');
+    //
+    // --- 
+    // --- THE FIRST FIX IS HERE (1 LINE) ---
+    // ---
+    // Check both localStorage (for "Remember Me") and sessionStorage (for regular login)
+    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    // ---
+    // --- END OF FIX ---
+    // ---
     let currentUserId = null;
     let codesharePartners = []; // For codeshare management, now fetched from API
     const allRoles = {
@@ -330,7 +338,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (loadingOverlay) {
                 loadingOverlay.classList.add('hidden');
             }
+            // --- FIX: Also clear sessionStorage on auth error ---
             localStorage.removeItem('authToken');
+            sessionStorage.removeItem('authToken');
             window.location.href = 'login.html';
         }
     }
@@ -1731,7 +1741,14 @@ function createInviteCardElement(invite) {
                     body: formData
                 });
                 showNotification('Profile updated successfully!', 'success');
-                if (result.token) localStorage.setItem('authToken', result.token);
+                if (result.token) {
+                    // --- FIX: Update the correct storage ---
+                    if (localStorage.getItem('authToken')) {
+                        localStorage.setItem('authToken', result.token);
+                    } else {
+                        sessionStorage.setItem('authToken', result.token);
+                    }
+                }
                 const user = result.user;
                 if (welcomeMessage) welcomeMessage.textContent = `Welcome, ${user.name}!`;
 
@@ -2101,7 +2118,16 @@ function createInviteCardElement(invite) {
     if (sidebarLogoutBtn) {
         sidebarLogoutBtn.addEventListener('click', (e) => {
             e.preventDefault();
+            //
+            // --- 
+            // --- THE SECOND FIX IS HERE (2 LINES) ---
+            // ---
+            // Clear the token from BOTH storage locations
             localStorage.removeItem('authToken');
+            sessionStorage.removeItem('authToken');
+            // ---
+            // --- END OF FIX ---
+            // ---
             window.location.href = 'index.html';
         });
     }
