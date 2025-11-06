@@ -72,6 +72,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
     // --- State Variables ---
+    let OWM_API_KEY = null;
+    let isWeatherLayerAdded = false;
     let MAPBOX_ACCESS_TOKEN = null;
     let DYNAMIC_FLEET = [];
     let CURRENT_PILOT = null;
@@ -119,18 +121,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
 
-    // --- Helper: Fetch Mapbox Token from Netlify Function ---
-    async function fetchMapboxToken() {
+    // --- Helper: Fetch API Keys from Netlify Function ---
+    async function fetchApiKeys() {
         try {
             const response = await fetch('https://indgo-va.netlify.app/.netlify/functions/config');
             if (!response.ok) throw new Error('Could not fetch server configuration.');
+            
             const config = await response.json();
+            
             if (!config.mapboxToken) throw new Error('Mapbox token is missing from server configuration.');
+            if (!config.owmApiKey) throw new Error('OWM API key is missing from server configuration.');
+
+            // Set Mapbox key
             MAPBOX_ACCESS_TOKEN = config.mapboxToken;
             mapboxgl.accessToken = MAPBOX_ACCESS_TOKEN;
+            
+            // Set OWM key
+            OWM_API_KEY = config.owmApiKey;
+
         } catch (error) {
-            console.error('Failed to initialize maps:', error.message);
-            showNotification('Could not load mapping services.', 'error');
+            console.error('Failed to initialize API keys:', error.message);
+            showNotification('Could not load mapping or weather services.', 'error');
         }
     }
 
@@ -1530,6 +1541,64 @@ function injectCustomStyles() {
     style.appendChild(document.createTextNode(css));
     document.head.appendChild(style);
 }
+
+// [ADD THIS new function to crew-center.js]
+
+    /**
+     * --- [NEW] Toggles the OpenWeatherMap Precipitation Layer ---
+     */
+    function toggleWeatherLayer(show) {
+        if (!sectorOpsMap) return;
+
+        const SOURCE_ID = 'owm-weather-source';
+        const LAYER_ID = 'owm-weather-layer';
+
+        // 1. First-time creation
+        if (show && !isWeatherLayerAdded) {
+            if (!OWM_API_KEY) {
+                console.error('OWM API Key is not loaded. Cannot add weather layer.');
+                showNotification('Weather service is unavailable (No API Key).', 'error');
+                return;
+            }
+
+            // --- Define the OWM tile URL ---
+            // We use {op} = PR0 for precipitation
+            const owmTileUrl = `https://maps.openweathermap.org/maps/2.0/weather/PR0/{z}/{x}/{y}?appid=${OWM_API_KEY}`;
+            
+            // --- Add the source ---
+            sectorOpsMap.addSource(SOURCE_ID, {
+                'type': 'raster',
+                'tiles': [owmTileUrl],
+                'tileSize': 256,
+                'maxzoom': 9
+            });
+
+            // --- Add the layer ---
+            sectorOpsMap.addLayer({
+                'id': LAYER_ID,
+                'type': 'raster',
+                'source': SOURCE_ID,
+                'paint': {
+                    'raster-opacity': 0.7, // Set a default transparency
+                    'raster-fade-duration': 300
+                }
+            }, 
+            // This is the critical part: Draw it *under* the aircraft icons
+            'sector-ops-live-flights-layer' 
+            ); 
+            
+            isWeatherLayerAdded = true;
+            console.log('Weather layer added.');
+
+        // 2. Toggle visibility
+        } else if (isWeatherLayerAdded) {
+            sectorOpsMap.setLayoutProperty(
+                LAYER_ID,
+                'visibility',
+                show ? 'visible' : 'none'
+            );
+        }
+    }
 
 /**
  * --- [NEW] Fetches reverse geocoded location and updates the UI.
@@ -3487,6 +3556,16 @@ function setupAircraftWindowEvents() {
                         </button>
                     `);
                  }
+
+                 // --- [START] ADDED THIS BLOCK ---
+                 if (!document.getElementById('weather-toggle-btn')) {
+                    toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
+                        <button id="weather-toggle-btn" class="toolbar-btn" title="Toggle Weather Radar">
+                            <i class="fa-solid fa-cloud-rain"></i>
+                        </button>
+                    `);
+                 }
+                 // --- [END] ADDED THIS BLOCK ---
             }
             
             airportInfoWindow = document.getElementById('airport-info-window');
@@ -5564,6 +5643,18 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
                 card.style.display = isMatch ? 'flex' : 'none';
             });
         });
+
+        // --- [START] ADDED THIS BLOCK ---
+        // --- NEW: Weather Toggle Button ---
+        const weatherToggleBtn = document.getElementById('weather-toggle-btn');
+        if (weatherToggleBtn) {
+            weatherToggleBtn.addEventListener('click', () => {
+                // This assumes your toggleWeatherLayer function exists
+                const isNowActive = weatherToggleBtn.classList.toggle('active');
+                toggleWeatherLayer(isNowActive); 
+            });
+        }
+        // --- [END] ADDED THIS BLOCK ---
     }
 
     // ==========================================================
