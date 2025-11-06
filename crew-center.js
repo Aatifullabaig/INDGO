@@ -7063,7 +7063,7 @@ async function initializeApp() {
 
     // Fetch essential data in parallel
     await Promise.all([
-        fetchMapboxToken(),
+        fetchApiKeys(),
         fetchAirportsData(),
         fetchRunwaysData()
     ]);
