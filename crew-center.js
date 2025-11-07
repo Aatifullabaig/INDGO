@@ -1535,6 +1535,114 @@ function injectCustomStyles() {
         .vsd-disclaimer p .fa-solid {
             margin-right: 4px;
         }
+        
+        /* ====================================================================
+        --- [NEW STYLES FOR WEATHER WINDOW] --- 
+        ====================================================================
+        */
+
+        #weather-settings-window {
+            /* Position on the left, not the right */
+            left: 20px;
+            right: auto;
+            
+            /* Make it smaller */
+            width: 360px;
+            
+            /* Fix transform direction */
+            transform: translateX(-20px);
+        }
+        
+        #weather-settings-window.visible {
+            transform: translateX(0);
+        }
+
+        .weather-toggle-list {
+            list-style: none;
+            padding: 16px 20px;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .weather-toggle-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .weather-toggle-label {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #e8eaf6;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .weather-toggle-label .fa-solid {
+            width: 20px;
+            text-align: center;
+            color: #00a8ff;
+        }
+        
+        .weather-disclaimer-note {
+            padding: 16px 20px;
+            margin: 0 20px 20px 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: #c5cae9;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            line-height: 1.5;
+        }
+        .weather-disclaimer-note .fa-solid {
+            color: #f39c12;
+            margin-right: 8px;
+        }
+
+        /* --- CSS Toggle Switch --- */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 28px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(10, 12, 26, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: .3s;
+            border-radius: 28px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #00a8ff;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(22px);
+        }
+        /* --- End Toggle Switch --- */
     `;
 
     const style = document.createElement('style');
@@ -3607,10 +3715,11 @@ function setupAircraftWindowEvents() {
 }
 
 
+
     /**
      * Main orchestrator for the Sector Ops view.
      * Manages fetching data and orchestrating map and list updates.
-     * --- [MODIFIED] Added injection for Cloud and Wind toggle buttons ---
+     * --- [MODIFIED] Injects Weather Settings Window and single toolbar button ---
      */
     async function initializeSectorOpsView() {
         const selector = document.getElementById('departure-hub-selector');
@@ -3645,6 +3754,51 @@ function setupAircraftWindowEvents() {
                 `;
                 viewContainer.insertAdjacentHTML('beforeend', windowHtml);
             }
+
+            // --- [NEW] Inject the Weather Settings Window ---
+            if (!document.getElementById('weather-settings-window')) {
+                const windowHtml = `
+                    <div id="weather-settings-window" class="info-window">
+                        <div class="info-window-header">
+                            <h3><i class="fa-solid fa-cloud-sun" style="margin-right: 10px;"></i> Weather Settings</h3>
+                            <div class="info-window-actions">
+                                <button class="weather-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
+                                <button class="weather-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                        </div>
+                        <div id="weather-window-content" class="info-window-content">
+                            <ul class="weather-toggle-list">
+                                <li class="weather-toggle-item">
+                                    <span class="weather-toggle-label"><i class="fa-solid fa-cloud-rain"></i> Precipitation</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="weather-toggle-precip">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </li>
+                                <li class="weather-toggle-item">
+                                    <span class="weather-toggle-label"><i class="fa-solid fa-cloud"></i> Cloud Cover</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="weather-toggle-clouds">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </li>
+                                <li class="weather-toggle-item">
+                                    <span class="weather-toggle-label"><i class="fa-solid fa-wind"></i> Wind Speed</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="weather-toggle-wind">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </li>
+                            </ul>
+                            <div class="weather-disclaimer-note">
+                                <i class="fa-solid fa-server"></i>
+                                <strong>Note:</strong> These layers are provided by a free service. Please use them gently as resources are limited.
+                            </div>
+                        </div>
+                    </div>
+                `;
+                viewContainer.insertAdjacentHTML('beforeend', windowHtml);
+            }
             
             const toolbarToggleBtn = document.getElementById('toolbar-toggle-panel-btn');
             if (toolbarToggleBtn) {
@@ -3663,36 +3817,22 @@ function setupAircraftWindowEvents() {
                     `);
                  }
 
-                 // --- [MODIFIED] Add all three weather buttons ---
-                 if (!document.getElementById('weather-toggle-btn')) {
+                 // --- [MODIFIED] Add ONE weather button, remove the other three ---
+                 if (!document.getElementById('open-weather-settings-btn')) {
                     toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
-                        <button id="weather-toggle-btn" class="toolbar-btn" title="Toggle Precipitation Radar">
-                            <i class="fa-solid fa-cloud-rain"></i>
+                        <button id="open-weather-settings-btn" class="toolbar-btn" title="Weather Settings">
+                            <i class="fa-solid fa-cloud-sun"></i>
                         </button>
                     `);
                  }
-                 if (!document.getElementById('cloud-toggle-btn')) {
-                    toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
-                        <button id="cloud-toggle-btn" class="toolbar-btn" title="Toggle Cloud Cover">
-                            <i class="fa-solid fa-cloud"></i>
-                        </button>
-                    `);
-                 }
-                 if (!document.getElementById('wind-toggle-btn')) {
-                    toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
-                        <button id="wind-toggle-btn" class="toolbar-btn" title="Toggle Wind Speed">
-                            <i class="fa-solid fa-wind"></i>
-                        </button>
-                    `);
-                 }
-                 // --- [END MODIFIED BLOCK] ---
+                 // --- [REMOVED] Old three buttons ---
             }
             
             airportInfoWindow = document.getElementById('airport-info-window');
             airportInfoWindowRecallBtn = document.getElementById('airport-recall-btn');
             aircraftInfoWindow = document.getElementById('aircraft-info-window');
             aircraftInfoWindowRecallBtn = document.getElementById('aircraft-recall-btn');
-
+            weatherSettingsWindow = document.getElementById('weather-settings-window'); // <-- NEW
 
             // 1. Get pilot's available hubs
             const rosterRes = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -3721,7 +3861,8 @@ function setupAircraftWindowEvents() {
             // 5. Set up all event listeners
             setupSectorOpsEventListeners();
             setupAirportWindowEvents();
-            setupAircraftWindowEvents(); // NEW
+            setupAircraftWindowEvents();
+            setupWeatherSettingsWindowEvents(); // <-- NEW
 
             // 6. Start the live data loop.
             startSectorOpsLiveLoop();
@@ -3736,7 +3877,7 @@ function setupAircraftWindowEvents() {
         }
     }
 
-// [REPLACE THIS FUNCTION]
+
 // ⬇️ MODIFIED: This function is modified to load 21 icons (regular, member, staff)
 // and use a 'case' expression to select the correct icon.
 async function initializeSectorOpsMap(centerICAO) {
@@ -5689,6 +5830,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         }
     }
 
+   
     /**
      * MODIFIED: Sets up event listeners for the Sector Ops view, including the new weather toolbar.
      */
@@ -5764,35 +5906,86 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
             });
         });
 
-        // --- [MODIFIED] Add listeners for all 3 weather buttons ---
-        
-        // 1. Precipitation Toggle Button
-        const weatherToggleBtn = document.getElementById('weather-toggle-btn');
-        if (weatherToggleBtn) {
-            weatherToggleBtn.addEventListener('click', () => {
-                const isNowActive = weatherToggleBtn.classList.toggle('active');
-                toggleWeatherLayer(isNowActive); // This is PRECIPITATION
+        // --- [MODIFIED] Add listener for the NEW single weather button ---
+        const openWeatherBtn = document.getElementById('open-weather-settings-btn');
+        if (openWeatherBtn) {
+            openWeatherBtn.addEventListener('click', () => {
+                // Toggle visibility of the new window
+                if (weatherSettingsWindow) {
+                    const isVisible = weatherSettingsWindow.classList.toggle('visible');
+                    if (isVisible) {
+                        MobileUIHandler.openWindow(weatherSettingsWindow);
+                    } else {
+                        MobileUIHandler.closeActiveWindow();
+                    }
+                }
             });
+        }
+        // --- [REMOVED] Old three button listeners ---
+    }
+
+    /**
+     * Updates the main weather toolbar button to show if any layers are active.
+     */
+    function updateWeatherToolbarButtonState() {
+        const openWeatherBtn = document.getElementById('open-weather-settings-btn');
+        if (!openWeatherBtn) return;
+
+        const precipToggle = document.getElementById('weather-toggle-precip');
+        const cloudsToggle = document.getElementById('weather-toggle-clouds');
+        const windToggle = document.getElementById('weather-toggle-wind');
+
+        const isAnyActive = (precipToggle && precipToggle.checked) ||
+                            (cloudsToggle && cloudsToggle.checked) ||
+                            (windToggle && windToggle.checked);
+
+        openWeatherBtn.classList.toggle('active', isAnyActive);
+    }
+
+    /**
+     * Sets up event listeners for the new Weather Settings info window.
+     */
+    function setupWeatherSettingsWindowEvents() {
+        if (!weatherSettingsWindow || weatherSettingsWindow.dataset.eventsAttached === 'true') {
+            return;
         }
 
-        // 2. Cloud Toggle Button
-        const cloudToggleBtn = document.getElementById('cloud-toggle-btn');
-        if (cloudToggleBtn) {
-            cloudToggleBtn.addEventListener('click', () => {
-                const isNowActive = cloudToggleBtn.classList.toggle('active');
-                toggleCloudLayer(isNowActive); 
-            });
-        }
+        // Use a single listener on the window for better performance
+        weatherSettingsWindow.addEventListener('click', (e) => {
+            const target = e.target;
 
-        // 3. Wind Toggle Button
-        const windToggleBtn = document.getElementById('wind-toggle-btn');
-        if (windToggleBtn) {
-            windToggleBtn.addEventListener('click', () => {
-                const isNowActive = windToggleBtn.classList.toggle('active');
-                toggleWindLayer(isNowActive); 
-            });
-        }
-        // --- [END MODIFIED BLOCK] ---
+            // Handle Close or Hide buttons
+            if (target.closest('.weather-window-close-btn') || target.closest('.weather-window-hide-btn')) {
+                weatherSettingsWindow.classList.remove('visible');
+                MobileUIHandler.closeActiveWindow();
+            }
+        });
+
+        // Use a 'change' listener for the toggles
+        weatherSettingsWindow.addEventListener('change', (e) => {
+            const target = e.target;
+
+            if (target.type === 'checkbox') {
+                const isChecked = target.checked;
+                
+                switch (target.id) {
+                    case 'weather-toggle-precip':
+                        toggleWeatherLayer(isChecked);
+                        break;
+                    case 'weather-toggle-clouds':
+                        toggleCloudLayer(isChecked);
+                        break;
+                    case 'weather-toggle-wind':
+                        toggleWindLayer(isChecked);
+                        break;
+                }
+                
+                // Update the toolbar button's active state
+                updateWeatherToolbarButtonState();
+            }
+        });
+
+        weatherSettingsWindow.dataset.eventsAttached = 'true';
     }
 
     // ==========================================================
@@ -5964,7 +6157,7 @@ async function updateSectorOpsSecondaryData() {
     // ====================================================================
 
 
-    // --- [REPLACE THIS FUNCTION] ---
+    
     /**
      * Main view switching logic.
      */
@@ -5983,11 +6176,13 @@ async function updateSectorOpsSecondaryData() {
         if (viewId !== 'view-rosters') {
             const airportWindow = document.getElementById('airport-info-window');
             const aircraftWindow = document.getElementById('aircraft-info-window');
+            const weatherWindow = document.getElementById('weather-settings-window'); // <-- NEW
             const airportRecall = document.getElementById('airport-recall-btn');
             const aircraftRecall = document.getElementById('aircraft-recall-btn');
 
             if (airportWindow) airportWindow.classList.remove('visible');
             if (aircraftWindow) aircraftWindow.classList.remove('visible');
+            if (weatherWindow) weatherWindow.classList.remove('visible'); // <-- NEW
             if (airportRecall) airportRecall.classList.remove('visible');
             if (aircraftRecall) aircraftRecall.classList.remove('visible');
 
