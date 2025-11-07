@@ -91,6 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let isAircraftWindowLoading = false;
 
     // --- Map-related State ---
+    let lastSocketUpdateTimestamp = 0; // NEW: Tracks the last valid flight data packet
     let liveTrailCache = new Map();
     let liveFlightsMap = null;
     let pilotMarkers = {};
@@ -2077,12 +2078,26 @@ function getIntermediatePoint(lat1, lon1, lat2, lon2, fraction) {
  * to their new positions with each update.
  *
  * ⬇️ MODIFIED: Now passes `isStaff` and `isVAMember` to the map source properties.
+ * ⬇️
+ * ⬇️ --- FIX: Added timestamp check to prevent race conditions ("jump back" bug) ---
  */
 function handleSocketFlightUpdate(data) {
-    if (!data || !Array.isArray(data.flights)) {
-        console.warn('Socket: Received invalid flights data packet.');
+    if (!data || !Array.isArray(data.flights) || !data.timestamp) {
+        console.warn('Socket: Received invalid or untimestamped flights data packet.');
         return;
     }
+
+    // --- [NEW] Timestamp validation to prevent "jump back" race condition ---
+    const newPacketTimestamp = new Date(data.timestamp).getTime();
+    if (newPacketTimestamp <= lastSocketUpdateTimestamp) {
+        // This packet is older than (or same as) the one we just rendered. Discard it.
+        console.warn(`Socket: Discarding stale flight data packet (Lag: ${lastSocketUpdateTimestamp - newPacketTimestamp}ms)`);
+        return;
+    }
+    // This packet is new. Update our "last seen" time.
+    lastSocketUpdateTimestamp = newPacketTimestamp;
+    // --- [END NEW] ---
+
 
     if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) {
         return; // Map not ready
