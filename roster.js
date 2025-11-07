@@ -4,7 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const defaultAvatar = '/images/indgo.png';
     const ROWS_PER_PAGE = 15;
 
-    // --- Rank Data (from curriculum.html) ---
+    // --- NEW: Rank Data (from curriculum.html) ---
+    // This maps rank names to their badges for easy lookup
     const RANK_DATA = {
         "IndGo Cadet": { badge: "images/badges/indgo_cadet_badge.png" },
         "Skyline Observer": { badge: "images/badges/skyline_observer_badge.png" },
@@ -17,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
         "Chief Flight Instructor": { badge: "images/badges/chief_flight_instructor_badge.png" },
         "IndGo SkyMaster": { badge: "images/badges/indgo_skymaster_badge.png" },
         "Blue Legacy Commander": { badge: "images/badges/blue_legacy_commander_badge.png" },
+        // Default fallback in case rank name doesn't match
         "default": { badge: "images/badges/indgo_cadet_badge.png" }
     };
 
@@ -32,7 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentPage = 1;
     let totalPages = 1;
 
-    // --- Main Function (Unchanged) ---
+    // --- Main Function: Fetch and Process Roster ---
     async function loadPilotRoster() {
         try {
             const response = await fetch(`${API_BASE_URL}/api/pilots/public-roster`);
@@ -41,16 +43,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             let pilots = await response.json();
 
+            // Sort pilots by flight hours (highest first)
             pilots.sort((a, b) => (b.flightHours || 0) - (a.flightHours || 0));
 
+            // Split pilots into Top 3 and Regular
             const topFlyers = pilots.slice(0, 3);
-            allRegularPilots = pilots.slice(3); 
+            allRegularPilots = pilots.slice(3); // Store regular pilots for pagination
 
+            // Clear loading message
             if (loadingEl) {
                 loadingEl.remove();
             }
 
-            displayTopFlyers(topFlyers); // Call the updated function
+            // Display the two groups
+            displayTopFlyers(topFlyers);
             
             if (allRegularPilots.length > 0) {
                 setupPagination();
@@ -59,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
                  rosterContainer.innerHTML = '<p>No pilots found.</p>';
                  document.getElementById('pagination-controls').style.display = 'none';
             } else {
+                // Hide pagination if only Top 3 exist
                 document.getElementById('pagination-controls').style.display = 'none';
             }
 
@@ -72,42 +79,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- NEW: Redesigned Display Top 3 Flyers ---
+    // --- NEW: Display Top 3 Flyers (Redesigned) ---
     function displayTopFlyers(pilots) {
         if (!topFlyersContainer) return;
-        topFlyersContainer.innerHTML = ''; 
+        topFlyersContainer.innerHTML = ''; // Clear any existing
         
         pilots.forEach((pilot, index) => {
             const card = document.createElement('div');
             card.className = 'top-pilot-card';
-            // Set data-rank for the CSS to apply the correct --pilot-rank-color
-            if (pilot.rank) {
-                card.setAttribute('data-rank', pilot.rank);
-            }
 
             const avatarUrl = pilot.imageUrl || defaultAvatar;
-            const flightHours = pilot.flightHours ? pilot.flightHours.toFixed(1) : '0.0';
-            const pilotRank = pilot.rank || 'N/A';
-            const rankInfo = RANK_DATA[pilot.rank] || RANK_DATA["default"];
+            
+            // --- NEW: Convert decimal hours to HHH:MM format ---
+            const totalHours = pilot.flightHours || 0;
+            const hours = Math.floor(totalHours);
+            const minutes = Math.round((totalHours - hours) * 60);
+            
+            const formattedHours = hours.toLocaleString('en-US'); // Adds commas
+            const formattedMinutes = minutes.toString().padStart(2, '0'); // Ensures "03" instead of "3"
+            const displayTime = `${formattedHours}:${formattedMinutes}`;
+            // --- End of new time logic ---
 
-            // Building the new card structure
+            const rankName = pilot.rank || 'N/A';
+
+            // New card structure inspired by the image
             card.innerHTML = `
-                <div class="top-pilot-avatar-container">
-                    <img src="${avatarUrl}" alt="${pilot.name}'s avatar" class="top-pilot-avatar" onerror="this.src='${defaultAvatar}'">
-                    <div class="top-pilot-rank-badge">#${index + 1}</div>
-                </div>
+                <div class="top-pilot-ribbon">#${index + 1}</div>
+                <img src="${avatarUrl}" alt="${pilot.name}'s avatar" class="top-pilot-avatar" onerror="this.src='${defaultAvatar}'">
+                
                 <div class="top-pilot-info">
                     <h3>${pilot.name}</h3>
                     <span class="callsign">${pilot.callsign || 'N/A'}</span>
                 </div>
+
                 <div class="top-pilot-stats">
-                    <div class="stat-bar hours-bar">
-                        <span>Flight Duration</span>
-                        <span>${flightHours}</span>
+                    <div class="stat-box">
+                        <span class="label">Flight Duration</span>
+                        <span class="value">${displayTime}</span>
                     </div>
-                    <div class="stat-bar rank-bar">
-                        <span>Rank</span>
-                        <span>${pilotRank}</span>
+                    <div class="stat-box">
+                        <span class="label">Rank</span>
+                        <span class="value">${rankName}</span>
                     </div>
                 </div>
             `;
@@ -115,17 +127,28 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Setup Pagination Logic (Unchanged) ---
+    // --- NEW: Setup Pagination Logic ---
     function setupPagination() {
         totalPages = Math.ceil(allRegularPilots.length / ROWS_PER_PAGE);
-        prevPageBtn.addEventListener('click', () => { /* ... */ });
-        nextPageBtn.addEventListener('click', () => { /* ... */ });
+
+        prevPageBtn.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                displayPage(currentPage);
+            }
+        });
+
+        nextPageBtn.addEventListener('click', () => {
+            if (currentPage < totalPages) {
+                currentPage++;
+                displayPage(currentPage);
+            }
+        });
     }
 
-    // --- Display a Specific Page (Unchanged) ---
-    // This function is still correct. It builds the main roster cards.
+    // --- NEW: Display a Specific Page ---
     function displayPage(page) {
-        rosterContainer.innerHTML = '';
+        rosterContainer.innerHTML = ''; // Clear previous page's pilots
         currentPage = page;
 
         const start = (page - 1) * ROWS_PER_PAGE;
@@ -136,6 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const pilotCard = document.createElement('div');
             pilotCard.className = 'pilot-card';
             
+            // Set data-rank attribute for CSS styling
             if (pilot.rank) {
                 pilotCard.setAttribute('data-rank', pilot.rank);
             }
