@@ -5,118 +5,106 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>INDGO AIR Virtual - Pilot Roster</title>
     <link rel="stylesheet" href="style.css">
+    
     <style>
-        /* Make all navbar text white for the dark map background */
-    .navbar .nav-link,
-    .navbar .logo-text {
-        color: white;
-    }
+        /* --- Pilot Roster Page (Theme-Consistent) --- */
 
-    /* Make the hamburger menu icon white */
-    .hamburger-menu .bar {
-        background-color: white;
-    }
+        /* Styles for the "Meet Our Pilots" hero section */
+        .roster-page-hero {
+            text-align: center;
+            padding: 4rem 1rem;
+        }
+        .roster-page-hero h1 {
+            font-size: 3.2rem;
+            font-family: var(--font-heading);
+            margin: 0;
+            color: var(--heading-color);
+        }
+        .roster-page-hero p {
+            font-size: 1.1rem;
+            color: var(--text-color);
+            max-width: 600px;
+            margin: 0.5rem auto 0 auto;
+        }
 
-    .navbar .nav-link:hover {
-        color: #d1d1d1; /* A light grey for hover effect */
-    }
+        /* This is the grid container for all the pilot cards */
+        #pilot-roster-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            padding: 2rem 0; /* Adds top/bottom padding inside the .main-container */
+        }
 
-    .navbar .nav-link.active {
-        color: white; /* Ensures the active link stays white */
-        border-bottom-color: white; /* Optional: make the active underline white too */
-    }
+        /* Styles for an individual pilot card */
+        .pilot-card {
+            background: var(--primary-glass); /* Use the site's glass background */
+            border: 1px solid var(--border-color); /* Use the site's border color */
+            border-radius: 10px; /* Match other cards */
+            display: flex;
+            padding: 1.5rem;
+            gap: 1.5rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
 
-    /* * STYLES FOR THE NEW PILOT ROSTER
-     * You can move this to your main style.css file if you want
-    */
-    .roster-page-hero {
-        text-align: center;
-        padding: 4rem 2rem;
-        background-color: #f4f4f4;
-    }
-    .roster-page-hero h1 {
-        font-size: 2.5rem;
-        font-family: 'Montserrat', sans-serif;
-        margin-bottom: 0.5rem;
-    }
-    .roster-page-hero p {
-        font-size: 1.1rem;
-        color: #555;
-        max-width: 600px;
-        margin: 0 auto;
-    }
+        .pilot-card:hover {
+            transform: translateY(-5px); /* Use the site's hover effect */
+            border-color: var(--accent-color);
+            box-shadow: 0 0 15px var(--glow-color);
+        }
 
-    #pilot-roster-container {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 1.5rem;
-        padding: 2rem 0;
-    }
+        /* The pilot's circular avatar */
+        .pilot-card-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid var(--accent-color); /* Use the site's accent color */
+            flex-shrink: 0;
+        }
 
-    .pilot-card {
-        background: #fff;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        display: flex;
-        padding: 1.5rem;
-        gap: 1rem;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
+        .pilot-card-info {
+            flex: 1;
+        }
 
-    .pilot-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-    }
+        /* Pilot's Name */
+        .pilot-card-info h3 {
+            font-family: var(--font-heading);
+            font-size: 1.25rem;
+            margin: 0;
+            color: var(--heading-color); /* Use the site's heading color */
+        }
 
-    .pilot-card-avatar {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        object-fit: cover;
-        border: 3px solid #0033a0; /* IndiGo blue */
-    }
+        /* Pilot's Callsign */
+        .pilot-card-info .callsign {
+            font-weight: 600;
+            color: var(--accent-color); /* Use the site's accent color */
+            margin-bottom: 0.5rem;
+            display: block;
+        }
 
-    .pilot-card-info {
-        flex: 1;
-    }
+        /* Pilot's Rank */
+        .pilot-card-info .rank {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-color); /* Use the site's text color */
+            margin-bottom: 0.25rem;
+            display: block;
+        }
 
-    .pilot-card-info h3 {
-        font-family: 'Montserrat', sans-serif;
-        font-size: 1.25rem;
-        margin: 0;
-        color: #111;
-    }
+        /* Pilot's Flight Hours */
+        .pilot-card-info .hours {
+            font-size: 0.9rem;
+            color: var(--heading-color); /* Use the site's heading color */
+        }
 
-    .pilot-card-info .callsign {
-        font-weight: 600;
-        color: #0033a0; /* IndiGo blue */
-        margin-bottom: 0.5rem;
-        display: block;
-    }
-
-    .pilot-card-info .rank {
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: #555;
-        margin-bottom: 0.25rem;
-        display: block;
-    }
-
-    .pilot-card-info .hours {
-        font-size: 0.9rem;
-        color: #333;
-    }
-
-    /* Loading Spinner */
-    #roster-loading {
-        text-align: center;
-        padding: 4rem;
-        font-size: 1.2rem;
-        color: #555;
-    }
-    /* End of new styles */
-
+        /* Style for the "Loading..." text */
+        #roster-loading {
+            text-align: center;
+            padding: 4rem;
+            font-size: 1.2rem;
+            color: var(--text-color); /* Use the site's text color */
+            grid-column: 1 / -1; /* Make it span the full grid width while loading */
+        }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
