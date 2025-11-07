@@ -5,13 +5,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // This is the default image to use if a pilot has no profile picture
     const defaultAvatar = '/images/indgo.png'; // Or any default placeholder image you have
 
+    // --- FIX: Define the absolute URL of your backend server ---
+    // This must match the port your server.js is running on
+    const API_BASE_URL = 'https://site--indgo-backend--6dmjph8ltlhv.code.run';
+
     // Function to fetch and display pilots
     async function loadPilotRoster() {
         try {
-            // This URL must match the new endpoint in your server.js
-            const response = await fetch('/api/pilots/public-roster');
+            // --- FIX: Use the full, absolute URL to fetch ---
+            const response = await fetch(`${API_BASE_URL}/api/pilots/public-roster`);
 
             if (!response.ok) {
+                // Log the server's response text for more detail
+                const errorText = await response.text();
+                console.error('Server responded with:', errorText);
                 throw new Error(`Failed to fetch roster: ${response.statusText}`);
             }
 
