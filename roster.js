@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const avatarUrl = pilot.imageUrl || defaultAvatar;
             
-            // --- NEW: Convert decimal hours to HHH:MM format ---
+            // --- Convert decimal hours to HHH:MM format ---
             const totalHours = pilot.flightHours || 0;
             const hours = Math.floor(totalHours);
             const minutes = Math.round((totalHours - hours) * 60);
@@ -98,28 +98,44 @@ document.addEventListener('DOMContentLoaded', () => {
             const formattedHours = hours.toLocaleString('en-US'); // Adds commas
             const formattedMinutes = minutes.toString().padStart(2, '0'); // Ensures "03" instead of "3"
             const displayTime = `${formattedHours}:${formattedMinutes}`;
-            // --- End of new time logic ---
-
+            
+            // --- Get Rank Info (for the badge) ---
             const rankName = pilot.rank || 'N/A';
+            const rankInfo = RANK_DATA[rankName] || RANK_DATA["default"];
 
-            // New card structure inspired by the image
+            // --- Get Podium Info (for the #1/2/3 badge) ---
+            const podiumClass = `podium-${index + 1}`;
+            const podiumText = `#${index + 1}`;
+
+            // --- Get Pireps (assuming API provides it, like in the inspiration) ---
+            // If your API uses a different field name (e.g., 'flights'), change 'pirepsFiled'
+            const pireps = pilot.pirepsFiled || 0; // Assuming 'pirepsFiled' is in your API data
+
+            // --- New card structure ---
             card.innerHTML = `
-                <div class="top-pilot-ribbon">#${index + 1}</div>
-                <img src="${avatarUrl}" alt="${pilot.name}'s avatar" class="top-pilot-avatar" onerror="this.src='${defaultAvatar}'">
+                <div class="top-pilot-avatar-wrapper">
+                    <img src="${avatarUrl}" alt="${pilot.name}'s avatar" class="top-pilot-avatar" onerror="this.src='${defaultAvatar}'">
+                    <div class="top-pilot-podium-badge ${podiumClass}">${podiumText}</div>
+                </div>
                 
                 <div class="top-pilot-info">
                     <h3>${pilot.name}</h3>
                     <span class="callsign">${pilot.callsign || 'N/A'}</span>
                 </div>
 
+                <div class="top-pilot-rank">
+                    <img src="${rankInfo.badge}" alt="${rankName}" class="top-pilot-rank-badge-img" title="${rankName}">
+                    <span class="top-pilot-rank-name">${rankName}</span>
+                </div>
+
                 <div class="top-pilot-stats">
-                    <div class="stat-box">
+                    <div class="stat-bar">
                         <span class="label">Flight Duration</span>
                         <span class="value">${displayTime}</span>
                     </div>
-                    <div class="stat-box">
-                        <span class="label">Rank</span>
-                        <span class="value">${rankName}</span>
+                    <div class="stat-bar">
+                        <span class="label">Pireps Filed</span>
+                        <span class="value">${pireps}</span>
                     </div>
                 </div>
             `;
@@ -146,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- NEW: Display a Specific Page ---
+    // --- NEW: Display a Specific Page (with Remade Cards) ---
     function displayPage(page) {
         rosterContainer.innerHTML = ''; // Clear previous page's pilots
         currentPage = page;
@@ -159,22 +175,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const pilotCard = document.createElement('div');
             pilotCard.className = 'pilot-card';
             
-            // Set data-rank attribute for CSS styling
-            if (pilot.rank) {
-                pilotCard.setAttribute('data-rank', pilot.rank);
-            }
+            // The 'data-rank' attribute is no longer needed for styling
+            // as the badge image is the primary visual.
 
             const avatarUrl = pilot.imageUrl || defaultAvatar;
             const flightHours = pilot.flightHours ? pilot.flightHours.toFixed(1) : '0';
-            const rankInfo = RANK_DATA[pilot.rank] || RANK_DATA["default"];
+            const rankName = pilot.rank || 'N/A';
+            const rankInfo = RANK_DATA[rankName] || RANK_DATA["default"];
 
+            // --- New Card Structure ---
             pilotCard.innerHTML = `
-                <img src="${rankInfo.badge}" alt="${pilot.rank}" class="pilot-card-badge" title="${pilot.rank}">
-                <img src="${avatarUrl}" alt="${pilot.name}'s avatar" class="pilot-card-avatar" onerror="this.src='${defaultAvatar}'">
+                <div class="pilot-card-avatar-wrapper">
+                    <img src="${avatarUrl}" alt="${pilot.name}'s avatar" class="pilot-card-avatar" onerror="this.src='${defaultAvatar}'">
+                    <img src="${rankInfo.badge}" alt="${rankName}" class="pilot-card-badge" title="${rankName}">
+                </div>
                 <div class="pilot-card-info">
                     <h3>${pilot.name}</h3>
                     <span class="callsign">${pilot.callsign || 'N/A'}</span>
-                    <span class="rank">${pilot.rank}</span>
+                    <span class="rank">${rankName}</span>
                     <span class="hours"><strong>${flightHours}</strong> hours</span>
                 </div>
             `;

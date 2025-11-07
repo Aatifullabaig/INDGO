@@ -44,45 +44,36 @@
 
         #top-flyers-container {
             display: flex;
-            flex-wrap: wrap;
+            flex-wrap: wrap; /* Will wrap to a new line on smaller screens */
             justify-content: center;
             gap: 2rem;
         }
 
         .top-pilot-card {
-            background: var(--primary-glass);
-            border: 1px solid var(--border-color);
-            box-shadow: 0 0 20px var(--glow-color);
-            border-radius: 16px; /* More rounded */
-            width: 360px; /* A bit wider */
+            /* Inspired by the provided image */
+            background: #fdfaf5; /* Using a light, warm background */
+            border: 1px solid #ede7df;
+            border-radius: 16px;
+            width: 380px; /* Wider for the new layout */
             text-align: center;
-            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-            position: relative; /* For the ribbon */
-            overflow: hidden; /* To clip the ribbon and stat boxes */
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            position: relative; 
+            overflow: hidden; /* Clips the stat bars at the bottom */
             display: flex;
             flex-direction: column;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
         }
         
         .top-pilot-card:hover {
             transform: translateY(-10px);
-            border-color: var(--accent-color);
-            box-shadow: 0 0 30px var(--accent-color);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.07);
         }
 
-        .top-pilot-ribbon {
-            position: absolute;
-            top: 12px;
-            right: -35px;
-            background: var(--accent-color);
-            color: #fff;
-            font-family: var(--font-heading);
-            font-size: 1.1rem;
-            font-weight: 700;
-            padding: 8px 0;
-            width: 130px;
-            transform: rotate(45deg);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            z-index: 2;
+        /* Avatar area */
+        .top-pilot-avatar-wrapper {
+            position: relative;
+            display: inline-block; /* Allows badge to be positioned relative to this */
+            margin-top: 2.5rem;
         }
 
         .top-pilot-avatar {
@@ -90,22 +81,48 @@
             height: 140px;
             border-radius: 50%;
             object-fit: cover;
-            border: 4px solid var(--accent-color);
-            margin: 3rem auto 1.5rem auto; /* More space at top */
+            border: 4px solid #fff; /* Clean white border */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin: 0; /* Margin is handled by wrapper */
             z-index: 1;
             position: relative;
         }
+
+        /* NEW: Upgraded Podium Badge */
+        .top-pilot-podium-badge {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-family: var(--font-heading);
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            border: 2px solid #fff;
+            z-index: 2;
+            /* Background color set by modifier classes */
+        }
+        .podium-1 { background: #FFD700; color: #5c3a00; } /* Gold */
+        .podium-2 { background: #C0C0C0; color: #333333; } /* Silver */
+        .podium-3 { background: #CD7F32; color: #ffffff; } /* Bronze */
+
         
         .top-pilot-info {
             padding: 0 1.5rem;
-            margin-bottom: 1.5rem;
+            margin-top: 1.5rem; /* Space below avatar */
             z-index: 1;
         }
 
         .top-pilot-info h3 {
             font-family: var(--font-heading);
             font-size: 1.6rem;
-            color: var(--heading-color);
+            color: #1a237e; /* Using a dark blue for contrast */
             margin: 0 0 0.25rem 0;
         }
         
@@ -116,34 +133,59 @@
             display: block;
         }
 
+        /* NEW: Rank Badge Display Area */
+        .top-pilot-rank {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 1.5rem 0;
+            padding: 0 1.5rem;
+        }
+
+        .top-pilot-rank-badge-img {
+            width: 45px;
+            height: 45px;
+            object-fit: contain;
+        }
+
+        .top-pilot-rank-name {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #555;
+            font-family: var(--font-heading);
+        }
+
+        /* NEW: Stat Bar Design (Inspired by image) */
         .top-pilot-stats {
             margin-top: auto; /* Pushes stats to the bottom */
-            border-top: 1px solid var(--border-color);
+            border-top: 1px solid #ede7df;
         }
 
-        .stat-box {
+        .stat-bar {
             display: flex;
-            justify-content: space-between;
             align-items: stretch; /* Makes label/value full height */
-            background: rgba(0,0,0, 0.1); /* Slight dark bg for label area */
+            background: #fbeae8; /* Light red from inspiration */
         }
 
-        .stat-box:last-child {
-             border-top: 1px solid var(--border-color);
+        /* Add a border between stat bars */
+        .stat-bar + .stat-bar {
+             border-top: 1px solid #ede7df;
         }
 
-        .stat-box .label {
+        .stat-bar .label {
             padding: 1.25rem 1.5rem;
             font-size: 1rem;
             font-weight: 600;
-            color: var(--text-color);
+            color: #555;
             text-align: left;
             display: flex;
             align-items: center;
+            flex-grow: 1; /* Takes up remaining space */
         }
 
-        .stat-box .value {
-            background: var(--accent-color);
+        .stat-bar .value {
+            background: #e53935; /* Dark red from inspiration */
             color: #fff;
             font-family: var(--font-heading);
             font-size: 1.75rem;
@@ -151,25 +193,17 @@
             padding: 1.25rem 1.5rem;
             min-width: 170px; /* Gives it that "box" feel */
             text-align: center;
-            border-left: 1px solid var(--border-color);
+            border-left: 1px solid #ede7df;
             display: flex;
             align-items: center;
             justify-content: center;
         }
         
-        /* Override for the second box value (Rank) */
-        .stat-box:last-child .value {
-            background: var(--primary-glass);
-            color: var(--heading-color);
-            font-size: 1.2rem; /* Ranks can be long, so smaller text */
-            font-weight: 600;
-        }
-
-        /* --- Main Pilot Roster Grid (Now with Rank Styles) --- */
+        /* --- Main Pilot Roster Grid (REMAKE) --- */
         
         #pilot-roster-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* Slightly smaller cards */
             gap: 1.5rem;
             padding: 2rem 0;
         }
@@ -177,42 +211,59 @@
         .pilot-card {
             background: var(--primary-glass);
             border: 1px solid var(--border-color);
-            border-left: 5px solid var(--pilot-rank-color, var(--accent-color)); /* Rank color here */
-            border-radius: 10px;
+            border-radius: 12px;
             display: flex;
+            flex-direction: column; /* Stacked layout */
+            align-items: center; /* Center-align content */
             padding: 1.5rem;
-            gap: 1.5rem;
+            gap: 0.5rem; /* Space between elements */
             transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-            position: relative; /* For the badge */
+            text-align: center;
         }
 
         .pilot-card:hover {
             transform: translateY(-5px);
-            border-color: var(--pilot-rank-color, var(--accent-color));
-            box-shadow: 0 0 15px var(--pilot-rank-color, var(--glow-color));
+            border-color: var(--accent-color);
+            box-shadow: 0 0 15px var(--glow-color);
         }
 
-        /* NEW: Rank Badge in the corner */
+        /* NEW: Avatar and Badge Wrapper */
+        .pilot-card-avatar-wrapper {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+
+        /* NEW: Badge is now integrated with the avatar */
         .pilot-card-badge {
             position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 35px;
-            height: 35px;
+            bottom: -5px;
+            right: -5px;
+            width: 32px;
+            height: 32px;
             object-fit: contain;
-            opacity: 0.7;
+            background: var(--primary-glass); /* Lifts badge off avatar */
+            border-radius: 50%;
+            padding: 4px; /* Creates a small border */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 2;
         }
 
         .pilot-card-avatar {
-            width: 80px;
-            height: 80px;
+            width: 90px;
+            height: 90px;
             border-radius: 50%;
             object-fit: cover;
-            border: 3px solid var(--pilot-rank-color, var(--accent-color)); /* Rank color here */
+            border: 3px solid var(--border-color); /* Neutral border */
             flex-shrink: 0;
+            position: relative;
+            z-index: 1;
         }
 
-        .pilot-card-info { flex: 1; }
+        .pilot-card-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
 
         .pilot-card-info h3 {
             font-family: var(--font-heading);
@@ -241,24 +292,11 @@
             color: var(--heading-color);
         }
 
-        /* --- NEW: Rank-Specific Colors --- */
-        /* These colors are applied via the `data-rank` attribute in JS */
-        .pilot-card[data-rank="IndGo Cadet"] { --pilot-rank-color: #b0bec5; }
-        .pilot-card[data-rank="Skyline Observer"] { --pilot-rank-color: #42a5f5; }
-        .pilot-card[data-rank="Route Explorer"] { --pilot-rank-color: #66bb6a; }
-        .pilot-card[data-rank="Skyline Officer"] { --pilot-rank-color: #ab47bc; }
-        .pilot-card[data-rank="Command Captain"] { --pilot-rank-color: #ffa726; }
-        .pilot-card[data-rank="Elite Captain"] { --pilot-rank-color: #ef5350; }
-        .pilot-card[data-rank="Blue Eagle"] { --pilot-rank-color: #29b6f6; }
-        .pilot-card[data-rank="Line Instructor"] { --pilot-rank-color: #e0e0e0; }
-        .pilot-card[data-rank="Chief Flight Instructor"] { --pilot-rank-color: #f7f7f7; }
-        .pilot-card[data-rank="IndGo SkyMaster"] { --pilot-rank-color: #1a237e; }
-        .pilot-card[data-rank="Blue Legacy Commander"] { --pilot-rank-color: #ffd600; }
-        /* Default fallback */
-        .pilot-card { --pilot-rank-color: var(--accent-color); }
+        /* --- REMOVED Rank-Specific Colors --- */
+        /* The [data-rank] styles are no longer needed 
+           as the badge image is now the primary indicator. */
 
-
-        /* --- NEW: Pagination Controls --- */
+        /* --- NEW: Pagination Controls (Keep As Is) --- */
         #pagination-controls {
             display: flex;
             justify-content: center;
@@ -295,7 +333,7 @@
             font-weight: 600;
         }
 
-        /* --- Loading/Error State --- */
+        /* --- Loading/Error State (Keep As Is) --- */
         #roster-loading {
             text-align: center;
             padding: 4rem;
