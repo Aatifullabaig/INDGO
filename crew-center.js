@@ -91,6 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let isAircraftWindowLoading = false;
 
     // --- Map-related State ---
+    let liveTrailCache = new Map();
     let liveFlightsMap = null;
     let pilotMarkers = {};
     let liveFlightsInterval = null;
@@ -3599,7 +3600,8 @@ async function updateLiveFlights() {
     }
     
 
-// --- [REPLACE THIS FUNCTION] ---
+
+
 function setupAircraftWindowEvents() {
     if (!aircraftInfoWindow || aircraftInfoWindow.dataset.eventsAttached === 'true') return;
 
@@ -3671,6 +3673,10 @@ function setupAircraftWindowEvents() {
             activeGeocodeUpdateInterval = null;
             currentAircraftPositionForGeocode = null;
             // --- [END MODIFIED] ---
+            
+            // ⬇️ === NEW: Clean up the trail cache === ⬇️
+            liveTrailCache.delete(currentFlightInWindow);
+            // ⬆️ === END NEW === ⬆️
 
             currentFlightInWindow = null;
             cachedFlightDataForStatsView = { flightProps: null, plan: null };
@@ -4251,6 +4257,8 @@ function generateAltitudeColoredRoute(sortedPoints, currentPosition) {
 }
 
 
+// crew-center.js (REPLACE this function)
+
 async function handleAircraftClick(flightProps, sessionId) {
     if (!flightProps || !flightProps.flightId) return;
 
@@ -4284,6 +4292,9 @@ async function handleAircraftClick(flightProps, sessionId) {
     // [ORIGINAL] Clear previous flight's path
     if (currentFlightInWindow && currentFlightInWindow !== flightProps.flightId) {
         clearLiveFlightPath(currentFlightInWindow);
+        // --- [NEW] ---
+        // Clean up the cache for the *previous* flight
+        liveTrailCache.delete(currentFlightInWindow);
     }
 
     // --- [MODIFIED] Set state for BOTH intervals ---
@@ -4325,6 +4336,11 @@ async function handleAircraftClick(flightProps, sessionId) {
                 return timeA - timeB;
             });
         }
+        
+        // ⬇️ === NEW: SEED THE CACHE === ⬇️
+        // This saves the historical data as the starting point for our trail
+        liveTrailCache.set(flightProps.flightId, sortedRoutePoints);
+        // ⬆️ === END NEW === ⬆️
 
         // NEW: Cache data for stats view
         cachedFlightDataForStatsView = { flightProps, plan };
@@ -4348,9 +4364,6 @@ async function handleAircraftClick(flightProps, sessionId) {
                 type: 'line',
                 source: flownLayerId,
                 paint: {
-                    // --- [MODIFIED] ---
-                    // Switched from 'step' to 'interpolate' for a smooth gradient
-                    // and added more color stops.
                     'line-color': [
                         'interpolate',
                         ['linear'],
@@ -4361,11 +4374,13 @@ async function handleAircraftClick(flightProps, sessionId) {
                         29000, '#00BFFF', // Blue (Cruise)
                         38000, '#9400D3'  // Purple (High Cruise)
                     ],
-                    // --- [END MODIFICATION] ---
                     'line-width': 4,
                     'line-opacity': 0.9
                 }
             }, 'sector-ops-live-flights-layer'); // Ensure it's drawn below aircraft
+        } else {
+            // Source already exists, just update its data
+             sectorOpsMap.getSource(flownLayerId).setData(routeFeatureCollection);
         }
 
         // --- [NEW] Store layer ID for live updates ---
@@ -4390,30 +4405,29 @@ async function handleAircraftClick(flightProps, sessionId) {
         // The interval will NOW re-fetch the route data on every tick.
         activePfdUpdateInterval = setInterval(async () => {
             try {
-                // --- [NEW] Fetch both live position AND route history in parallel ---
-                const [freshDataRes, routeRes] = await Promise.all([
+                // --- [MODIFIED] ---
+                // We ONLY fetch the live flights data now.
+                const [freshDataRes] = await Promise.all([
                     fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}`), // Live position
-                    fetch(`${LIVE_FLIGHTS_API_URL}/${sessionId}/${flightProps.flightId}/route`) // Route history
+                    // The 'routeRes' fetch has been REMOVED.
                 ]);
+
 
                 if (!freshDataRes.ok) throw new Error("Flight data update failed.");
                 
                 const allFlights = await freshDataRes.json();
                 const updatedFlight = allFlights.flights.find(f => f.flightId === flightProps.flightId);
 
-                // --- [NEW] Process the freshly fetched route data ---
-                let updatedSortedRoutePoints = [];
-                if (routeRes.ok) {
-                    const routeData = await routeRes.json();
-                    if (routeData && routeData.ok && Array.isArray(routeData.route) && routeData.route.length > 0) {
-                        updatedSortedRoutePoints = routeData.route.sort((a, b) => {
-                            const timeA = a.date ? new Date(a.date).getTime() : 0;
-                            const timeB = b.date ? new Date(b.date).getTime() : 0;
-                            return timeA - timeB;
-                        });
-                    }
+                // --- [MODIFIED] ---
+                // Get the trail from our local cache.
+                const localTrail = liveTrailCache.get(flightProps.flightId);
+                if (!localTrail) {
+                    // This can happen if the window was closed and re-opened quickly.
+                    // We must stop the interval.
+                    throw new Error("Local trail cache was lost.");
                 }
-                // --- [END NEW] ---
+                // The 'updatedSortedRoutePoints' block has been REMOVED.
+                // --- [END MODIFICATION] ---
 
                 if (updatedFlight && updatedFlight.position) {
                     
@@ -4424,15 +4438,34 @@ async function handleAircraftClick(flightProps, sessionId) {
                     // --- Logic to update the info window (Unchanged) ---
                     updatePfdDisplay(updatedFlight.position);
                     
-                    // Pass the NEWLY fetched historical data
-                    updateAircraftInfoWindow(updatedFlight, plan, updatedSortedRoutePoints);
+                    // --- [NEW: THE FIX] ---
+                    // Convert the new live data to a "route point" format
+                    // so it matches the historical data.
+                    const newRoutePoint = {
+                        latitude: updatedFlight.position.lat,
+                        longitude: updatedFlight.position.lon,
+                        altitude: updatedFlight.position.alt_ft,
+                        groundSpeed: updatedFlight.position.gs_kt,
+                        track: updatedFlight.position.heading_deg, // Use heading_deg
+                        date: new Date(updatedFlight.position.lastReport || Date.now()).toISOString()
+                    };
+                    
+                    // Add this new, high-resolution point to our local trail
+                    localTrail.push(newRoutePoint);
+                    // Update the cache with the new, longer trail
+                    liveTrailCache.set(flightProps.flightId, localTrail);
+                    // --- [END NEW] ---
+                    
+                    // Pass the NEWLY fetched *and grown* local trail
+                    updateAircraftInfoWindow(updatedFlight, plan, localTrail);
                     
                     // --- [NEW] Live update for the 2D altitude-colored trail ---
                     const layerId = sectorOpsLiveFlightPathLayers[flightProps.flightId]?.flown;
                     const source = layerId ? sectorOpsMap.getSource(layerId) : null;
                     
                     if (source) {
-                        const newRouteData = generateAltitudeColoredRoute(updatedSortedRoutePoints, updatedFlight.position);
+                        // Pass the *updated* local trail to the map drawing function
+                        const newRouteData = generateAltitudeColoredRoute(localTrail, updatedFlight.position);
                         source.setData(newRouteData);
                     }
                     // --- [END NEW] ---
@@ -4444,6 +4477,11 @@ async function handleAircraftClick(flightProps, sessionId) {
                     // --- [NEW] Stop geocode interval too ---
                     if (activeGeocodeUpdateInterval) clearInterval(activeGeocodeUpdateInterval);
                     activeGeocodeUpdateInterval = null;
+                    
+                    // --- [NEW] ---
+                    // Clean up the cache for this flight
+                    liveTrailCache.delete(flightProps.flightId);
+                    // --- [END NEW] ---
                 }
             } catch (error) {
                 console.error("Stopping PFD update due to error:", error);
@@ -4452,8 +4490,13 @@ async function handleAircraftClick(flightProps, sessionId) {
                 // --- [NEW] Stop geocode interval too ---
                 if (activeGeocodeUpdateInterval) clearInterval(activeGeocodeUpdateInterval);
                 activeGeocodeUpdateInterval = null;
+
+                // --- [NEW] ---
+                // Clean up the cache for this flight
+                liveTrailCache.delete(flightProps.flightId);
+                // --- [END NEW] ---
             }
-        }, 3000);
+        }, 3000); // 3000ms is a good, fast interval
 
         // [RESILIENCE] Unset loading flag on success
         isAircraftWindowLoading = false;
@@ -4466,6 +4509,8 @@ async function handleAircraftClick(flightProps, sessionId) {
         isAircraftWindowLoading = false; 
         currentFlightInWindow = null; 
         cachedFlightDataForStatsView = { flightProps: null, plan: null };
+        // --- [NEW] Clean up the cache ---
+        liveTrailCache.delete(flightProps.flightId);
     }
 }
 
