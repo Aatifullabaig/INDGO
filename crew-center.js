@@ -2069,15 +2069,12 @@ function getIntermediatePoint(lat1, lon1, lat2, lon2, fraction) {
 }
 
 
-
 /**
  * --- [REPLACEMENT - TELEPORT VERSION] Handles live flight data received from the WebSocket.
  * This function updates the map source directly, causing aircraft to "teleport"
  * to their new positions with each update.
  *
  * ⬇️ MODIFIED: Now passes `isStaff` and `isVAMember` to the map source properties.
- * ⬇️ MODIFIED v2: Checks for ground speed > 0 before updating heading
- * to prevent icon spinning when parked.
  */
 function handleSocketFlightUpdate(data) {
     if (!data || !Array.isArray(data.flights)) {
@@ -2107,22 +2104,8 @@ function handleSocketFlightUpdate(data) {
         // Extract new API data
         const newApiLat = flight.position.lat;
         const newApiLon = flight.position.lon;
+        const newApiHeading = flight.position.track_deg || 0;
         const newApiSpeed = flight.position.gs_kt || 0;
-        
-        // --- [START OF FIX] ---
-        let finalHeading = 0;
-        const existingFeature = currentMapFeatures[flightId];
-
-        if (newApiSpeed > 0) {
-            // Plane is moving, use the new API heading
-            finalHeading = flight.position.track_deg || 0;
-        } else if (existingFeature) {
-            // Plane is parked, reuse the last known heading to prevent spinning
-            finalHeading = existingFeature.properties.heading || 0;
-        }
-        // If speed is 0 AND it's a new feature, finalHeading will be 0 (the default), which is fine.
-        // --- [END OF FIX] ---
-
         const newProperties = {
             flightId: flight.flightId,
             callsign: flight.callsign,
@@ -2134,9 +2117,11 @@ function handleSocketFlightUpdate(data) {
             aircraft: JSON.stringify(flight.aircraft),
             userId: flight.userId,
             category: getAircraftCategory(flight.aircraft?.aircraftName),
-            heading: finalHeading, // <-- Use the stabilized finalHeading
+            heading: newApiHeading, // Pass heading for icon rotation
+            // ⬇️ === NEW: Add VA status for icon logic === ⬇️
             isStaff: flight.isStaff,
             isVAMember: flight.isVAMember
+            // ⬆️ === END OF NEW LINES === ⬆️
         };
 
         // Create or update the feature in our state
@@ -3467,122 +3452,102 @@ function updatePfdDisplay(pfdData) {
         if (map.getSource('planned-path-source')) map.removeSource('planned-path-source');
     }
 
+    /**
+     * Fetches live flight data and updates the map.
+     */
+    async function updateLiveFlights() {
+        if (!liveFlightsMap || !liveFlightsMap.isStyleLoaded()) return;
 
-/**
- * Fetches live flight data and updates the map.
- * --- [MODIFIED v2] ---
- * - Added check for ground speed > 0 before applying rotation
- * to prevent parked icons from spinning.
- */
-async function updateLiveFlights() {
-    if (!liveFlightsMap || !liveFlightsMap.isStyleLoaded()) return;
+        try {
+            const sessionsRes = await fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions');
+            const expertSession = (await sessionsRes.json()).sessions.find(s => s.name.toLowerCase().includes('expert'));
+            if (!expertSession) {
+                console.warn('No Expert Server session found for live flights.');
+                return;
+            }
 
-    try {
-        const sessionsRes = await fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions');
-        const expertSession = (await sessionsRes.json()).sessions.find(s => s.name.toLowerCase().includes('expert'));
-        if (!expertSession) {
-            console.warn('No Expert Server session found for live flights.');
-            return;
-        }
+            const response = await fetch(`${LIVE_FLIGHTS_API_URL}/${expertSession.id}?callsignEndsWith=GO`);
+            const flights = (await response.json()).flights || [];
+            const activeFlightIds = new Set();
 
-        const response = await fetch(`${LIVE_FLIGHTS_API_URL}/${expertSession.id}?callsignEndsWith=GO`);
-        const flights = (await response.json()).flights || [];
-        const activeFlightIds = new Set();
+            flights.forEach(f => {
+                const { flightId, position: pos, callsign, username } = f;
+                if (!flightId || !pos || pos.lat == null || pos.lon == null) return;
 
-        flights.forEach(f => {
-            const { flightId, position: pos, callsign, username } = f;
-            if (!flightId || !pos || pos.lat == null || pos.lon == null) return;
+                activeFlightIds.add(flightId);
+                const lngLat = [pos.lon, pos.lat];
 
-            activeFlightIds.add(flightId);
-            const lngLat = [pos.lon, pos.lat];
-            const groundSpeed = pos.gs_kt || 0; // Get ground speed
-
-            if (pilotMarkers[flightId]) {
-                // Update existing marker
-                const entry = pilotMarkers[flightId];
-                entry.marker.setLngLat(lngLat);
-
-                // --- [START OF FIX] ---
-                // Only update rotation if the plane is actually moving
-                if (groundSpeed > 0) {
+                if (pilotMarkers[flightId]) {
+                    // Update existing marker
+                    const entry = pilotMarkers[flightId];
+                    entry.marker.setLngLat(lngLat);
                     entry.marker.getElement().style.transform = `rotate(${pos.track_deg ?? 0}deg)`;
+                } else {
+                    // Create new marker
+                    const el = document.createElement('div');
+                    el.className = 'plane-marker';
+                    const marker = new mapboxgl.Marker(el).setLngLat(lngLat).addTo(liveFlightsMap);
+                    pilotMarkers[flightId] = { marker: marker };
+
+                    // Add click event listener
+                    marker.getElement().addEventListener('click', async () => {
+                        removeFlightPathLayers(liveFlightsMap);
+                        const popup = new mapboxgl.Popup({ closeButton: false, offset: 25 }).setLngLat(lngLat).setHTML(`<b>${callsign}</b><br><i>Loading flight data...</i>`).addTo(liveFlightsMap);
+
+                        try {
+                            const [planRes, routeRes] = await Promise.all([
+                                fetch(`${LIVE_FLIGHTS_API_URL}/${expertSession.id}/${flightId}/plan`),
+                                fetch(`${LIVE_FLIGHTS_API_URL}/${expertSession.id}/${flightId}/route`)
+                            ]);
+                            const planJson = await planRes.json();
+                            const routeJson = await routeRes.json();
+                            let allCoordsForBounds = [];
+
+                            // Flown path
+                            const flownCoords = (routeRes.ok && routeJson.ok && Array.isArray(routeJson.route)) ? routeJson.route.map(p => [p.lon, p.lat]) : [];
+                            if (flownCoords.length > 1) {
+                                allCoordsForBounds.push(...flownCoords);
+                                liveFlightsMap.addSource('flown-path-source', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: flownCoords } } });
+                                liveFlightsMap.addLayer({ id: 'flown-path', type: 'line', source: 'flown-path-source', paint: { 'line-color': '#00b894', 'line-width': 4 } });
+                            }
+
+                            // Planned path
+                            if (planRes.ok && planJson.ok && Array.isArray(planJson?.plan?.flightPlanItems) && planJson.plan.flightPlanItems.length > 0) {
+                                const nextIdx = (typeof planJson?.plan?.nextWaypointIndex === 'number') ? planJson.plan.nextWaypointIndex : 0;
+                                const items = Array.isArray(planJson.plan.flightPlanItems) ? planJson.plan.flightPlanItems.slice(nextIdx) : [];
+                                const plannedWps = flattenWaypointsFromPlan(items);
+                                const remainingPathCoords = [lngLat, ...plannedWps];
+                                allCoordsForBounds.push(...remainingPathCoords);
+                                liveFlightsMap.addSource('planned-path-source', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: remainingPathCoords } } });
+                                liveFlightsMap.addLayer({ id: 'planned-path', type: 'line', source: 'planned-path-source', paint: { 'line-color': '#e84393', 'line-width': 3, 'line-dasharray': [2, 2] } });
+                                popup.setHTML(`<b>${callsign}</b> (${username || 'N/A'})<br>Route and flight plan loaded.`);
+                            } else {
+                                popup.setHTML(`<b>${callsign}</b> (${username || 'N/A'})<br>No flight plan filed.`);
+                            }
+
+                            if (allCoordsForBounds.length > 0) {
+                                const bounds = allCoordsForBounds.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(allCoordsForBounds[0], allCoordsForBounds[0]));
+                                liveFlightsMap.fitBounds(bounds, { padding: 60, maxZoom: 10 });
+                            }
+                        } catch (err) {
+                            console.error("Failed to fetch/render flight paths:", err);
+                            popup.setHTML(`<b>${callsign}</b> (${username || 'N/A'})<br>Could not load flight data.`);
+                        }
+                    });
                 }
-                // --- [END OF FIX] ---
+            });
 
-            } else {
-                // Create new marker
-                const el = document.createElement('div');
-                el.className = 'plane-marker';
-                
-                // --- [START OF FIX] ---
-                // Set initial rotation only if moving
-                if (groundSpeed > 0) {
-                    el.style.transform = `rotate(${pos.track_deg ?? 0}deg)`;
+            // Remove inactive markers
+            Object.keys(pilotMarkers).forEach(fid => {
+                if (!activeFlightIds.has(String(fid))) {
+                    pilotMarkers[fid].marker?.remove();
+                    delete pilotMarkers[fid];
                 }
-                // --- [END OF FIX] ---
-
-                const marker = new mapboxgl.Marker(el).setLngLat(lngLat).addTo(liveFlightsMap);
-                pilotMarkers[flightId] = { marker: marker };
-
-                // Add click event listener
-                marker.getElement().addEventListener('click', async () => {
-                    removeFlightPathLayers(liveFlightsMap);
-                    const popup = new mapboxgl.Popup({ closeButton: false, offset: 25 }).setLngLat(lngLat).setHTML(`<b>${callsign}</b><br><i>Loading flight data...</i>`).addTo(liveFlightsMap);
-
-                    try {
-                        const [planRes, routeRes] = await Promise.all([
-                            fetch(`${LIVE_FLIGHTS_API_URL}/${expertSession.id}/${flightId}/plan`),
-                            fetch(`${LIVE_FLIGHTS_API_URL}/${expertSession.id}/${flightId}/route`)
-                        ]);
-                        const planJson = await planRes.json();
-                        const routeJson = await routeRes.json();
-                        let allCoordsForBounds = [];
-
-                        // Flown path
-                        const flownCoords = (routeRes.ok && routeJson.ok && Array.isArray(routeJson.route)) ? routeJson.route.map(p => [p.lon, p.lat]) : [];
-                        if (flownCoords.length > 1) {
-                            allCoordsForBounds.push(...flownCoords);
-                            liveFlightsMap.addSource('flown-path-source', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: flownCoords } } });
-                            liveFlightsMap.addLayer({ id: 'flown-path', type: 'line', source: 'flown-path-source', paint: { 'line-color': '#00b894', 'line-width': 4 } });
-                        }
-
-                        // Planned path
-                        if (planRes.ok && planJson.ok && Array.isArray(planJson?.plan?.flightPlanItems) && planJson.plan.flightPlanItems.length > 0) {
-                            const nextIdx = (typeof planJson?.plan?.nextWaypointIndex === 'number') ? planJson.plan.nextWaypointIndex : 0;
-                            const items = Array.isArray(planJson.plan.flightPlanItems) ? planJson.plan.flightPlanItems.slice(nextIdx) : [];
-                            const plannedWps = flattenWaypointsFromPlan(items);
-                            const remainingPathCoords = [lngLat, ...plannedWps];
-                            allCoordsForBounds.push(...remainingPathCoords);
-                            liveFlightsMap.addSource('planned-path-source', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: remainingPathCoords } } });
-                            liveFlightsMap.addLayer({ id: 'planned-path', type: 'line', source: 'planned-path-source', paint: { 'line-color': '#e84393', 'line-width': 3, 'line-dasharray': [2, 2] } });
-                            popup.setHTML(`<b>${callsign}</b> (${username || 'N/A'})<br>Route and flight plan loaded.`);
-                        } else {
-                            popup.setHTML(`<b>${callsign}</b> (${username || 'N/A'})<br>No flight plan filed.`);
-                        }
-
-                        if (allCoordsForBounds.length > 0) {
-                            const bounds = allCoordsForBounds.reduce((b, coord) => b.extend(coord), new mapboxgl.LngLatBounds(allCoordsForBounds[0], allCoordsForBounds[0]));
-                            liveFlightsMap.fitBounds(bounds, { padding: 60, maxZoom: 10 });
-                        }
-                    } catch (err) {
-                        console.error("Failed to fetch/render flight paths:", err);
-                        popup.setHTML(`<b>${callsign}</b> (${username || 'N/A'})<br>Could not load flight data.`);
-                    }
-                });
-            }
-        });
-
-        // Remove inactive markers
-        Object.keys(pilotMarkers).forEach(fid => {
-            if (!activeFlightIds.has(String(fid))) {
-                pilotMarkers[fid].marker?.remove();
-                delete pilotMarkers[fid];
-            }
-        });
-    } catch (err) {
-        console.error('Error updating live flights:', err);
+            });
+        } catch (err) {
+            console.error('Error updating live flights:', err);
+        }
     }
-}
 
 
     // ==========================================================
