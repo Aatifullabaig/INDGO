@@ -27,7 +27,7 @@
             margin: 0.5rem auto 0 auto;
         }
 
-        /* --- NEW: Top 3 Flyers Section (REHAULED) --- */
+        /* --- NEW: Top 3 Flyers Section (Redesigned) --- */
 
         .top-flyers-section {
             text-align: center;
@@ -44,67 +44,70 @@
 
         #top-flyers-container {
             display: flex;
-            flex-wrap: wrap; /* Allows wrapping on small screens */
+            flex-wrap: wrap; /* Will wrap to a new line on smaller screens */
             justify-content: center;
-            gap: 1.5rem; /* Tighter gap */
+            gap: 2rem;
         }
 
         .top-pilot-card {
-            /* Back to theme colors */
-            background: var(--primary-glass);
-            border: 1px solid var(--border-color);
+            /* Inspired by the provided image */
+            background: #fdfaf5; /* Using a light, warm background */
+            border: 1px solid #ede7df;
             border-radius: 16px;
-            width: 340px; /* NARROWER to fit 3-in-a-row */
+            width: 380px; /* Wider for the new layout */
             text-align: center;
             transition: transform 0.2s ease, box-shadow 0.2s ease;
             position: relative; 
             overflow: hidden; /* Clips the stat bars at the bottom */
             display: flex;
             flex-direction: column;
-            box-shadow: 0 0 15px var(--glow-color);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
         }
         
         .top-pilot-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 0 25px var(--accent-color);
-            border-color: var(--accent-color);
+            transform: translateY(-10px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.07);
         }
 
         /* Avatar area */
         .top-pilot-avatar-wrapper {
             position: relative;
-            display: inline-block;
-            margin-top: 2rem; /* Less top margin */
+            display: inline-block; /* Allows badge to be positioned relative to this */
+            margin-top: 2.5rem;
         }
 
         .top-pilot-avatar {
-            width: 120px; /* SMALLER avatar */
-            height: 120px;
+            width: 140px;
+            height: 140px;
             border-radius: 50%;
             object-fit: cover;
-            border: 3px solid var(--border-color); /* Theme border */
+            border: 4px solid #fff; /* Clean white border */
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            margin: 0;
+            margin: 0; /* Margin is handled by wrapper */
             z-index: 1;
             position: relative;
         }
 
-        /* NEW: Upgraded Podium Badge (Tag/Sash style) */
-        .top-pilot-podium-tag {
+        /* NEW: Upgraded Podium Badge */
+        .top-pilot-podium-badge {
             position: absolute;
-            top: 10px; /* Sits on top of the avatar */
-            left: -4px; /* Sits on the edge */
-            background: var(--accent-color); /* Default, will be overridden */
-            color: #fff;
+            top: -10px;
+            right: -10px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
             font-family: var(--font-heading);
-            font-size: 1rem;
+            font-size: 1.5rem;
             font-weight: 700;
-            padding: 4px 12px;
-            border-radius: 0 4px 4px 0; /* Tag shape */
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            border: 2px solid #fff;
             z-index: 2;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            /* Background color set by modifier classes */
         }
-        /* Podium colors */
         .podium-1 { background: #FFD700; color: #5c3a00; } /* Gold */
         .podium-2 { background: #C0C0C0; color: #333333; } /* Silver */
         .podium-3 { background: #CD7F32; color: #ffffff; } /* Bronze */
@@ -118,88 +121,89 @@
 
         .top-pilot-info h3 {
             font-family: var(--font-heading);
-            font-size: 1.5rem; /* Slightly smaller */
-            color: var(--heading-color); /* Theme color */
+            font-size: 1.6rem;
+            color: #1a237e; /* Using a dark blue for contrast */
             margin: 0 0 0.25rem 0;
         }
         
         .top-pilot-info .callsign {
             font-weight: 600;
             color: var(--accent-color);
-            font-size: 1rem; /* Slightly smaller */
+            font-size: 1.1rem;
             display: block;
         }
 
-        /* Rank Badge Display Area */
+        /* NEW: Rank Badge Display Area */
         .top-pilot-rank {
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 0.5rem;
-            margin: 1rem 0; /* Tighter margin */
+            margin: 1.5rem 0;
             padding: 0 1.5rem;
         }
 
         .top-pilot-rank-badge-img {
-            width: 40px; /* Slightly smaller */
-            height: 40px;
+            width: 45px;
+            height: 45px;
             object-fit: contain;
         }
 
         .top-pilot-rank-name {
-            font-size: 0.9rem; /* Slightly smaller */
+            font-size: 1rem;
             font-weight: 600;
-            color: var(--text-color); /* Theme color */
+            color: #555;
             font-family: var(--font-heading);
         }
 
-        /* Stat Bar Design (Theme Colors) */
+        /* NEW: Stat Bar Design (Inspired by image) */
         .top-pilot-stats {
             margin-top: auto; /* Pushes stats to the bottom */
-            border-top: 1px solid var(--border-color);
+            border-top: 1px solid #ede7df;
         }
 
         .stat-bar {
             display: flex;
-            align-items: stretch;
-            background: rgba(0,0,0, 0.1); /* Subtle dark bg */
+            align-items: stretch; /* Makes label/value full height */
+            background: #fbeae8; /* Light red from inspiration */
         }
 
+        /* Add a border between stat bars */
         .stat-bar + .stat-bar {
-             border-top: 1px solid var(--border-color);
+             border-top: 1px solid #ede7df;
         }
 
         .stat-bar .label {
-            padding: 1.15rem 1.25rem; /* Tighter padding */
-            font-size: 0.9rem; /* Smaller text */
+            padding: 1.25rem 1.5rem;
+            font-size: 1rem;
             font-weight: 600;
-            color: var(--text-color); /* Theme color */
+            color: #555;
             text-align: left;
             display: flex;
             align-items: center;
-            flex-grow: 1;
+            flex-grow: 1; /* Takes up remaining space */
         }
 
         .stat-bar .value {
-            background: var(--accent-color); /* Theme accent */
+            background: #e53935; /* Dark red from inspiration */
             color: #fff;
             font-family: var(--font-heading);
-            font-size: 1.6rem; /* Slightly smaller */
+            font-size: 1.75rem;
             font-weight: 700;
-            padding: 1.15rem 1.25rem;
-            min-width: 140px; /* NARROWER box */
+            padding: 1.25rem 1.5rem;
+            min-width: 170px; /* Gives it that "box" feel */
             text-align: center;
-            border-left: 1px solid var(--border-color);
+            border-left: 1px solid #ede7df;
             display: flex;
             align-items: center;
             justify-content: center;
         }
         
-        /* --- Main Pilot Roster Grid (Keep As Is) --- */
+        /* --- Main Pilot Roster Grid (REMAKE) --- */
         
         #pilot-roster-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* Slightly smaller cards */
             gap: 1.5rem;
             padding: 2rem 0;
         }
@@ -209,10 +213,10 @@
             border: 1px solid var(--border-color);
             border-radius: 12px;
             display: flex;
-            flex-direction: column;
-            align-items: center;
+            flex-direction: column; /* Stacked layout */
+            align-items: center; /* Center-align content */
             padding: 1.5rem;
-            gap: 0.5rem;
+            gap: 0.5rem; /* Space between elements */
             transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
             text-align: center;
         }
@@ -223,11 +227,13 @@
             box-shadow: 0 0 15px var(--glow-color);
         }
 
+        /* NEW: Avatar and Badge Wrapper */
         .pilot-card-avatar-wrapper {
             position: relative;
             margin-bottom: 1rem;
         }
 
+        /* NEW: Badge is now integrated with the avatar */
         .pilot-card-badge {
             position: absolute;
             bottom: -5px;
@@ -235,9 +241,9 @@
             width: 32px;
             height: 32px;
             object-fit: contain;
-            background: var(--primary-glass);
+            background: var(--primary-glass); /* Lifts badge off avatar */
             border-radius: 50%;
-            padding: 4px;
+            padding: 4px; /* Creates a small border */
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             z-index: 2;
         }
@@ -247,7 +253,7 @@
             height: 90px;
             border-radius: 50%;
             object-fit: cover;
-            border: 3px solid var(--border-color);
+            border: 3px solid var(--border-color); /* Neutral border */
             flex-shrink: 0;
             position: relative;
             z-index: 1;
@@ -286,7 +292,11 @@
             color: var(--heading-color);
         }
 
-        /* --- Pagination Controls (Keep As Is) --- */
+        /* --- REMOVED Rank-Specific Colors --- */
+        /* The [data-rank] styles are no longer needed 
+           as the badge image is now the primary indicator. */
+
+        /* --- NEW: Pagination Controls (Keep As Is) --- */
         #pagination-controls {
             display: flex;
             justify-content: center;
@@ -421,6 +431,6 @@
     <a href="#" class="back-to-top">↑</a>
     <script src="script.js" defer></script>
     <script src="global.js" defer></script>
-    <script src="roster.js" defer></_script>
+    <script src="roster.js" defer></script>
 </body>
 </html>
