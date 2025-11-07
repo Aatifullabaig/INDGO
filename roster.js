@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- NEW: Display Top 3 Flyers (Redesigned) ---
+    // --- NEW: Display Top 3 Flyers (Rehauled) ---
     function displayTopFlyers(pilots) {
         if (!topFlyersContainer) return;
         topFlyersContainer.innerHTML = ''; // Clear any existing
@@ -103,19 +103,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const rankName = pilot.rank || 'N/A';
             const rankInfo = RANK_DATA[rankName] || RANK_DATA["default"];
 
-            // --- Get Podium Info (for the #1/2/3 badge) ---
+            // --- Get Podium Info (for the #1/2/3 tag) ---
             const podiumClass = `podium-${index + 1}`;
             const podiumText = `#${index + 1}`;
 
-            // --- Get Pireps (assuming API provides it, like in the inspiration) ---
-            // If your API uses a different field name (e.g., 'flights'), change 'pirepsFiled'
+            // --- Get Pireps (assuming API provides it) ---
             const pireps = pilot.pirepsFiled || 0; // Assuming 'pirepsFiled' is in your API data
 
             // --- New card structure ---
             card.innerHTML = `
                 <div class="top-pilot-avatar-wrapper">
+                    <div class="top-pilot-podium-tag ${podiumClass}">${podiumText}</div>
                     <img src="${avatarUrl}" alt="${pilot.name}'s avatar" class="top-pilot-avatar" onerror="this.src='${defaultAvatar}'">
-                    <div class="top-pilot-podium-badge ${podiumClass}">${podiumText}</div>
                 </div>
                 
                 <div class="top-pilot-info">
@@ -175,9 +174,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const pilotCard = document.createElement('div');
             pilotCard.className = 'pilot-card';
             
-            // The 'data-rank' attribute is no longer needed for styling
-            // as the badge image is the primary visual.
-
             const avatarUrl = pilot.imageUrl || defaultAvatar;
             const flightHours = pilot.flightHours ? pilot.flightHours.toFixed(1) : '0';
             const rankName = pilot.rank || 'N/A';
