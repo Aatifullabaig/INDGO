@@ -4530,6 +4530,7 @@ async function handleAircraftClick(flightProps, sessionId) {
 }
 
 
+
 function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <-- MODIFIED: Added 3rd arg
     const windowEl = document.getElementById('aircraft-info-window');
 
@@ -4585,9 +4586,12 @@ function populateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) { // <--
     const logoHtml = logoPath ? `<img src="${logoPath}" alt="${liveryName}" class="ac-header-logo" onerror="this.style.display='none'">` : '';
     // --- End [NEW] ---
 
-    // --- [FIX: REMOVED GRADIENT] ---
-    // We only set a temporary background image. The gradient is now in CSS.
-    const tempBg = `background-image: url('/CommunityPlanes/default.png');`;
+    // --- [YOUR FIX] ---
+    // We set no image initially. The 'updateAircraftInfoWindow' function
+    // (called immediately after) will handle loading the correct image.
+    // This prevents the "flash" of the default image.
+    const tempBg = ``;
+    // --- [END FIX] ---
     
     // --- [MODIFIED - YOUR FIX] Get Actual Departure Time and clear initial ETA ---
     const atdTimestamp = (sortedRoutePoints && sortedRoutePoints.length > 0) ? sortedRoutePoints[0].date : null;
