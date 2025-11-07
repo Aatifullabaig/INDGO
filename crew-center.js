@@ -112,6 +112,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentAirportInWindow = null;
     // NEW: State for the aircraft info window
     let aircraftInfoWindow = null;
+    let weatherSettingsWindow = null; // <-- This was added in the last step
+    let filterSettingsWindow = null; // <-- ADD THIS NEW VARIABLE
     let aircraftInfoWindowRecallBtn = null;
     let currentFlightInWindow = null; // Stores the flightId of the last selected aircraft
     let activePfdUpdateInterval = null; // Interval for updating the PFD display
@@ -122,6 +124,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     let lastPfdState = { track_deg: 0, timestamp: 0, roll_deg: 0 };
     // --- NEW: To cache flight data when switching to stats view ---
     let cachedFlightDataForStatsView = { flightProps: null, plan: null };
+    let mapFilters = {
+        showVaOnly: false,
+        showStaffOnly: false,
+        hideAllAircraft: false,
+        showAtcAirportsOnly: false,
+        hideAtcMarkers: false,
+        hideAllAirports: false
+    };
 
 
 
@@ -149,8 +159,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    
-// --- [REPLACE THIS FUNCTION] ---
+
 function injectCustomStyles() {
     const styleId = 'sector-ops-custom-styles';
     if (document.getElementById(styleId)) return;
@@ -1645,6 +1654,59 @@ function injectCustomStyles() {
             transform: translateX(22px);
         }
         /* --- End Toggle Switch --- */
+
+        /* ====================================================================
+        --- [NEW STYLES FOR FILTER WINDOW] --- 
+        ====================================================================
+        */
+
+        #filter-settings-window {
+            /* Position on the left, not the right */
+            left: 20px;
+            right: auto;
+            
+            /* --- [NEW] Stack it below the weather window --- */
+            top: 300px; 
+            
+            /* Make it smaller */
+            width: 360px;
+            
+            /* Fix transform direction */
+            transform: translateX(-20px);
+        }
+        
+        #filter-settings-window.visible {
+            transform: translateX(0);
+        }
+
+        .filter-toggle-list {
+            list-style: none;
+            padding: 16px 20px;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .filter-toggle-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .filter-toggle-label {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #e8eaf6;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .filter-toggle-label .fa-solid {
+            width: 20px;
+            text-align: center;
+            color: #00a8ff; /* Re-use blue color for consistency */
+        }
     `;
 
     const style = document.createElement('style');
@@ -1812,6 +1874,75 @@ function injectCustomStyles() {
                 'visibility',
                 show ? 'visible' : 'none'
             );
+        }
+    }
+
+/**
+     * --- [NEW] Applies all active map filters.
+     * This function calls the specific sub-functions to update
+     * aircraft layers and airport markers based on the mapFilters state.
+     */
+    function updateMapFilters() {
+        if (!sectorOpsMap) return;
+
+        // 1. Update Aircraft Filter (using Mapbox setFilter)
+        updateAircraftLayerFilter();
+
+        // 2. Update Airport Filter (by re-rendering markers)
+        renderAirportMarkers();
+        
+        // 3. Update Toolbar Button States (Weather + Filters)
+        updateToolbarButtonStates();
+    }
+
+    /**
+     * --- [NEW] Builds and applies a Mapbox filter expression to the live aircraft layer.
+     */
+    function updateAircraftLayerFilter() {
+        if (!sectorOpsMap || !sectorOpsMap.getLayer('sector-ops-live-flights-layer')) return;
+
+        let filter = ['all']; // Start with a base 'all' filter
+
+        if (mapFilters.hideAllAircraft) {
+            // Use a filter that matches nothing
+            filter = ['==', 'flightId', '']; 
+        } else if (mapFilters.showStaffOnly) {
+            // Show only features where isStaff is true
+            filter.push(['==', 'isStaff', true]);
+        } else if (mapFilters.showVaOnly) {
+            // Show only features where isVAMember is true
+            filter.push(['==', 'isVAMember', true]);
+        }
+        
+        // Apply the constructed filter
+        sectorOpsMap.setFilter('sector-ops-live-flights-layer', filter);
+    }
+
+    /**
+     * --- [RENAMED & MODIFIED] Updates the main toolbar buttons to show if any layers are active.
+     * Now handles both Weather and Filter buttons.
+     */
+    function updateToolbarButtonStates() {
+        // --- Weather Button (Existing) ---
+        const openWeatherBtn = document.getElementById('open-weather-settings-btn');
+        if (openWeatherBtn) {
+            const precipToggle = document.getElementById('weather-toggle-precip');
+            const cloudsToggle = document.getElementById('weather-toggle-clouds');
+            const windToggle = document.getElementById('weather-toggle-wind');
+
+            const isWeatherActive = (precipToggle && precipToggle.checked) ||
+                                (cloudsToggle && cloudsToggle.checked) ||
+                                (windToggle && windToggle.checked);
+
+            openWeatherBtn.classList.toggle('active', isWeatherActive);
+        }
+
+        // --- [NEW] Filter Button ---
+        const openFiltersBtn = document.getElementById('filters-settings-btn');
+        if (openFiltersBtn) {
+            // Check if any filter in mapFilters is true
+            const isFilterActive = Object.values(mapFilters).some(value => value === true);
+            openFiltersBtn.classList.toggle('active', isFilterActive);
         }
     }
 
@@ -3743,13 +3874,7 @@ function setupAircraftWindowEvents() {
 }
 
 
-
-    /**
-     * Main orchestrator for the Sector Ops view.
-     * Manages fetching data and orchestrating map and list updates.
-     * --- [MODIFIED] Injects Weather Settings Window and single toolbar button ---
-     */
-    async function initializeSectorOpsView() {
+async function initializeSectorOpsView() {
         const selector = document.getElementById('departure-hub-selector');
         const mapContainer = document.getElementById('sector-ops-map-fullscreen');
         const viewContainer = document.getElementById('view-rosters'); // The main view container
@@ -3827,6 +3952,48 @@ function setupAircraftWindowEvents() {
                 `;
                 viewContainer.insertAdjacentHTML('beforeend', windowHtml);
             }
+
+            // --- [START NEW FILTER WINDOW INJECTION] ---
+            if (!document.getElementById('filter-settings-window')) {
+                const windowHtml = `
+                    <div id="filter-settings-window" class="info-window">
+                        <div class="info-window-header">
+                            <h3><i class="fa-solid fa-filter" style="margin-right: 10px;"></i> Map Filters</h3>
+                            <div class="info-window-actions">
+                                <button class="filter-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
+                                <button class="filter-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                        </div>
+                        <div id="filter-window-content" class="info-window-content">
+                            <ul class="filter-toggle-list">
+                                <li class="filter-toggle-item">
+                                    <span class="filter-toggle-label"><i class="fa-solid fa-plane-circle-check"></i> Show VA Members Only</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="filter-toggle-members-only">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </li>
+                                <li class="filter-toggle-item">
+                                    <span class="filter-toggle-label"><i class="fa-solid fa-tower-broadcast"></i> Hide Staffed Airports</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="filter-toggle-atc">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </li>
+                                <li class="filter-toggle-item">
+                                    <span class="filter-toggle-label"><i class="fa-solid fa-location-dot"></i> Hide Unstaffed Airports</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="filter-toggle-no-atc">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                `;
+                viewContainer.insertAdjacentHTML('beforeend', windowHtml);
+            }
+            // --- [END NEW FILTER WINDOW INJECTION] ---
             
             const toolbarToggleBtn = document.getElementById('toolbar-toggle-panel-btn');
             if (toolbarToggleBtn) {
@@ -3853,14 +4020,24 @@ function setupAircraftWindowEvents() {
                         </button>
                     `);
                  }
-                 // --- [REMOVED] Old three buttons ---
+
+                 // --- [START NEW FILTER BUTTON INJECTION] ---
+                 if (!document.getElementById('open-filter-settings-btn')) {
+                    toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
+                        <button id="open-filter-settings-btn" class="toolbar-btn" title="Map Filters">
+                            <i class="fa-solid fa-filter"></i>
+                        </button>
+                    `);
+                 }
+                 // --- [END NEW FILTER BUTTON INJECTION] ---
             }
             
             airportInfoWindow = document.getElementById('airport-info-window');
             airportInfoWindowRecallBtn = document.getElementById('airport-recall-btn');
             aircraftInfoWindow = document.getElementById('aircraft-info-window');
             aircraftInfoWindowRecallBtn = document.getElementById('aircraft-recall-btn');
-            weatherSettingsWindow = document.getElementById('weather-settings-window'); // <-- NEW
+            weatherSettingsWindow = document.getElementById('weather-settings-window');
+            filterSettingsWindow = document.getElementById('filter-settings-window'); // <-- ADD THIS
 
             // 1. Get pilot's available hubs
             const rosterRes = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -3890,7 +4067,8 @@ function setupAircraftWindowEvents() {
             setupSectorOpsEventListeners();
             setupAirportWindowEvents();
             setupAircraftWindowEvents();
-            setupWeatherSettingsWindowEvents(); // <-- NEW
+            setupWeatherSettingsWindowEvents();
+            setupFilterSettingsWindowEvents(); // <-- ADD THIS
 
             // 6. Start the live data loop.
             startSectorOpsLiveLoop();
@@ -5903,10 +6081,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     }
 
    
-    /**
-     * MODIFIED: Sets up event listeners for the Sector Ops view, including the new weather toolbar.
-     */
-    function setupSectorOpsEventListeners() {
+function setupSectorOpsEventListeners() {
         const panel = document.getElementById('sector-ops-floating-panel');
         if (!panel || panel.dataset.listenersAttached === 'true') return;
         panel.dataset.listenersAttached = 'true';
@@ -5993,7 +6168,23 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
                 }
             });
         }
-        // --- [REMOVED] Old three button listeners ---
+
+        // --- [START NEW FILTER BUTTON LISTENER] ---
+        const openFilterBtn = document.getElementById('open-filter-settings-btn');
+        if (openFilterBtn) {
+            openFilterBtn.addEventListener('click', () => {
+                // Toggle visibility of the new window
+                if (filterSettingsWindow) {
+                    const isVisible = filterSettingsWindow.classList.toggle('visible');
+                    if (isVisible) {
+                        MobileUIHandler.openWindow(filterSettingsWindow);
+                    } else {
+                        MobileUIHandler.closeActiveWindow();
+                    }
+                }
+            });
+        }
+        // --- [END NEW FILTER BUTTON LISTENER] ---
     }
 
     /**
@@ -6060,6 +6251,89 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         weatherSettingsWindow.dataset.eventsAttached = 'true';
     }
 
+// [ADD THIS NEW FUNCTION]
+/**
+ * Applies map filters based on the toggle states.
+ * This function handles both aircraft (Mapbox layer) and airports (HTML markers).
+ */
+function applyMapFilters() {
+    if (!sectorOpsMap) return;
+
+    // 1. Read the state of all filter toggles
+    const showMembersOnly = document.getElementById('filter-toggle-members-only')?.checked || false;
+    const hideAtc = document.getElementById('filter-toggle-atc')?.checked || false;
+    const hideNoAtc = document.getElementById('filter-toggle-no-atc')?.checked || false;
+
+    // 2. Apply Aircraft Filter (using Mapbox setFilter)
+    let aircraftFilter = null;
+    if (showMembersOnly) {
+        // This filter shows features where 'isVAMember' is true
+        aircraftFilter = ['==', ['get', 'isVAMember'], true];
+    }
+    // Set the filter on the aircraft layer. 'null' removes any existing filter.
+    sectorOpsMap.setFilter('sector-ops-live-flights-layer', aircraftFilter);
+
+    // 3. Apply Airport Filters (by re-rendering the markers)
+    // The logic inside renderAirportMarkers() will read the toggle state
+    // and skip rendering the ones that are filtered out.
+    renderAirportMarkers();
+}
+
+// [ADD THIS NEW FUNCTION]
+/**
+ * Updates the filter toolbar button to show if any filters are active.
+ */
+function updateFilterToolbarButtonState() {
+    const openFilterBtn = document.getElementById('open-filter-settings-btn');
+    if (!openFilterBtn) return;
+
+    const membersToggle = document.getElementById('filter-toggle-members-only');
+    const atcToggle = document.getElementById('filter-toggle-atc');
+    const noAtcToggle = document.getElementById('filter-toggle-no-atc');
+
+    const isAnyActive = (membersToggle && membersToggle.checked) ||
+                        (atcToggle && atcToggle.checked) ||
+                        (noAtcToggle && noAtcToggle.checked);
+
+    openFilterBtn.classList.toggle('active', isAnyActive);
+}
+
+// [ADD THIS NEW FUNCTION]
+/**
+ * Sets up event listeners for the new Filter Settings info window.
+ */
+function setupFilterSettingsWindowEvents() {
+    if (!filterSettingsWindow || filterSettingsWindow.dataset.eventsAttached === 'true') {
+        return;
+    }
+
+    // Use a single listener on the window for better performance
+    filterSettingsWindow.addEventListener('click', (e) => {
+        const target = e.target;
+
+        // Handle Close or Hide buttons
+        if (target.closest('.filter-window-close-btn') || target.closest('.filter-window-hide-btn')) {
+            filterSettingsWindow.classList.remove('visible');
+            MobileUIHandler.closeActiveWindow();
+        }
+    });
+
+    // Use a 'change' listener for the toggles
+    filterSettingsWindow.addEventListener('change', (e) => {
+        const target = e.target;
+
+        if (target.type === 'checkbox') {
+            // When any filter is changed, re-apply all map filters
+            applyMapFilters();
+            
+            // Update the toolbar button's active state
+            updateFilterToolbarButtonState();
+        }
+    });
+
+    filterSettingsWindow.dataset.eventsAttached = 'true';
+}
+
     // ==========================================================
     // END: SECTOR OPS / ROUTE EXPLORER LOGIC
     // ==========================================================
@@ -6109,12 +6383,14 @@ function stopSectorOpsLiveLoop() {
     currentMapFeatures = {};
 }
 
-    /**
-     * NEW / REFACTORED: Renders all airport markers based on current route and ATC data.
-     * This single, efficient function replaces the previous separate functions.
-     */
-    function renderAirportMarkers() {
+    // [REPLACE THIS FUNCTION]
+function renderAirportMarkers() {
         if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
+
+        // --- [NEW] Read filter state ---
+        const hideNoAtc = document.getElementById('filter-toggle-no-atc')?.checked || false;
+        const hideAtc = document.getElementById('filter-toggle-atc')?.checked || false;
+        // --- [END NEW] ---
 
         // Clear all previously rendered airport markers to ensure a fresh state
         Object.values(airportAndAtcMarkers).forEach(({ marker }) => marker.remove());
@@ -6135,6 +6411,16 @@ function stopSectorOpsLiveLoop() {
             if (!airport || airport.lat == null || airport.lon == null) return;
 
             const hasAtc = atcAirportIcaos.has(icao);
+
+            // --- [NEW] Apply filter logic ---
+            if (hideNoAtc && !hasAtc) {
+                return; // Skip rendering this marker
+            }
+            if (hideAtc && hasAtc) {
+                return; // Skip rendering this marker
+            }
+            // --- [END NEW] ---
+
             let markerClass; // Use 'let' to allow modification
             let title = `${icao}: ${airport.name || 'Unknown Airport'}`;
 
@@ -6174,7 +6460,6 @@ function stopSectorOpsLiveLoop() {
         });
     }
 
-// crew-center.js
 
 // --- [REPLACEMENT] for updateSectorOpsLiveFlights ---
 // --- [MODIFIED] This function is now named 'updateSectorOpsSecondaryData'
