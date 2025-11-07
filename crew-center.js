@@ -6337,7 +6337,14 @@ async function updateSectorOpsSecondaryData() {
             ]);
 
             if (!pilotResponse.ok) {
+                // --- [YOUR FIX] ---
+                // If the session is invalid, log the user out by
+                // clearing the token from BOTH storage locations
+                // before redirecting to the login page.
                 localStorage.removeItem('authToken');
+                sessionStorage.removeItem('authToken');
+                // --- [END FIX] ---
+                
                 window.location.href = 'login.html';
                 throw new Error('Session invalid. Please log in again.');
             }
@@ -6371,7 +6378,10 @@ async function updateSectorOpsSecondaryData() {
 
         } catch (error) {
             console.error('Error fetching pilot data:', error);
-            showNotification(error.message, 'error');
+            // Don't show a notification if we're redirecting
+            if (error.message !== 'Session invalid. Please log in again.') {
+                showNotification(error.message, 'error');
+            }
         } finally {
             if (mainContentLoader) {
                 mainContentLoader.classList.remove('active');
