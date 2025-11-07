@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INDGO AIR Virtual - Pilot Roster</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Make all navbar text white for the dark map background */
+    .navbar .nav-link,
+    .navbar .logo-text {
+        color: white;
+    }
+
+    /* Make the hamburger menu icon white */
+    .hamburger-menu .bar {
+        background-color: white;
+    }
+
+    .navbar .nav-link:hover {
+        color: #d1d1d1; /* A light grey for hover effect */
+    }
+
+    .navbar .nav-link.active {
+        color: white; /* Ensures the active link stays white */
+        border-bottom-color: white; /* Optional: make the active underline white too */
+    }
+
+    /* * STYLES FOR THE NEW PILOT ROSTER
+     * You can move this to your main style.css file if you want
+    */
+    .roster-page-hero {
+        text-align: center;
+        padding: 4rem 2rem;
+        background-color: #f4f4f4;
+    }
+    .roster-page-hero h1 {
+        font-size: 2.5rem;
+        font-family: 'Montserrat', sans-serif;
+        margin-bottom: 0.5rem;
+    }
+    .roster-page-hero p {
+        font-size: 1.1rem;
+        color: #555;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    #pilot-roster-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+        padding: 2rem 0;
+    }
+
+    .pilot-card {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        display: flex;
+        padding: 1.5rem;
+        gap: 1rem;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .pilot-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    }
+
+    .pilot-card-avatar {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid #0033a0; /* IndiGo blue */
+    }
+
+    .pilot-card-info {
+        flex: 1;
+    }
+
+    .pilot-card-info h3 {
+        font-family: 'Montserrat', sans-serif;
+        font-size: 1.25rem;
+        margin: 0;
+        color: #111;
+    }
+
+    .pilot-card-info .callsign {
+        font-weight: 600;
+        color: #0033a0; /* IndiGo blue */
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+
+    .pilot-card-info .rank {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 0.25rem;
+        display: block;
+    }
+
+    .pilot-card-info .hours {
+        font-size: 0.9rem;
+        color: #333;
+    }
+
+    /* Loading Spinner */
+    #roster-loading {
+        text-align: center;
+        padding: 4rem;
+        font-size: 1.2rem;
+        color: #555;
+    }
+    /* End of new styles */
+
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="/images/indgo.png" type="image/x-icon">
+</head>
+<body>
+    <header>
+        <nav class="navbar">
+            <a href="index.html" class="nav-logo">
+                <img src="/images/indgo.png" alt="IndGo AIR Virtual Logo" class="logo-image">
+                <span class="logo-text">IndGo AIR VIRTUAL</span>
+            </a>
+            <ul class="nav-menu">
+                <li class="nav-item"><a href="index.html" class="nav-link">Home</a></li>
+                <li class="nav-item"><a href="curriculum.html" class="nav-link">Ranks</a></li>
+                <li class="nav-item"><a href="fleet.html" class="nav-link">Fleet</a></li>
+                <li class="nav-item dropdown">
+                    <a href="#" class="nav-link">Network</a>
+                    <ul class="dropdown-menu">
+                        <li><a href="hubs.html">Hubs</a></li>
+                        <li><a href="routes.html">Routes</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item dropdown">
+                    <a href="#" class="nav-link active">About Us</a>
+                    <ul class="dropdown-menu">
+                        <li><a href="staff.html">Staff</a></li>
+                        <li><a href="community.html">Community</a></li>
+                        <li><a href="pilots.html">Pilot Roster</a></li> 
+                    </ul>
+                </li>
+                <li class="nav-item auth-link"><a href="login.html" class="nav-link nav-button nav-button-login">Login</a></li>
+                <li class="nav-item auth-link"><a href="apply.html" class="nav-link nav-button">Join Us</a></li>
+            </ul>
+            <div class="hamburger-menu">
+                <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+            </div>
+        </nav>
+        </header>
+
+    <main>
+        <section class="roster-page-hero">
+            <h1>Meet Our Pilots</h1>
+            <p>The dedicated and professional pilots who form the backbone of IndGo Air Virtual. We're proud to fly with them.</p>
+        </section>
+
+        <div class="main-container">
+            <section class="content-section">
+                <div id="pilot-roster-container">
+                    <div id="roster-loading">Loading pilot roster...</div>
+                    </div>
+            </section>
+        </div>
+    </main>
+    
+    <footer class="site-footer">
+        <div class="footer-container">
+            <a href="index.html" class="footer-logo">
+        <img src="/images/indgo.png" alt="IndGo AIR Virtual Logo" class="logo-image">
+        <span class="logo-text">IndGo AIR VIRTUAL</span>
+    </a>
+            <ul class="footer-links">
+                <a href="https://www.youtube.com/@INDAIR.N" target="_blank">YouTube</a> |
+                <a href="https://Discordapp.com/users/baigaatifulla" target="_blank">Discord</a> |
+                <a href="https://www.instagram.com/indair.co?igsh=cnZsazJhbXNrcjlm&utm_source=qr" target="_blank">Instagram</a>
+            </ul>
+        </div>
+        <div class="footer-disclaimer">
+            <p><a href="login.html">Staff Login</a></p> 
+            
+            <p>&copy; 2025 IndGo Air Virtual | Developed by ServerNoob</p>
+            <p>Disclaimer: IndGo Air Virtual is a non-commercial, fan-run virtual airline for flight simulation enthusiasts within the Infinite Flight community. We are not affiliated with, sponsored, or endorsed by InterGlobe Aviation Limited (IndiGo) or any real-world airline. All trademarks, service marks, trade names, and logos associated with IndiGo are the property of InterGlobe Aviation Limited. Their use here is for identification and entertainment purposes only and does not imply any official connection.</p>
+        </div>
+    </footer>
+
+    <a href="#" class="back-to-top">↑</a>
+    <script src="script.js" defer></script>
+    <script src="global.js" defer></script>
+    <script src="roster.js" defer></script>
+</body>
+</html>
