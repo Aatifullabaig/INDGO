@@ -27,83 +27,217 @@
             margin: 0.5rem auto 0 auto;
         }
 
-        /* This is the grid container for all the pilot cards */
+        /* --- NEW: Top 3 Flyers Section --- */
+
+        .top-flyers-section {
+            text-align: center;
+            padding-bottom: 3rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .top-flyers-section h2 {
+            font-size: 2.5rem;
+            font-family: var(--font-heading);
+            color: var(--heading-color);
+            margin-bottom: 2rem;
+        }
+
+        #top-flyers-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 2rem;
+        }
+
+        .top-pilot-card {
+            background: var(--primary-glass);
+            border: 1px solid var(--accent-color); /* Extra highlight */
+            box-shadow: 0 0 20px var(--glow-color);
+            border-radius: 12px;
+            padding: 2rem;
+            width: 320px;
+            text-align: center;
+            transition: transform 0.2s ease;
+        }
+        
+        .top-pilot-card:hover {
+            transform: translateY(-10px);
+        }
+
+        .top-pilot-card .rank-badge {
+            width: 100px;
+            height: 100px;
+            object-fit: contain;
+            margin-bottom: 1rem;
+        }
+
+        .top-pilot-card .pilot-avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 4px solid var(--accent-color);
+            margin-bottom: 1.5rem;
+        }
+        
+        .top-pilot-card h3 {
+            font-family: var(--font-heading);
+            font-size: 1.5rem;
+            color: var(--heading-color);
+            margin: 0;
+        }
+        
+        .top-pilot-card .callsign {
+            font-weight: 600;
+            color: var(--accent-color);
+            font-size: 1.1rem;
+            display: block;
+            margin-bottom: 1rem;
+        }
+
+        .top-pilot-card .hours {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--heading-color);
+        }
+
+        /* --- Main Pilot Roster Grid (Now with Rank Styles) --- */
+        
         #pilot-roster-container {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 1.5rem;
-            padding: 2rem 0; /* Adds top/bottom padding inside the .main-container */
+            padding: 2rem 0;
         }
 
-        /* Styles for an individual pilot card */
         .pilot-card {
-            background: var(--primary-glass); /* Use the site's glass background */
-            border: 1px solid var(--border-color); /* Use the site's border color */
-            border-radius: 10px; /* Match other cards */
+            background: var(--primary-glass);
+            border: 1px solid var(--border-color);
+            border-left: 5px solid var(--pilot-rank-color, var(--accent-color)); /* Rank color here */
+            border-radius: 10px;
             display: flex;
             padding: 1.5rem;
             gap: 1.5rem;
             transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+            position: relative; /* For the badge */
         }
 
         .pilot-card:hover {
-            transform: translateY(-5px); /* Use the site's hover effect */
-            border-color: var(--accent-color);
-            box-shadow: 0 0 15px var(--glow-color);
+            transform: translateY(-5px);
+            border-color: var(--pilot-rank-color, var(--accent-color));
+            box-shadow: 0 0 15px var(--pilot-rank-color, var(--glow-color));
         }
 
-        /* The pilot's circular avatar */
+        /* NEW: Rank Badge in the corner */
+        .pilot-card-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 35px;
+            height: 35px;
+            object-fit: contain;
+            opacity: 0.7;
+        }
+
         .pilot-card-avatar {
             width: 80px;
             height: 80px;
             border-radius: 50%;
             object-fit: cover;
-            border: 3px solid var(--accent-color); /* Use the site's accent color */
+            border: 3px solid var(--pilot-rank-color, var(--accent-color)); /* Rank color here */
             flex-shrink: 0;
         }
 
-        .pilot-card-info {
-            flex: 1;
-        }
+        .pilot-card-info { flex: 1; }
 
-        /* Pilot's Name */
         .pilot-card-info h3 {
             font-family: var(--font-heading);
             font-size: 1.25rem;
             margin: 0;
-            color: var(--heading-color); /* Use the site's heading color */
+            color: var(--heading-color);
         }
 
-        /* Pilot's Callsign */
         .pilot-card-info .callsign {
             font-weight: 600;
-            color: var(--accent-color); /* Use the site's accent color */
+            color: var(--accent-color);
             margin-bottom: 0.5rem;
             display: block;
         }
 
-        /* Pilot's Rank */
         .pilot-card-info .rank {
             font-size: 0.9rem;
             font-weight: 600;
-            color: var(--text-color); /* Use the site's text color */
+            color: var(--text-color);
             margin-bottom: 0.25rem;
             display: block;
         }
 
-        /* Pilot's Flight Hours */
         .pilot-card-info .hours {
             font-size: 0.9rem;
-            color: var(--heading-color); /* Use the site's heading color */
+            color: var(--heading-color);
         }
 
-        /* Style for the "Loading..." text */
+        /* --- NEW: Rank-Specific Colors --- */
+        /* These colors are applied via the `data-rank` attribute in JS */
+        .pilot-card[data-rank="IndGo Cadet"] { --pilot-rank-color: #b0bec5; }
+        .pilot-card[data-rank="Skyline Observer"] { --pilot-rank-color: #42a5f5; }
+        .pilot-card[data-rank="Route Explorer"] { --pilot-rank-color: #66bb6a; }
+        .pilot-card[data-rank="Skyline Officer"] { --pilot-rank-color: #ab47bc; }
+        .pilot-card[data-rank="Command Captain"] { --pilot-rank-color: #ffa726; }
+        .pilot-card[data-rank="Elite Captain"] { --pilot-rank-color: #ef5350; }
+        .pilot-card[data-rank="Blue Eagle"] { --pilot-rank-color: #29b6f6; }
+        .pilot-card[data-rank="Line Instructor"] { --pilot-rank-color: #e0e0e0; }
+        .pilot-card[data-rank="Chief Flight Instructor"] { --pilot-rank-color: #f7f7f7; }
+        .pilot-card[data-rank="IndGo SkyMaster"] { --pilot-rank-color: #1a237e; }
+        .pilot-card[data-rank="Blue Legacy Commander"] { --pilot-rank-color: #ffd600; }
+        /* Default fallback */
+        .pilot-card { --pilot-rank-color: var(--accent-color); }
+
+
+        /* --- NEW: Pagination Controls --- */
+        #pagination-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            padding: 2rem 0;
+        }
+        
+        #pagination-controls button {
+            background: var(--accent-color);
+            color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            font-family: var(--font-heading);
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        #pagination-controls button:hover {
+            background: var(--accent-color-darker); /* Assuming you have this */
+        }
+        
+        #pagination-controls button:disabled {
+            background: var(--border-color);
+            color: var(--text-color);
+            cursor: not-allowed;
+        }
+
+        #page-info {
+            font-size: 1.1rem;
+            color: var(--heading-color);
+            font-weight: 600;
+        }
+
+        /* --- Loading/Error State --- */
         #roster-loading {
             text-align: center;
             padding: 4rem;
             font-size: 1.2rem;
-            color: var(--text-color); /* Use the site's text color */
-            grid-column: 1 / -1; /* Make it span the full grid width while loading */
+            color: var(--text-color);
+            grid-column: 1 / -1;
         }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -153,13 +287,24 @@
         </section>
 
         <div class="main-container">
-            <section class="content-section">
-                <div id="pilot-roster-container">
-                    <div id="roster-loading">Loading pilot roster...</div>
+            <section class="content-section top-flyers-section">
+                <h2>Top Flyers</h2>
+                <div id="top-flyers-container">
                     </div>
             </section>
-        </div>
-    </main>
+        <section class="content-section">
+                <h2>Our Roster</h2>
+                <div id="pilot-roster-container">
+                    <div id="roster-loading">Loading pilot roster...</div>
+                </div>
+                
+                <div id="pagination-controls">
+                    <button id="prev-page" disabled>Previous</button>
+                    <span id="page-info"></span>
+                    <button id="next-page" disabled>Next</button>
+                </div>
+            </section>
+        </div> </main>
     
     <footer class="site-footer">
         <div class="footer-container">
