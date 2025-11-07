@@ -130,7 +130,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         hideAllAircraft: false,
         showAtcAirportsOnly: false,
         hideAtcMarkers: false,
-        hideAllAirports: false
+        hideAllAirports: false,
+        hideNoAtcMarkers: false
     };
 
 
@@ -1937,11 +1938,13 @@ function injectCustomStyles() {
             openWeatherBtn.classList.toggle('active', isWeatherActive);
         }
 
-        // --- [NEW] Filter Button ---
+        // --- [FIXED] Filter Button (Reads from state) ---
         const openFiltersBtn = document.getElementById('filters-settings-btn');
         if (openFiltersBtn) {
             // Check if any filter in mapFilters is true
-            const isFilterActive = Object.values(mapFilters).some(value => value === true);
+            const isFilterActive = mapFilters.showVaOnly || 
+                                   mapFilters.hideAtcMarkers || 
+                                   mapFilters.hideNoAtcMarkers; // Use the state object
             openFiltersBtn.classList.toggle('active', isFilterActive);
         }
     }
@@ -6251,54 +6254,8 @@ function setupSectorOpsEventListeners() {
         weatherSettingsWindow.dataset.eventsAttached = 'true';
     }
 
-// [ADD THIS NEW FUNCTION]
-/**
- * Applies map filters based on the toggle states.
- * This function handles both aircraft (Mapbox layer) and airports (HTML markers).
- */
-function applyMapFilters() {
-    if (!sectorOpsMap) return;
 
-    // 1. Read the state of all filter toggles
-    const showMembersOnly = document.getElementById('filter-toggle-members-only')?.checked || false;
-    const hideAtc = document.getElementById('filter-toggle-atc')?.checked || false;
-    const hideNoAtc = document.getElementById('filter-toggle-no-atc')?.checked || false;
 
-    // 2. Apply Aircraft Filter (using Mapbox setFilter)
-    let aircraftFilter = null;
-    if (showMembersOnly) {
-        // This filter shows features where 'isVAMember' is true
-        aircraftFilter = ['==', ['get', 'isVAMember'], true];
-    }
-    // Set the filter on the aircraft layer. 'null' removes any existing filter.
-    sectorOpsMap.setFilter('sector-ops-live-flights-layer', aircraftFilter);
-
-    // 3. Apply Airport Filters (by re-rendering the markers)
-    // The logic inside renderAirportMarkers() will read the toggle state
-    // and skip rendering the ones that are filtered out.
-    renderAirportMarkers();
-}
-
-// [ADD THIS NEW FUNCTION]
-/**
- * Updates the filter toolbar button to show if any filters are active.
- */
-function updateFilterToolbarButtonState() {
-    const openFilterBtn = document.getElementById('open-filter-settings-btn');
-    if (!openFilterBtn) return;
-
-    const membersToggle = document.getElementById('filter-toggle-members-only');
-    const atcToggle = document.getElementById('filter-toggle-atc');
-    const noAtcToggle = document.getElementById('filter-toggle-no-atc');
-
-    const isAnyActive = (membersToggle && membersToggle.checked) ||
-                        (atcToggle && atcToggle.checked) ||
-                        (noAtcToggle && noAtcToggle.checked);
-
-    openFilterBtn.classList.toggle('active', isAnyActive);
-}
-
-// [ADD THIS NEW FUNCTION]
 /**
  * Sets up event listeners for the new Filter Settings info window.
  */
@@ -6323,11 +6280,15 @@ function setupFilterSettingsWindowEvents() {
         const target = e.target;
 
         if (target.type === 'checkbox') {
-            // When any filter is changed, re-apply all map filters
-            applyMapFilters();
-            
-            // Update the toolbar button's active state
-            updateFilterToolbarButtonState();
+            // --- THIS IS THE FIX ---
+            // 1. Update the global mapFilters state object from the DOM
+            mapFilters.showVaOnly = document.getElementById('filter-toggle-members-only')?.checked || false;
+            mapFilters.hideAtcMarkers = document.getElementById('filter-toggle-atc')?.checked || false;
+            mapFilters.hideNoAtcMarkers = document.getElementById('filter-toggle-no-atc')?.checked || false;
+
+            // 2. Call the single, original update function
+            updateMapFilters();
+            // --- END OF FIX ---
         }
     });
 
@@ -6383,14 +6344,14 @@ function stopSectorOpsLiveLoop() {
     currentMapFeatures = {};
 }
 
-    // [REPLACE THIS FUNCTION]
+
 function renderAirportMarkers() {
         if (!sectorOpsMap || !sectorOpsMap.isStyleLoaded()) return;
 
-        // --- [NEW] Read filter state ---
-        const hideNoAtc = document.getElementById('filter-toggle-no-atc')?.checked || false;
-        const hideAtc = document.getElementById('filter-toggle-atc')?.checked || false;
-        // --- [END NEW] ---
+        // --- [FIXED] Read filter state from the global object ---
+        const hideNoAtc = mapFilters.hideNoAtcMarkers;
+        const hideAtc = mapFilters.hideAtcMarkers;
+        // --- [END FIXED] ---
 
         // Clear all previously rendered airport markers to ensure a fresh state
         Object.values(airportAndAtcMarkers).forEach(({ marker }) => marker.remove());
@@ -6412,14 +6373,14 @@ function renderAirportMarkers() {
 
             const hasAtc = atcAirportIcaos.has(icao);
 
-            // --- [NEW] Apply filter logic ---
+            // --- [FIXED] Apply filter logic from state ---
             if (hideNoAtc && !hasAtc) {
                 return; // Skip rendering this marker
             }
             if (hideAtc && hasAtc) {
                 return; // Skip rendering this marker
             }
-            // --- [END NEW] ---
+            // --- [END FIXED] ---
 
             let markerClass; // Use 'let' to allow modification
             let title = `${icao}: ${airport.name || 'Unknown Airport'}`;
