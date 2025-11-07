@@ -74,6 +74,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- State Variables ---
     let OWM_API_KEY = null;
     let isWeatherLayerAdded = false;
+    let isCloudLayerAdded = false;   // NEW: For Clouds
+    let isWindLayerAdded = false;    // NEW: For Wind
     let MAPBOX_ACCESS_TOKEN = null;
     let DYNAMIC_FLEET = [];
     let CURRENT_PILOT = null;
@@ -1542,16 +1544,15 @@ function injectCustomStyles() {
     document.head.appendChild(style);
 }
 
-// [ADD THIS new function to crew-center.js]
-
-    /**
-     * --- [NEW] Toggles the OpenWeatherMap Precipitation Layer ---
+/**
+     * --- [FIXED] Toggles the OpenWeatherMap Precipitation Layer ---
+     * Switched from the paid Maps 2.0 API to the free Maps 1.0 API endpoint.
      */
     function toggleWeatherLayer(show) {
         if (!sectorOpsMap) return;
 
-        const SOURCE_ID = 'owm-weather-source';
-        const LAYER_ID = 'owm-weather-layer';
+        const SOURCE_ID = 'owm-precipitation-source'; // Renamed for clarity
+        const LAYER_ID = 'owm-precipitation-layer';   // Renamed for clarity
 
         // 1. First-time creation
         if (show && !isWeatherLayerAdded) {
@@ -1561,16 +1562,15 @@ function injectCustomStyles() {
                 return;
             }
 
-            // --- Define the OWM tile URL ---
-            // We use {op} = PR0 for precipitation
-            const owmTileUrl = `https://maps.openweathermap.org/maps/2.0/weather/PR0/{z}/{x}/{y}?appid=${OWM_API_KEY}`;
+            // --- [FIX] Define the OWM tile URL for the FREE Maps 1.0 API ---
+            const owmTileUrl = `https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${OWM_API_KEY}`;
             
             // --- Add the source ---
             sectorOpsMap.addSource(SOURCE_ID, {
                 'type': 'raster',
                 'tiles': [owmTileUrl],
                 'tileSize': 256,
-                'maxzoom': 9
+                'maxzoom': 9 
             });
 
             // --- Add the layer ---
@@ -1579,19 +1579,124 @@ function injectCustomStyles() {
                 'type': 'raster',
                 'source': SOURCE_ID,
                 'paint': {
-                    'raster-opacity': 0.7, // Set a default transparency
+                    'raster-opacity': 0.7, // Precipitation can be a bit darker
                     'raster-fade-duration': 300
                 }
             }, 
-            // This is the critical part: Draw it *under* the aircraft icons
-            'sector-ops-live-flights-layer' 
+            'sector-ops-live-flights-layer' // Draw under aircraft
             ); 
             
             isWeatherLayerAdded = true;
-            console.log('Weather layer added.');
+            console.log('Precipitation layer added (using free Maps 1.0).');
 
         // 2. Toggle visibility
         } else if (isWeatherLayerAdded) {
+            sectorOpsMap.setLayoutProperty(
+                LAYER_ID,
+                'visibility',
+                show ? 'visible' : 'none'
+            );
+        }
+    }
+
+/**
+     * --- [NEW] Toggles the OpenWeatherMap Cloud Layer ---
+     * Uses the free 'clouds_new' layer from the Maps 1.0 API.
+     */
+    function toggleCloudLayer(show) {
+        if (!sectorOpsMap) return;
+
+        const SOURCE_ID = 'owm-cloud-source';
+        const LAYER_ID = 'owm-cloud-layer';
+
+        // 1. First-time creation
+        if (show && !isCloudLayerAdded) {
+            if (!OWM_API_KEY) {
+                console.error('OWM API Key is not loaded. Cannot add cloud layer.');
+                showNotification('Weather service is unavailable (No API Key).', 'error');
+                return;
+            }
+
+            // --- Use the 'clouds_new' layer ---
+            const owmTileUrl = `https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${OWM_API_KEY}`;
+            
+            sectorOpsMap.addSource(SOURCE_ID, {
+                'type': 'raster',
+                'tiles': [owmTileUrl],
+                'tileSize': 256,
+                'maxzoom': 9
+            });
+
+            sectorOpsMap.addLayer({
+                'id': LAYER_ID,
+                'type': 'raster',
+                'source': SOURCE_ID,
+                'paint': {
+                    'raster-opacity': 0.6, // Slightly more transparent for layering
+                    'raster-fade-duration': 300
+                }
+            }, 
+            'sector-ops-live-flights-layer' // Draw under aircraft
+            ); 
+            
+            isCloudLayerAdded = true;
+            console.log('Cloud layer added (using free Maps 1.0).');
+
+        // 2. Toggle visibility
+        } else if (isCloudLayerAdded) {
+            sectorOpsMap.setLayoutProperty(
+                LAYER_ID,
+                'visibility',
+                show ? 'visible' : 'none'
+            );
+        }
+    }
+
+    /**
+     * --- [NEW] Toggles the OpenWeatherMap Wind Speed Layer ---
+     * Uses the free 'wind_new' layer from the Maps 1.0 API.
+     */
+    function toggleWindLayer(show) {
+        if (!sectorOpsMap) return;
+
+        const SOURCE_ID = 'owm-wind-source';
+        const LAYER_ID = 'owm-wind-layer';
+
+        // 1. First-time creation
+        if (show && !isWindLayerAdded) {
+            if (!OWM_API_KEY) {
+                console.error('OWM API Key is not loaded. Cannot add wind layer.');
+                showNotification('Weather service is unavailable (No API Key).', 'error');
+                return;
+            }
+
+            // --- Use the 'wind_new' layer ---
+            const owmTileUrl = `https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=${OWM_API_KEY}`;
+            
+            sectorOpsMap.addSource(SOURCE_ID, {
+                'type': 'raster',
+                'tiles': [owmTileUrl],
+                'tileSize': 256,
+                'maxzoom': 9
+            });
+
+            sectorOpsMap.addLayer({
+                'id': LAYER_ID,
+                'type': 'raster',
+                'source': SOURCE_ID,
+                'paint': {
+                    'raster-opacity': 0.6, // Slightly more transparent for layering
+                    'raster-fade-duration': 300
+                }
+            }, 
+            'sector-ops-live-flights-layer' // Draw under aircraft
+            ); 
+            
+            isWindLayerAdded = true;
+            console.log('Wind layer added (using free Maps 1.0).');
+
+        // 2. Toggle visibility
+        } else if (isWindLayerAdded) {
             sectorOpsMap.setLayoutProperty(
                 LAYER_ID,
                 'visibility',
@@ -3505,6 +3610,7 @@ function setupAircraftWindowEvents() {
     /**
      * Main orchestrator for the Sector Ops view.
      * Manages fetching data and orchestrating map and list updates.
+     * --- [MODIFIED] Added injection for Cloud and Wind toggle buttons ---
      */
     async function initializeSectorOpsView() {
         const selector = document.getElementById('departure-hub-selector');
@@ -3557,15 +3663,29 @@ function setupAircraftWindowEvents() {
                     `);
                  }
 
-                 // --- [START] ADDED THIS BLOCK ---
+                 // --- [MODIFIED] Add all three weather buttons ---
                  if (!document.getElementById('weather-toggle-btn')) {
                     toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
-                        <button id="weather-toggle-btn" class="toolbar-btn" title="Toggle Weather Radar">
+                        <button id="weather-toggle-btn" class="toolbar-btn" title="Toggle Precipitation Radar">
                             <i class="fa-solid fa-cloud-rain"></i>
                         </button>
                     `);
                  }
-                 // --- [END] ADDED THIS BLOCK ---
+                 if (!document.getElementById('cloud-toggle-btn')) {
+                    toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
+                        <button id="cloud-toggle-btn" class="toolbar-btn" title="Toggle Cloud Cover">
+                            <i class="fa-solid fa-cloud"></i>
+                        </button>
+                    `);
+                 }
+                 if (!document.getElementById('wind-toggle-btn')) {
+                    toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
+                        <button id="wind-toggle-btn" class="toolbar-btn" title="Toggle Wind Speed">
+                            <i class="fa-solid fa-wind"></i>
+                        </button>
+                    `);
+                 }
+                 // --- [END MODIFIED BLOCK] ---
             }
             
             airportInfoWindow = document.getElementById('airport-info-window');
@@ -5570,7 +5690,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     }
 
     /**
-     * MODIFIED: Sets up event listeners for the Sector Ops view, including the new toolbar.
+     * MODIFIED: Sets up event listeners for the Sector Ops view, including the new weather toolbar.
      */
     function setupSectorOpsEventListeners() {
         const panel = document.getElementById('sector-ops-floating-panel');
@@ -5644,17 +5764,35 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
             });
         });
 
-        // --- [START] ADDED THIS BLOCK ---
-        // --- NEW: Weather Toggle Button ---
+        // --- [MODIFIED] Add listeners for all 3 weather buttons ---
+        
+        // 1. Precipitation Toggle Button
         const weatherToggleBtn = document.getElementById('weather-toggle-btn');
         if (weatherToggleBtn) {
             weatherToggleBtn.addEventListener('click', () => {
-                // This assumes your toggleWeatherLayer function exists
                 const isNowActive = weatherToggleBtn.classList.toggle('active');
-                toggleWeatherLayer(isNowActive); 
+                toggleWeatherLayer(isNowActive); // This is PRECIPITATION
             });
         }
-        // --- [END] ADDED THIS BLOCK ---
+
+        // 2. Cloud Toggle Button
+        const cloudToggleBtn = document.getElementById('cloud-toggle-btn');
+        if (cloudToggleBtn) {
+            cloudToggleBtn.addEventListener('click', () => {
+                const isNowActive = cloudToggleBtn.classList.toggle('active');
+                toggleCloudLayer(isNowActive); 
+            });
+        }
+
+        // 3. Wind Toggle Button
+        const windToggleBtn = document.getElementById('wind-toggle-btn');
+        if (windToggleBtn) {
+            windToggleBtn.addEventListener('click', () => {
+                const isNowActive = windToggleBtn.classList.toggle('active');
+                toggleWindLayer(isNowActive); 
+            });
+        }
+        // --- [END MODIFIED BLOCK] ---
     }
 
     // ==========================================================
