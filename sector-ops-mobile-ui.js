@@ -1,16 +1,15 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v6.4 - Route Bar Top)
+ * MobileUIHandler Module (Creative HUD Rehaul - v6.5 - Unified Handle)
  *
- * REHAUL v6.4 CHANGES (Route Bar Top):
- * 1. MOVED the `.route-summary-overlay` (KSFO -> EKCH bar) to the top
- * of all three bottom islands (Mini, Peek, and Expanded).
- * 2. This element is now cloned into all three states for a consistent header.
- * 3. REMOVED the old `#vsd-summary-bar` (3-widget layout) from the
- * Mini Island (State 0) to fulfill the "erase anything else" request.
- * 4. The Mini Island (State 0) now *only* shows the Route Summary Bar
- * and the drawer handle.
- * 5. CSS from V4 redesign has been removed, and new CSS for the
- * mobile route bar has been added.
+ * REHAUL v6.5 CHANGES (Unified Handle):
+ * 1. REMOVED the separate `.drawer-handle` element from all three islands.
+ * 2. MOVED the "pill" visual and grab/swipe properties directly to the
+ * `.route-summary-wrapper-mobile` element.
+ * 3. This top bar is now the single, unified handle for all states
+ * (Mini, Peek, and Expanded).
+ * 4. RE-WIRED all click and touch interactions in `wireUpInteractions` to
+ * listen to `.route-summary-wrapper-mobile` in all three islands.
+ * 5. SIMPLIFIED `handleTouchStart` to only check for the new unified handle.
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -54,17 +53,18 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (HUD Rehaul v6.4 / Route Bar Top) Initialized.");
+        console.log("Mobile UI Handler (HUD Rehaul v6.5 / Unified Handle) Initialized.");
     },
 
     /**
      * Injects all the CSS for the new HUD-themed floating islands.
      * ---
-     * [REHAUL v6.4 / ROUTE BAR TOP]
-     * 1. Removes all V4 redesign styles for the old mini-island content.
-     * 2. Sets #mobile-island-mini height to 'auto'.
-     * 3. Adds new styles for `.route-summary-wrapper-mobile` to style
-     * the route bar inside the islands.
+     * [REHAUL v6.5 / UNIFIED HANDLE]
+     * 1. Removes all styles for `.drawer-handle`.
+     * 2. Adds handle properties (`cursor`, `touch-action`, etc.) to
+     * `.route-summary-wrapper-mobile`.
+     * 3. Adds the "pill" pseudo-element (`::before`) to
+     * `.route-summary-wrapper-mobile` and gives it `padding-bottom`.
      * ---
      */
     injectMobileStyles() {
@@ -79,8 +79,7 @@ const MobileUIHandler = {
                 --hud-accent: #00a8ff;
                 --hud-glow: 0 0 15px rgba(0, 168, 255, 0.5);
                 
-                /* [MODIFIED v6.3] Island Dimensions */
-                --drawer-handle-height: 20px; /* <-- v6.3 Tighter handle */
+                /* [REMOVED v6.5] --drawer-handle-height was here */
                 
                 /* [REMOVED v6.4] Mini Island Data Area Height */
                 /* --drawer-mini-data-height: 70px; */
@@ -180,18 +179,14 @@ const MobileUIHandler = {
                 bottom: var(--island-bottom-margin);
                 /* [MODIFIED v6.4] Height is auto-sized by content */
                 height: auto; 
-                cursor: pointer;
+                /* [REMOVED v6.5] cursor: pointer was here */
                 
                 /* [NEW] Use flex to stack route bar and handle */
                 display: flex;
                 flex-direction: column; 
             }
 
-            /* [NEW v6.2] Make the "pill" fainter on the mini-island */
-            #mobile-island-mini .drawer-handle::before {
-                opacity: 0.3;
-            }
-
+            /* [REMOVED v6.5] Faint pill rule for mini-island was here */
             /* [REMOVED v6.4] .mini-content-wrapper was here */
             
             /* --- [NEW] State 1: Peek Island --- */
@@ -209,16 +204,43 @@ const MobileUIHandler = {
             }
 
             /* ====================================================================
-            --- [NEW v6.4] Route Summary Bar Styling (Mobile)
+            --- [MODIFIED v6.5] Route Summary Bar Styling (Mobile)
             ==================================================================== */
             
-            /* [NEW] Wrapper for the Route Summary Bar */
+            /* [NEW v6.5] This is now the unified handle */
             .route-summary-wrapper-mobile {
                 flex-shrink: 0;
                 overflow: hidden;
-                /* [NEW] Ensure top corners are rounded */
                 border-top-left-radius: 16px;
                 border-top-right-radius: 16px;
+                
+                /* [NEW v6.5] Add handle properties */
+                cursor: grab;
+                touch-action: none;
+                user-select: none;
+                position: relative;
+                
+                /* [NEW v6.5] Add padding to make space for the pill */
+                padding-bottom: 20px; 
+            }
+            
+            /* [NEW v6.5] Add the pill visual */
+            .route-summary-wrapper-mobile::before {
+                content: '';
+                position: absolute;
+                left: 50%;
+                transform: translateX(-50%);
+                bottom: 8px; /* Position in the padding area */
+                width: 40px; 
+                height: 4px; 
+                background: var(--hud-border);
+                border-radius: 2px; 
+                opacity: 0.5;
+            }
+            
+            /* [NEW v6.5] Make the pill fainter on the mini-island */
+            #mobile-island-mini .route-summary-wrapper-mobile::before {
+                opacity: 0.3;
             }
 
             /* [NEW] Override desktop styles for the route bar on mobile */
@@ -232,7 +254,8 @@ const MobileUIHandler = {
                 border-radius: 0; /* Wrapper handles rounding */
                 
                 /* Adjust padding for a tighter mobile look */
-                padding: 12px 15px;
+                /* [MODIFIED v6.5] Removed padding-bottom, handled by wrapper */
+                padding: 12px 15px 0 15px; 
                 
                 /* Force grid to 3 columns and scale down text */
                 grid-template-columns: auto 1fr auto;
@@ -264,33 +287,11 @@ const MobileUIHandler = {
             }
             
             /* ====================================================================
-            --- [END V6.4 NEW STYLES] ---
+            --- [END V6.5 MODIFIED STYLES] ---
             ==================================================================== */
 
 
-            /* --- [MODIFIED v6.3] Drawer Handle (Used in ALL Bottom Islands) --- */
-            .drawer-handle {
-                height: var(--drawer-handle-height); /* <-- Reduced to 20px */
-                flex-shrink: 0;
-                cursor: grab;
-                touch-action: none;
-                user-select: none;
-                display: grid;
-                place-items: center;
-                box-sizing: border-box;
-                /* [REMOVED v6.3] border-bottom was here */
-            }
-            .drawer-handle::before {
-                content: '';
-                width: 40px; 
-                height: 4px; 
-                background: var(--hud-border);
-                border-radius: 2px; 
-                opacity: 0.5; 
-            }
-            #mobile-island-expanded .drawer-handle::before {
-                opacity: 0.5; 
-            }
+            /* --- [REMOVED v6.5] .drawer-handle styles were here --- */
             
             /* --- [MODIFIED] Drawer Content (Used in Peek & Expanded) --- */
             .drawer-content {
@@ -545,12 +546,12 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.4]
+     * [REHAUL v6.5]
      * Creates the new DOM structure for the HUD:
      * 1 Top Window + 3 Bottom Islands (Mini, Peek, Expanded).
      *
-     * v6.4 Change: Adds a `.route-summary-wrapper-mobile` to the top of
-     * ALL THREE bottom islands. Removes `.mini-content-wrapper` from Mini Island.
+     * v6.5 Change: REMOVES the `.drawer-handle` div from all islands.
+     * The `.route-summary-wrapper-mobile` is now the handle.
      */
     createSplitViewUI() {
         const viewContainer = document.getElementById('view-rosters');
@@ -567,35 +568,32 @@ const MobileUIHandler = {
         this.topWindowEl.className = 'mobile-aircraft-view';
         viewContainer.appendChild(this.topWindowEl);
 
-        // 3. [MODIFIED v6.4] Bottom Island - State 0 (Mini)
+        // 3. [MODIFIED v6.5] Bottom Island - State 0 (Mini)
         this.miniIslandEl = document.createElement('div');
         this.miniIslandEl.id = 'mobile-island-mini';
         this.miniIslandEl.className = 'mobile-island-bottom';
-        // [MODIFIED v6.4] Add route bar wrapper + handle
+        // [MODIFIED v6.5] Only contains the route bar wrapper
         this.miniIslandEl.innerHTML = `
             <div class="route-summary-wrapper-mobile"></div>
-            <div class="drawer-handle"></div>
         `;
         viewContainer.appendChild(this.miniIslandEl);
 
-        // 4. [MODIFIED v6.4] Bottom Island - State 1 (Peek)
+        // 4. [MODIFIED v6.5] Bottom Island - State 1 (Peek)
         this.peekIslandEl = document.createElement('div');
         this.peekIslandEl.id = 'mobile-island-peek';
         this.peekIslandEl.className = 'mobile-island-bottom';
         this.peekIslandEl.innerHTML = `
             <div class="route-summary-wrapper-mobile"></div>
-            <div class="drawer-handle"></div>
             <div class="drawer-content"></div>
         `;
         viewContainer.appendChild(this.peekIslandEl);
         
-        // 5. [MODIFIED v6.4] Bottom Island - State 2 (Expanded)
+        // 5. [MODIFIED v6.5] Bottom Island - State 2 (Expanded)
         this.expandedIslandEl = document.createElement('div');
         this.expandedIslandEl.id = 'mobile-island-expanded';
         this.expandedIslandEl.className = 'mobile-island-bottom';
         this.expandedIslandEl.innerHTML = `
             <div class="route-summary-wrapper-mobile"></div>
-            <div class="drawer-handle"></div>
             <div class="drawer-content"></div>
         `;
         viewContainer.appendChild(this.expandedIslandEl);
@@ -677,31 +675,40 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.0]
-     * Wires up all-new interactions for the islands.
-     * - Click logic is explicit (Mini -> Peek, Peek -> Expanded, etc.)
-     * - Swipe logic is simplified (no drag-to-move).
+     * [REHAUL v6.5]
+     * Wires up all interactions to the new unified handle
+     * (`.route-summary-wrapper-mobile`) in all three islands.
      */
     wireUpInteractions() {
         if (!this.miniIslandEl || !this.peekIslandEl || !this.expandedIslandEl) return;
 
+        // [NEW v6.5] Get the new unified handles
+        const miniHandle = this.miniIslandEl.querySelector('.route-summary-wrapper-mobile');
+        const peekHandle = this.peekIslandEl.querySelector('.route-summary-wrapper-mobile');
+        const expandedHandle = this.expandedIslandEl.querySelector('.route-summary-wrapper-mobile');
+
+        if (!miniHandle || !peekHandle || !expandedHandle) return;
+
         // --- Click Interactions ---
         
         // State 0 -> 1
-        this.miniIslandEl.addEventListener('click', () => this.setDrawerState(1));
+        miniHandle.addEventListener('click', (e) => {
+            // Prevent click from firing if it was the end of a swipe
+            if (this.swipeState.isDragging) return;
+            this.setDrawerState(1);
+        });
         
-        const peekHandle = this.peekIslandEl.querySelector('.drawer-handle');
-        const expandedHandle = this.expandedIslandEl.querySelector('.drawer-handle');
-
         // State 1 -> 2
-        if (peekHandle) {
-            peekHandle.addEventListener('click', () => this.setDrawerState(2));
-        }
+        peekHandle.addEventListener('click', (e) => {
+            if (this.swipeState.isDragging) return;
+            this.setDrawerState(2);
+        });
         
         // State 2 -> 1 (Goes back to Peek, not Mini)
-        if (expandedHandle) {
-            expandedHandle.addEventListener('click', () => this.setDrawerState(1));
-        }
+        expandedHandle.addEventListener('click', (e) => {
+            if (this.swipeState.isDragging) return;
+            this.setDrawerState(1);
+        });
         
         // Overlay click -> State 0
         if (this.overlayEl) {
@@ -709,15 +716,11 @@ const MobileUIHandler = {
         }
 
         // --- Swipe Interactions ---
-        this.miniIslandEl.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
-        if (peekHandle) {
-            peekHandle.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
-        }
-        if (expandedHandle) {
-            expandedHandle.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
-        }
+        // [NEW v6.5] Listen on all three new handles
+        miniHandle.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+        peekHandle.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+        expandedHandle.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
         
-        // [REMOVED] 'touchmove' listener is no longer needed.
         document.addEventListener('touchend', this.handleTouchEnd.bind(this));
 
         // --- Re-wire desktop buttons using event delegation ---
@@ -791,6 +794,7 @@ const MobileUIHandler = {
      * the '.island-active' class on the correct island.
      */
     setDrawerState(targetState) {
+        // [CHANGED v6.5] Check isDragging on set state, not just click
         if (targetState === this.drawerState || this.swipeState.isDragging || !this.miniIslandEl) return;
         
         this.drawerState = targetState;
@@ -808,16 +812,16 @@ const MobileUIHandler = {
     // --- Swipe Gesture Handlers ---
     
     /**
-     * [REHAUL v6.0]
-     * Simplified: Only registers the start of a drag.
-     * Allows dragging from handles OR the entire mini island.
+     * [REHAUL v6.5]
+     * Simplified: Only registers the start of a drag from the
+     * new unified handle `.route-summary-wrapper-mobile`.
      */
     handleTouchStart(e) {
-        const handle = e.target.closest('.drawer-handle');
-        const miniIsland = e.target.closest('#mobile-island-mini');
+        // [CHANGED v6.5] Only check for the new unified handle
+        const handle = e.target.closest('.route-summary-wrapper-mobile');
         
-        // Only start a swipe if it's on a handle or the mini island
-        if (!handle && !miniIsland) {
+        // Only start a swipe if it's on the handle
+        if (!handle) {
              this.swipeState.isDragging = false;
              return;
         }
@@ -833,7 +837,14 @@ const MobileUIHandler = {
      */
     handleTouchEnd(e) {
         if (!this.swipeState.isDragging) return;
-        this.swipeState.isDragging = false;
+        
+        // [CHANGED v6.5] We must set isDragging to false *after* a short delay.
+        // This allows the 'click' event listeners to check this flag and
+        // prevent a "click" from firing at the end of a "swipe".
+        setTimeout(() => {
+            this.swipeState.isDragging = false;
+            this.swipeState.touchStartY = 0;
+        }, 50); // A 50ms delay is usually enough
 
         const touchEndY = e.changedTouches[0].clientY;
         const deltaY = touchEndY - this.swipeState.touchStartY;
@@ -855,7 +866,7 @@ const MobileUIHandler = {
         
         this.setDrawerState(newState);
         
-        this.swipeState.touchStartY = 0;
+        // [REMOVED v6.5] State reset is now in the setTimeout
     },
 
     /**
