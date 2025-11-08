@@ -1,15 +1,14 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v6.5 - Unified Handle)
+ * MobileUIHandler Module (Creative HUD Rehaul - v6.6 - State Change Fix)
  *
- * REHAUL v6.5 CHANGES (Unified Handle):
- * 1. REMOVED the separate `.drawer-handle` element from all three islands.
- * 2. MOVED the "pill" visual and grab/swipe properties directly to the
- * `.route-summary-wrapper-mobile` element.
- * 3. This top bar is now the single, unified handle for all states
- * (Mini, Peek, and Expanded).
- * 4. RE-WIRED all click and touch interactions in `wireUpInteractions` to
- * listen to `.route-summary-wrapper-mobile` in all three islands.
- * 5. SIMPLIFIED `handleTouchStart` to only check for the new unified handle.
+ * REHAUL v6.6 CHANGES (State Change Fix):
+ * 1. IDENTIFIED bug in `setDrawerState`: It was checking `this.swipeState.isDragging`
+ * which prevented the `handleTouchEnd` function from *ever*
+ * successfully changing the state.
+ * 2. REMOVED the `this.swipeState.isDragging` check from `setDrawerState`.
+ * The click handlers already perform this check, which is the correct
+ * place for it.
+ * 3. All other logic from v6.5 (Unified Handle) remains.
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -53,7 +52,7 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (HUD Rehaul v6.5 / Unified Handle) Initialized.");
+        console.log("Mobile UI Handler (HUD Rehaul v6.6 / State Change Fix) Initialized.");
     },
 
     /**
@@ -789,13 +788,14 @@ const MobileUIHandler = {
     },
     
     /**
-     * [REHAUL v6.0]
-     * Sets the drawer to a specific state (0, 1, or 2) by toggling
-     * the '.island-active' class on the correct island.
+     * [REHAUL v6.6 - THE FIX]
+     * Sets the drawer to a specific state (0, 1, or 2).
+     * Removed the faulty `isDragging` check that prevented
+     * state changes from `handleTouchEnd`.
      */
     setDrawerState(targetState) {
-        // [CHANGED v6.5] Check isDragging on set state, not just click
-        if (targetState === this.drawerState || this.swipeState.isDragging || !this.miniIslandEl) return;
+        // [REMOVED v6.6] The isDragging check was here.
+        if (targetState === this.drawerState || !this.miniIslandEl) return;
         
         this.drawerState = targetState;
 
@@ -832,8 +832,12 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.0] handleTouchMove has been DELETED.
-     * All logic is now in handleTouchEnd for a "snap" interaction.
+     * [REHAUL v6.5]
+     * Handles the end of a swipe.
+     * 1. Calculates new state based on swipe direction.
+     * 2. Calls `setDrawerState` (which is no longer blocked).
+     * 3. Uses a `setTimeout` to reset `isDragging` *after* a delay,
+     * which correctly blocks the `click` event from firing.
      */
     handleTouchEnd(e) {
         if (!this.swipeState.isDragging) return;
@@ -853,7 +857,7 @@ const MobileUIHandler = {
         // "Throw away" gesture: swipe down hard from the mini state to close
         if (deltaY > 150 && currentState === 0) {
              this.closeActiveWindow();
-             return;
+             return; // The setTimeout will still run, which is fine.
         }
         
         let newState = currentState;
@@ -864,7 +868,7 @@ const MobileUIHandler = {
              newState = Math.max(0, currentState - 1); // Go down one state, min 0
         }
         
-        this.setDrawerState(newState);
+        this.setDrawerState(newState); // [FIX v6.6] This now works.
         
         // [REMOVED v6.5] State reset is now in the setTimeout
     },
