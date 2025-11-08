@@ -2083,6 +2083,11 @@ function getAircraftCategory(aircraftName) {
         return 'fighter';
     }
 
+    // --- [NEW] Military Cargo ---
+    if (['c-130', 'ac-130', 'hercules', 'c-17'].some(ac => name.includes(ac))) {
+        return 'military';
+    }
+
     // --- NEW: Jumbo Jets (Supers) ---
     // This check MUST come before the wide-body check.
     if (['a380', '747', 'vc-25'].some(ac => name.includes(ac))) {
@@ -2099,8 +2104,13 @@ function getAircraftCategory(aircraftName) {
         return 'regional';
     }
     
-    // Private / General Aviation
-    if (['cessna', 'citation', 'cirrus', 'tbm', 'sr22','xcub'].some(ac => name.includes(ac))) {
+    // --- [NEW] Split GA: Cessna ---
+    if (['cessna', 'c172', 'c208', 'xcub', 'tbm', 'sr22'].some(ac => name.includes(ac))) {
+        return 'cessna';
+    }
+    
+    // Private / General Aviation (remaining)
+    if (['citation', 'cirrus','challenger'].some(ac => name.includes(ac))) {
         return 'private';
     }
 
@@ -4087,7 +4097,7 @@ async function initializeSectorOpsView() {
     }
 
 
-// ⬇️ MODIFIED: This function is modified to load 21 icons (regular, member, staff)
+
 // and use a 'case' expression to select the correct icon.
 async function initializeSectorOpsMap(centerICAO) {
     if (!MAPBOX_ACCESS_TOKEN) {
@@ -4132,6 +4142,8 @@ async function initializeSectorOpsMap(centerICAO) {
                 { id: 'icon-private', path: '/Images/map_icons/private.png' },
                 { id: 'icon-fighter', path: '/Images/map_icons/fighter.png' },
                 { id: 'icon-default', path: '/Images/map_icons/default.png' },
+                { id: 'icon-military', path: '/Images/map_icons/military.png' }, // <-- ADDED
+                { id: 'icon-cessna', path: '/Images/map_icons/cessna.png' },     // <-- ADDED
                 // Members
                 { id: 'icon-jumbo-member', path: '/Images/map_icons/members/jumbo.png' },
                 { id: 'icon-widebody-member', path: '/Images/map_icons/members/widebody.png' },
@@ -4140,6 +4152,8 @@ async function initializeSectorOpsMap(centerICAO) {
                 { id: 'icon-private-member', path: '/Images/map_icons/members/private.png' },
                 { id: 'icon-fighter-member', path: '/Images/map_icons/members/fighter.png' },
                 { id: 'icon-default-member', path: '/Images/map_icons/members/default.png' },
+                { id: 'icon-military-member', path: '/Images/map_icons/members/military.png' }, // <-- ADDED
+                { id: 'icon-cessna-member', path: '/Images/map_icons/members/cessna.png' },     // <-- ADDED
                 // Staff
                 { id: 'icon-jumbo-staff', path: '/Images/map_icons/staff/jumbo.png' },
                 { id: 'icon-widebody-staff', path: '/Images/map_icons/staff/widebody.png' },
@@ -4147,7 +4161,9 @@ async function initializeSectorOpsMap(centerICAO) {
                 { id: 'icon-regional-staff', path: '/Images/map_icons/staff/regional.png' },
                 { id: 'icon-private-staff', path: '/Images/map_icons/staff/private.png' },
                 { id: 'icon-fighter-staff', path: '/Images/map_icons/staff/fighter.png' },
-                { id: 'icon-default-staff', path: '/Images/map_icons/staff/default.png' }
+                { id: 'icon-default-staff', path: '/Images/map_icons/staff/default.png' },
+                { id: 'icon-military-staff', path: '/Images/map_icons/staff/military.png' }, // <-- ADDED
+                { id: 'icon-cessna-staff', path: '/Images/map_icons/staff/cessna.png' }      // <-- ADDED
             ];
             // ⬆️ === END OF MODIFICATION === ⬆️
 
@@ -4198,6 +4214,8 @@ async function initializeSectorOpsMap(centerICAO) {
                                     'regional', 'icon-regional-staff',
                                     'private', 'icon-private-staff',
                                     'fighter', 'icon-fighter-staff',
+                                    'military', 'icon-military-staff', // <-- ADDED
+                                    'cessna', 'icon-cessna-staff',     // <-- ADDED
                                     'icon-default-staff' // Staff fallback
                                 ],
                                 // Condition 2: Is Member?
@@ -4211,6 +4229,8 @@ async function initializeSectorOpsMap(centerICAO) {
                                     'regional', 'icon-regional-member',
                                     'private', 'icon-private-member',
                                     'fighter', 'icon-fighter-member',
+                                    'military', 'icon-military-member', // <-- ADDED
+                                    'cessna', 'icon-cessna-member',     // <-- ADDED
                                     'icon-default-member' // Member fallback
                                 ],
                                 // Default: Use Regular icons
@@ -4223,6 +4243,8 @@ async function initializeSectorOpsMap(centerICAO) {
                                     'regional', 'icon-regional',
                                     'private', 'icon-private',
                                     'fighter', 'icon-fighter',
+                                    'military', 'icon-military', // <-- ADDED
+                                    'cessna', 'icon-cessna',     // <-- ADDED
                                     'icon-default' // Regular fallback
                                 ]
                             ],
