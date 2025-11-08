@@ -37,6 +37,19 @@ const MobileUIHandler = {
     },
 
     /**
+     * [NEW] Restores the main map UI controls.
+     */
+    restoreMapControls() {
+        const burgerMenu = document.getElementById('mobile-sidebar-toggle');
+        // Find the map toolbar by finding the parent of one of its buttons
+        const mapToolbar = document.getElementById('toolbar-toggle-panel-btn')?.parentElement;
+        
+        // Revert to stylesheet defaults
+        if (burgerMenu) burgerMenu.style.display = ''; 
+        if (mapToolbar) mapToolbar.style.display = '';
+    },
+
+    /**
      * Initializes the handler by injecting the new HUD styles.
      */
     init() {
@@ -499,6 +512,7 @@ const MobileUIHandler = {
     /**
      * Intercepts the window open command to build the mobile UI.
      * [FIXED] Force-closes any existing UI to ensure a clean state.
+     * [MODIFIED] Hides main map controls when opening.
      */
     openWindow(windowElement) {
         if (!this.isMobile()) return;
@@ -508,6 +522,14 @@ const MobileUIHandler = {
         }
 
         if (windowElement.id === 'aircraft-info-window') {
+            // --- [NEW] Hide map controls ---
+            const burgerMenu = document.getElementById('mobile-sidebar-toggle');
+            const mapToolbar = document.getElementById('toolbar-toggle-panel-btn')?.parentElement;
+            
+            if (burgerMenu) burgerMenu.style.display = 'none';
+            if (mapToolbar) mapToolbar.style.display = 'none';
+            // --- [END NEW] ---
+
             this.activeWindow = windowElement;
             this.createSplitViewUI(); // Build our new island containers
 
@@ -842,6 +864,7 @@ const MobileUIHandler = {
      * *destroys* cloned content, and cleans up.
      * v6.4: Removes all logic for `#vsd-summary-bar` as it is
      * no longer moved separately from its parent.
+     * [MODIFIED] Restores main map controls on close.
      */
     closeActiveWindow(force = false) {
         if (this.contentObserver) this.contentObserver.disconnect();
@@ -906,6 +929,10 @@ const MobileUIHandler = {
             miniIslandToRemove?.remove();
             peekIslandToRemove?.remove();
             expandedIslandToRemove?.remove();
+            
+            // --- [NEW] Restore controls ---
+            this.restoreMapControls();
+            
             resetState();
         } else {
             // Animate all 4 islands out
@@ -922,6 +949,9 @@ const MobileUIHandler = {
                 peekIslandToRemove?.remove();
                 expandedIslandToRemove?.remove();
                 
+                // --- [NEW] Restore controls ---
+                this.restoreMapControls();
+
                 // Check if a new window was opened *during* the close animation
                 if (this.topWindowEl === topWindowToRemove) {
                     resetState();
