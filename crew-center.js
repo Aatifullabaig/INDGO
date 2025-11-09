@@ -1742,14 +1742,25 @@ function injectCustomStyles() {
             width: 44px;
         }
         
-        .sector-ops-search .search-icon {
+        /* --- [START OF FIX] --- */
+        /* This rule now targets the new <label> element */
+        .sector-ops-search .search-icon-label {
             color: #9fa8da;
             padding: 12px 14px;
             font-size: 1rem;
             z-index: 1;
             transition: color 0.2s;
             line-height: 1;
+            cursor: text;
+            display: grid;
+            place-items: center;
         }
+        
+        /* [NEW] This rule removes padding from the <i> icon itself */
+        .sector-ops-search .search-icon {
+            padding: 0;
+        }
+        /* --- [END OF FIX] --- */
 
         #sector-ops-search-input {
             width: 0; /* Hidden by default */
@@ -1772,9 +1783,14 @@ function injectCustomStyles() {
             width: 300px;
             background: rgba(10, 12, 26, 0.8);
         }
-        .sector-ops-search:focus-within .search-icon {
+        
+        /* --- [START OF FIX] --- */
+        /* This rule now targets the <label> on focus-within */
+        .sector-ops-search:focus-within .search-icon-label {
             color: #00a8ff;
         }
+        /* --- [END OF FIX] --- */
+        
         .sector-ops-search:focus-within #sector-ops-search-input {
             /* 300px (total) - 44px (icon) - 46px (clear button) */
             width: 210px; 
@@ -4052,244 +4068,253 @@ function setupAircraftWindowEvents() {
 }
 
 
+
 async function initializeSectorOpsView() {
-        const selector = document.getElementById('departure-hub-selector');
-        const mapContainer = document.getElementById('sector-ops-map-fullscreen');
-        const viewContainer = document.getElementById('view-rosters'); // The main view container
-        if (!selector || !mapContainer) return;
+    const selector = document.getElementById('departure-hub-selector');
+    const mapContainer = document.getElementById('sector-ops-map-fullscreen');
+    const viewContainer = document.getElementById('view-rosters'); // The main view container
+    if (!selector || !mapContainer) return;
 
-        mainContentLoader.classList.add('active');
+    mainContentLoader.classList.add('active');
 
-        try {
-            // --- [NEW] Inject the Search Bar ---
-            if (!document.getElementById('sector-ops-search-container')) {
-                const searchHtml = `
-                    <div id="sector-ops-search-container" class="sector-ops-search">
+    try {
+        // --- [NEW] Inject the Search Bar ---
+        if (!document.getElementById('sector-ops-search-container')) {
+            // --- [START OF FIX] ---
+            // The icon is now wrapped in a <label> with a 'for' attribute
+            // pointing to the input's ID. This makes the icon clickable
+            // and allows it to focus the input.
+            // ---
+            const searchHtml = `
+                <div id="sector-ops-search-container" class="sector-ops-search">
+                    <label for="sector-ops-search-input" class="search-icon-label">
                         <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                        <input type="text" id="sector-ops-search-input" placeholder="Search callsign or username..." aria-label="Search callsign or username">
-                        <button id="sector-ops-search-clear" class="search-clear-btn" aria-label="Clear search" style="display: none;">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
-                    </div>
-                `;
-                viewContainer.insertAdjacentHTML('beforeend', searchHtml);
-            }
-
-            // Create and inject the Info Windows and their recall buttons into the main view container
-            if (!document.getElementById('airport-info-window')) {
-                const windowHtml = `
-                    <div id="airport-info-window" class="info-window">
-                        <div class="info-window-header">
-                            <h3 id="airport-window-title"></h3>
-                            <div class="info-window-actions">
-                                <button id="airport-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
-                                <button id="airport-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                        </div>
-                        <div id="airport-window-content" class="info-window-content"></div>
-                    </div>
-                `;
-                viewContainer.insertAdjacentHTML('beforeend', windowHtml);
-            }
-            if (!document.getElementById('aircraft-info-window')) {
-                 const windowHtml = `
-                    <div id="aircraft-info-window" class="info-window">
-                        
-                    </div>
-                `;
-                viewContainer.insertAdjacentHTML('beforeend', windowHtml);
-            }
-
-            // --- [NEW] Inject the Weather Settings Window ---
-            if (!document.getElementById('weather-settings-window')) {
-                const windowHtml = `
-                    <div id="weather-settings-window" class="info-window">
-                        <div class="info-window-header">
-                            <h3><i class="fa-solid fa-cloud-sun" style="margin-right: 10px;"></i> Weather Settings</h3>
-                            <div class="info-window-actions">
-                                <button class="weather-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
-                                <button class="weather-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                        </div>
-                        <div id="weather-window-content" class="info-window-content">
-                            <ul class="weather-toggle-list">
-                                <li class="weather-toggle-item">
-                                    <span class="weather-toggle-label"><i class="fa-solid fa-cloud-rain"></i> Precipitation</span>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="weather-toggle-precip">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </li>
-                                <li class="weather-toggle-item">
-                                    <span class="weather-toggle-label"><i class="fa-solid fa-cloud"></i> Cloud Cover</span>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="weather-toggle-clouds">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </li>
-                                <li class="weather-toggle-item">
-                                    <span class="weather-toggle-label"><i class="fa-solid fa-wind"></i> Wind Speed</span>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="weather-toggle-wind">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </li>
-                            </ul>
-                            <div class="weather-disclaimer-note">
-                                <i class="fa-solid fa-server"></i>
-                                <strong>Note:</strong> These layers are provided by a free service. Please use them gently as resources are limited.
-                            </div>
-                        </div>
-                    </div>
-                `;
-                viewContainer.insertAdjacentHTML('beforeend', windowHtml);
-            }
-
-            // --- [MODIFIED FILTER WINDOW INJECTION] ---
-            if (!document.getElementById('filter-settings-window')) {
-                const windowHtml = `
-                    <div id="filter-settings-window" class="info-window">
-                        <div class="info-window-header">
-                            <h3><i class="fa-solid fa-filter" style="margin-right: 10px;"></i> Map Filters</h3>
-                            <div class="info-window-actions">
-                                <button class="filter-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
-                                <button class="filter-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
-                            </div>
-                        </div>
-                        <div id="filter-window-content" class="info-window-content">
-                            <ul class="filter-toggle-list">
-                                <li class="filter-toggle-item">
-                                    <span class="filter-toggle-label"><i class="fa-solid fa-plane-circle-check"></i> Show VA Members Only</span>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="filter-toggle-members-only">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </li>
-                                <li class="filter-toggle-item">
-                                    <span class="filter-toggle-label"><i class="fa-solid fa-tower-broadcast"></i> Hide Staffed Airports</span>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="filter-toggle-atc">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </li>
-                                <li class="filter-toggle-item">
-                                    <span class="filter-toggle-label"><i class="fa-solid fa-location-dot"></i> Hide Unstaffed Airports</span>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="filter-toggle-no-atc">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </li>
-
-                                <li class="filter-toggle-item">
-                                    <span class="filter-toggle-label"><i class="fa-solid fa-sun"></i> Light Mode</span>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="filter-toggle-light-mode">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </li>
-                                <li class="filter-toggle-item">
-                                    <span class="filter-toggle-label"><i class="fa-solid fa-satellite"></i> Satellite Mode</span>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="filter-toggle-satellite-mode">
-                                        <span class="toggle-slider"></span>
-                                    </label>
-                                </li>
-                                </ul>
-                        </div>
-                    </div>
-                `;
-                viewContainer.insertAdjacentHTML('beforeend', windowHtml);
-            }
-            // --- [END MODIFIED FILTER WINDOW INJECTION] ---
-            
-            const toolbarToggleBtn = document.getElementById('toolbar-toggle-panel-btn');
-            if (toolbarToggleBtn) {
-                 if (!document.getElementById('airport-recall-btn')) {
-                    toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
-                        <button id="airport-recall-btn" class="toolbar-btn" title="Show Airport Info">
-                            <i class="fa-solid fa-location-dot"></i>
-                        </button>
-                    `);
-                 }
-                 if (!document.getElementById('aircraft-recall-btn')) {
-                      toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
-                        <button id="aircraft-recall-btn" class="toolbar-btn" title="Show Aircraft Info">
-                            <i class="fa-solid fa-plane-up"></i>
-                        </button>
-                    `);
-                 }
-
-                 // --- [MODIFIED] Add ONE weather button, remove the other three ---
-                 if (!document.getElementById('open-weather-settings-btn')) {
-                    toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
-                        <button id="open-weather-settings-btn" class="toolbar-btn" title="Weather Settings">
-                            <i class="fa-solid fa-cloud-sun"></i>
-                        </button>
-                    `);
-                 }
-
-                 // --- [START NEW FILTER BUTTON INJECTION] ---
-                 if (!document.getElementById('open-filter-settings-btn')) {
-                    toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
-                        <button id="open-filter-settings-btn" class="toolbar-btn" title="Map Filters">
-                            <i class="fa-solid fa-filter"></i>
-                        </button>
-                    `);
-                 }
-                 // --- [END NEW FILTER BUTTON INJECTION] ---
-            }
-            
-            airportInfoWindow = document.getElementById('airport-info-window');
-            airportInfoWindowRecallBtn = document.getElementById('airport-recall-btn');
-            aircraftInfoWindow = document.getElementById('aircraft-info-window');
-            aircraftInfoWindowRecallBtn = document.getElementById('aircraft-recall-btn');
-            weatherSettingsWindow = document.getElementById('weather-settings-window');
-            filterSettingsWindow = document.getElementById('filter-settings-window'); // <-- ADD THIS
-
-            // 1. Get pilot's available hubs
-            const rosterRes = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!rosterRes.ok) throw new Error('Could not determine your current location.');
-            const rosterData = await rosterRes.json();
-            const departureHubs = rosterData.searchCriteria?.searched || ['VIDP'];
-
-            // 2. Populate hub selector
-            selector.innerHTML = departureHubs.map(h => `<option value="${h}">${airportsData[h]?.name || h}</option>`).join('');
-            const selectedHub = selector.value;
-
-            // 3. Initialize the Mapbox map
-            await initializeSectorOpsMap(selectedHub);
-
-            // 4. Fetch data for both tabs in parallel
-            const [rosters, routes] = await Promise.all([
-                fetchAndRenderRosters(selectedHub),
-                fetchAndRenderRoutes()
-            ]);
-            ALL_AVAILABLE_ROUTES = routes; // Store all routes for later use
-
-            // *** FIX APLIED HERE ***
-            // Immediately render markers with the static route data to prevent blank map on view switch
-            renderAirportMarkers();
-
-            // 5. Set up all event listeners
-            setupSectorOpsEventListeners();
-            setupAirportWindowEvents();
-            setupAircraftWindowEvents();
-            setupWeatherSettingsWindowEvents();
-            setupFilterSettingsWindowEvents(); 
-            setupSearchEventListeners(); // <-- ADD THIS NEW LINE
-
-            // 6. Start the live data loop.
-            startSectorOpsLiveLoop();
-
-        } catch (error) {
-            console.error("Error initializing Sector Ops view:", error);
-            showNotification(error.message, 'error');
-            document.getElementById('roster-list-container').innerHTML = `<p class="error-text">${error.message}</p>`;
-            document.getElementById('route-list-container').innerHTML = `<p class="error-text">${error.message}</p>`;
-        } finally {
-            mainContentLoader.classList.remove('active');
+                    </label>
+                    <input type="text" id="sector-ops-search-input" placeholder="Search callsign or username..." aria-label="Search callsign or username">
+                    <button id="sector-ops-search-clear" class="search-clear-btn" aria-label="Clear search" style="display: none;">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            `;
+            // --- [END OF FIX] ---
+            viewContainer.insertAdjacentHTML('beforeend', searchHtml);
         }
+
+        // Create and inject the Info Windows and their recall buttons into the main view container
+        if (!document.getElementById('airport-info-window')) {
+            const windowHtml = `
+                <div id="airport-info-window" class="info-window">
+                    <div class="info-window-header">
+                        <h3 id="airport-window-title"></h3>
+                        <div class="info-window-actions">
+                            <button id="airport-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
+                            <button id="airport-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                    </div>
+                    <div id="airport-window-content" class="info-window-content"></div>
+                </div>
+            `;
+            viewContainer.insertAdjacentHTML('beforeend', windowHtml);
+        }
+        if (!document.getElementById('aircraft-info-window')) {
+             const windowHtml = `
+                <div id="aircraft-info-window" class="info-window">
+                    
+                </div>
+            `;
+            viewContainer.insertAdjacentHTML('beforeend', windowHtml);
+        }
+
+        // --- [NEW] Inject the Weather Settings Window ---
+        if (!document.getElementById('weather-settings-window')) {
+            const windowHtml = `
+                <div id="weather-settings-window" class="info-window">
+                    <div class="info-window-header">
+                        <h3><i class="fa-solid fa-cloud-sun" style="margin-right: 10px;"></i> Weather Settings</h3>
+                        <div class="info-window-actions">
+                            <button class="weather-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
+                            <button class="weather-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                    </div>
+                    <div id="weather-window-content" class="info-window-content">
+                        <ul class="weather-toggle-list">
+                            <li class="weather-toggle-item">
+                                <span class="weather-toggle-label"><i class="fa-solid fa-cloud-rain"></i> Precipitation</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="weather-toggle-precip">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </li>
+                            <li class="weather-toggle-item">
+                                <span class="weather-toggle-label"><i class="fa-solid fa-cloud"></i> Cloud Cover</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="weather-toggle-clouds">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </li>
+                            <li class="weather-toggle-item">
+                                <span class="weather-toggle-label"><i class="fa-solid fa-wind"></i> Wind Speed</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="weather-toggle-wind">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </li>
+                        </ul>
+                        <div class="weather-disclaimer-note">
+                            <i class="fa-solid fa-server"></i>
+                            <strong>Note:</strong> These layers are provided by a free service. Please use them gently as resources are limited.
+                        </div>
+                    </div>
+                </div>
+            `;
+            viewContainer.insertAdjacentHTML('beforeend', windowHtml);
+        }
+
+        // --- [MODIFIED FILTER WINDOW INJECTION] ---
+        if (!document.getElementById('filter-settings-window')) {
+            const windowHtml = `
+                <div id="filter-settings-window" class="info-window">
+                    <div class="info-window-header">
+                        <h3><i class="fa-solid fa-filter" style="margin-right: 10px;"></i> Map Filters</h3>
+                        <div class="info-window-actions">
+                            <button class="filter-window-hide-btn" title="Hide"><i class="fa-solid fa-compress"></i></button>
+                            <button class="filter-window-close-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                    </div>
+                    <div id="filter-window-content" class="info-window-content">
+                        <ul class="filter-toggle-list">
+                            <li class="filter-toggle-item">
+                                <span class="filter-toggle-label"><i class="fa-solid fa-plane-circle-check"></i> Show VA Members Only</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="filter-toggle-members-only">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </li>
+                            <li class="filter-toggle-item">
+                                <span class="filter-toggle-label"><i class="fa-solid fa-tower-broadcast"></i> Hide Staffed Airports</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="filter-toggle-atc">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </li>
+                            <li class="filter-toggle-item">
+                                <span class="filter-toggle-label"><i class="fa-solid fa-location-dot"></i> Hide Unstaffed Airports</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="filter-toggle-no-atc">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </li>
+
+                            <li class="filter-toggle-item">
+                                <span class="filter-toggle-label"><i class="fa-solid fa-sun"></i> Light Mode</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="filter-toggle-light-mode">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </li>
+                            <li class="filter-toggle-item">
+                                <span class="filter-toggle-label"><i class="fa-solid fa-satellite"></i> Satellite Mode</span>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="filter-toggle-satellite-mode">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </li>
+                            </ul>
+                    </div>
+                </div>
+            `;
+            viewContainer.insertAdjacentHTML('beforeend', windowHtml);
+        }
+        // --- [END MODIFIED FILTER WINDOW INJECTION] ---
+        
+        const toolbarToggleBtn = document.getElementById('toolbar-toggle-panel-btn');
+        if (toolbarToggleBtn) {
+             if (!document.getElementById('airport-recall-btn')) {
+                toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
+                    <button id="airport-recall-btn" class="toolbar-btn" title="Show Airport Info">
+                        <i class="fa-solid fa-location-dot"></i>
+                    </button>
+                `);
+             }
+             if (!document.getElementById('aircraft-recall-btn')) {
+                  toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
+                    <button id="aircraft-recall-btn" class="toolbar-btn" title="Show Aircraft Info">
+                        <i class="fa-solid fa-plane-up"></i>
+                    </button>
+                `);
+             }
+
+             // --- [MODIFIED] Add ONE weather button, remove the other three ---
+             if (!document.getElementById('open-weather-settings-btn')) {
+                toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
+                    <button id="open-weather-settings-btn" class="toolbar-btn" title="Weather Settings">
+                        <i class="fa-solid fa-cloud-sun"></i>
+                    </button>
+                `);
+             }
+
+             // --- [START NEW FILTER BUTTON INJECTION] ---
+             if (!document.getElementById('open-filter-settings-btn')) {
+                toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
+                    <button id="open-filter-settings-btn" class="toolbar-btn" title="Map Filters">
+                        <i class="fa-solid fa-filter"></i>
+                    </button>
+                `);
+             }
+             // --- [END NEW FILTER BUTTON INJECTION] ---
+        }
+        
+        airportInfoWindow = document.getElementById('airport-info-window');
+        airportInfoWindowRecallBtn = document.getElementById('airport-recall-btn');
+        aircraftInfoWindow = document.getElementById('aircraft-info-window');
+        aircraftInfoWindowRecallBtn = document.getElementById('aircraft-recall-btn');
+        weatherSettingsWindow = document.getElementById('weather-settings-window');
+        filterSettingsWindow = document.getElementById('filter-settings-window'); // <-- ADD THIS
+
+        // 1. Get pilot's available hubs
+        const rosterRes = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!rosterRes.ok) throw new Error('Could not determine your current location.');
+        const rosterData = await rosterRes.json();
+        const departureHubs = rosterData.searchCriteria?.searched || ['VIDP'];
+
+        // 2. Populate hub selector
+        selector.innerHTML = departureHubs.map(h => `<option value="${h}">${airportsData[h]?.name || h}</option>`).join('');
+        const selectedHub = selector.value;
+
+        // 3. Initialize the Mapbox map
+        await initializeSectorOpsMap(selectedHub);
+
+        // 4. Fetch data for both tabs in parallel
+        const [rosters, routes] = await Promise.all([
+            fetchAndRenderRosters(selectedHub),
+            fetchAndRenderRoutes()
+        ]);
+        ALL_AVAILABLE_ROUTES = routes; // Store all routes for later use
+
+        // *** FIX APLIED HERE ***
+        // Immediately render markers with the static route data to prevent blank map on view switch
+        renderAirportMarkers();
+
+        // 5. Set up all event listeners
+        setupSectorOpsEventListeners();
+        setupAirportWindowEvents();
+        setupAircraftWindowEvents();
+        setupWeatherSettingsWindowEvents();
+        setupFilterSettingsWindowEvents(); 
+        setupSearchEventListeners(); // <-- ADD THIS NEW LINE
+
+        // 6. Start the live data loop.
+        startSectorOpsLiveLoop();
+
+    } catch (error) {
+        console.error("Error initializing Sector Ops view:", error);
+        showNotification(error.message, 'error');
+        document.getElementById('roster-list-container').innerHTML = `<p class="error-text">${error.message}</p>`;
+        document.getElementById('route-list-container').innerHTML = `<p class="error-text">${error.message}</p>`;
+    } finally {
+        mainContentLoader.classList.remove('active');
     }
+}
 
 
 async function initializeSectorOpsMap(centerICAO) {
