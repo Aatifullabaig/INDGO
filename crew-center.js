@@ -2037,8 +2037,9 @@ function injectCustomStyles() {
     }
 
     /**
-     * --- [NEW] Handles the click on a search result item.
+     * --- [FIXED] Handles the click on a search result item.
      * Flies to the aircraft and opens its info window.
+     * Added safe parsing to prevent crashes from bad/undefined feature properties.
      * @param {string} flightId - The flightId of the selected aircraft.
      */
     function onSearchResultClick(flightId) {
@@ -2054,7 +2055,10 @@ function injectCustomStyles() {
         
         // 2. Find the feature data
         const feature = currentMapFeatures[flightId];
-        if (!feature) return;
+        if (!feature) {
+            console.error(`onSearchResultClick: Could not find feature for flightId ${flightId}`);
+            return;
+        }
 
         // 3. Fly to the aircraft
         sectorOpsMap.flyTo({
@@ -2065,7 +2069,28 @@ function injectCustomStyles() {
 
         // 4. Open the info window
         const props = feature.properties;
-        const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
+        let flightProps;
+
+        // --- [START OF FIX] ---
+        // Safely parse properties, as they might be invalid JSON strings or undefined
+        try {
+            flightProps = {
+                ...props,
+                position: props.position ? JSON.parse(props.position) : null,
+                aircraft: props.aircraft ? JSON.parse(props.aircraft) : null
+            };
+        } catch (parseError) {
+            console.error('onSearchResultClick: Failed to parse flight properties:', parseError, props);
+            // Fallback: Use the properties directly, even if position/aircraft are strings
+            flightProps = { ...props };
+        }
+        
+        // Check if parsing failed fatally
+        if (!flightProps || !flightProps.position) {
+            console.error('onSearchResultClick: Aborting, flight has no valid position data.');
+            return;
+        }
+        // --- [END OF FIX] ---
         
         fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions')
             .then(res => res.json())
@@ -2596,6 +2621,7 @@ function getIntermediatePoint(lat1, lon1, lat2, lon2, fraction) {
  * ⬇️ MODIFIED: Now passes `isStaff` and `isVAMember` to the map source properties.
  * ⬇️
  * ⬇️ --- FIX: Added timestamp check to prevent race conditions ("jump back" bug) ---
+ * ⬇️ --- FIX (v2): Ensure `flight.aircraft` is not undefined to prevent JSON.parse errors downstream.
  */
 function handleSocketFlightUpdate(data) {
     if (!data || !Array.isArray(data.flights) || !data.timestamp) {
@@ -2640,6 +2666,12 @@ function handleSocketFlightUpdate(data) {
         // ⬇️ MODIFIED: Read from heading_deg as track_deg is no longer sent
         const newApiHeading = flight.position.heading_deg || 0;
         const newApiSpeed = flight.position.gs_kt || 0;
+        
+        // --- [START OF FIX] ---
+        // Ensure `flight.aircraft` is at least `null` if it's undefined
+        const aircraftData = flight.aircraft || null;
+        // --- [END OF FIX] ---
+        
         const newProperties = {
             flightId: flight.flightId,
             callsign: flight.callsign,
@@ -2648,7 +2680,11 @@ function handleSocketFlightUpdate(data) {
             speed: newApiSpeed,
             verticalSpeed: flight.position.vs_fpm || 0,
             position: JSON.stringify(flight.position),
-            aircraft: JSON.stringify(flight.aircraft),
+            
+            // --- [MODIFIED BY FIX] ---
+            aircraft: JSON.stringify(aircraftData), // Use the safe variable
+            // --- [END MODIFIED] ---
+            
             userId: flight.userId,
             category: getAircraftCategory(flight.aircraft?.aircraftName),
             heading: newApiHeading, // Pass heading for icon rotation
