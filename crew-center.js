@@ -137,7 +137,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         showAtcAirportsOnly: false,
         hideAtcMarkers: false,
         hideAllAirports: false,
-        hideNoAtcMarkers: false
+        hideNoAtcMarkers: false,
+        planDisplayMode: 'none'
     };
 
 
@@ -1714,6 +1715,50 @@ function injectCustomStyles() {
             text-align: center;
             color: #00a8ff; /* Re-use blue color for consistency */
         }
+
+        /* --- [START NEW] --- */
+        .filter-section-divider {
+            padding: 12px 20px 8px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .filter-section-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #9fa8da;
+            text-transform: uppercase;
+        }
+
+        .filter-radio-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0; /* A bit less padding than toggles */
+        }
+        
+        .filter-radio-item input[type="radio"] {
+            /* Use accent-color for modern browsers */
+            accent-color: #00a8ff;
+            width: 18px;
+            height: 18px;
+        }
+        
+        .filter-radio-item label {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #e8eaf6;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .filter-radio-item label .fa-solid {
+            width: 20px;
+            text-align: center;
+            color: #00a8ff;
+        }
+        /* --- [END NEW] --- */
 
         /* ====================================================================
         --- [NEW STYLES FOR MAP SEARCH BAR] --- 
@@ -4248,7 +4293,9 @@ function setupAircraftWindowEvents() {
             aircraftInfoWindow.classList.remove('visible');
             MobileUIHandler.closeActiveWindow();
             aircraftInfoWindowRecallBtn.classList.remove('visible');
-            clearLiveFlightPath(currentFlightInWindow);
+            
+            // --- [VERIFIED] This call is correct ---
+            clearLiveFlightPath(currentFlightInWindow); 
             
             // --- [MODIFIED] Clear BOTH intervals ---
             if (activePfdUpdateInterval) clearInterval(activePfdUpdateInterval);
@@ -4269,6 +4316,11 @@ function setupAircraftWindowEvents() {
         if (hideBtn) {
             aircraftInfoWindow.classList.remove('visible');
             
+            // --- [START MODIFICATION] ---
+            // We must also clear the map layers when hiding the window
+            clearLiveFlightPath(currentFlightInWindow);
+            // --- [END MODIFICATION] ---
+
             // --- [MODIFIED] Clear BOTH intervals ---
             if (activePfdUpdateInterval) clearInterval(activePfdUpdateInterval);
             if (activeGeocodeUpdateInterval) clearInterval(activeGeocodeUpdateInterval);
@@ -4464,8 +4516,26 @@ async function initializeSectorOpsView() {
                                     <span class="toggle-slider"></span>
                                 </label>
                             </li>
-                            </ul>
-                    </div>
+                        </ul>
+
+                        <div class="filter-section-divider">
+                            <span class="filter-section-title">Active Flight Plan Display</span>
+                        </div>
+                        <ul class="filter-toggle-list" id="plan-filter-group" style="padding-top: 8px;">
+                            <li class="filter-radio-item">
+                                <input type="radio" id="plan-filter-none" name="plan-display-mode" value="none" checked>
+                                <label for="plan-filter-none"><i class="fa-solid fa-eye-slash"></i> Hide Plan</label>
+                            </li>
+                            <li class="filter-radio-item">
+                                <input type="radio" id="plan-filter-direct" name="plan-display-mode" value="direct">
+                                <label for="plan-filter-direct"><i class="fa-solid fa-route"></i> Direct to Destination</label>
+                            </li>
+                            <li class="filter-radio-item">
+                                <input type="radio" id="plan-filter-full" name="plan-display-mode" value="full">
+                                <label for="plan-filter-full"><i class="fa-solid fa-diagram-project"></i> Full Filed Plan</label>
+                            </li>
+                        </ul>
+                        </div>
                 </div>
             `;
             viewContainer.insertAdjacentHTML('beforeend', windowHtml);
@@ -4768,13 +4838,23 @@ async function initializeSectorOpsMap(centerICAO) {
     function clearLiveFlightPath(flightId) {
         if (!sectorOpsMap || !flightId) return;
 
-        const flownLayerId = `flown-path-${flightId}`;
+        // --- [START MODIFICATION] ---
+        // Get all layers associated with this flight
+        const layers = sectorOpsLiveFlightPathLayers[flightId];
+        if (!layers) return;
 
-        if (sectorOpsMap.getLayer(flownLayerId)) sectorOpsMap.removeLayer(flownLayerId);
-        if (sectorOpsMap.getSource(flownLayerId)) sectorOpsMap.removeSource(flownLayerId);
+        // Loop over all layer types (flown, planDirect, planFull) and remove them
+        Object.values(layers).forEach(layerId => {
+            if (layerId) {
+                if (sectorOpsMap.getLayer(layerId)) sectorOpsMap.removeLayer(layerId);
+                if (sectorOpsMap.getSource(layerId)) sectorOpsMap.removeSource(layerId);
+            }
+        });
         
         delete sectorOpsLiveFlightPathLayers[flightId];
     }
+
+    
 
     /**
      * --- [NEW] Rebuilds all dynamic layers after a map style change.
@@ -4806,30 +4886,29 @@ async function initializeSectorOpsMap(centerICAO) {
         // 3. Re-apply active flight trail
         if (currentFlightInWindow) {
             const flightId = currentFlightInWindow;
-            const flownLayerId = `flown-path-${flightId}`;
             
             // Clear any stray map state
             clearLiveFlightPath(flightId); 
             delete sectorOpsLiveFlightPathLayers[flightId]; 
 
             // Get cached data from when the window was opened
-            const { flightProps } = cachedFlightDataForStatsView;
+            const { flightProps, plan } = cachedFlightDataForStatsView; // <-- Add 'plan'
             if (flightProps) {
                 const localTrail = liveTrailCache.get(flightId) || [];
                 const currentPosition = currentAircraftPositionForGeocode || flightProps.position;
                 const routeFeatureCollection = generateAltitudeColoredRoute(localTrail, currentPosition);
 
                 // Re-add source
-                sectorOpsMap.addSource(flownLayerId, {
+                sectorOpsMap.addSource(`flown-path-${flightId}`, { // Use base ID
                     type: 'geojson',
                     data: routeFeatureCollection
                 });
                 
                 // Re-add layer (copying paint properties from handleAircraftClick)
                 sectorOpsMap.addLayer({
-                    id: flownLayerId,
+                    id: `flown-path-${flightId}`, // Use base ID
                     type: 'line',
-                    source: flownLayerId,
+                    source: `flown-path-${flightId}`, // Use base ID
                     paint: {
                         'line-color': [
                             'interpolate',
@@ -4846,8 +4925,16 @@ async function initializeSectorOpsMap(centerICAO) {
                     }
                 }, 'sector-ops-live-flights-layer'); // Draw below aircraft
                 
-                sectorOpsLiveFlightPathLayers[flightId] = { flown: flownLayerId };
+                sectorOpsLiveFlightPathLayers[flightId] = { flown: `flown-path-${flightId}` };
                 console.log(`Rebuilt active trail for ${flightId}`);
+
+                // --- [START NEW] ---
+                // Re-draw the planned route line based on filter state
+                if (plan) {
+                    const position = currentAircraftPositionForGeocode || flightProps.position;
+                    updateFlightPlanLayer(flightId, plan, position);
+                }
+                // --- [END NEW] ---
             }
         }
         
@@ -4857,6 +4944,98 @@ async function initializeSectorOpsMap(centerICAO) {
         // 5. Re-render airport markers
         renderAirportMarkers();
     }
+
+    /**
+ * --- [NEW] Draws or updates the filed flight plan layers (direct or full)
+ * based on the current filter settings.
+ * @param {string} flightId - The flightId of the selected aircraft.
+ * @param {object} plan - The parsed flight plan object.
+ * @param {object} currentPosition - The aircraft's current position { lat, lon }.
+ */
+function updateFlightPlanLayer(flightId, plan, currentPosition) {
+    if (!sectorOpsMap || !plan || !plan.flightPlanItems || plan.flightPlanItems.length < 2) {
+        return; // Not enough data
+    }
+
+    const layerIdDirect = `plan-path-direct-${flightId}`;
+    const layerIdFull = `plan-path-full-${flightId}`;
+
+    // --- Ensure layer IDs are tracked ---
+    if (!sectorOpsLiveFlightPathLayers[flightId]) {
+        sectorOpsLiveFlightPathLayers[flightId] = {};
+    }
+    sectorOpsLiveFlightPathLayers[flightId].planDirect = layerIdDirect;
+    sectorOpsLiveFlightPathLayers[flightId].planFull = layerIdFull;
+    
+    // --- Get destination coordinates ---
+    const allWaypoints = flattenWaypointsFromPlan(plan.flightPlanItems);
+    if (allWaypoints.length < 2) return;
+    const destinationCoords = allWaypoints[allWaypoints.length - 1];
+    const currentCoords = [currentPosition.lon, currentPosition.lat];
+
+    // --- 1. Handle "Direct to Destination" Line ---
+    if (mapFilters.planDisplayMode === 'direct') {
+        const directLineData = {
+            type: 'Feature',
+            geometry: {
+                type: 'LineString',
+                coordinates: [currentCoords, destinationCoords]
+            }
+        };
+
+        const source = sectorOpsMap.getSource(layerIdDirect);
+        if (source) {
+            source.setData(directLineData);
+        } else {
+            sectorOpsMap.addSource(layerIdDirect, { type: 'geojson', data: directLineData });
+            sectorOpsMap.addLayer({
+                id: layerIdDirect,
+                type: 'line',
+                source: layerIdDirect,
+                paint: {
+                    'line-color': '#00a8ff',
+                    'line-width': 2,
+                    'line-opacity': 0.8,
+                    'line-dasharray': [2, 2] // Dashed line
+                }
+            }, 'sector-ops-live-flights-layer'); // Below aircraft
+        }
+    } else {
+        // Remove the layer if the mode is not 'direct'
+        if (sectorOpsMap.getLayer(layerIdDirect)) sectorOpsMap.removeLayer(layerIdDirect);
+        if (sectorOpsMap.getSource(layerIdDirect)) sectorOpsMap.removeSource(layerIdDirect);
+    }
+
+    // --- 2. Handle "Full Filed Plan" Line ---
+    if (mapFilters.planDisplayMode === 'full') {
+        const source = sectorOpsMap.getSource(layerIdFull);
+        if (!source) {
+            // This layer is static, so we only create it once
+            const fullLineData = {
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: allWaypoints
+                }
+            };
+            sectorOpsMap.addSource(layerIdFull, { type: 'geojson', data: fullLineData });
+            sectorOpsMap.addLayer({
+                id: layerIdFull,
+                type: 'line',
+                source: layerIdFull,
+                paint: {
+                    'line-color': '#00a8ff', // Same blue
+                    'line-width': 2,
+                    'line-opacity': 0.8 // Solid line
+                }
+            }, 'sector-ops-live-flights-layer'); // Below aircraft
+        }
+    } else {
+        // Remove the layer if the mode is not 'full'
+        if (sectorOpsMap.getLayer(layerIdFull)) sectorOpsMap.removeLayer(layerIdFull);
+        if (sectorOpsMap.getSource(layerIdFull)) sectorOpsMap.removeSource(layerIdFull);
+    }
+}
 
 
     /**
@@ -6851,9 +7030,27 @@ function setupFilterSettingsWindowEvents() {
         }
     });
 
-    // Use a 'change' listener for the toggles
+    // Use a 'change' listener for all toggles and radios
     filterSettingsWindow.addEventListener('change', (e) => {
         const target = e.target;
+        
+        // --- [START NEW] Handle Radio Button Logic ---
+        if (target.name === 'plan-display-mode') {
+            mapFilters.planDisplayMode = target.value;
+            
+            // If an aircraft is currently selected, update its plan line immediately
+            if (currentFlightInWindow && cachedFlightDataForStatsView.plan) {
+                const { flightProps, plan } = cachedFlightDataForStatsView;
+                const position = currentAircraftPositionForGeocode || flightProps.position;
+                
+                // Call the new helper to redraw all plan layers
+                updateFlightPlanLayer(currentFlightInWindow, plan, position);
+            }
+            // We don't call updateMapFilters() here as this isn't a layer filter
+            return; // Stop processing
+        }
+        // --- [END NEW] ---
+
         if (target.type !== 'checkbox') return;
 
         // --- [NEW] Get DOM elements for style toggles ---
