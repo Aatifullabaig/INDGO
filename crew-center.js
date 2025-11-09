@@ -2045,22 +2045,14 @@ function injectCustomStyles() {
 
     /**
      * --- [FIXED] Handles the click on a search result item.
-     * Now reads all data directly from the clicked element's data attributes,
-     * making it immune to the cache race condition.
+     * Now reads all data directly from the clicked element's data attributes
+     * *before* clearing the dropdown, fixing the race condition.
      * @param {HTMLElement} itemElement - The clicked <div> element.
      */
     function onSearchResultClick(itemElement) {
-        const dropdown = document.getElementById('search-results-dropdown');
-        const searchInput = document.getElementById('sector-ops-search-input');
-        
-        // 1. Hide dropdown and clear input
-        if (dropdown) dropdown.innerHTML = '';
-        if (searchInput) {
-            searchInput.value = '';
-            searchInput.blur(); // Remove focus
-        }
-        
-        // 2. Get data directly from the element's dataset
+        // --- [START OF FIX] ---
+        // 1. Get data directly from the element's dataset FIRST.
+        // This must happen before we clear the dropdown, which destroys the element.
         let coordinates;
         let props;
         try {
@@ -2074,15 +2066,27 @@ function injectCustomStyles() {
             console.error(`onSearchResultClick: Failed to parse data from clicked search item.`, e, itemElement.dataset);
             return; // Abort if data is bad
         }
+        // --- [END OF FIX] ---
 
-        // 3. Fly to the aircraft
+        // 2. Get UI elements
+        const dropdown = document.getElementById('search-results-dropdown');
+        const searchInput = document.getElementById('sector-ops-search-input');
+        
+        // 3. Hide dropdown and clear input NOW
+        if (dropdown) dropdown.innerHTML = '';
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.blur(); // Remove focus
+        }
+        
+        // 4. Fly to the aircraft
         sectorOpsMap.flyTo({
             center: coordinates, // <-- Use data from element
             zoom: 9,
             essential: true
         });
 
-        // 4. Open the info window
+        // 5. Open the info window
         let flightProps;
 
         // Safely parse the *nested* JSON strings (position, aircraft)
@@ -2103,7 +2107,7 @@ function injectCustomStyles() {
             return;
         }
         
-        // 5. Fetch session and call handleAircraftClick
+        // 6. Fetch session and call handleAircraftClick
         // (This part is unchanged)
         fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions')
             .then(res => res.json())
