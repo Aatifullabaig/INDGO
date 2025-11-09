@@ -1716,7 +1716,7 @@ function injectCustomStyles() {
         }
 
         /* ====================================================================
-        --- [MODIFIED] STYLES FOR MAP SEARCH BAR --- 
+        --- [NEW STYLES FOR MAP SEARCH BAR] --- 
         ====================================================================
         */
         .sector-ops-search {
@@ -1726,41 +1726,34 @@ function injectCustomStyles() {
             right: 580px; 
             z-index: 1040; /* Below info window (1050) */
             display: flex;
-            /* --- [MODIFIED] --- */
-            flex-direction: column; /* Stack search bar and results */
+            flex-direction: column; /* --- [NEW] Stack search and results --- */
             align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        /* --- [NEW] Container for the input bar itself --- */
+        .search-bar-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 300px; /* Start at full width */
             background: rgba(18, 20, 38, 0.75);
             backdrop-filter: blur(15px);
             -webkit-backdrop-filter: blur(15px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 25px; /* --- [MODIFIED] Keep radius on main container --- */
-            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-            transition: all 0.3s ease;
-            /* --- [MODIFIED] --- */
-            overflow: hidden; /* This will be overridden on focus */
-            width: 300px; /* --- [MODIFIED] Start at full width --- */
-        }
-        
-        /* --- [MODIFIED] --- 
-           Create a container for the input row
-           so it's separate from the results list
-        */
-        .sector-ops-search-input-row {
-            display: flex;
-            width: 100%;
-            align-items: center;
             border-radius: 25px;
-            z-index: 2; /* Keep input row on top */
-            background: rgba(18, 20, 38, 0.75);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            overflow: hidden;
+            z-index: 2; /* Keep bar above results */
         }
         
-        /* --- [REMOVED] Minimal "icon only" state --- */
-        /*
-        .sector-ops-search:not(:focus-within) {
+        /* Minimal "icon only" state when not focused */
+        .sector-ops-search:not(:focus-within) .search-bar-container {
             width: 44px;
         }
-        */
         
+        /* --- [START OF FIX] --- */
+        /* This rule now targets the new <label> element */
         .sector-ops-search .search-icon-label {
             color: #9fa8da;
             padding: 12px 14px;
@@ -1773,13 +1766,14 @@ function injectCustomStyles() {
             place-items: center;
         }
         
+        /* [NEW] This rule removes padding from the <i> icon itself */
         .sector-ops-search .search-icon {
             padding: 0;
         }
+        /* --- [END OF FIX] --- */
 
         #sector-ops-search-input {
-            /* --- [MODIFIED] --- */
-            width: 210px; /* Start at full width */
+            width: 0; /* Hidden by default */
             border: none;
             background: transparent;
             color: #e8eaf6;
@@ -1794,21 +1788,25 @@ function injectCustomStyles() {
             opacity: 0.8;
         }
         
-        /* --- [MODIFIED] --- */
-        /* When focused, change bg color and expand overflow */
-        .sector-ops-search:focus-within {
-            background: rgba(10, 12, 26, 0.9);
-            overflow: visible; /* Allow results to show */
-        }
-        .sector-ops-search:focus-within .sector-ops-search-input-row {
-            background: rgba(10, 12, 26, 0.9);
+        /* Expand when the input or its container is focused */
+        .sector-ops-search:focus-within .search-bar-container {
+            width: 300px;
+            background: rgba(10, 12, 26, 0.8);
+            border-bottom-left-radius: 0; /* --- [NEW] --- */
+            border-bottom-right-radius: 0; /* --- [NEW] --- */
         }
         
+        /* --- [START OF FIX] --- */
+        /* This rule now targets the <label> on focus-within */
         .sector-ops-search:focus-within .search-icon-label {
             color: #00a8ff;
         }
+        /* --- [END OF FIX] --- */
         
-        /* --- [REMOVED] Width expansion logic --- */
+        .sector-ops-search:focus-within #sector-ops-search-input {
+            /* 300px (total) - 44px (icon) - 46px (clear button) */
+            width: 210px; 
+        }
 
         .search-clear-btn {
             background: none;
@@ -1824,13 +1822,85 @@ function injectCustomStyles() {
             color: #fff;
         }
         
-        /* --- [MODIFIED] Show/hide clear button logic --- */
-        #sector-ops-search-input:not(:placeholder-shown) + #sector-ops-search-clear {
+        /* Show/hide clear button logic */
+        .sector-ops-search:focus-within #sector-ops-search-input:not(:placeholder-shown) + #sector-ops-search-clear {
             display: block;
         }
-        #sector-ops-search-input:placeholder-shown + #sector-ops-search-clear {
+        .sector-ops-search:focus-within #sector-ops-search-input:placeholder-shown + #sector-ops-search-clear,
+        .sector-ops-search:not(:focus-within) #sector-ops-search-clear {
             display: none;
         }
+
+        /* --- [START NEW] Search Results Dropdown --- */
+        .search-results-dropdown {
+            width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            background: rgba(10, 12, 26, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: none;
+            border-radius: 0 0 16px 16px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            z-index: 1; /* Below bar */
+            display: none; /* Hidden by default */
+        }
+
+        /* Show dropdown when search is focused and has results */
+        .sector-ops-search:focus-within .search-results-dropdown:not(:empty) {
+            display: block;
+        }
+
+        .search-result-item {
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            transition: background-color 0.2s;
+        }
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+        .search-result-item:hover {
+            background-color: #00a8ff;
+        }
+
+        .search-result-item .fa-solid {
+            color: #9fa8da;
+            width: 16px;
+        }
+        .search-result-item:hover .fa-solid {
+            color: #fff;
+        }
+
+        .search-result-info {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.3;
+            overflow: hidden;
+        }
+        .search-result-info strong {
+            font-size: 0.95rem;
+            color: #fff;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            overflow: hidden;
+        }
+        .search-result-info small {
+            font-size: 0.8rem;
+            color: #c5cae9;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            overflow: hidden;
+        }
+        .search-result-item:hover small {
+            color: #e8eaf6;
+        }
+        /* --- [END NEW] Search Results Dropdown --- */
+
 
         /* --- Mobile adjustments for search bar --- */
         @media (max-width: 992px) {
@@ -1843,12 +1913,24 @@ function injectCustomStyles() {
             }
             
             /* Keep it expanded on mobile */
-            .sector-ops-search,
-            .sector-ops-search:focus-within {
-                 width: calc(100vw - 30px);
+            .search-bar-container,
+            .sector-ops-search:not(:focus-within) .search-bar-container,
+            .sector-ops-search:focus-within .search-bar-container {
+                 width: 100%;
+                 border-radius: 25px; /* --- [FIX] Always rounded on mobile --- */
             }
+
+            /* --- [NEW] --- */
+            .search-results-dropdown {
+                width: 100%;
+            }
+            .sector-ops-search:focus-within .search-bar-container {
+                border-bottom-left-radius: 0;
+                border-bottom-right-radius: 0;
+            }
+            /* --- [END NEW] --- */
             
-            #sector-ops-search-input,
+            .sector-ops-search #sector-ops-search-input,
             .sector-ops-search:focus-within #sector-ops-search-input {
                  /* Fill remaining space */
                  width: calc(100% - 88px);
@@ -1869,106 +1951,6 @@ function injectCustomStyles() {
                 max-height: calc(100vh - 135px);
             }
         }
-        
-        /* ====================================================================
-        --- [NEW STYLES FOR SEARCH RESULTS] --- 
-        ====================================================================
-        */
-        .search-results-list {
-            position: absolute;
-            top: 100%; /* Position below the search bar */
-            left: 0;
-            width: 100%;
-            background: rgba(18, 20, 38, 0.95);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-top: none;
-            border-bottom-left-radius: 16px;
-            border-bottom-right-radius: 16px;
-            max-height: 400px;
-            overflow-y: auto;
-            z-index: 1; /* Below input row */
-            display: none; /* Hidden by default */
-            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
-        }
-        
-        .search-results-list.visible {
-            display: block;
-        }
-        
-        .search-result-item {
-            padding: 12px 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .search-result-item:hover {
-            background: rgba(0, 168, 255, 0.1);
-        }
-        .search-result-item:last-child {
-            border-bottom: none;
-        }
-        
-        .search-result-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #fff;
-        }
-        .search-result-header .callsign {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .search-result-header .username {
-            font-size: 0.85rem;
-            font-weight: 300;
-            color: #c5cae9;
-        }
-        .search-result-va-tag {
-            font-size: 0.7rem;
-            font-weight: 700;
-            padding: 3px 6px;
-            border-radius: 4px;
-            background: #00a8ff;
-            color: #fff;
-        }
-        
-        .search-result-body {
-            margin-top: 8px;
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 10px;
-            font-size: 0.85rem;
-        }
-        .search-result-body .ac-type {
-            grid-column: 1 / -1; /* Span full width */
-            color: #e8eaf6;
-            font-weight: 500;
-        }
-        .search-result-body .stat {
-            color: #c5cae9;
-        }
-        .search-result-body .stat strong {
-            color: #fff;
-            font-weight: 600;
-            font-family: 'Courier New', monospace;
-            margin-left: 5px;
-        }
-        
-        .search-no-results {
-            padding: 20px;
-            text-align: center;
-            color: #9fa8da;
-        }
-        
-        /* Scrollbar for results */
-        .search-results-list::-webkit-scrollbar { width: 6px; }
-        .search-results-list::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
-        .search-results-list::-webkit-scrollbar-thumb { background-color: #00a8ff; border-radius: 10px; }
     `;
 
     const style = document.createElement('style');
@@ -1979,139 +1961,104 @@ function injectCustomStyles() {
 }
 
 /**
-     * --- [NEW] Hides the search results dropdown.
+     * --- [NEW] Handles the search input event.
+     * Finds matching flights from the live data and calls the render function.
+     * @param {string} searchText - The text from the search input.
      */
-    function hideSearchResults() {
-        const resultsContainer = document.getElementById('sector-ops-search-results');
-        if (resultsContainer) {
-            resultsContainer.classList.remove('visible');
-            resultsContainer.innerHTML = '';
-        }
-    }
+    function handleSearchInput(searchText) {
+        const dropdown = document.getElementById('search-results-dropdown');
+        if (!dropdown) return;
 
-    /**
-     * --- [NEW] Runs the search and populates the results dropdown.
-     */
-    function runMapSearch() {
-        const searchInput = document.getElementById('sector-ops-search-input');
-        const resultsContainer = document.getElementById('sector-ops-search-results');
-        if (!searchInput || !resultsContainer) return;
-
-        const searchText = searchInput.value.toUpperCase().trim();
-
-        if (searchText.length === 0) {
-            hideSearchResults();
+        if (searchText.length < 2) {
+            dropdown.innerHTML = ''; // Clear and hide
             return;
         }
 
+        const upperSearchText = searchText.toUpperCase();
         const matches = [];
-        for (const feature of Object.values(currentMapFeatures)) {
+
+        // Search through the live flight data cache
+        for (const flightId in currentMapFeatures) {
+            const feature = currentMapFeatures[flightId];
             const props = feature.properties;
-            if (props.callsign.toUpperCase().includes(searchText) || props.username.toUpperCase().includes(searchText)) {
-                matches.push(props);
+            
+            if (props.callsign.toUpperCase().includes(upperSearchText) || 
+                props.username.toUpperCase().includes(upperSearchText)) {
+                
+                matches.push({
+                    flightId: props.flightId,
+                    callsign: props.callsign,
+                    username: props.username
+                });
             }
         }
-
-        renderSearchResults(matches);
-        resultsContainer.classList.add('visible');
+        
+        renderSearchResultsDropdown(matches);
     }
 
     /**
-     * --- [NEW] Renders the HTML for the search results list.
+     * --- [NEW] Renders the search results into the dropdown.
+     * @param {Array} matches - An array of flight objects that matched the search.
      */
-    function renderSearchResults(matches) {
-        const resultsContainer = document.getElementById('sector-ops-search-results');
-        if (!resultsContainer) return;
+    function renderSearchResultsDropdown(matches) {
+        const dropdown = document.getElementById('search-results-dropdown');
+        if (!dropdown) return;
 
         if (matches.length === 0) {
-            resultsContainer.innerHTML = '<div class="search-no-results">No flights found.</div>';
+            dropdown.innerHTML = ''; // Clear and hide
             return;
         }
 
-        const html = matches.map(props => {
-            // We must parse the JSON strings to get live data
-            let pos, ac;
-            try {
-                pos = JSON.parse(props.position);
-                ac = JSON.parse(props.aircraft);
-            } catch (e) {
-                console.warn('Could not parse flight data for search result:', props.flightId);
-                return ''; // Skip this invalid flight
-            }
-            
-            const alt = Math.round(pos.alt_ft || 0);
-            const spd = Math.round(pos.gs_kt || 0);
-            const acType = ac.aircraftName || 'Unknown Aircraft';
-            
-            // Show a VA tag if they are staff or member
-            let vaTag = '';
-            if (props.isStaff) {
-                vaTag = '<span class="search-result-va-tag" style="background-color: #dc3545;">STAFF</span>';
-            } else if (props.isVAMember) {
-                vaTag = '<span class="search-result-va-tag">MEMBER</span>';
-            }
-
-            // Note: We don't have DEPT/ARRV data here, as it requires a separate API call.
-            // We only show data available in the live flight properties.
-
-            return `
-            <div class="search-result-item" data-flight-id="${props.flightId}">
-                <div class="search-result-header">
-                    <span class="callsign">
-                        ${props.callsign}
-                        <span class="username">(${props.username})</span>
-                    </span>
-                    ${vaTag}
-                </div>
-                <div class="search-result-body">
-                    <div class="ac-type">${acType}</div>
-                    <div class="stat">ALT: <strong>${alt.toLocaleString()}ft</strong></div>
-                    <div class="stat">SPD: <strong>${spd}kt</strong></div>
+        // Limit to 10 results to avoid a huge list
+        dropdown.innerHTML = matches.slice(0, 10).map(flight => `
+            <div class="search-result-item" data-flight-id="${flight.flightId}">
+                <i class="fa-solid fa-plane"></i>
+                <div class="search-result-info">
+                    <strong>${flight.callsign}</strong>
+                    <small>${flight.username}</small>
                 </div>
             </div>
-            `;
-        }).join('');
-
-        resultsContainer.innerHTML = html;
+        `).join('');
     }
-    
+
     /**
      * --- [NEW] Handles the click on a search result item.
+     * Flies to the aircraft and opens its info window.
+     * @param {string} flightId - The flightId of the selected aircraft.
      */
-    function handleSearchResultClick(flightId) {
-        const feature = currentMapFeatures[flightId];
-        if (!feature) {
-            console.error('Could not find flight data for ID:', flightId);
-            return;
-        }
-
-        // Hide the results list immediately
-        hideSearchResults();
-        document.getElementById('sector-ops-search-input').value = '';
-
-        // We must parse the properties, just like the map click handler does
-        const props = feature.properties;
-        const flightProps = { 
-            ...props, 
-            position: JSON.parse(props.position), 
-            aircraft: JSON.parse(props.aircraft) 
-        };
+    function onSearchResultClick(flightId) {
+        const dropdown = document.getElementById('search-results-dropdown');
+        const searchInput = document.getElementById('sector-ops-search-input');
         
-        // We also need the session ID, which requires a quick fetch
+        // 1. Hide dropdown and clear input
+        if (dropdown) dropdown.innerHTML = '';
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.blur(); // Remove focus
+        }
+        
+        // 2. Find the feature data
+        const feature = currentMapFeatures[flightId];
+        if (!feature) return;
+
+        // 3. Fly to the aircraft
+        sectorOpsMap.flyTo({
+            center: feature.geometry.coordinates,
+            zoom: 9,
+            essential: true
+        });
+
+        // 4. Open the info window
+        const props = feature.properties;
+        const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
+        
         fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions')
             .then(res => res.json())
             .then(data => {
                 const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
                 if (expertSession) {
-                    // This is the existing function to open the aircraft window
                     handleAircraftClick(flightProps, expertSession.id);
-                } else {
-                    showNotification('Could not find expert server session.', 'error');
                 }
-            })
-            .catch(err => {
-                console.error('Failed to fetch session ID for search click:', err);
-                showNotification('Error opening flight data.', 'error');
             });
     }
 
@@ -2296,7 +2243,8 @@ function injectCustomStyles() {
 
     /**
      * --- [MODIFIED] Builds and applies a Mapbox filter expression to the live aircraft layer.
-     * This function now ONLY uses the filter toggles (mapFilters) and IGNORES the search bar.
+     * This function now ONLY applies the filter toggles (mapFilters state).
+     * The search bar logic has been removed and moved to its own handler.
      */
     function updateAircraftLayerFilter() {
         if (!sectorOpsMap || !sectorOpsMap.getLayer('sector-ops-live-flights-layer')) return;
@@ -2320,9 +2268,9 @@ function injectCustomStyles() {
             filter.push(['==', 'isVAMember', true]);
         }
         
-        // --- [REMOVED] Search Filter Block ---
-        // The logic for reading from '#sector-ops-search-input' has been removed.
-        // The search bar no longer affects this function.
+        // --- 2. [REMOVED] ---
+        // The entire "Apply Search Filter" block has been deleted.
+        // This function no longer reads from the search input.
 
         // --- 3. Apply the combined filter to the map ---
         sectorOpsMap.setFilter('sector-ops-live-flights-layer', filter);
@@ -4306,21 +4254,26 @@ async function initializeSectorOpsView() {
     mainContentLoader.classList.add('active');
 
     try {
-        // --- [MODIFIED] Inject the Search Bar & Results Container ---
+        // --- [NEW] Inject the Search Bar ---
         if (!document.getElementById('sector-ops-search-container')) {
+            // --- [START OF MODIFICATION] ---
+            // The HTML now includes the search-bar-container wrapper
+            // and the new search-results-dropdown.
             const searchHtml = `
                 <div id="sector-ops-search-container" class="sector-ops-search">
-                    <label for="sector-ops-search-input" class="search-icon-label">
-                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                    </label>
-                    <input type="text" id="sector-ops-search-input" placeholder="Search callsign or username..." aria-label="Search callsign or username" autocomplete="off">
-                    <button id="sector-ops-search-clear" class="search-clear-btn" aria-label="Clear search" style="display: none;">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                    
-                    <div id="sector-ops-search-results" class="search-results-list"></div>
+                    <div class="search-bar-container">
+                        <label for="sector-ops-search-input" class="search-icon-label">
+                            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        </label>
+                        <input type="text" id="sector-ops-search-input" placeholder="Search callsign or username..." aria-label="Search callsign or username" autocomplete="off">
+                        <button id="sector-ops-search-clear" class="search-clear-btn" aria-label="Clear search" style="display: none;">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <div id="search-results-dropdown" class="search-results-dropdown"></div>
                 </div>
             `;
+            // --- [END OF MODIFICATION] ---
             viewContainer.insertAdjacentHTML('beforeend', searchHtml);
         }
 
@@ -4525,7 +4478,7 @@ async function initializeSectorOpsView() {
         setupAircraftWindowEvents();
         setupWeatherSettingsWindowEvents();
         setupFilterSettingsWindowEvents(); 
-        setupSearchEventListeners(); // <-- This function will be replaced
+        setupSearchEventListeners(); // <-- This function will be modified next
 
         // 6. Start the live data loop.
         startSectorOpsLiveLoop();
@@ -6888,51 +6841,63 @@ function setupFilterSettingsWindowEvents() {
 }
 
 /**
-     * --- [REPLACED] Sets up event listeners for the new map search "finder".
-     * This now builds a dropdown list instead of filtering the map.
+     * --- [MODIFIED] Sets up event listeners for the map search bar.
+     * Now triggers autocomplete search instead of filtering.
      */
     function setupSearchEventListeners() {
         const searchInput = document.getElementById('sector-ops-search-input');
         const searchClear = document.getElementById('sector-ops-search-clear');
         const searchContainer = document.getElementById('sector-ops-search-container');
-        const resultsContainer = document.getElementById('sector-ops-search-results');
+        const dropdown = document.getElementById('search-results-dropdown');
 
-        if (!searchInput || !searchClear || !searchContainer || !resultsContainer) {
-            console.warn("Could not find search bar elements for new finder.");
+        if (!searchInput || !searchClear || !searchContainer || !dropdown) {
+            console.warn("Could not find all search bar elements.");
             return;
         }
         
         let isListening = searchContainer.dataset.searchListeners === 'true';
         if (isListening) return; // Prevent duplicate listeners
 
-        // On typing, run the search and build the results list
-        searchInput.addEventListener('input', runMapSearch);
-
-        // On focus, also run the search (in case there's already text)
-        searchInput.addEventListener('focus', runMapSearch);
-        
-        // On blur, hide the results (with a delay to allow clicks)
-        searchInput.addEventListener('blur', () => {
-            setTimeout(hideSearchResults, 200); // 200ms delay
+        // On typing, call the new search handler
+        searchInput.addEventListener('input', () => {
+            handleSearchInput(searchInput.value);
+            
+            // Show/hide clear button
+            if (searchInput.value) {
+                searchClear.style.display = 'block';
+            } else {
+                searchClear.style.display = 'none';
+            }
         });
 
-        // On clear, clear input, re-run search (which will hide list), and focus
+        // On clear, clear input and hide dropdown
         searchClear.addEventListener('click', () => {
             searchInput.value = '';
-            runMapSearch(); // This will clear and hide the results
+            handleSearchInput(''); // This will clear the dropdown
+            searchClear.style.display = 'none';
             searchInput.focus(); // Keep the bar expanded
         });
-        
-        // --- [NEW] Handle clicks on the results list ---
-        resultsContainer.addEventListener('click', (e) => {
+
+        // [NEW] Add a click listener for the results dropdown
+        dropdown.addEventListener('click', (e) => {
             const item = e.target.closest('.search-result-item');
-            if (!item) return;
-
-            const flightId = item.dataset.flightId;
-            if (!flightId) return;
-
-            handleSearchResultClick(flightId);
+            if (item) {
+                const flightId = item.dataset.flightId;
+                if (flightId) {
+                    onSearchResultClick(flightId);
+                }
+            }
         });
+
+        // [NEW] Add a listener to the whole document to hide the dropdown
+        // when clicking away from the search bar.
+        document.addEventListener('click', (e) => {
+            // If the click is *outside* the main search container, blur the input
+            if (!searchContainer.contains(e.target)) {
+                searchInput.blur();
+                dropdown.innerHTML = ''; // Hide dropdown
+            }
+        }, true); // Use capture phase to catch clicks on the map
         
         searchContainer.dataset.searchListeners = 'true';
     }
