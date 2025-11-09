@@ -5208,7 +5208,6 @@ function generateAltitudeColoredRoute(sortedPoints, currentPosition) {
 }
 
 
-// crew-center.js (REPLACE this function)
 
 async function handleAircraftClick(flightProps, sessionId) {
     if (!flightProps || !flightProps.flightId) return;
@@ -5340,6 +5339,14 @@ async function handleAircraftClick(flightProps, sessionId) {
         };
         
         // --- [REMOVED] The automatic zoom-to-fit block (`fitBounds`) ---
+
+        // --- [FIX 1 of 2] ---
+        // Draw the planned route line (Direct, Full, or None) *immediately*
+        // based on the current filter state, instead of waiting for a change.
+        if (plan) {
+            updateFlightPlanLayer(flightProps.flightId, plan, flightProps.position);
+        }
+        // --- [END OF FIX 1] ---
         
         // --- [NEW] Start the slow geocode update interval (e.g., 60 seconds) ---
         activeGeocodeUpdateInterval = setInterval(() => {
@@ -5420,6 +5427,15 @@ async function handleAircraftClick(flightProps, sessionId) {
                         source.setData(newRouteData);
                     }
                     // --- [END NEW] ---
+
+                    // --- [FIX 2 of 2] ---
+                    // Live-update the planned layer. This is essential for the
+                    // "Direct to Destination" line to follow the aircraft.
+                    // We only run it if the mode is 'direct' to save resources.
+                    if (plan && mapFilters.planDisplayMode === 'direct') {
+                        updateFlightPlanLayer(flightProps.flightId, plan, updatedFlight.position);
+                    }
+                    // --- [END OF FIX 2] ---
 
                 } else {
                     // Flight no longer found, stop the interval
