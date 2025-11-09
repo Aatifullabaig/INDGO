@@ -1960,10 +1960,9 @@ function injectCustomStyles() {
     document.head.appendChild(style);
 }
 
-/**
+    /**
      * --- [FIXED] Handles the search input event.
      * Finds matching flights from the live data and calls the render function.
-     * Added checks to prevent errors from flights with null/undefined data.
      * @param {string} searchText - The text from the search input.
      */
     function handleSearchInput(searchText) {
@@ -1982,28 +1981,21 @@ function injectCustomStyles() {
         for (const flightId in currentMapFeatures) {
             try {
                 const feature = currentMapFeatures[flightId];
-                if (!feature || !feature.properties) continue; // Skip if feature is invalid
+                if (!feature || !feature.properties) continue;
 
                 const props = feature.properties;
-
-                // --- [START OF FIX] ---
-                // Safely get callsign and username, defaulting to an empty string
-                // This prevents .toUpperCase() from being called on `null`
                 const callsign = props.callsign || '';
                 const username = props.username || '';
-                // --- [END OF FIX] ---
 
                 if (callsign.toUpperCase().includes(upperSearchText) ||
                     username.toUpperCase().includes(upperSearchText)) {
 
-                    matches.push({
-                        flightId: props.flightId,
-                        callsign: props.callsign, // Push the original data
-                        username: props.username
-                    });
+                    // --- [MODIFICATION] ---
+                    // Push the entire feature, not just text.
+                    // This gives the render function access to coordinates and properties.
+                    matches.push(feature);
                 }
             } catch (error) {
-                // Log the error but continue the loop so one bad flight doesn't break the search
                 console.error('Error searching feature:', error, currentMapFeatures[flightId]);
             }
         }
@@ -2011,9 +2003,11 @@ function injectCustomStyles() {
         renderSearchResultsDropdown(matches);
     }
 
+
     /**
-     * --- [NEW] Renders the search results into the dropdown.
-     * @param {Array} matches - An array of flight objects that matched the search.
+     * --- [FIXED] Renders the search results into the dropdown.
+     * Now embeds all required data into the HTML to prevent race conditions.
+     * @param {Array} matches - An array of full GeoJSON feature objects.
      */
     function renderSearchResultsDropdown(matches) {
         const dropdown = document.getElementById('search-results-dropdown');
@@ -2024,25 +2018,38 @@ function injectCustomStyles() {
             return;
         }
 
-        // Limit to 10 results to avoid a huge list
-        dropdown.innerHTML = matches.slice(0, 10).map(flight => `
-            <div class="search-result-item" data-flight-id="${flight.flightId}">
+        // Limit to 10 results
+        dropdown.innerHTML = matches.slice(0, 10).map(feature => {
+            const props = feature.properties;
+            const coords = feature.geometry.coordinates;
+
+            // Stringify all data and escape single quotes for HTML safety
+            const propsString = JSON.stringify(props).replace(/'/g, "&apos;");
+            const coordsString = JSON.stringify(coords);
+
+            return `
+            <div class="search-result-item" 
+                 data-flight-id="${props.flightId}"
+                 data-coordinates='${coordsString}'
+                 data-properties='${propsString}'>
                 <i class="fa-solid fa-plane"></i>
                 <div class="search-result-info">
-                    <strong>${flight.callsign}</strong>
-                    <small>${flight.username}</small>
+                    <strong>${props.callsign}</strong>
+                    <small>${props.username}</small>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
+
 
     /**
      * --- [FIXED] Handles the click on a search result item.
-     * Flies to the aircraft and opens its info window.
-     * Added safe parsing to prevent crashes from bad/undefined feature properties.
-     * @param {string} flightId - The flightId of the selected aircraft.
+     * Now reads all data directly from the clicked element's data attributes,
+     * making it immune to the cache race condition.
+     * @param {HTMLElement} itemElement - The clicked <div> element.
      */
-    function onSearchResultClick(flightId) {
+    function onSearchResultClick(itemElement) {
         const dropdown = document.getElementById('search-results-dropdown');
         const searchInput = document.getElementById('sector-ops-search-input');
         
@@ -2053,26 +2060,32 @@ function injectCustomStyles() {
             searchInput.blur(); // Remove focus
         }
         
-        // 2. Find the feature data
-        const feature = currentMapFeatures[flightId];
-        if (!feature) {
-            console.error(`onSearchResultClick: Could not find feature for flightId ${flightId}`);
-            return;
+        // 2. Get data directly from the element's dataset
+        let coordinates;
+        let props;
+        try {
+            coordinates = JSON.parse(itemElement.dataset.coordinates);
+            props = JSON.parse(itemElement.dataset.properties);
+            
+            if (!coordinates || !props || !props.flightId) {
+                 throw new Error('Search item is missing required data.');
+            }
+        } catch (e) {
+            console.error(`onSearchResultClick: Failed to parse data from clicked search item.`, e, itemElement.dataset);
+            return; // Abort if data is bad
         }
 
         // 3. Fly to the aircraft
         sectorOpsMap.flyTo({
-            center: feature.geometry.coordinates,
+            center: coordinates, // <-- Use data from element
             zoom: 9,
             essential: true
         });
 
         // 4. Open the info window
-        const props = feature.properties;
         let flightProps;
 
-        // --- [START OF FIX] ---
-        // Safely parse properties, as they might be invalid JSON strings or undefined
+        // Safely parse the *nested* JSON strings (position, aircraft)
         try {
             flightProps = {
                 ...props,
@@ -2080,18 +2093,18 @@ function injectCustomStyles() {
                 aircraft: props.aircraft ? JSON.parse(props.aircraft) : null
             };
         } catch (parseError) {
-            console.error('onSearchResultClick: Failed to parse flight properties:', parseError, props);
-            // Fallback: Use the properties directly, even if position/aircraft are strings
-            flightProps = { ...props };
+            console.error('onSearchResultClick: Failed to parse *nested* flight properties:', parseError, props);
+            flightProps = { ...props }; // Fallback
         }
         
         // Check if parsing failed fatally
         if (!flightProps || !flightProps.position) {
-            console.error('onSearchResultClick: Aborting, flight has no valid position data.');
+            console.error('onSearchResultClick: Aborting, flight has no valid position data after parsing.');
             return;
         }
-        // --- [END OF FIX] ---
         
+        // 5. Fetch session and call handleAircraftClick
+        // (This part is unchanged)
         fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions')
             .then(res => res.json())
             .then(data => {
@@ -6891,7 +6904,8 @@ function setupFilterSettingsWindowEvents() {
     filterSettingsWindow.dataset.eventsAttached = 'true';
 }
 
-/**
+
+   /**
      * --- [MODIFIED] Sets up event listeners for the map search bar.
      * Now triggers autocomplete search instead of filtering.
      */
@@ -6929,18 +6943,16 @@ function setupFilterSettingsWindowEvents() {
             searchInput.focus(); // Keep the bar expanded
         });
 
-        // [NEW] Add a click listener for the results dropdown
+        // [MODIFIED] Add a click listener for the results dropdown
         dropdown.addEventListener('click', (e) => {
             const item = e.target.closest('.search-result-item');
             if (item) {
-                const flightId = item.dataset.flightId;
-                if (flightId) {
-                    onSearchResultClick(flightId);
-                }
+                // Pass the whole element to the click handler
+                onSearchResultClick(item); 
             }
         });
 
-        // [NEW] Add a listener to the whole document to hide the dropdown
+        // Add a listener to the whole document to hide the dropdown
         // when clicking away from the search bar.
         document.addEventListener('click', (e) => {
             // If the click is *outside* the main search container, blur the input
