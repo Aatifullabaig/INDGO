@@ -1246,13 +1246,9 @@ function injectCustomStyles() {
                 display: block;
             }
             
-            /* Remove the padding that makes space for a static sidebar */
-            .main-content, .dashboard-container.sidebar-collapsed .main-content {
-                padding-left: 0;
-            }
             
             /*
-             * --- [USER REQUEST FIX - REMOVED!] ---
+             * --- [ - REMOVED!] ---
              * This rule was moved out of the media query
              * to apply to all screen sizes.
             */
