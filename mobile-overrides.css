@@ -1,5 +1,40 @@
 /*
  * ==================================================
+ * START: GLOBAL MOBILE LAYOUT FIXES
+ * ==================================================
+ */
+
+/*
+ * This media query targets all screens 992px or smaller,
+ * which is when the hamburger menu appears.
+ */
+@media (max-width: 992px) {
+
+    /*
+     * 1. Fix: Center content and clear the hamburger menu
+     *
+     * PROBLEM: The hamburger menu is fixed to the top-left
+     * and overlaps the content. The side padding is not
+     * symmetrical, so content isn't centered.
+     *
+     * SOLUTION:
+     * 1. Add 'padding-top: 5rem' (80px) to push all content
+     * down, creating a safe area below the 44px-high menu.
+     * 2. Set symmetrical 'padding-left' and 'padding-right'
+     * (1.5rem) to center the content blocks on the screen.
+     */
+    .main-content,
+    .dashboard-container.sidebar-collapsed .main-content {
+        /*
+         * Overrides the 'padding: 2rem 3rem;' from crew-center.css
+         * and the 'padding-left: 0;' from crew-center.js
+         */
+        padding: 5rem 1.5rem 2rem 1.5rem;
+    }
+}
+
+/*
+ * ==================================================
  * START: DISPATCH TAB (view-flight-plan)
  * ==================================================
  */
