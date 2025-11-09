@@ -90,6 +90,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const ACARS_SOCKET_URL = 'https://site--acars-backend--6dmjph8ltlhv.code.run'; // <-- NEW: For WebSocket
     let isAircraftWindowLoading = false;
 
+    // --- [NEW] Map Style Constants & State ---
+    const MAP_STYLE_DARK = 'mapbox://styles/mapbox/dark-v11';
+    const MAP_STYLE_LIGHT = 'mapbox://styles/mapbox/light-v11';
+    const MAP_STYLE_SATELLITE = 'mapbox://styles/mapbox/satellite-streets-v12';
+    let currentMapStyle = MAP_STYLE_DARK; // Set the default
+
     // --- Map-related State ---
     let lastSocketUpdateTimestamp = 0; // NEW: Tracks the last valid flight data packet
     let liveTrailCache = new Map();
@@ -3966,7 +3972,7 @@ async function initializeSectorOpsView() {
                 viewContainer.insertAdjacentHTML('beforeend', windowHtml);
             }
 
-            // --- [START NEW FILTER WINDOW INJECTION] ---
+            // --- [MODIFIED FILTER WINDOW INJECTION] ---
             if (!document.getElementById('filter-settings-window')) {
                 const windowHtml = `
                     <div id="filter-settings-window" class="info-window">
@@ -4000,13 +4006,28 @@ async function initializeSectorOpsView() {
                                         <span class="toggle-slider"></span>
                                     </label>
                                 </li>
-                            </ul>
+
+                                <li class="filter-toggle-item">
+                                    <span class="filter-toggle-label"><i class="fa-solid fa-sun"></i> Light Mode</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="filter-toggle-light-mode">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </li>
+                                <li class="filter-toggle-item">
+                                    <span class="filter-toggle-label"><i class="fa-solid fa-satellite"></i> Satellite Mode</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="filter-toggle-satellite-mode">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </li>
+                                </ul>
                         </div>
                     </div>
                 `;
                 viewContainer.insertAdjacentHTML('beforeend', windowHtml);
             }
-            // --- [END NEW FILTER WINDOW INJECTION] ---
+            // --- [END MODIFIED FILTER WINDOW INJECTION] ---
             
             const toolbarToggleBtn = document.getElementById('toolbar-toggle-panel-btn');
             if (toolbarToggleBtn) {
@@ -4097,8 +4118,6 @@ async function initializeSectorOpsView() {
     }
 
 
-
-// and use a 'case' expression to select the correct icon.
 async function initializeSectorOpsMap(centerICAO) {
     if (!MAPBOX_ACCESS_TOKEN) {
         document.getElementById('sector-ops-map-fullscreen').innerHTML = '<p class="map-error-msg">Map service not available.</p>';
@@ -4110,17 +4129,19 @@ async function initializeSectorOpsMap(centerICAO) {
 
     sectorOpsMap = new mapboxgl.Map({
         container: 'sector-ops-map-fullscreen',
-        style: 'mapbox://styles/mapbox/dark-v11',
+        style: currentMapStyle, // Use the global state variable
         center: centerCoords,
         zoom: 4.5,
         interactive: true,
-        // ⬇️ === RECOMMENDED RENDERING FIX ===
-        projection: 'globe' 
-        // ⬆️ === END OF RECOMMENDED RENDERING FIX ===
+        projection: 'globe'
     });
 
-    // --- [NEW] Set globe-specific settings on style load ---
-    sectorOpsMap.on('style.load', () => {
+    /**
+     * --- [NEW] Extracted function to set up base layers.
+     * This is called on initial load AND on every style change.
+     */
+    async function setupMapLayersAndFog() {
+        // 1. Set globe fog
         sectorOpsMap.setFog({
             color: 'rgb(186, 210, 235)', // Lower atmosphere
             'high-color': 'rgb(36, 92, 223)', // Upper atmosphere
@@ -4128,158 +4149,165 @@ async function initializeSectorOpsMap(centerICAO) {
             'space-color': 'rgb(11, 11, 25)', // Space color
             'star-intensity': 0.6 // Adjust star intensity
         });
+
+        // 2. Load all aircraft icons
+        const iconsToLoad = [
+            // Regular
+            { id: 'icon-jumbo', path: '/Images/map_icons/jumbo.png' },
+            { id: 'icon-widebody', path: '/Images/map_icons/widebody.png' },
+            { id: 'icon-narrowbody', path: '/Images/map_icons/narrowbody.png' },
+            { id: 'icon-regional', path: '/Images/map_icons/regional.png' },
+            { id: 'icon-private', path: '/Images/map_icons/private.png' },
+            { id: 'icon-fighter', path: '/Images/map_icons/fighter.png' },
+            { id: 'icon-default', path: '/Images/map_icons/default.png' },
+            { id: 'icon-military', path: '/Images/map_icons/military.png' },
+            { id: 'icon-cessna', path: '/Images/map_icons/cessna.png' },
+            // Members
+            { id: 'icon-jumbo-member', path: '/Images/map_icons/members/jumbo.png' },
+            { id: 'icon-widebody-member', path: '/Images/map_icons/members/widebody.png' },
+            { id: 'icon-narrowbody-member', path: '/Images/map_icons/members/narrowbody.png' },
+            { id: 'icon-regional-member', path: '/Images/map_icons/members/regional.png' },
+            { id: 'icon-private-member', path: '/Images/map_icons/members/private.png' },
+            { id: 'icon-fighter-member', path: '/Images/map_icons/members/fighter.png' },
+            { id: 'icon-default-member', path: '/Images/map_icons/members/default.png' },
+            { id: 'icon-military-member', path: '/Images/map_icons/members/military.png' },
+            { id: 'icon-cessna-member', path: '/Images/map_icons/members/cessna.png' },
+            // Staff
+            { id: 'icon-jumbo-staff', path: '/Images/map_icons/staff/jumbo.png' },
+            { id: 'icon-widebody-staff', path: '/Images/map_icons/staff/widebody.png' },
+            { id: 'icon-narrowbody-staff', path: '/Images/map_icons/staff/narrowbody.png' },
+            { id: 'icon-regional-staff', path: '/Images/map_icons/staff/regional.png' },
+            { id: 'icon-private-staff', path: '/Images/map_icons/staff/private.png' },
+            { id: 'icon-fighter-staff', path: '/Images/map_icons/staff/fighter.png' },
+            { id: 'icon-default-staff', path: '/Images/map_icons/staff/default.png' },
+            { id: 'icon-military-staff', path: '/Images/map_icons/staff/military.png' },
+            { id: 'icon-cessna-staff', path: '/Images/map_icons/staff/cessna.png' }
+        ];
+
+        const imagePromises = iconsToLoad.map(icon =>
+            new Promise((res, rej) => {
+                // Check if image already exists (Mapbox preserves images across style loads)
+                if (sectorOpsMap.hasImage(icon.id)) {
+                    res();
+                    return;
+                }
+                sectorOpsMap.loadImage(icon.path, (error, image) => {
+                    if (error) {
+                        console.warn(`Could not load icon: ${icon.path}`);
+                        rej(error);
+                    } else {
+                        sectorOpsMap.addImage(icon.id, image);
+                        res();
+                    }
+                });
+            })
+        );
+        
+        await Promise.all(imagePromises).catch(err => console.error("Error loading map icons", err));
+        console.log('All custom aircraft icons are ready.');
+
+        // 3. Add base flight data source and layer
+        if (!sectorOpsMap.getSource('sector-ops-live-flights-source')) {
+            sectorOpsMap.addSource('sector-ops-live-flights-source', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: Object.values(currentMapFeatures) } // Use current state
+            });
+        }
+
+        if (!sectorOpsMap.getLayer('sector-ops-live-flights-layer')) {
+            sectorOpsMap.addLayer({
+                id: 'sector-ops-live-flights-layer',
+                type: 'symbol',
+                source: 'sector-ops-live-flights-source',
+                layout: {
+                    'icon-image': [
+                        'case',
+                        // Condition 1: Is Staff?
+                        ['==', ['get', 'isStaff'], true],
+                        [ // Result: Use Staff icons
+                            'match',
+                            ['get', 'category'],
+                            'jumbo', 'icon-jumbo-staff',
+                            'widebody', 'icon-widebody-staff',
+                            'narrowbody', 'icon-narrowbody-staff',
+                            'regional', 'icon-regional-staff',
+                            'private', 'icon-private-staff',
+                            'fighter', 'icon-fighter-staff',
+                            'military', 'icon-military-staff', 
+                            'cessna', 'icon-cessna-staff',     
+                            'icon-default-staff' // Staff fallback
+                        ],
+                        // Condition 2: Is Member?
+                        ['==', ['get', 'isVAMember'], true],
+                        [ // Result: Use Member icons
+                            'match',
+                            ['get', 'category'],
+                            'jumbo', 'icon-jumbo-member',
+                            'widebody', 'icon-widebody-member',
+                            'narrowbody', 'icon-narrowbody-member',
+                            'regional', 'icon-regional-member',
+                            'private', 'icon-private-member',
+                            'fighter', 'icon-fighter-member',
+                            'military', 'icon-military-member', 
+                            'cessna', 'icon-cessna-member',     
+                            'icon-default-member' // Member fallback
+                        ],
+                        // Default: Use Regular icons
+                        [
+                            'match',
+                            ['get', 'category'],
+                            'jumbo', 'icon-jumbo',
+                            'widebody', 'icon-widebody',
+                            'narrowbody', 'icon-narrowbody',
+                            'regional', 'icon-regional',
+                            'private', 'icon-private',
+                            'fighter', 'icon-fighter',
+                            'military', 'icon-military', 
+                            'cessna', 'icon-cessna',     
+                            'icon-default' // Regular fallback
+                        ]
+                    ],
+                    'icon-size': 0.08,
+                    'icon-rotate': ['get', 'heading'],
+                    'icon-rotation-alignment': 'map',
+                    'icon-allow-overlap': true,
+                    'icon-ignore-placement': true
+                }
+            });
+
+            // 4. Re-attach listeners
+            sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
+                const props = e.features[0].properties;
+                const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
+                fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions').then(res => res.json()).then(data => {
+                    const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
+                    if (expertSession) {
+                        handleAircraftClick(flightProps, expertSession.id);
+                    }
+                });
+            });
+            sectorOpsMap.on('mouseenter', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
+            sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
+        }
+    }
+    
+    // --- [NEW] This handles style changes ---
+    sectorOpsMap.on('style.load', async () => {
+        console.log("Map style reloading. Rebuilding layers...");
+        await setupMapLayersAndFog(); // Re-add fog, icons, base layer
+        rebuildDynamicLayers();     // Re-add weather, routes, trails, filters
     });
 
+    // --- This handles the initial map load ---
     return new Promise(resolve => {
-        sectorOpsMap.on('load', () => {
-            // ⬇️ === MODIFIED: Load all 21 icon variations === ⬇️
-            const iconsToLoad = [
-                // Regular
-                { id: 'icon-jumbo', path: '/Images/map_icons/jumbo.png' },
-                { id: 'icon-widebody', path: '/Images/map_icons/widebody.png' },
-                { id: 'icon-narrowbody', path: '/Images/map_icons/narrowbody.png' },
-                { id: 'icon-regional', path: '/Images/map_icons/regional.png' },
-                { id: 'icon-private', path: '/Images/map_icons/private.png' },
-                { id: 'icon-fighter', path: '/Images/map_icons/fighter.png' },
-                { id: 'icon-default', path: '/Images/map_icons/default.png' },
-                { id: 'icon-military', path: '/Images/map_icons/military.png' }, // <-- ADDED
-                { id: 'icon-cessna', path: '/Images/map_icons/cessna.png' },     // <-- ADDED
-                // Members
-                { id: 'icon-jumbo-member', path: '/Images/map_icons/members/jumbo.png' },
-                { id: 'icon-widebody-member', path: '/Images/map_icons/members/widebody.png' },
-                { id: 'icon-narrowbody-member', path: '/Images/map_icons/members/narrowbody.png' },
-                { id: 'icon-regional-member', path: '/Images/map_icons/members/regional.png' },
-                { id: 'icon-private-member', path: '/Images/map_icons/members/private.png' },
-                { id: 'icon-fighter-member', path: '/Images/map_icons/members/fighter.png' },
-                { id: 'icon-default-member', path: '/Images/map_icons/members/default.png' },
-                { id: 'icon-military-member', path: '/Images/map_icons/members/military.png' }, // <-- ADDED
-                { id: 'icon-cessna-member', path: '/Images/map_icons/members/cessna.png' },     // <-- ADDED
-                // Staff
-                { id: 'icon-jumbo-staff', path: '/Images/map_icons/staff/jumbo.png' },
-                { id: 'icon-widebody-staff', path: '/Images/map_icons/staff/widebody.png' },
-                { id: 'icon-narrowbody-staff', path: '/Images/map_icons/staff/narrowbody.png' },
-                { id: 'icon-regional-staff', path: '/Images/map_icons/staff/regional.png' },
-                { id: 'icon-private-staff', path: '/Images/map_icons/staff/private.png' },
-                { id: 'icon-fighter-staff', path: '/Images/map_icons/staff/fighter.png' },
-                { id: 'icon-default-staff', path: '/Images/map_icons/staff/default.png' },
-                { id: 'icon-military-staff', path: '/Images/map_icons/staff/military.png' }, // <-- ADDED
-                { id: 'icon-cessna-staff', path: '/Images/map_icons/staff/cessna.png' }      // <-- ADDED
-            ];
-            // ⬆️ === END OF MODIFICATION === ⬆️
-
-            const imagePromises = iconsToLoad.map(icon =>
-                new Promise((res, rej) => {
-                    sectorOpsMap.loadImage(icon.path, (error, image) => {
-                        if (error) {
-                            console.warn(`Could not load icon: ${icon.path}`);
-                            rej(error);
-                        } else {
-                            if (!sectorOpsMap.hasImage(icon.id)) {
-                                sectorOpsMap.addImage(icon.id, image);
-                            }
-                            res();
-                        }
-                    });
-                })
-            );
-
-            // --- [MODIFIED] Set up layers after icons are loaded ---
-            Promise.all(imagePromises).then(() => {
-                console.log('All custom aircraft icons loaded.');
-
-                // --- [NEW] Create the source and layer ONCE with empty data ---
-                if (!sectorOpsMap.getSource('sector-ops-live-flights-source')) {
-                    sectorOpsMap.addSource('sector-ops-live-flights-source', {
-                        type: 'geojson',
-                        // Start with an empty collection
-                        data: { type: 'FeatureCollection', features: [] }
-                    });
-
-                    sectorOpsMap.addLayer({
-                        id: 'sector-ops-live-flights-layer',
-                        type: 'symbol',
-                        source: 'sector-ops-live-flights-source',
-                        layout: {
-                            // ⬇️ === MODIFIED: Use 'case' expression for icon logic === ⬇️
-                            'icon-image': [
-                                'case',
-                                // Condition 1: Is Staff?
-                                ['==', ['get', 'isStaff'], true],
-                                [ // Result: Use Staff icons
-                                    'match',
-                                    ['get', 'category'],
-                                    'jumbo', 'icon-jumbo-staff',
-                                    'widebody', 'icon-widebody-staff',
-                                    'narrowbody', 'icon-narrowbody-staff',
-                                    'regional', 'icon-regional-staff',
-                                    'private', 'icon-private-staff',
-                                    'fighter', 'icon-fighter-staff',
-                                    'military', 'icon-military-staff', // <-- ADDED
-                                    'cessna', 'icon-cessna-staff',     // <-- ADDED
-                                    'icon-default-staff' // Staff fallback
-                                ],
-                                // Condition 2: Is Member?
-                                ['==', ['get', 'isVAMember'], true],
-                                [ // Result: Use Member icons
-                                    'match',
-                                    ['get', 'category'],
-                                    'jumbo', 'icon-jumbo-member',
-                                    'widebody', 'icon-widebody-member',
-                                    'narrowbody', 'icon-narrowbody-member',
-                                    'regional', 'icon-regional-member',
-                                    'private', 'icon-private-member',
-                                    'fighter', 'icon-fighter-member',
-                                    'military', 'icon-military-member', // <-- ADDED
-                                    'cessna', 'icon-cessna-member',     // <-- ADDED
-                                    'icon-default-member' // Member fallback
-                                ],
-                                // Default: Use Regular icons
-                                [
-                                    'match',
-                                    ['get', 'category'],
-                                    'jumbo', 'icon-jumbo',
-                                    'widebody', 'icon-widebody',
-                                    'narrowbody', 'icon-narrowbody',
-                                    'regional', 'icon-regional',
-                                    'private', 'icon-private',
-                                    'fighter', 'icon-fighter',
-                                    'military', 'icon-military', // <-- ADDED
-                                    'cessna', 'icon-cessna',     // <-- ADDED
-                                    'icon-default' // Regular fallback
-                                ]
-                            ],
-                            // ⬆️ === END OF MODIFICATION === ⬆️
-                            'icon-size': 0.08,
-                            'icon-rotate': ['get', 'heading'],
-                            'icon-rotation-alignment': 'map',
-                            'icon-allow-overlap': true,
-                            'icon-ignore-placement': true
-                        }
-                    });
-
-                    // Set up the click/hover event listeners ONCE
-                    sectorOpsMap.on('click', 'sector-ops-live-flights-layer', (e) => {
-                        const props = e.features[0].properties;
-                        const flightProps = { ...props, position: JSON.parse(props.position), aircraft: JSON.parse(props.aircraft) };
-                        fetch('https://site--acars-backend--6dmjph8ltlhv.code.run/if-sessions').then(res => res.json()).then(data => {
-                            const expertSession = data.sessions.find(s => s.name.toLowerCase().includes('expert'));
-                            if (expertSession) {
-                                handleAircraftClick(flightProps, expertSession.id);
-                            }
-                        });
-                    });
-                    sectorOpsMap.on('mouseenter', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = 'pointer'; });
-                    sectorOpsMap.on('mouseleave', 'sector-ops-live-flights-layer', () => { sectorOpsMap.getCanvas().style.cursor = ''; });
-                }
-
-                resolve(); // Resolve the main promise
-            }).catch(error => {
-                console.error('Failed to load aircraft icons, flight layer not added.', error);
-                resolve(); // Still resolve so the app doesn't hang
-            });
+        sectorOpsMap.on('load', async () => {
+            await setupMapLayersAndFog(); // Run setup for the first time
+            resolve();
         });
     });
 }
+
+
 
     /**
      * (REFACTORED) Clears only the route line layers from the map.
@@ -4302,6 +4330,88 @@ async function initializeSectorOpsMap(centerICAO) {
         if (sectorOpsMap.getSource(flownLayerId)) sectorOpsMap.removeSource(flownLayerId);
         
         delete sectorOpsLiveFlightPathLayers[flightId];
+    }
+
+    /**
+     * --- [NEW] Rebuilds all dynamic layers after a map style change.
+     * This includes weather, airport routes, and the active aircraft trail.
+     */
+    function rebuildDynamicLayers() {
+        console.log("Rebuilding dynamic layers...");
+
+        // 1. Re-apply weather layers
+        if (document.getElementById('weather-toggle-precip')?.checked) {
+            isWeatherLayerAdded = false; // Force re-creation
+            toggleWeatherLayer(true);
+        }
+        if (document.getElementById('weather-toggle-clouds')?.checked) {
+            isCloudLayerAdded = false; // Force re-creation
+            toggleCloudLayer(true);
+        }
+        if (document.getElementById('weather-toggle-wind')?.checked) {
+            isWindLayerAdded = false; // Force re-creation
+            toggleWindLayer(true);
+        }
+
+        // 2. Re-apply airport routes
+        if (currentAirportInWindow) {
+            // This function already clears old layers and re-adds new ones
+            plotRoutesFromAirport(currentAirportInWindow);
+        }
+
+        // 3. Re-apply active flight trail
+        if (currentFlightInWindow) {
+            const flightId = currentFlightInWindow;
+            const flownLayerId = `flown-path-${flightId}`;
+            
+            // Clear any stray map state
+            clearLiveFlightPath(flightId); 
+            delete sectorOpsLiveFlightPathLayers[flightId]; 
+
+            // Get cached data from when the window was opened
+            const { flightProps } = cachedFlightDataForStatsView;
+            if (flightProps) {
+                const localTrail = liveTrailCache.get(flightId) || [];
+                const currentPosition = currentAircraftPositionForGeocode || flightProps.position;
+                const routeFeatureCollection = generateAltitudeColoredRoute(localTrail, currentPosition);
+
+                // Re-add source
+                sectorOpsMap.addSource(flownLayerId, {
+                    type: 'geojson',
+                    data: routeFeatureCollection
+                });
+                
+                // Re-add layer (copying paint properties from handleAircraftClick)
+                sectorOpsMap.addLayer({
+                    id: flownLayerId,
+                    type: 'line',
+                    source: flownLayerId,
+                    paint: {
+                        'line-color': [
+                            'interpolate',
+                            ['linear'],
+                            ['get', 'avgAltitude'],
+                            0,     '#e6e600',
+                            10000, '#ff9900',
+                            20000, '#ff3300',
+                            29000, '#00BFFF',
+                            38000, '#9400D3'
+                        ],
+                        'line-width': 4,
+                        'line-opacity': 0.9
+                    }
+                }, 'sector-ops-live-flights-layer'); // Draw below aircraft
+                
+                sectorOpsLiveFlightPathLayers[flightId] = { flown: flownLayerId };
+                console.log(`Rebuilt active trail for ${flightId}`);
+            }
+        }
+        
+        // 4. Re-apply aircraft filters
+        updateAircraftLayerFilter();
+
+        // 5. Re-render airport markers
+        renderAirportMarkers();
     }
 
 
@@ -6300,18 +6410,55 @@ function setupFilterSettingsWindowEvents() {
     // Use a 'change' listener for the toggles
     filterSettingsWindow.addEventListener('change', (e) => {
         const target = e.target;
+        if (target.type !== 'checkbox') return;
 
-        if (target.type === 'checkbox') {
-            // --- THIS IS THE FIX ---
-            // 1. Update the global mapFilters state object from the DOM
-            mapFilters.showVaOnly = document.getElementById('filter-toggle-members-only')?.checked || false;
-            mapFilters.hideAtcMarkers = document.getElementById('filter-toggle-atc')?.checked || false;
-            mapFilters.hideNoAtcMarkers = document.getElementById('filter-toggle-no-atc')?.checked || false;
+        // --- [NEW] Get DOM elements for style toggles ---
+        const lightModeToggle = document.getElementById('filter-toggle-light-mode');
+        const satelliteModeToggle = document.getElementById('filter-toggle-satellite-mode');
+        let styleChanged = false;
+        let newMapStyle = currentMapStyle;
 
-            // 2. Call the single, original update function
-            updateMapFilters();
-            // --- END OF FIX ---
+        // --- [NEW] Radio button logic for map styles ---
+        if (target.id === 'filter-toggle-light-mode' && target.checked) {
+            // If user turned Light ON, turn Satellite OFF
+            if (satelliteModeToggle) satelliteModeToggle.checked = false;
+            newMapStyle = MAP_STYLE_LIGHT;
+            styleChanged = true;
+        } else if (target.id === 'filter-toggle-satellite-mode' && target.checked) {
+            // If user turned Satellite ON, turn Light OFF
+            if (lightModeToggle) lightModeToggle.checked = false;
+            newMapStyle = MAP_STYLE_SATELLITE;
+            styleChanged = true;
+        } else if ((target.id === 'filter-toggle-light-mode' || target.id === 'filter-toggle-satellite-mode') && !target.checked) {
+            // If user turned one OFF, check if both are off
+            if (!lightModeToggle.checked && !satelliteModeToggle.checked) {
+                newMapStyle = MAP_STYLE_DARK; // Revert to dark
+                styleChanged = true;
+            }
         }
+        // --- [END NEW] ---
+
+        // 1. Update the global mapFilters state object from the DOM
+        mapFilters.showVaOnly = document.getElementById('filter-toggle-members-only')?.checked || false;
+        mapFilters.hideAtcMarkers = document.getElementById('filter-toggle-atc')?.checked || false;
+        mapFilters.hideNoAtcMarkers = document.getElementById('filter-toggle-no-atc')?.checked || false;
+        
+        // 2. Decide whether to change style or just filters
+        if (styleChanged && newMapStyle !== currentMapStyle) {
+            // --- [NEW] Trigger a full map style change ---
+            console.log(`Changing map style to: ${newMapStyle}`);
+            currentMapStyle = newMapStyle;
+            sectorOpsMap.setStyle(currentMapStyle);
+            // The 'style.load' event will handle rebuilding all layers.
+            
+        } else if (!styleChanged) {
+            // --- [ORIGINAL] Only a filter changed, just update layers ---
+            updateMapFilters();
+        }
+
+        // 3. Update toolbar button state (always)
+        // This is safe to call, it reads from the state object.
+        updateMapFilters();
     });
 
     filterSettingsWindow.dataset.eventsAttached = 'true';
