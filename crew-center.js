@@ -6956,6 +6956,17 @@ function setupFilterSettingsWindowEvents() {
             }
         });
 
+        // ⬇️ --- [THIS IS THE NEW FIX] --- ⬇️
+        // Add a 'mousedown' listener to the dropdown.
+        // This prevents the 'blur' event from firing on the search input
+        // when a user clicks a result. This stops the CSS from hiding
+        // the dropdown (due to :focus-within) before the 'click' event
+        // can be processed.
+        dropdown.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+        });
+        // ⬆️ --- [END OF NEW FIX] --- ⬆️
+
         // Add a listener to the whole document to hide the dropdown
         // when clicking away from the search bar.
         document.addEventListener('click', (e) => {
