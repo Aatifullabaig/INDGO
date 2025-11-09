@@ -1961,8 +1961,9 @@ function injectCustomStyles() {
 }
 
 /**
-     * --- [NEW] Handles the search input event.
+     * --- [FIXED] Handles the search input event.
      * Finds matching flights from the live data and calls the render function.
+     * Added checks to prevent errors from flights with null/undefined data.
      * @param {string} searchText - The text from the search input.
      */
     function handleSearchInput(searchText) {
@@ -1979,17 +1980,31 @@ function injectCustomStyles() {
 
         // Search through the live flight data cache
         for (const flightId in currentMapFeatures) {
-            const feature = currentMapFeatures[flightId];
-            const props = feature.properties;
-            
-            if (props.callsign.toUpperCase().includes(upperSearchText) || 
-                props.username.toUpperCase().includes(upperSearchText)) {
-                
-                matches.push({
-                    flightId: props.flightId,
-                    callsign: props.callsign,
-                    username: props.username
-                });
+            try {
+                const feature = currentMapFeatures[flightId];
+                if (!feature || !feature.properties) continue; // Skip if feature is invalid
+
+                const props = feature.properties;
+
+                // --- [START OF FIX] ---
+                // Safely get callsign and username, defaulting to an empty string
+                // This prevents .toUpperCase() from being called on `null`
+                const callsign = props.callsign || '';
+                const username = props.username || '';
+                // --- [END OF FIX] ---
+
+                if (callsign.toUpperCase().includes(upperSearchText) ||
+                    username.toUpperCase().includes(upperSearchText)) {
+
+                    matches.push({
+                        flightId: props.flightId,
+                        callsign: props.callsign, // Push the original data
+                        username: props.username
+                    });
+                }
+            } catch (error) {
+                // Log the error but continue the loop so one bad flight doesn't break the search
+                console.error('Error searching feature:', error, currentMapFeatures[flightId]);
             }
         }
         
