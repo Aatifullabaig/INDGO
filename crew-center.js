@@ -1714,6 +1714,132 @@ function injectCustomStyles() {
             text-align: center;
             color: #00a8ff; /* Re-use blue color for consistency */
         }
+
+        /* ====================================================================
+        --- [NEW STYLES FOR MAP SEARCH BAR] --- 
+        ====================================================================
+        */
+        .sector-ops-search {
+            position: absolute;
+            top: 20px;
+            /* Position top-right, left of the info window */
+            right: 580px; 
+            z-index: 1040; /* Below info window (1050) */
+            display: flex;
+            align-items: center;
+            background: rgba(18, 20, 38, 0.75);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        
+        /* Minimal "icon only" state when not focused */
+        .sector-ops-search:not(:focus-within) {
+            width: 44px;
+        }
+        
+        .sector-ops-search .search-icon {
+            color: #9fa8da;
+            padding: 12px 14px;
+            font-size: 1rem;
+            z-index: 1;
+            transition: color 0.2s;
+            line-height: 1;
+        }
+
+        #sector-ops-search-input {
+            width: 0; /* Hidden by default */
+            border: none;
+            background: transparent;
+            color: #e8eaf6;
+            font-size: 0.95rem;
+            outline: none;
+            padding: 12px 0 12px 0;
+            transition: width 0.3s ease-in-out;
+        }
+        
+        #sector-ops-search-input::placeholder {
+            color: #9fa8da;
+            opacity: 0.8;
+        }
+        
+        /* Expand when the input or its container is focused */
+        .sector-ops-search:focus-within {
+            width: 300px;
+            background: rgba(10, 12, 26, 0.8);
+        }
+        .sector-ops-search:focus-within .search-icon {
+            color: #00a8ff;
+        }
+        .sector-ops-search:focus-within #sector-ops-search-input {
+            /* 300px (total) - 44px (icon) - 46px (clear button) */
+            width: 210px; 
+        }
+
+        .search-clear-btn {
+            background: none;
+            border: none;
+            color: #9fa8da;
+            cursor: pointer;
+            font-size: 1.1rem;
+            padding: 10px 14px;
+            margin-left: auto;
+            line-height: 1;
+        }
+        .search-clear-btn:hover {
+            color: #fff;
+        }
+        
+        /* Show/hide clear button logic */
+        .sector-ops-search:focus-within #sector-ops-search-input:not(:placeholder-shown) + #sector-ops-search-clear {
+            display: block;
+        }
+        .sector-ops-search:focus-within #sector-ops-search-input:placeholder-shown + #sector-ops-search-clear,
+        .sector-ops-search:not(:focus-within) #sector-ops-search-clear {
+            display: none;
+        }
+
+        /* --- Mobile adjustments for search bar --- */
+        @media (max-width: 992px) {
+            .sector-ops-search {
+                /* On mobile, put it below the hamburger menu */
+                top: 70px;
+                left: 15px;
+                right: auto; /* Remove right positioning */
+                width: calc(100vw - 30px); /* Full width minus padding */
+            }
+            
+            /* Keep it expanded on mobile */
+            .sector-ops-search,
+            .sector-ops-search:focus-within {
+                 width: calc(100vw - 30px);
+            }
+            
+            .sector-ops-search #sector-ops-search-input,
+            .sector-ops-search:focus-within #sector-ops-search-input {
+                 /* Fill remaining space */
+                 width: calc(100% - 88px);
+            }
+
+            /* Show clear button if not empty (no focus-within needed) */
+            #sector-ops-search-input:not(:placeholder-shown) + #sector-ops-search-clear {
+                display: block;
+            }
+            #sector-ops-search-input:placeholder-shown + #sector-ops-search-clear {
+                display: none;
+            }
+
+            /* Adjust info window to not clash */
+            .info-window {
+                /* Move it down to avoid search bar */
+                top: 125px;
+                max-height: calc(100vh - 135px);
+            }
+        }
     `;
 
     const style = document.createElement('style');
@@ -1903,16 +2029,23 @@ function injectCustomStyles() {
     }
 
     /**
-     * --- [NEW] Builds and applies a Mapbox filter expression to the live aircraft layer.
+     * --- [REPLACED] Builds and applies a Mapbox filter expression to the live aircraft layer.
+     * This function now combines the filter toggles (mapFilters) WITH the search bar text.
      */
     function updateAircraftLayerFilter() {
         if (!sectorOpsMap || !sectorOpsMap.getLayer('sector-ops-live-flights-layer')) return;
 
         let filter = ['all']; // Start with a base 'all' filter
 
+        // --- 1. Apply Toggle Filters (from mapFilters state) ---
         if (mapFilters.hideAllAircraft) {
             // Use a filter that matches nothing
             filter = ['==', 'flightId', '']; 
+            
+            // Apply the filter and exit early
+            sectorOpsMap.setFilter('sector-ops-live-flights-layer', filter);
+            return; 
+
         } else if (mapFilters.showStaffOnly) {
             // Show only features where isStaff is true
             filter.push(['==', 'isStaff', true]);
@@ -1921,7 +2054,33 @@ function injectCustomStyles() {
             filter.push(['==', 'isVAMember', true]);
         }
         
-        // Apply the constructed filter
+        // --- 2. Apply Search Filter (from search bar input) ---
+        const searchInput = document.getElementById('sector-ops-search-input');
+        const searchClear = document.getElementById('sector-ops-search-clear');
+        
+        if (searchInput && searchInput.value) {
+            const searchText = searchInput.value.toUpperCase();
+            
+            filter.push(
+                ['any',
+                    // Check if callsign *contains* the text
+                    // ['in', <needle>, <haystack>]
+                    ['in', searchText, ['upcase', ['get', 'callsign']]],
+                    
+                    // Check if username *contains* the text
+                    ['in', searchText, ['upcase', ['get', 'username']]]
+                ]
+            );
+            
+            // Show clear button if it's not already visible
+            if (searchClear) searchClear.style.display = 'block';
+            
+        } else {
+            // Hide clear button
+            if (searchClear) searchClear.style.display = 'none';
+        }
+
+        // --- 3. Apply the combined filter to the map ---
         sectorOpsMap.setFilter('sector-ops-live-flights-layer', filter);
     }
 
@@ -3902,6 +4061,20 @@ async function initializeSectorOpsView() {
         mainContentLoader.classList.add('active');
 
         try {
+            // --- [NEW] Inject the Search Bar ---
+            if (!document.getElementById('sector-ops-search-container')) {
+                const searchHtml = `
+                    <div id="sector-ops-search-container" class="sector-ops-search">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="sector-ops-search-input" placeholder="Search callsign or username..." aria-label="Search callsign or username">
+                        <button id="sector-ops-search-clear" class="search-clear-btn" aria-label="Clear search" style="display: none;">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                `;
+                viewContainer.insertAdjacentHTML('beforeend', searchHtml);
+            }
+
             // Create and inject the Info Windows and their recall buttons into the main view container
             if (!document.getElementById('airport-info-window')) {
                 const windowHtml = `
@@ -4102,7 +4275,8 @@ async function initializeSectorOpsView() {
             setupAirportWindowEvents();
             setupAircraftWindowEvents();
             setupWeatherSettingsWindowEvents();
-            setupFilterSettingsWindowEvents(); // <-- ADD THIS
+            setupFilterSettingsWindowEvents(); 
+            setupSearchEventListeners(); // <-- ADD THIS NEW LINE
 
             // 6. Start the live data loop.
             startSectorOpsLiveLoop();
@@ -6463,6 +6637,39 @@ function setupFilterSettingsWindowEvents() {
 
     filterSettingsWindow.dataset.eventsAttached = 'true';
 }
+
+/**
+     * --- [NEW] Sets up event listeners for the map search bar.
+     */
+    function setupSearchEventListeners() {
+        const searchInput = document.getElementById('sector-ops-search-input');
+        const searchClear = document.getElementById('sector-ops-search-clear');
+        const searchContainer = document.getElementById('sector-ops-search-container');
+
+        if (!searchInput || !searchClear || !searchContainer) {
+            console.warn("Could not find search bar elements.");
+            return;
+        }
+        
+        let isListening = searchContainer.dataset.searchListeners === 'true';
+        if (isListening) return; // Prevent duplicate listeners
+
+        // On typing, apply the filter
+        searchInput.addEventListener('input', () => {
+            // This just calls the main filter function, which will
+            // combine the search text with any active toggles.
+            updateAircraftLayerFilter();
+        });
+
+        // On clear, clear input and re-apply filter
+        searchClear.addEventListener('click', () => {
+            searchInput.value = '';
+            updateAircraftLayerFilter(); // Re-apply filters without search text
+            searchInput.focus(); // Keep the bar expanded
+        });
+        
+        searchContainer.dataset.searchListeners = 'true';
+    }
 
     // ==========================================================
     // END: SECTOR OPS / ROUTE EXPLORER LOGIC
