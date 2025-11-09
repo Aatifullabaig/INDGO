@@ -1,0 +1,146 @@
+/*
+ * ==================================================
+ * START: DISPATCH TAB (view-flight-plan)
+ * ==================================================
+ */
+@media (max-width: 768px) {
+
+    /*
+     * 1. Fix: Active Flights List
+     *
+     * PROBLEM: The flight info (number, route, aircraft) is in
+     * a flex row and gets squished on mobile.
+     *
+     * SOLUTION: Stack the flight info vertically.
+     */
+    .main-content.hub-light-theme .flight-summary-info {
+        flex-direction: column;     /* Stack items vertically */
+        align-items: flex-start;  /* Align text to the left */
+        gap: 0.25rem;             /* Tighter gap for stacked items */
+    }
+
+    .main-content.hub-light-theme .flight-summary-info strong {
+        min-width: auto; /* Remove the minimum width that breaks layout */
+    }
+
+    /*
+     * 2. Fix: Dispatch Form (Manual File)
+     *
+     * PROBLEM: The form grid tries to fit 250px columns,
+     * which overflows on small phones.
+     *
+     * SOLUTION: Force a single-column layout for the grid.
+     */
+    .main-content.hub-light-theme .form-grid {
+        grid-template-columns: 1fr; /* Force 1 column */
+    }
+
+    .main-content.hub-light-theme .form-group-span-2 {
+        grid-column: span 1; /* Ensure this doesn't try to span 2 */
+    }
+
+    /*
+     * 3. Fix: Dispatch Pass (The expanded view)
+     *
+     * PROBLEM: Several components (header, summary, perf cards)
+     * are in horizontal rows.
+     *
+     * SOLUTION: Stack all of them vertically.
+     */
+
+    /* Reduce padding on the whole pass */
+    .dispatch-pass-container .dispatch-body {
+        padding: 1rem;
+    }
+
+    /* Stack the header */
+    .dispatch-pass-container .dispatch-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .dispatch-pass-container .dispatch-header .header-right {
+        align-self: flex-end; /* Move date to the right */
+    }
+
+    /* Force 2 columns on the summary grid and shrink text */
+    .dispatch-pass-container .summary-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+    }
+
+    .dispatch-pass-container .summary-item span {
+        font-size: 1.1rem;      /* Smaller text */
+        word-break: break-all;  /* Break long text (e.g., weights) */
+    }
+
+    /* Stack the Performance and Weather cards */
+    .dispatch-pass-container .performance-container,
+    .dispatch-pass-container .accordion-content .weather-container {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    /* Stack the footer buttons (Depart/Cancel, File/Close) */
+    .dispatch-pass-container .dispatch-actions-wrapper {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .dispatch-pass-container .dispatch-action-group {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .dispatch-pass-container .dispatch-action-group .cta-button,
+    .dispatch-pass-container .dispatch-action-group .details-button {
+        width: 100%;
+    }
+
+    .dispatch-pass-container .dispatch-action-group p {
+        text-align: center; /* Center the helper text */
+    }
+
+    /* Stack the manual file buttons */
+    .main-content.hub-light-theme .dispatch-actions {
+        flex-direction: column;
+        align-items: stretch; /* Make buttons full-width */
+    }
+}
+
+/*
+ * ==================================================
+ * START: FLIGHT LOG TAB (view-pirep-history)
+ * ==================================================
+ */
+@media (max-width: 768px) {
+    /*
+     * PROBLEM: The PIREP item is a flex row, and the details
+     * inside it are ALSO a flex row. This squishes all text.
+     *
+     * SOLUTION: Stack both levels vertically.
+     */
+
+    /* Stack the main info and the details block */
+    .main-content.hub-light-theme #pirep-history-list .pirep-history-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    /* Stack the items within the details block */
+    .main-content.hub-light-theme .pirep-details {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+        width: 100%;
+    }
+}
+
+/*
+ * ==================================================
+ * END: MOBILE OVERRIDE STYLES
+ * ==================================================
+ */
