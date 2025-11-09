@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- [NEW] Map Style Constants & State ---
     const MAP_STYLE_DARK = 'mapbox://styles/mapbox/dark-v11';
-    const MAP_STYLE_LIGHT = 'mapbox://styles/mapbox/light-v11';
+    const MAP_STYLE_LIGHT = 'mapbox://styles/servernoob/cmg3wq7an002p01s17kbx7lqk';
     const MAP_STYLE_SATELLITE = 'mapbox://styles/mapbox/satellite-streets-v12';
     let currentMapStyle = MAP_STYLE_DARK; // Set the default
 
