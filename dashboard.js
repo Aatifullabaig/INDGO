@@ -1659,13 +1659,17 @@ function createInviteCardElement(invite) {
                 card.innerHTML = `
                     <div class="user-info">
                         <strong>${p.name}</strong> <small>(${p.email})</small><br/>
-                        <small>Rank: ${p.rank || '—'} • Hours: ${p.flightHours?.toFixed(1) ?? 0}</small>
+                        <small>Rank: ${p.rank || '—'} • Hours: <span id="hours-display-${p._id}">${p.flightHours?.toFixed(1) ?? 0}</span></small>
                     </div>
-                    <div class="user-controls">
-                        <label>Callsign:
-                            <input class="pilot-callsign-input" data-userid="${p._id}" value="${p.callsign || ''}" placeholder="e.g. INDGO-01" />
+                    <div class="user-controls" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
+                        <label style="display: flex; align-items: center; gap: 5px; font-size: 0.9em; width: 100%; justify-content: flex-end;">Callsign:
+                            <input class="pilot-callsign-input" data-userid="${p._id}" value="${p.callsign || ''}" placeholder="e.g. INDGO-01" style="width: 120px;" />
+                            <button class="pilot-set-callsign-btn cta-button" data-userid="${p._id}" style="padding: 4px 8px; font-size: 0.8em; margin: 0; width: 50px;">Set</button>
                         </label>
-                        <button class="pilot-set-callsign-btn" data-userid="${p._id}">Update</button>
+                        <label style="display: flex; align-items: center; gap: 5px; font-size: 0.9em; width: 100%; justify-content: flex-end;">Set Hours:
+                            <input type="number" step="0.1" class="pilot-hours-input" data-userid="${p._id}" value="${p.flightHours?.toFixed(1) ?? 0}" placeholder="0.0" style="width: 80px;" />
+                            <button class="pilot-set-hours-btn cta-button" data-userid="${p._id}" style="padding: 4px 8px; font-size: 0.8em; margin: 0; width: 50px;">Set</button>
+                        </label>
                     </div>
                 `;
                 return card;
@@ -2106,6 +2110,58 @@ function createInviteCardElement(invite) {
         }
         // --- END: NEW DISCORD LINKING EVENT HANDLER ---
 
+        const pilotSetHoursBtn = e.target.closest('.pilot-set-hours-btn');
+        if (pilotSetHoursBtn) {
+            const userId = pilotSetHoursBtn.dataset.userid;
+            const input = document.querySelector(`.pilot-hours-input[data-userid="${userId}"]`);
+            if (!input) return;
+
+            const flightHours = parseFloat(input.value);
+            if (isNaN(flightHours) || flightHours < 0) {
+                showNotification('Please enter a valid, non-negative number for flight hours.', 'error');
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to set ${flightHours.toFixed(1)} hours for this pilot? This can trigger promotions and cannot be undone.`)) {
+                return;
+            }
+
+            // Disable button to prevent double-click
+            pilotSetHoursBtn.disabled = true;
+            pilotSetHoursBtn.textContent = '...';
+
+            try {
+                const result = await safeFetch(`${API_BASE_URL}/api/users/${userId}/flight-hours`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        flightHours: flightHours
+                    })
+                });
+                
+                // Update the UI dynamically
+                const newHours = result.user.flightHours.toFixed(1);
+                const hoursDisplay = document.getElementById(`hours-display-${userId}`);
+                if (hoursDisplay) {
+                    hoursDisplay.textContent = newHours;
+                }
+                input.value = newHours; // sync input box
+
+                // Show the detailed success message from the server
+                showNotification(result.message, 'success', 8000); 
+                
+                // Refresh the pilot management tab as well, in case of promotion status change
+                if (pilotManagementContainer) {
+                    populatePilotManagement();
+                }
+                
+            } catch (error) {
+                showNotification(`Failed to update hours: ${error.message}`, 'error');
+            } finally {
+                // Re-enable button
+                pilotSetHoursBtn.disabled = false;
+                pilotSetHoursBtn.textContent = 'Set';
+            }
+        }
 
         const pilotSetCsBtn = e.target.closest('.pilot-set-callsign-btn');
         if (pilotSetCsBtn) {
