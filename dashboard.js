@@ -1734,7 +1734,7 @@ function createInviteCardElement(invite) {
                 const reader = new FileReader();
                 reader.onload = () => {
                     if (imageToCrop) imageToCrop.src = reader.result;
-                    if (cropperModal) cropperModal.style.display = 'flex';
+                    if (cropperModal) cropperModal.classList.add('active');
                     if (cropper) cropper.destroy();
                     if (imageToCrop) {
                         cropper = new Cropper(imageToCrop, {
@@ -1751,7 +1751,7 @@ function createInviteCardElement(invite) {
 
     if (cancelCropBtn) {
         cancelCropBtn.addEventListener('click', () => {
-            if (cropperModal) cropperModal.style.display = 'none';
+            if (cropperModal) cropperModal.classList.remove('active');
             if (cropper) cropper.destroy();
             if (pictureInput) pictureInput.value = '';
         });
@@ -1767,7 +1767,7 @@ function createInviteCardElement(invite) {
                     croppedImageBlob = blob;
                     const previewUrl = URL.createObjectURL(blob);
                     if (profilePictureElem) profilePictureElem.src = previewUrl;
-                    if (cropperModal) cropperModal.style.display = 'none';
+                    if (cropperModal) cropperModal.classList.remove('active');
                     cropper.destroy();
                     if (pictureInput) pictureInput.value = '';
                     showNotification('Picture ready to be saved.', 'info');

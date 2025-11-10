@@ -648,14 +648,13 @@
         </main>
     </div>
     
-    <div id="cropper-modal" style="display: none;">
-        <div class="cropper-modal-overlay"></div>
-        <div class="cropper-modal-content">
+    <div id="cropper-modal" class="modal-overlay">
+        <div class="modal-content">
             <h2>Adjust Your Profile Picture</h2>
             <div class="cropper-container">
                 <img id="image-to-crop" src="">
             </div>
-            <div class="cropper-modal-actions">
+            <div class="cropper-modal-actions" style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem;">
                 <button id="cancel-crop-btn" class="cta-button" style="background-color: #555;">Cancel</button>
                 <button id="crop-and-save-btn" class="cta-button">Crop & Save</button>
             </div>
