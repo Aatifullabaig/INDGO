@@ -250,7 +250,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    // --- FETCH USER DATA & SETUP UI ---
     async function fetchUserData() {
         try {
             const user = await safeFetch(`${API_BASE_URL}/api/me`);
@@ -325,6 +324,64 @@ document.addEventListener('DOMContentLoaded', () => {
                 showTab(routeManagerTabLink);
                 showTab(aircraftManagerTabLink); // NEW: Show Aircraft Manager tab
             }
+
+            // =========================================================
+            // START: NEW FUNCTION TO HIDE EMPTY CATEGORIES
+            // =========================================================
+            /**
+             * Checks the visibility of sidebar links and hides the parent category
+             * if no links within it are visible.
+             */
+            function updateCategoryVisibility() {
+                /**
+                 * Helper to check a single category.
+                 * @param {string} categoryId - The ID of the <li class="nav-category"> element.
+                 * @param {HTMLElement[]} links - An array of the <li> link elements (e.g., pirepTabLink).
+                 */
+                const checkCategory = (categoryId, links) => {
+                    const categoryElement = document.getElementById(categoryId);
+                    if (!categoryElement) return;
+
+                    // Check if *any* of the links are visible.
+                    // A link is visible if its style.display is 'list-item'.
+                    const isAnyLinkVisible = links.some(link =>
+                        link && link.style.display === 'list-item'
+                    );
+
+                    if (isAnyLinkVisible) {
+                        // If at least one link is visible, make sure the category is visible
+                        categoryElement.style.display = 'list-item';
+                    } else {
+                        // If NO links are visible, hide the entire category
+                        categoryElement.style.display = 'none';
+                    }
+                };
+
+                // Check each dynamic category
+                checkCategory('category-management', [
+                    pirepTabLink,
+                    rosterTabLink,
+                    routeManagerTabLink,
+                    aircraftManagerTabLink,
+                    pilotManagementTabLink
+                ]);
+
+                checkCategory('category-content', [
+                    communityTabLink
+                ]);
+
+                checkCategory('category-administration', [
+                    adminTabLink,
+                    pilotTabLink
+                ]);
+            }
+            
+            // Run the new function to clean up the sidebar
+            updateCategoryVisibility();
+            // =========================================================
+            // END: NEW FUNCTION
+            // =========================================================
+
 
             // Hide the main loader now that the core UI is ready
             if (loadingOverlay) {
