@@ -1670,7 +1670,7 @@ function injectCustomStyles() {
             right: auto;
             
             /* --- [NEW] Stack it below the weather window --- */
-            top: 300px; 
+            top: 20px; 
             
             /* Make it smaller */
             width: 360px;
