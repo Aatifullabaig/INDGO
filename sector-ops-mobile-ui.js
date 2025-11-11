@@ -219,8 +219,11 @@ const MobileUIHandler = {
                 user-select: none;
                 position: relative;
                 
-                /* [NEW v6.5] Add padding to make space for the pill */
-                padding-bottom: 20px; 
+                /* [MODIFIED BY USER REQUEST] Add background to blend pill */
+                background: var(--hud-bg);
+                
+                /* [REMOVED BY USER REQUEST] Removed padding-bottom */
+                /* padding-bottom: 20px; */
             }
             
             /* [NEW v6.5] Add the pill visual */
@@ -229,7 +232,8 @@ const MobileUIHandler = {
                 position: absolute;
                 left: 50%;
                 transform: translateX(-50%);
-                bottom: 8px; /* Position in the padding area */
+                /* [MODIFIED BY USER REQUEST] Positioned at top */
+                top: 8px; 
                 width: 40px; 
                 height: 4px; 
                 background: var(--hud-border);
