@@ -2405,39 +2405,70 @@ function injectCustomStyles() {
     }
 
 /**
- * --- [NEW] Fetches reverse geocoded location and updates the UI.
+ * --- [FIXED] Fetches reverse geocoded location and updates the UI.
  * Includes a distance check to avoid redundant API calls.
+ *
+ * [FIX v2 - Mobile UI]
+ * This function is vulnerable to a race condition where:
+ * 1. It's called and gets a reference to the original '#ac-location' (locationEl).
+ * 2. It sets the spinner on locationEl.
+ * 3. It awaits the fetch.
+ * 4. While awaiting, MobileUIHandler clones locationEl (with spinner) into the "Peek" view
+ * and moves the original locationEl to the "Expanded" view.
+ * 5. The fetch returns, and updates textContent on locationEl (the original, now in Expanded).
+ * 6. The "Peek" view is left with a "dead" spinner.
+ *
+ * THE FIX:
+ * 1. Query for all elements *before* the await to set loading state.
+ * 2. Query for all elements *AGAIN* after the await to update ALL instances (original + clone).
+ * 3. Modify the distance check to always allow the first run (when lastGeocodeCoords.lat is 0).
  */
 async function fetchAndDisplayGeocode(lat, lon) {
     if (!lat || !lon) return;
 
     // 1. Check if we've moved significantly (e.g., > 20km)
+    // [FIX] Allow the first run by checking if lat is 0.
     const distanceMovedKm = getDistanceKm(lat, lon, lastGeocodeCoords.lat, lastGeocodeCoords.lon);
-    if (distanceMovedKm < 20) {
+    if (distanceMovedKm < 20 && lastGeocodeCoords.lat !== 0) {
         return; // Not far enough, don't waste API call
     }
 
-    // 2. Store new coordinates and find the UI element
+    // 2. Store new coordinates and find ALL UI elements
     lastGeocodeCoords = { lat, lon };
-    const locationEl = document.getElementById('ac-location');
-    if (!locationEl) return;
+    
+    // [FIX] Query all *before* the await
+    const initialElements = document.querySelectorAll('#ac-location');
+    if (initialElements.length === 0) return;
 
-    locationEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; // Loading state
+    initialElements.forEach(el => {
+        el.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; // Loading state
+    });
 
     try {
         // 3. Call your new Netlify Function
         const response = await fetch(`https://indgo-va.netlify.app/.netlify/functions/reverse-geocode?lat=${lat}&lon=${lon}`);
 
+        // [FIX] Query all *after* the await to get the (potentially) new DOM structure
+        const currentElements = document.querySelectorAll('#ac-location');
+
         if (response.ok) {
             const data = await response.json();
-            locationEl.textContent = data.location || 'Remote Area';
+            currentElements.forEach(el => {
+                el.textContent = data.location || 'Remote Area';
+            });
         } else {
             // API returned an error (e.g., 404 for ocean)
-            locationEl.textContent = 'Ocean / Remote Area';
+            currentElements.forEach(el => {
+                el.textContent = 'Ocean / Remote Area';
+            });
         }
     } catch (error) {
         console.error("Geocode fetch error:", error);
-        locationEl.textContent = 'N/A'; // Fetch failed
+        // [FIX] Query all *after* the await, even in the catch block
+        const currentElements = document.querySelectorAll('#ac-location');
+        currentElements.forEach(el => {
+            el.textContent = 'N/A'; // Fetch failed
+        });
     }
 }
 
