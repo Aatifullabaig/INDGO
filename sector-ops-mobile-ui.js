@@ -1,14 +1,15 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v6.6 - State Change Fix)
+ * MobileUIHandler Module (Creative HUD Rehaul - v6.9 - Event Listener Fix)
  *
- * REHAUL v6.6 CHANGES (State Change Fix):
- * 1. IDENTIFIED bug in `setDrawerState`: It was checking `this.swipeState.isDragging`
- * which prevented the `handleTouchEnd` function from *ever*
- * successfully changing the state.
- * 2. REMOVED the `this.swipeState.isDragging` check from `setDrawerState`.
- * The click handlers already perform this check, which is the correct
- * place for it.
- * 3. All other logic from v6.5 (Unified Handle) remains.
+ * REHAUL v6.9 CHANGES (Event Listener Fix):
+ * 1. IDENTIFIED bug where `document.addEventListener('touchend', ...)`
+ * was called in `wireUpInteractions` every time a window opened,
+ * creating duplicate listeners that caused the "state skip" bug.
+ * 2. ADDED a new state flag: `this.documentListenersWired = false`.
+ * 3. MODIFIED `wireUpInteractions` to wrap the document listener
+ * in an `if (!this.documentListenersWired)` block, ensuring
+ * it only ever runs once.
+ * 4. All other logic remains the same.
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -29,6 +30,7 @@ const MobileUIHandler = {
     expandedIslandEl: null,
     
     contentObserver: null,
+    documentListenersWired: false, // <-- [FIX] This flag prevents duplicate listeners
     drawerState: 0, // 0 = Mini, 1 = Peek, 2 = Expanded
     swipeState: {
         touchStartY: 0,
@@ -53,21 +55,11 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (HUD Rehaul v6.6 / State Change Fix) Initialized.");
+        console.log("Mobile UI Handler (HUD Rehaul v6.9 / Event Listener Fix) Initialized.");
     },
 
     /**
      * Injects all the CSS for the new HUD-themed floating islands.
-     * ---
-     * [REHAUL v6.5 / UNIFIED HANDLE]
-     * 1. Removes all styles for `.drawer-handle`.
-     * 2. Adds handle properties (`cursor`, `touch-action`, etc.) to
-     * `.route-summary-wrapper-mobile`.
-     * 3. Adds the "pill" pseudo-element (`::before`) to
-     * `.route-summary-wrapper-mobile` and gives it `padding-bottom`.
-     * ---
-     * [MODIFIED v6.8] Reduced side margin from 15px to 10px to make
-     * floating windows wider, per user request.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -81,15 +73,8 @@ const MobileUIHandler = {
                 --hud-accent: #00a8ff;
                 --hud-glow: 0 0 15px rgba(0, 168, 255, 0.5);
                 
-                /* [REMOVED v6.5] --drawer-handle-height was here */
-                
-                /* [REMOVED v6.4] Mini Island Data Area Height */
-                /* --drawer-mini-data-height: 70px; */
-                
                 --drawer-peek-content-height: 200px;
                 --island-bottom-margin: env(safe-area-inset-bottom, 15px);
-                
-                /* --- [MODIFIED v6.8] --- */
                 --island-side-margin: 10px;
             }
 
@@ -168,7 +153,6 @@ const MobileUIHandler = {
                 opacity: 0;
                 z-index: 1045;
                 
-                /* [NEW v6.4] All bottom islands must overflow hidden */
                 overflow: hidden;
             }
             
@@ -178,29 +162,21 @@ const MobileUIHandler = {
                 opacity: 1;
             }
 
-            /* --- [MODIFIED v6.4] State 0: Mini Island --- */
+            /* --- State 0: Mini Island --- */
             #mobile-island-mini {
                 bottom: var(--island-bottom-margin);
-                /* [MODIFIED v6.4] Height is auto-sized by content */
                 height: auto; 
-                /* [REMOVED v6.5] cursor: pointer was here */
-                
-                /* [NEW] Use flex to stack route bar and handle */
                 display: flex;
                 flex-direction: column; 
             }
-
-            /* [REMOVED v6.5] Faint pill rule for mini-island was here */
-            /* [REMOVED v6.4] .mini-content-wrapper was here */
             
-            /* --- [NEW] State 1: Peek Island --- */
+            /* --- State 1: Peek Island --- */
             #mobile-island-peek {
                 bottom: var(--island-bottom-margin);
-                /* [MODIFIED v6.4] Height is now auto (route bar + handle + content) */
                 height: auto; 
             }
             
-            /* --- [NEW] State 2: Expanded Island --- */
+            /* --- State 2: Expanded Island --- */
             #mobile-island-expanded {
                 top: 280px; /* Sits below the top window */
                 bottom: var(--island-bottom-margin);
@@ -208,36 +184,31 @@ const MobileUIHandler = {
             }
 
             /* ====================================================================
-            --- [MODIFIED v6.5] Route Summary Bar Styling (Mobile)
+            --- Route Summary Bar Styling (Mobile)
             ==================================================================== */
             
-            /* [NEW v6.5] This is now the unified handle */
+            /* This is now the unified handle */
             .route-summary-wrapper-mobile {
                 flex-shrink: 0;
                 overflow: hidden;
                 border-top-left-radius: 16px;
                 border-top-right-radius: 16px;
                 
-                /* [NEW v6.5] Add handle properties */
+                /* Handle properties */
                 cursor: grab;
                 touch-action: none;
                 user-select: none;
                 position: relative;
                 
-                /* [MODIFIED BY USER REQUEST] Add background to blend pill */
                 background: var(--hud-bg);
-                
-                /* [REMOVED BY USER REQUEST] Removed padding-bottom */
-                /* padding-bottom: 20px; */
             }
             
-            /* [NEW v6.5] Add the pill visual */
+            /* Add the pill visual */
             .route-summary-wrapper-mobile::before {
                 content: '';
                 position: absolute;
                 left: 50%;
                 transform: translateX(-50%);
-                /* [MODIFIED BY USER REQUEST] Positioned at top */
                 top: 8px; 
                 width: 40px; 
                 height: 4px; 
@@ -246,25 +217,18 @@ const MobileUIHandler = {
                 opacity: 0.5;
             }
             
-            /* [NEW v6.5] Make the pill fainter on the mini-island */
+            /* Make the pill fainter on the mini-island */
             #mobile-island-mini .route-summary-wrapper-mobile::before {
                 opacity: 0.3;
             }
 
-            /* [NEW] Override desktop styles for the route bar on mobile */
+            /* Override desktop styles for the route bar on mobile */
             .route-summary-wrapper-mobile .route-summary-overlay {
-                /* Reset properties that fight the mobile layout */
                 position: relative; 
                 margin-bottom: 0;
-                
-                /* Use a simpler background, the gradient overlap is complex */
                 background: var(--hud-bg);
-                border-radius: 0; /* Wrapper handles rounding */
-                
-                /* [MODIFIED BY USER REQUEST] Added padding-bottom to center content */
+                border-radius: 0;
                 padding: 12px 15px 12px 15px; 
-                
-                /* Force grid to 3 columns and scale down text */
                 grid-template-columns: auto 1fr auto;
                 gap: 12px;
             }
@@ -282,36 +246,27 @@ const MobileUIHandler = {
                 padding: 3px 10px;
                 font-size: 0.7rem;
             }
-            /* [NEW] Hide the progress bar fill on Mini and Peek islands */
+            /* Hide the progress bar fill on Mini and Peek islands */
             #mobile-island-mini .route-summary-wrapper-mobile .progress-bar-fill,
             #mobile-island-peek .route-summary-wrapper-mobile .progress-bar-fill {
                 display: none;
             }
-            /* [NEW] Make progress bar bg fainter on Mini/Peek */
+            /* Make progress bar bg fainter on Mini/Peek */
             #mobile-island-mini .route-summary-wrapper-mobile .route-progress-bar-container,
             #mobile-island-peek .route-summary-wrapper-mobile .route-progress-bar-container {
                  background: rgba(10, 12, 26, 0.4);
             }
-            
-            /* ====================================================================
-            --- [END V6.5 MODIFIED STYLES] ---
-            ==================================================================== */
 
-
-            /* --- [REMOVED v6.5] .drawer-handle styles were here --- */
-            
-            /* --- [MODIFIED] Drawer Content (Used in Peek & Expanded) --- */
+            /* --- Drawer Content (Used in Peek & Expanded) --- */
             .drawer-content {
                 overflow-y: auto;
                 flex-grow: 1;
                 padding-bottom: env(safe-area-inset-bottom, 0);
-                /* [NEW v6.4] Explicitly set height for peek content */
                 height: var(--drawer-peek-content-height);
             }
             #mobile-island-peek .drawer-content {
                 overflow: hidden;
             }
-            /* [NEW v6.4] Expanded content must fill remaining space */
             #mobile-island-expanded .drawer-content {
                 height: auto;
             }
@@ -321,12 +276,6 @@ const MobileUIHandler = {
             .drawer-content::-webkit-scrollbar-thumb { background-color: var(--hud-accent); border-radius: 10px; }
 
             /* ====================================================================
-            --- [REMOVED v6.4] V4 REDESIGN WAS HERE ---
-            ==================================================================== */
-
-
-            /* ====================================================================
-            --- [START OF USER REQUEST V7: 2025-10-30] ---
             --- State 1: "Peek" Side-by-Side Layout ---
             ==================================================================== */
             #mobile-island-peek .unified-display-main {
@@ -344,71 +293,61 @@ const MobileUIHandler = {
                 margin: 0 !important;
                 max-width: none !important;
                 justify-content: center;
-                flex-basis: 80%; /* <-- [USER REQ V7] Changed to 80% */
+                flex-basis: 80%;
                 flex-grow: 0;
                 flex-shrink: 0;
-                width: 80%; /* <-- [USER REQ V7] Changed to 80% */
+                width: 80%;
                 min-height: 0;
                 height: 100%;
-                
-                /* [NEW] Ensure flex properties for child growth */
                 display: flex !important;
                 flex-direction: column !important;
             }
             
-            /* [MODIFIED V6] Make PFD container fill AND scale its child */
             #mobile-island-peek #pfd-container {
                 flex-grow: 1;
                 border-radius: 12px !important;
-                
-                /* [NEW V6] Use grid to force child scaling */
                 display: grid; 
                 place-items: center;
-                overflow: hidden; /* Hide any overflow */
+                overflow: hidden;
             }
             
-            /* [NEW V6] Force the PFD's canvas/svg to fill container */
             #mobile-island-peek #pfd-container > * {
                 width: 100% !important;
                 height: 100% !important;
-                object-fit: contain; /* Good for scaling SVGs/Canvas */
+                object-fit: contain;
             }
 
-            /* [NEW] Hide PFD footer */
+            /* Hide PFD footer */
             #mobile-island-peek .pfd-footer-display {
                 display: none !important;
             }
             
             /* Data Panel on the right */
             #mobile-island-peek .live-data-panel {
-                flex-direction: column; /* <-- Stack data items VERTICALLY */
-                justify-content: flex-start !important; /* <-- Align to top */
-                padding: 8px !important; /* <-- Adjusted padding */
+                flex-direction: column;
+                justify-content: flex-start !important;
+                padding: 8px !important;
                 background: rgba(10, 12, 26, 0.5) !important;
                 border-radius: 10px;
-                
-                flex-grow: 1; /* <-- Fill remaining space */
+                flex-grow: 1;
                 flex-shrink: 1;
-                flex-basis: auto; /* <-- [USER REQ V7] Let it fill remaining 20% */
-                
-                height: 100%; /* <-- Fill the container height */
+                flex-basis: auto;
+                height: 100%;
                 box-sizing: border-box;
-                overflow: auto; /* <-- Allow scroll if bubbles overflow */
-                gap: 6px; /* <-- Space out the bubbles */
+                overflow: auto;
+                gap: 6px;
             }
             
             /* Styling for the "bubble" items */
             #mobile-island-peek .live-data-item {
-                flex-direction: column-reverse; /* Value on top, label on bottom */
-                align-items: flex-start; /* <-- LEFT-ALIGN text */
+                flex-direction: column-reverse;
+                align-items: flex-start;
                 width: 100%;
-                
-                /* Bubble styles */
                 background: rgba(20, 25, 40, 0.7);
                 padding: 6px 10px;
                 border-radius: 8px;
                 box-sizing: border-box;
-                flex-shrink: 0; /* <-- Prevent bubbles from shrinking */
+                flex-shrink: 0;
             }
             #mobile-island-peek .live-data-item .data-label { 
                 font-size: 0.6rem; 
@@ -418,7 +357,7 @@ const MobileUIHandler = {
                 text-overflow: ellipsis;
             }
             #mobile-island-peek .live-data-item .data-value { 
-                font-size: 1.0rem; /* <-- Sized down */
+                font-size: 1.0rem;
                 font-weight: 600;
                 line-height: 1.1;
             }
@@ -427,26 +366,22 @@ const MobileUIHandler = {
                 opacity: 0.7;
             }
             #mobile-island-peek .live-data-item .data-value-ETE { 
-                font-size: 1.2rem; /* <-- Sized down */
+                font-size: 1.2rem;
                 font-weight: 600;
-                color: var(--hud-accent); /* <-- Make ETE stand out */
+                color: var(--hud-accent);
             }
 
             /* --- Hide VSD in Peek State --- */
             #mobile-island-peek #vsd-panel {
                 display: none !important;
             }
-            /* ====================================================================
-            --- [END OF USER REQUEST V7] ---
-            ==================================================================== */
-
 
             /* Hide stats button in Mini and Peek states */
             .pilot-stats-toggle-btn {
                 display: none;
             }
 
-            /* --- [NEW] HUD Modules for Expanded View --- */
+            /* --- HUD Modules for Expanded View --- */
             .hud-module {
                 background: rgba(10, 12, 26, 0.5);
                 border-radius: 12px;
@@ -454,39 +389,33 @@ const MobileUIHandler = {
                 box-sizing: border-box;
             }
 
-            /* --- [RESTORED] State 2: "Expanded" Stacked Layout --- */
+            /* --- State 2: "Expanded" Stacked Layout --- */
             #mobile-island-expanded .unified-display-main {
                 display: flex !important;
-                flex-direction: column; /* <-- Original vertical stack */
-                gap: 16px; /* <-- Original gap */
+                flex-direction: column;
+                gap: 16px;
                 height: auto;
                 overflow: hidden;
                 padding: 16px;
             }
             #mobile-island-expanded .pfd-main-panel {
-                margin: 0 auto !important; /* <-- Original centered layout */
-                max-width: 400px !important; /* <-- Original max-width */
+                margin: 0 auto !important;
+                max-width: 400px !important;
             }
             #mobile-island-expanded .live-data-panel {
-                justify-content: space-around !important; /* <-- Original layout */
-                /* Apply module styles */
+                justify-content: space-around !important;
                 background: rgba(10, 12, 26, 0.5) !important;
-                border-radius: 12px; /* <-- Original style */
-                padding: 16px !important; /* <-- Original style */
-            }
-            /* Original styles for *contents* of the module */
-            #mobile-island-expanded .live-data-item {
-                 /* Uses default flex-direction (row) and alignment (center) */
+                border-radius: 12px !important;
+                padding: 16px !important;
             }
             #mobile-island-expanded .live-data-item .data-label { font-size: 0.7rem; }
             #mobile-island-expanded .live-data-item .data-value { font-size: 1.5rem; }
             #mobile-island-expanded .live-data-item .data-value .unit { font-size: 0.8rem; }
             #mobile-island-expanded .live-data-item .data-value-ete { font-size: 1.7rem; }
             
-            /* [MODIFIED] Show stats button ONLY when expanded (as a module) */
+            /* Show stats button ONLY when expanded (as a module) */
             #mobile-island-expanded .pilot-stats-toggle-btn {
                 display: flex;
-                /* Apply module styles */
                 background: rgba(10, 12, 26, 0.5);
                 border-radius: 12px;
                 padding: 16px;
@@ -497,11 +426,8 @@ const MobileUIHandler = {
                 color: var(--hud-accent);
                 font-weight: 600;
                 font-size: 1rem;
-                margin-top: 16px; /* Add space from the content above */
+                margin-top: 16px;
             }
-
-            /* --- VSD is visible by default in State 2 --- */
-            /* No rule needed */
 
 
             @media (max-width: ${this.CONFIG.breakpoint}px) {
@@ -519,8 +445,6 @@ const MobileUIHandler = {
 
     /**
      * Intercepts the window open command to build the mobile UI.
-     * [FIXED] Force-closes any existing UI to ensure a clean state.
-     * [MODIFIED] Hides main map controls when opening.
      */
     openWindow(windowElement) {
         if (!this.isMobile()) return;
@@ -530,13 +454,12 @@ const MobileUIHandler = {
         }
 
         if (windowElement.id === 'aircraft-info-window') {
-            // --- [NEW] Hide map controls ---
+            // --- Hide map controls ---
             const burgerMenu = document.getElementById('mobile-sidebar-toggle');
             const mapToolbar = document.getElementById('toolbar-toggle-panel-btn')?.parentElement;
             
             if (burgerMenu) burgerMenu.style.display = 'none';
             if (mapToolbar) mapToolbar.style.display = 'none';
-            // --- [END NEW] ---
 
             this.activeWindow = windowElement;
             this.createSplitViewUI(); // Build our new island containers
@@ -553,12 +476,8 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.5]
      * Creates the new DOM structure for the HUD:
      * 1 Top Window + 3 Bottom Islands (Mini, Peek, Expanded).
-     *
-     * v6.5 Change: REMOVES the `.drawer-handle` div from all islands.
-     * The `.route-summary-wrapper-mobile` is now the handle.
      */
     createSplitViewUI() {
         const viewContainer = document.getElementById('view-rosters');
@@ -575,17 +494,16 @@ const MobileUIHandler = {
         this.topWindowEl.className = 'mobile-aircraft-view';
         viewContainer.appendChild(this.topWindowEl);
 
-        // 3. [MODIFIED v6.5] Bottom Island - State 0 (Mini)
+        // 3. Bottom Island - State 0 (Mini)
         this.miniIslandEl = document.createElement('div');
         this.miniIslandEl.id = 'mobile-island-mini';
         this.miniIslandEl.className = 'mobile-island-bottom';
-        // [MODIFIED v6.5] Only contains the route bar wrapper
         this.miniIslandEl.innerHTML = `
             <div class="route-summary-wrapper-mobile"></div>
         `;
         viewContainer.appendChild(this.miniIslandEl);
 
-        // 4. [MODIFIED v6.5] Bottom Island - State 1 (Peek)
+        // 4. Bottom Island - State 1 (Peek)
         this.peekIslandEl = document.createElement('div');
         this.peekIslandEl.id = 'mobile-island-peek';
         this.peekIslandEl.className = 'mobile-island-bottom';
@@ -595,7 +513,7 @@ const MobileUIHandler = {
         `;
         viewContainer.appendChild(this.peekIslandEl);
         
-        // 5. [MODIFIED v6.5] Bottom Island - State 2 (Expanded)
+        // 5. Bottom Island - State 2 (Expanded)
         this.expandedIslandEl = document.createElement('div');
         this.expandedIslandEl.id = 'mobile-island-expanded';
         this.expandedIslandEl.className = 'mobile-island-bottom';
@@ -606,15 +524,12 @@ const MobileUIHandler = {
         viewContainer.appendChild(this.expandedIslandEl);
     },
 
-    /observeOriginalWindow(windowElement) {
+    observeOriginalWindow(windowElement) {
         if (this.contentObserver) this.contentObserver.disconnect();
         
         this.contentObserver = new MutationObserver((mutationsList, obs) => {
             const mainContent = windowElement.querySelector('.unified-display-main-content');
             
-            // --- ✅ FIX ---
-            // Look for the attitude_group and check its 'data-initialized' flag.
-            // This flag is set by createPfdDisplay() *after* it finishes drawing the SVG tapes.
             const attitudeGroup = mainContent?.querySelector('#attitude_group');
             
             if (mainContent && attitudeGroup && attitudeGroup.dataset.initialized === 'true') {
@@ -624,29 +539,23 @@ const MobileUIHandler = {
             }
         });
         
-        // We must observe 'attributes' as well to detect the 'data-initialized' change.
         this.contentObserver.observe(windowElement, { 
             childList: true, 
             subtree: true,
-            attributes: true // <-- CRITICAL: Added this line
+            attributes: true
         });
     },
 
     /**
-     * [REHAUL v6.4]
      * Moves content from the original window into the new island components.
-     * 1. Top Overview -> Top Window
-     * 2. Route Summary Bar -> CLONED to Mini, Peek, and Expanded Islands
-     * 3. Main Content -> CLONED to Peek Island, MOVED to Expanded Island
-     * 4. VSD Summary Bar (old) -> Is NO LONGER MOVED. Stays in Main Content.
      */
     populateSplitView(sourceWindow) {
         if (!this.topWindowEl || !this.miniIslandEl || !this.peekIslandEl || !this.expandedIslandEl) return;
 
         // Find content containers
-        const miniRouteContainer = this.miniIslandEl.querySelector('.route-summary-wrapper-mobile'); // <-- NEW
-        const peekRouteContainer = this.peekIslandEl.querySelector('.route-summary-wrapper-mobile'); // <-- NEW
-        const expandedRouteContainer = this.expandedIslandEl.querySelector('.route-summary-wrapper-mobile'); // <-- NEW
+        const miniRouteContainer = this.miniIslandEl.querySelector('.route-summary-wrapper-mobile');
+        const peekRouteContainer = this.peekIslandEl.querySelector('.route-summary-wrapper-mobile');
+        const expandedRouteContainer = this.expandedIslandEl.querySelector('.route-summary-wrapper-mobile');
         
         const peekContentContainer = this.peekIslandEl.querySelector('.drawer-content');
         const expandedContentContainer = this.expandedIslandEl.querySelector('.drawer-content');
@@ -654,17 +563,15 @@ const MobileUIHandler = {
 
         // Find original content pieces
         const topOverviewPanel = sourceWindow.querySelector('.aircraft-overview-panel');
-        const routeSummaryBar = sourceWindow.querySelector('.route-summary-overlay'); // <-- NEW
+        const routeSummaryBar = sourceWindow.querySelector('.route-summary-overlay');
         const mainFlightContent = sourceWindow.querySelector('.unified-display-main-content');
         
-        // [REMOVED v6.4] VSD Summary Bar logic is gone
-
         // 1. Move Top Panel
         if (topOverviewPanel) {
             this.topWindowEl.appendChild(topOverviewPanel);
         }
         
-        // 2. [NEW v6.4] Clone and Move Route Summary Bar to ALL three islands
+        // 2. Clone and Move Route Summary Bar to ALL three islands
         if (routeSummaryBar) {
             const clonedRouteBar1 = routeSummaryBar.cloneNode(true);
             const clonedRouteBar2 = routeSummaryBar.cloneNode(true);
@@ -675,7 +582,7 @@ const MobileUIHandler = {
             expandedRouteContainer.appendChild(clonedRouteBar3);
         }
         
-        // 3. [CRITICAL] Clone and Move Main Content
+        // 3. Clone and Move Main Content
         if (mainFlightContent) {
             // Clone the content for the "Peek" view
             const clonedFlightContent = mainFlightContent.cloneNode(true);
@@ -689,14 +596,13 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.5]
      * Wires up all interactions to the new unified handle
      * (`.route-summary-wrapper-mobile`) in all three islands.
      */
     wireUpInteractions() {
         if (!this.miniIslandEl || !this.peekIslandEl || !this.expandedIslandEl) return;
 
-        // [NEW v6.5] Get the new unified handles
+        // Get the new unified handles
         const miniHandle = this.miniIslandEl.querySelector('.route-summary-wrapper-mobile');
         const peekHandle = this.peekIslandEl.querySelector('.route-summary-wrapper-mobile');
         const expandedHandle = this.expandedIslandEl.querySelector('.route-summary-wrapper-mobile');
@@ -707,7 +613,6 @@ const MobileUIHandler = {
         
         // State 0 -> 1
         miniHandle.addEventListener('click', (e) => {
-            // Prevent click from firing if it was the end of a swipe
             if (this.swipeState.isDragging) return;
             this.setDrawerState(1);
         });
@@ -730,12 +635,17 @@ const MobileUIHandler = {
         }
 
         // --- Swipe Interactions ---
-        // [NEW v6.5] Listen on all three new handles
         miniHandle.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
         peekHandle.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
         expandedHandle.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
         
-        document.addEventListener('touchend', this.handleTouchEnd.bind(this));
+        // --- [FIX FOR STATE-SKIP BUG] ---
+        // Only attach the *global* document listener ONCE.
+        if (!this.documentListenersWired) {
+            document.addEventListener('touchend', this.handleTouchEnd.bind(this));
+            this.documentListenersWired = true;
+        }
+        // --- [END FIX] ---
 
         // --- Re-wire desktop buttons using event delegation ---
 
@@ -766,7 +676,6 @@ const MobileUIHandler = {
         });
         
         // 2. Stats and Back buttons (in bottom islands)
-        // [NEW] This single handler is attached to both Peek and Expanded islands.
         const bottomIslandButtonHandler = async (e) => {
             const statsBtn = e.target.closest('.pilot-stats-toggle-btn');
             const backBtn = e.target.closest('.back-to-flight-btn');
@@ -803,13 +712,9 @@ const MobileUIHandler = {
     },
     
     /**
-     * [REHAUL v6.6 - THE FIX]
      * Sets the drawer to a specific state (0, 1, or 2).
-     * Removed the faulty `isDragging` check that prevented
-     * state changes from `handleTouchEnd`.
      */
     setDrawerState(targetState) {
-        // [REMOVED v6.6] The isDragging check was here.
         if (targetState === this.drawerState || !this.miniIslandEl) return;
         
         this.drawerState = targetState;
@@ -827,15 +732,12 @@ const MobileUIHandler = {
     // --- Swipe Gesture Handlers ---
     
     /**
-     * [REHAUL v6.5]
-     * Simplified: Only registers the start of a drag from the
-     * new unified handle `.route-summary-wrapper-mobile`.
+     * Registers the start of a drag from the
+     * unified handle `.route-summary-wrapper-mobile`.
      */
     handleTouchStart(e) {
-        // [CHANGED v6.5] Only check for the new unified handle
         const handle = e.target.closest('.route-summary-wrapper-mobile');
         
-        // Only start a swipe if it's on the handle
         if (!handle) {
              this.swipeState.isDragging = false;
              return;
@@ -847,23 +749,15 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.5]
      * Handles the end of a swipe.
-     * 1. Calculates new state based on swipe direction.
-     * 2. Calls `setDrawerState` (which is no longer blocked).
-     * 3. Uses a `setTimeout` to reset `isDragging` *after* a delay,
-     * which correctly blocks the `click` event from firing.
      */
     handleTouchEnd(e) {
         if (!this.swipeState.isDragging) return;
         
-        // [CHANGED v6.5] We must set isDragging to false *after* a short delay.
-        // This allows the 'click' event listeners to check this flag and
-        // prevent a "click" from firing at the end of a "swipe".
         setTimeout(() => {
             this.swipeState.isDragging = false;
             this.swipeState.touchStartY = 0;
-        }, 50); // A 50ms delay is usually enough
+        }, 50);
 
         const touchEndY = e.changedTouches[0].clientY;
         const deltaY = touchEndY - this.swipeState.touchStartY;
@@ -872,7 +766,7 @@ const MobileUIHandler = {
         // "Throw away" gesture: swipe down hard from the mini state to close
         if (deltaY > 150 && currentState === 0) {
              this.closeActiveWindow();
-             return; // The setTimeout will still run, which is fine.
+             return;
         }
         
         let newState = currentState;
@@ -883,36 +777,22 @@ const MobileUIHandler = {
              newState = Math.max(0, currentState - 1); // Go down one state, min 0
         }
         
-        this.setDrawerState(newState); // [FIX v6.6] This now works.
-        
-        // [REMOVED v6.5] State reset is now in the setTimeout
+        this.setDrawerState(newState);
     },
 
-    /**
-     * [FIX v6.7 - Race Condition]
-     * 1. Added `this.closeTimer` to the state.
-     * 2. A "force close" now clears any pending "soft close" timers.
-     * 3. A "soft close" now stores its timer in `this.closeTimer`.
-     */
     closeActiveWindow(force = false) {
         if (this.contentObserver) this.contentObserver.disconnect();
         
-        // --- [FIX v6.7] ---
-        // If a new window is forcing this one to close (force = true),
-        // we MUST cancel any pending "soft close" timers first.
         if (this.closeTimer) {
             clearTimeout(this.closeTimer);
             this.closeTimer = null;
         }
-        // --- [END FIX] ---
 
         // [CRITICAL] Move content back and destroy clone
         if (this.activeWindow && this.topWindowEl && this.miniIslandEl && this.peekIslandEl && this.expandedIslandEl) {
             const topOverviewPanel = this.topWindowEl.querySelector('.aircraft-overview-panel');
             
-            // Get the ORIGINAL content from the expanded island
             const mainFlightContent = this.expandedIslandEl.querySelector('.unified-display-main-content');
-            // Get the CLONE from the peek island to destroy it
             const clonedFlightContent = this.peekIslandEl.querySelector('.unified-display-main-content');
             
             if (topOverviewPanel) {
@@ -923,7 +803,6 @@ const MobileUIHandler = {
                 this.activeWindow.appendChild(mainFlightContent);
             }
             
-            // Destroy the clone
             if (clonedFlightContent) {
                 clonedFlightContent.remove();
             }
@@ -931,7 +810,6 @@ const MobileUIHandler = {
 
         const animationDuration = force ? 0 : 500;
 
-        // --- [FIX v6.7] Moved this block up so `force` branch can access it
         const overlayToRemove = this.overlayEl;
         const topWindowToRemove = this.topWindowEl;
         const miniIslandToRemove = this.miniIslandEl;
@@ -952,7 +830,6 @@ const MobileUIHandler = {
             this.peekIslandEl = null;
             this.expandedIslandEl = null;
             this.drawerState = 0;
-            // this.closeTimer is already null or will be set to null
         };
 
         if (force) {
@@ -962,19 +839,16 @@ const MobileUIHandler = {
             peekIslandToRemove?.remove();
             expandedIslandToRemove?.remove();
             
-            // --- [NEW] Restore controls ---
             this.restoreMapControls();
             
             resetState();
         } else {
-            // Animate all 4 islands out
             if (overlayToRemove) overlayToRemove.classList.remove('visible');
             if (topWindowToRemove) topWindowToRemove.classList.remove('visible');
             if (miniIslandToRemove) miniIslandToRemove.classList.remove('island-active');
             if (peekIslandToRemove) peekIslandToRemove.classList.remove('island-active');
             if (expandedIslandToRemove) expandedIslandToRemove.classList.remove('island-active');
 
-            // --- [FIX v6.7] Store the timer so it can be cancelled
             this.closeTimer = setTimeout(() => {
                 overlayToRemove?.remove();
                 topWindowToRemove?.remove();
@@ -982,15 +856,13 @@ const MobileUIHandler = {
                 peekIslandToRemove?.remove();
                 expandedIslandToRemove?.remove();
                 
-                // --- [NEW] Restore controls ---
                 this.restoreMapControls();
 
-                // Check if a new window was opened *during* the close animation
                 if (this.topWindowEl === topWindowToRemove) {
                     resetState();
                 }
                 
-                this.closeTimer = null; // [FIX v6.7] Clear timer after it runs
+                this.closeTimer = null;
             }, animationDuration);
         }
     }
