@@ -21,6 +21,7 @@ const MobileUIHandler = {
     activeWindow: null, // The *original* hidden #aircraft-info-window
     topWindowEl: null,
     overlayEl: null,
+    closeTimer: null,
     
     // [NEW] Island elements
     miniIslandEl: null,
@@ -877,35 +878,35 @@ const MobileUIHandler = {
     },
 
     /**
-     * [REHAUL v6.4]
-     * Animates out all islands, moves *original* content back,
-     * *destroys* cloned content, and cleans up.
-     * v6.4: Removes all logic for `#vsd-summary-bar` as it is
-     * no longer moved separately from its parent.
-     * [MODIFIED] Restores main map controls on close.
+     * [FIX v6.7 - Race Condition]
+     * 1. Added `this.closeTimer` to the state.
+     * 2. A "force close" now clears any pending "soft close" timers.
+     * 3. A "soft close" now stores its timer in `this.closeTimer`.
      */
     closeActiveWindow(force = false) {
         if (this.contentObserver) this.contentObserver.disconnect();
         
+        // --- [FIX v6.7] ---
+        // If a new window is forcing this one to close (force = true),
+        // we MUST cancel any pending "soft close" timers first.
+        if (this.closeTimer) {
+            clearTimeout(this.closeTimer);
+            this.closeTimer = null;
+        }
+        // --- [END FIX] ---
+
         // [CRITICAL] Move content back and destroy clone
         if (this.activeWindow && this.topWindowEl && this.miniIslandEl && this.peekIslandEl && this.expandedIslandEl) {
             const topOverviewPanel = this.topWindowEl.querySelector('.aircraft-overview-panel');
-            
-            // [REMOVED v6.4] Logic for vsdSummaryBar removed
             
             // Get the ORIGINAL content from the expanded island
             const mainFlightContent = this.expandedIslandEl.querySelector('.unified-display-main-content');
             // Get the CLONE from the peek island to destroy it
             const clonedFlightContent = this.peekIslandEl.querySelector('.unified-display-main-content');
             
-            // [REMOVED v6.4] Destroy route bar clones (happens when islands are removed)
-
             if (topOverviewPanel) {
                 this.activeWindow.appendChild(topOverviewPanel);
             }
-            
-            // [REMOVED v6.4] Logic to re-prepend vsdSummaryBar is gone.
-            // It now stays inside mainFlightContent, where it belongs.
 
             if (mainFlightContent) {
                 this.activeWindow.appendChild(mainFlightContent);
@@ -919,6 +920,7 @@ const MobileUIHandler = {
 
         const animationDuration = force ? 0 : 500;
 
+        // --- [FIX v6.7] Moved this block up so `force` branch can access it
         const overlayToRemove = this.overlayEl;
         const topWindowToRemove = this.topWindowEl;
         const miniIslandToRemove = this.miniIslandEl;
@@ -939,6 +941,7 @@ const MobileUIHandler = {
             this.peekIslandEl = null;
             this.expandedIslandEl = null;
             this.drawerState = 0;
+            // this.closeTimer is already null or will be set to null
         };
 
         if (force) {
@@ -960,7 +963,8 @@ const MobileUIHandler = {
             if (peekIslandToRemove) peekIslandToRemove.classList.remove('island-active');
             if (expandedIslandToRemove) expandedIslandToRemove.classList.remove('island-active');
 
-            setTimeout(() => {
+            // --- [FIX v6.7] Store the timer so it can be cancelled
+            this.closeTimer = setTimeout(() => {
                 overlayToRemove?.remove();
                 topWindowToRemove?.remove();
                 miniIslandToRemove?.remove();
@@ -974,6 +978,8 @@ const MobileUIHandler = {
                 if (this.topWindowEl === topWindowToRemove) {
                     resetState();
                 }
+                
+                this.closeTimer = null; // [FIX v6.7] Clear timer after it runs
             }, animationDuration);
         }
     }
