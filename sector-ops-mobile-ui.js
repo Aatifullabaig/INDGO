@@ -60,6 +60,19 @@ const MobileUIHandler = {
 
     /**
      * Injects all the CSS for the new HUD-themed floating islands.
+     * ---
+     * [REHAUL v6.5 / UNIFIED HANDLE]
+     * 1. Removes all styles for `.drawer-handle`.
+     * 2. Adds handle properties (`cursor`, `touch-action`, etc.) to
+     * `.route-summary-wrapper-mobile`.
+     * 3. Adds the "pill" pseudo-element (`::before`) to
+     * `.route-summary-wrapper-mobile` and gives it `padding-bottom`.
+     * ---
+     * [MODIFIED v6.8] Reduced side margin from 15px to 10px to make
+     * floating windows wider, per user request.
+     * ---
+     * [MODIFIED v8.0] Replaced Peek Island CSS to show data panels
+     * instead of the PFD.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -73,8 +86,15 @@ const MobileUIHandler = {
                 --hud-accent: #00a8ff;
                 --hud-glow: 0 0 15px rgba(0, 168, 255, 0.5);
                 
+                /* [REMOVED v6.5] --drawer-handle-height was here */
+                
+                /* [REMOVED v6.4] Mini Island Data Area Height */
+                /* --drawer-mini-data-height: 70px; */
+                
                 --drawer-peek-content-height: 200px;
                 --island-bottom-margin: env(safe-area-inset-bottom, 15px);
+                
+                /* --- [MODIFIED v6.8] --- */
                 --island-side-margin: 10px;
             }
 
@@ -153,6 +173,7 @@ const MobileUIHandler = {
                 opacity: 0;
                 z-index: 1045;
                 
+                /* [NEW v6.4] All bottom islands must overflow hidden */
                 overflow: hidden;
             }
             
@@ -162,21 +183,29 @@ const MobileUIHandler = {
                 opacity: 1;
             }
 
-            /* --- State 0: Mini Island --- */
+            /* --- [MODIFIED v6.4] State 0: Mini Island --- */
             #mobile-island-mini {
                 bottom: var(--island-bottom-margin);
+                /* [MODIFIED v6.4] Height is auto-sized by content */
                 height: auto; 
+                /* [REMOVED v6.5] cursor: pointer was here */
+                
+                /* [NEW] Use flex to stack route bar and handle */
                 display: flex;
                 flex-direction: column; 
             }
+
+            /* [REMOVED v6.5] Faint pill rule for mini-island was here */
+            /* [REMOVED v6.4] .mini-content-wrapper was here */
             
-            /* --- State 1: Peek Island --- */
+            /* --- [NEW] State 1: Peek Island --- */
             #mobile-island-peek {
                 bottom: var(--island-bottom-margin);
+                /* [MODIFIED v6.4] Height is now auto (route bar + handle + content) */
                 height: auto; 
             }
             
-            /* --- State 2: Expanded Island --- */
+            /* --- [NEW] State 2: Expanded Island --- */
             #mobile-island-expanded {
                 top: 280px; /* Sits below the top window */
                 bottom: var(--island-bottom-margin);
@@ -184,31 +213,36 @@ const MobileUIHandler = {
             }
 
             /* ====================================================================
-            --- Route Summary Bar Styling (Mobile)
+            --- [MODIFIED v6.5] Route Summary Bar Styling (Mobile)
             ==================================================================== */
             
-            /* This is now the unified handle */
+            /* [NEW v6.5] This is now the unified handle */
             .route-summary-wrapper-mobile {
                 flex-shrink: 0;
                 overflow: hidden;
                 border-top-left-radius: 16px;
                 border-top-right-radius: 16px;
                 
-                /* Handle properties */
+                /* [NEW v6.5] Add handle properties */
                 cursor: grab;
                 touch-action: none;
                 user-select: none;
                 position: relative;
                 
+                /* [MODIFIED BY USER REQUEST] Add background to blend pill */
                 background: var(--hud-bg);
+                
+                /* [REMOVED BY USER REQUEST] Removed padding-bottom */
+                /* padding-bottom: 20px; */
             }
             
-            /* Add the pill visual */
+            /* [NEW v6.5] Add the pill visual */
             .route-summary-wrapper-mobile::before {
                 content: '';
                 position: absolute;
                 left: 50%;
                 transform: translateX(-50%);
+                /* [MODIFIED BY USER REQUEST] Positioned at top */
                 top: 8px; 
                 width: 40px; 
                 height: 4px; 
@@ -217,18 +251,25 @@ const MobileUIHandler = {
                 opacity: 0.5;
             }
             
-            /* Make the pill fainter on the mini-island */
+            /* [NEW v6.5] Make the pill fainter on the mini-island */
             #mobile-island-mini .route-summary-wrapper-mobile::before {
                 opacity: 0.3;
             }
 
-            /* Override desktop styles for the route bar on mobile */
+            /* [NEW] Override desktop styles for the route bar on mobile */
             .route-summary-wrapper-mobile .route-summary-overlay {
+                /* Reset properties that fight the mobile layout */
                 position: relative; 
                 margin-bottom: 0;
+                
+                /* Use a simpler background, the gradient overlap is complex */
                 background: var(--hud-bg);
-                border-radius: 0;
+                border-radius: 0; /* Wrapper handles rounding */
+                
+                /* [MODIFIED BY USER REQUEST] Added padding-bottom to center content */
                 padding: 12px 15px 12px 15px; 
+                
+                /* Force grid to 3 columns and scale down text */
                 grid-template-columns: auto 1fr auto;
                 gap: 12px;
             }
@@ -246,27 +287,36 @@ const MobileUIHandler = {
                 padding: 3px 10px;
                 font-size: 0.7rem;
             }
-            /* Hide the progress bar fill on Mini and Peek islands */
+            /* [NEW] Hide the progress bar fill on Mini and Peek islands */
             #mobile-island-mini .route-summary-wrapper-mobile .progress-bar-fill,
             #mobile-island-peek .route-summary-wrapper-mobile .progress-bar-fill {
                 display: none;
             }
-            /* Make progress bar bg fainter on Mini/Peek */
+            /* [NEW] Make progress bar bg fainter on Mini/Peek */
             #mobile-island-mini .route-summary-wrapper-mobile .route-progress-bar-container,
             #mobile-island-peek .route-summary-wrapper-mobile .route-progress-bar-container {
                  background: rgba(10, 12, 26, 0.4);
             }
+            
+            /* ====================================================================
+            --- [END V6.5 MODIFIED STYLES] ---
+            ==================================================================== */
 
-            /* --- Drawer Content (Used in Peek & Expanded) --- */
+
+            /* --- [REMOVED v6.5] .drawer-handle styles were here --- */
+            
+            /* --- [MODIFIED] Drawer Content (Used in Peek & Expanded) --- */
             .drawer-content {
                 overflow-y: auto;
                 flex-grow: 1;
                 padding-bottom: env(safe-area-inset-bottom, 0);
+                /* [NEW v6.4] Explicitly set height for peek content */
                 height: var(--drawer-peek-content-height);
             }
             #mobile-island-peek .drawer-content {
                 overflow: hidden;
             }
+            /* [NEW v6.4] Expanded content must fill remaining space */
             #mobile-island-expanded .drawer-content {
                 height: auto;
             }
@@ -276,112 +326,94 @@ const MobileUIHandler = {
             .drawer-content::-webkit-scrollbar-thumb { background-color: var(--hud-accent); border-radius: 10px; }
 
             /* ====================================================================
-            --- State 1: "Peek" Side-by-Side Layout ---
+            --- [REMOVED v6.4] V4 REDESIGN WAS HERE ---
             ==================================================================== */
-            #mobile-island-peek .unified-display-main {
+
+
+            /* ====================================================================
+            --- [START OF USER REQUEST V8: 2025-11-10] ---
+            --- State 1: "Peek" Data-Only Layout ---
+            ==================================================================== */
+            
+            /* [NEW V8] This is the main container for the flight data pane */
+            #mobile-island-peek #ac-tab-flight-data {
                 display: flex !important;
-                flex-direction: row !important; /* <-- Use horizontal layout */
+                flex-direction: column !important; /* Stack items vertically */
                 height: var(--drawer-peek-content-height); /* 200px */
                 padding: 10px;
                 box-sizing: border-box;
                 gap: 10px;
-                overflow: hidden;
-            }
-            
-            /* PFD on the left */
-            #mobile-island-peek .pfd-main-panel {
-                margin: 0 !important;
-                max-width: none !important;
-                justify-content: center;
-                flex-basis: 80%;
-                flex-grow: 0;
-                flex-shrink: 0;
-                width: 80%;
-                min-height: 0;
-                height: 100%;
-                display: flex !important;
-                flex-direction: column !important;
-            }
-            
-            #mobile-island-peek #pfd-container {
-                flex-grow: 1;
-                border-radius: 12px !important;
-                display: grid; 
-                place-items: center;
-                overflow: hidden;
-            }
-            
-            #mobile-island-peek #pfd-container > * {
-                width: 100% !important;
-                height: 100% !important;
-                object-fit: contain;
+                overflow: hidden; /* Hide anything that overflows */
             }
 
-            /* Hide PFD footer */
-            #mobile-island-peek .pfd-footer-display {
+            /* [NEW V8] Hide the PFD panel in Peek view */
+            #mobile-island-peek .pfd-main-panel {
                 display: none !important;
             }
             
-            /* Data Panel on the right */
-            #mobile-island-peek .live-data-panel {
-                flex-direction: column;
-                justify-content: flex-start !important;
-                padding: 8px !important;
-                background: rgba(10, 12, 26, 0.5) !important;
-                border-radius: 10px;
-                flex-grow: 1;
-                flex-shrink: 1;
-                flex-basis: auto;
-                height: 100%;
-                box-sizing: border-box;
-                overflow: auto;
-                gap: 6px;
-            }
-            
-            /* Styling for the "bubble" items */
-            #mobile-island-peek .live-data-item {
-                flex-direction: column-reverse;
-                align-items: flex-start;
-                width: 100%;
-                background: rgba(20, 25, 40, 0.7);
-                padding: 6px 10px;
-                border-radius: 8px;
-                box-sizing: border-box;
-                flex-shrink: 0;
-            }
-            #mobile-island-peek .live-data-item .data-label { 
-                font-size: 0.6rem; 
-                opacity: 0.7;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-            }
-            #mobile-island-peek .live-data-item .data-value { 
-                font-size: 1.0rem;
-                font-weight: 600;
-                line-height: 1.1;
-            }
-            #mobile-island-peek .live-data-item .data-value .unit { 
-                font-size: 0.7rem; 
-                opacity: 0.7;
-            }
-            #mobile-island-peek .live-data-item .data-value-ETE { 
-                font-size: 1.2rem;
-                font-weight: 600;
-                color: var(--hud-accent);
+            /* [NEW V8] Hide the VSD panel in Peek view */
+            #mobile-island-peek .ac-profile-card-new {
+                display: none !important;
             }
 
-            /* --- Hide VSD in Peek State --- */
+            /* [NEW V8] Style the "Currently Over" panel for Peek view */
+            #mobile-island-peek #location-data-panel {
+                flex-shrink: 0; /* Don't shrink */
+                margin: 0; /* Remove any default margins */
+                padding: 10px 12px !important; /* Make it a bit smaller */
+                height: auto; /* Let content define height */
+            }
+            
+            /* [NEW V8] Make "Currently Over" text smaller in Peek view */
+            #mobile-island-peek #location-data-panel .data-label {
+                font-size: 0.7rem !important;
+            }
+            #mobile-island-peek #location-data-panel .data-value {
+                font-size: 1.0rem !important;
+                margin-top: 4px !important;
+                line-height: 1.2 !important;
+            }
+            
+            /* [NEW V8] Style the main data bar for Peek view */
+            #mobile-island-peek .flight-data-bar {
+                flex-grow: 1; /* Fill remaining space */
+                flex-shrink: 1; /* Allow to shrink if needed */
+                margin: 0;
+                padding: 10px !important; /* Smaller padding */
+                
+                /* [NEW V8] Force a 2-column grid and allow scrolling */
+                grid-template-columns: 1fr 1fr !important;
+                gap: 8px !important;
+                overflow-y: auto; /* Allow scrolling if items overflow */
+                height: 100%; /* Fill the flex space */
+            }
+            
+            /* [NEW V8] Make data bar items smaller in Peek view */
+            #mobile-island-peek .data-bar-item .data-label {
+                font-size: 0.6rem !important;
+            }
+            #mobile-island-peek .data-bar-item .data-value {
+                font-size: 1.1rem !important;
+            }
+            #mobile-island-peek .data-bar-item .data-value .unit {
+                font-size: 0.7rem !important;
+            }
+            
+            /* --- Hide VSD in Peek State (Redundant but safe) --- */
             #mobile-island-peek #vsd-panel {
                 display: none !important;
             }
+            /* ====================================================================
+            --- [END OF USER REQUEST V8] ---
+            ==================================================================== */
+
 
             /* Hide stats button in Mini and Peek states */
             .pilot-stats-toggle-btn {
                 display: none;
             }
 
-            /* --- HUD Modules for Expanded View --- */
+            /* --- [NEW] HUD Modules for Expanded View --- */
             .hud-module {
                 background: rgba(10, 12, 26, 0.5);
                 border-radius: 12px;
@@ -389,33 +421,39 @@ const MobileUIHandler = {
                 box-sizing: border-box;
             }
 
-            /* --- State 2: "Expanded" Stacked Layout --- */
+            /* --- [RESTORED] State 2: "Expanded" Stacked Layout --- */
             #mobile-island-expanded .unified-display-main {
                 display: flex !important;
-                flex-direction: column;
-                gap: 16px;
+                flex-direction: column; /* <-- Original vertical stack */
+                gap: 16px; /* <-- Original gap */
                 height: auto;
                 overflow: hidden;
                 padding: 16px;
             }
             #mobile-island-expanded .pfd-main-panel {
-                margin: 0 auto !important;
-                max-width: 400px !important;
+                margin: 0 auto !important; /* <-- Original centered layout */
+                max-width: 400px !important; /* <-- Original max-width */
             }
             #mobile-island-expanded .live-data-panel {
-                justify-content: space-around !important;
+                justify-content: space-around !important; /* <-- Original layout */
+                /* Apply module styles */
                 background: rgba(10, 12, 26, 0.5) !important;
-                border-radius: 12px !important;
-                padding: 16px !important;
+                border-radius: 12px; /* <-- Original style */
+                padding: 16px !important; /* <-- Original style */
+            }
+            /* Original styles for *contents* of the module */
+            #mobile-island-expanded .live-data-item {
+                 /* Uses default flex-direction (row) and alignment (center) */
             }
             #mobile-island-expanded .live-data-item .data-label { font-size: 0.7rem; }
             #mobile-island-expanded .live-data-item .data-value { font-size: 1.5rem; }
             #mobile-island-expanded .live-data-item .data-value .unit { font-size: 0.8rem; }
             #mobile-island-expanded .live-data-item .data-value-ete { font-size: 1.7rem; }
             
-            /* Show stats button ONLY when expanded (as a module) */
+            /* [MODIFIED] Show stats button ONLY when expanded (as a module) */
             #mobile-island-expanded .pilot-stats-toggle-btn {
                 display: flex;
+                /* Apply module styles */
                 background: rgba(10, 12, 26, 0.5);
                 border-radius: 12px;
                 padding: 16px;
@@ -426,8 +464,11 @@ const MobileUIHandler = {
                 color: var(--hud-accent);
                 font-weight: 600;
                 font-size: 1rem;
-                margin-top: 16px;
+                margin-top: 16px; /* Add space from the content above */
             }
+
+            /* --- VSD is visible by default in State 2 --- */
+            /* No rule needed */
 
 
             @media (max-width: ${this.CONFIG.breakpoint}px) {
@@ -441,7 +482,7 @@ const MobileUIHandler = {
         style.type = 'text/css';
         style.appendChild(document.createTextNode(css));
         document.head.appendChild(style);
-    },
+    }
 
     /**
      * Intercepts the window open command to build the mobile UI.
