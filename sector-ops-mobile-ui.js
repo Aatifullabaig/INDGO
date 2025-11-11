@@ -66,6 +66,8 @@ const MobileUIHandler = {
      * 3. Adds the "pill" pseudo-element (`::before`) to
      * `.route-summary-wrapper-mobile` and gives it `padding-bottom`.
      * ---
+     * [MODIFIED v6.8] Reduced side margin from 15px to 10px to make
+     * floating windows wider, per user request.
      */
     injectMobileStyles() {
         const styleId = 'mobile-sector-ops-styles';
@@ -86,7 +88,9 @@ const MobileUIHandler = {
                 
                 --drawer-peek-content-height: 200px;
                 --island-bottom-margin: env(safe-area-inset-bottom, 15px);
-                --island-side-margin: 15px;
+                
+                /* --- [MODIFIED v6.8] --- */
+                --island-side-margin: 10px;
             }
 
             #view-rosters.active {
