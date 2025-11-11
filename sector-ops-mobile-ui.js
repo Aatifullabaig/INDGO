@@ -606,23 +606,30 @@ const MobileUIHandler = {
         viewContainer.appendChild(this.expandedIslandEl);
     },
 
-    /**
-     * Watches the original hidden window for when its content is ready.
-     * (Unchanged from v5.2 - logic is robust)
-     */
-    observeOriginalWindow(windowElement) {
+    /observeOriginalWindow(windowElement) {
         if (this.contentObserver) this.contentObserver.disconnect();
         
         this.contentObserver = new MutationObserver((mutationsList, obs) => {
             const mainContent = windowElement.querySelector('.unified-display-main-content');
-            if (mainContent && mainContent.querySelector('#pfd-container')) {
+            
+            // --- ✅ FIX ---
+            // Look for the attitude_group and check its 'data-initialized' flag.
+            // This flag is set by createPfdDisplay() *after* it finishes drawing the SVG tapes.
+            const attitudeGroup = mainContent?.querySelector('#attitude_group');
+            
+            if (mainContent && attitudeGroup && attitudeGroup.dataset.initialized === 'true') {
                 this.populateSplitView(windowElement);
                 obs.disconnect();
                 this.contentObserver = null;
             }
         });
         
-        this.contentObserver.observe(windowElement, { childList: true, subtree: true });
+        // We must observe 'attributes' as well to detect the 'data-initialized' change.
+        this.contentObserver.observe(windowElement, { 
+            childList: true, 
+            subtree: true,
+            attributes: true // <-- CRITICAL: Added this line
+        });
     },
 
     /**

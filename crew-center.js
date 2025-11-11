@@ -3376,7 +3376,6 @@ if (typeof window.WeatherService === 'undefined') {
             return;
         }
 
-        attitudeGroup.dataset.initialized = 'true'; // Prevent re-initialization
 
         // --- GENERATION FUNCTIONS (unchanged from your original static function) ---
         function generateAttitudeIndicators() {
@@ -3505,6 +3504,8 @@ if (typeof window.WeatherService === 'undefined') {
         generateAltitudeTape();
         generateAltitudeTensReel();
         generateHeadingTape();
+
+        attitudeGroup.dataset.initialized = 'true'; 
     }
     
 
