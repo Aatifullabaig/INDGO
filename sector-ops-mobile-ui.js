@@ -1,15 +1,17 @@
 /**
- * MobileUIHandler Module (Creative HUD Rehaul - v6.9 - Event Listener Fix)
+ * MobileUIHandler Module (Creative HUD Rehaul - v7.0 - Peek View Reconfig)
  *
- * REHAUL v6.9 CHANGES (Event Listener Fix):
- * 1. IDENTIFIED bug where `document.addEventListener('touchend', ...)`
- * was called in `wireUpInteractions` every time a window opened,
- * creating duplicate listeners that caused the "state skip" bug.
- * 2. ADDED a new state flag: `this.documentListenersWired = false`.
- * 3. MODIFIED `wireUpInteractions` to wrap the document listener
- * in an `if (!this.documentListenersWired)` block, ensuring
- * it only ever runs once.
- * 4. All other logic remains the same.
+ * REHAUL v7.0 CHANGES (Peek View Reconfig):
+ * 1. IDENTIFIED that "Peek" view (State 1) CSS was outdated
+ * and still trying to show the PFD.
+ * 2. REPLACED the entire CSS block for "#mobile-island-peek"
+ * to align with the new v14 layout from crew-center.js.
+ * 3. NEW CSS now hides the PFD panel (`.pfd-main-panel`).
+ * 4. NEW CSS now correctly displays the location panel
+ * (`#location-data-panel`) and the flight data bar
+ * (`.flight-data-bar`).
+ * 5. ADJUSTED padding and font sizes for these elements to fit
+ * within the 200px peek drawer.
  */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
@@ -55,7 +57,7 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
-        console.log("Mobile UI Handler (HUD Rehaul v6.9 / Event Listener Fix) Initialized.");
+        console.log("Mobile UI Handler (HUD Rehaul v7.0 / Peek View Reconfig) Initialized.");
     },
 
     /**
@@ -275,106 +277,81 @@ const MobileUIHandler = {
             .drawer-content::-webkit-scrollbar-track { background: transparent; }
             .drawer-content::-webkit-scrollbar-thumb { background-color: var(--hud-accent); border-radius: 10px; }
 
+
             /* ====================================================================
-            --- State 1: "Peek" Side-by-Side Layout ---
+            --- [START] State 1: "Peek" Stacked Data Layout (Replaces PFD)
             ==================================================================== */
-            #mobile-island-peek .unified-display-main {
-                display: flex !important;
-                flex-direction: row !important; /* <-- Use horizontal layout */
-                height: var(--drawer-peek-content-height); /* 200px */
+            
+            /* Set padding on the content area itself */
+            #mobile-island-peek .drawer-content {
                 padding: 10px;
                 box-sizing: border-box;
-                gap: 10px;
-                overflow: hidden;
+                height: var(--drawer-peek-content-height); /* 200px */
+                display: flex; /* Use flex to control the child */
+                flex-direction: column;
             }
             
-            /* PFD on the left */
-            #mobile-island-peek .pfd-main-panel {
-                margin: 0 !important;
-                max-width: none !important;
-                justify-content: center;
-                flex-basis: 80%;
-                flex-grow: 0;
-                flex-shrink: 0;
-                width: 80%;
-                min-height: 0;
+            /* This is the container cloned from crew-center.js */
+            #mobile-island-peek .unified-display-main-content {
+                padding: 0 !important; /* Remove its internal padding */
+                gap: 10px; /* Reduce the gap for peek view */
                 height: 100%;
-                display: flex !important;
-                flex-direction: column !important;
-            }
-            
-            #mobile-island-peek #pfd-container {
-                flex-grow: 1;
-                border-radius: 12px !important;
-                display: grid; 
-                place-items: center;
-                overflow: hidden;
-            }
-            
-            #mobile-island-peek #pfd-container > * {
-                width: 100% !important;
-                height: 100% !important;
-                object-fit: contain;
+                overflow: hidden; /* Hide anything that overflows the 200px */
             }
 
-            /* Hide PFD footer */
-            #mobile-island-peek .pfd-footer-display {
+            /* HIDE the PFD */
+            #mobile-island-peek .pfd-main-panel {
                 display: none !important;
             }
             
-            /* Data Panel on the right */
-            #mobile-island-peek .live-data-panel {
-                flex-direction: column;
-                justify-content: flex-start !important;
-                padding: 8px !important;
-                background: rgba(10, 12, 26, 0.5) !important;
-                border-radius: 10px;
-                flex-grow: 1;
-                flex-shrink: 1;
-                flex-basis: auto;
-                height: 100%;
-                box-sizing: border-box;
-                overflow: auto;
-                gap: 6px;
+            /* HIDE the VSD card */
+            #mobile-island-peek .ac-profile-card-new {
+                display: none !important;
             }
             
-            /* Styling for the "bubble" items */
-            #mobile-island-peek .live-data-item {
-                flex-direction: column-reverse;
-                align-items: flex-start;
-                width: 100%;
-                background: rgba(20, 25, 40, 0.7);
-                padding: 6px 10px;
-                border-radius: 8px;
-                box-sizing: border-box;
-                flex-shrink: 0;
+            /* HIDE the VSD disclaimer */
+            #mobile-island-peek .vsd-disclaimer {
+                display: none !important;
             }
-            #mobile-island-peek .live-data-item .data-label { 
-                font-size: 0.6rem; 
-                opacity: 0.7;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-            }
-            #mobile-island-peek .live-data-item .data-value { 
-                font-size: 1.0rem;
-                font-weight: 600;
-                line-height: 1.1;
-            }
-            #mobile-island-peek .live-data-item .data-value .unit { 
-                font-size: 0.7rem; 
-                opacity: 0.7;
-            }
-            #mobile-island-peek .live-data-item .data-value-ETE { 
-                font-size: 1.2rem;
-                font-weight: 600;
-                color: var(--hud-accent);
-            }
-
-            /* --- Hide VSD in Peek State --- */
+            
+            /* HIDE the VSD panel (redundant, but safe) */
             #mobile-island-peek #vsd-panel {
                 display: none !important;
             }
+
+            /* SHOW the location panel (Currently Over) */
+            #mobile-island-peek #location-data-panel {
+                padding: 10px; /* Make padding smaller */
+                flex-shrink: 0; /* Prevent shrinking */
+                border-top-width: 0; /* Hide top border */
+                background: rgba(10, 12, 26, 0.5) !important;
+            }
+            #mobile-island-peek #location-data-panel .data-value {
+                font-size: 1.0rem; /* Make text a bit smaller */
+                margin-top: 4px;
+            }
+
+            /* SHOW the flight data bar */
+            #mobile-island-peek .flight-data-bar {
+                padding: 10px; /* Make padding smaller */
+                gap: 8px; /* Reduce gap */
+                grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); /* Allow more items */
+                flex-grow: 1; /* Allow it to fill remaining space */
+                overflow: hidden;
+                border-top-width: 0; /* Hide top border */
+            }
+            #mobile-island-peek .flight-data-bar .data-label {
+                font-size: 0.6rem; /* Smaller label */
+            }
+            #mobile-island-peek .flight-data-bar .data-value {
+                font-size: 1.1rem; /* Smaller value */
+            }
+            #mobile-island-peek .flight-data-bar .data-value .unit {
+                font-size: 0.7rem; /* Smaller unit */
+            }
+
+            /* --- [END] State 1 --- */
+
 
             /* Hide stats button in Mini and Peek states */
             .pilot-stats-toggle-btn {
@@ -390,17 +367,25 @@ const MobileUIHandler = {
             }
 
             /* --- State 2: "Expanded" Stacked Layout --- */
-            #mobile-island-expanded .unified-display-main {
+            /* This section now re-enables the PFD and VSD for the full view */
+            #mobile-island-expanded .unified-display-main-content {
                 display: flex !important;
                 flex-direction: column;
                 gap: 16px;
                 height: auto;
-                overflow: hidden;
+                overflow: hidden; /* This is OK, drawer-content scrolls */
                 padding: 16px;
             }
             #mobile-island-expanded .pfd-main-panel {
+                display: flex !important; /* RE-SHOW PFD */
                 margin: 0 auto !important;
                 max-width: 400px !important;
+            }
+             #mobile-island-expanded .ac-profile-card-new {
+                display: flex !important; /* RE-SHOW VSD */
+            }
+            #mobile-island-expanded .vsd-disclaimer {
+                display: block !important; /* RE-SHOW VSD Disclaimer */
             }
             #mobile-island-expanded .live-data-panel {
                 justify-content: space-around !important;
