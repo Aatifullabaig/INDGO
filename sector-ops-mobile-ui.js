@@ -256,9 +256,8 @@ const MobileUIHandler = {
                 background: var(--hud-bg);
                 border-radius: 0; /* Wrapper handles rounding */
                 
-                /* Adjust padding for a tighter mobile look */
-                /* [MODIFIED v6.5] Removed padding-bottom, handled by wrapper */
-                padding: 12px 15px 0 15px; 
+                /* [MODIFIED BY USER REQUEST] Added padding-bottom to center content */
+                padding: 12px 15px 12px 15px; 
                 
                 /* Force grid to 3 columns and scale down text */
                 grid-template-columns: auto 1fr auto;
