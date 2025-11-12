@@ -542,13 +542,8 @@ const MobileUIHandler = {
         this.activeWindow.classList.add('mobile-legacy-sheet');
         this.activeWindow.style.display = 'flex';
         
-        // 3. Animate it in
-        setTimeout(() => {
-            this.activeWindow.classList.add('visible', 'peek');
-            this.legacySheetState.currentState = 'peek';
-            // Overlay only shows when expanded
-            // this.overlayEl.classList.add('visible'); 
-        }, 50);
+        // 3. Animate it in [REMOVED]
+        // We now wait for the observer to populate content *before* animating.
     },
 
     /**
@@ -597,17 +592,14 @@ const MobileUIHandler = {
         `;
         viewContainer.appendChild(this.expandedIslandEl);
 
-        // Animate in
-        setTimeout(() => {
-            if (this.topWindowEl) this.topWindowEl.classList.add('visible');
-            if (this.miniIslandEl) this.miniIslandEl.classList.add('island-active');
-            this.drawerState = 0; // Set initial state
-        }, 50);
+        // Animate in [REMOVED]
+        // We now wait for the observer to populate content *before* animating.
     },
 
     /**
      * [MODIFIED] Observes the original window for content.
-     * Now calls the correct "populate" function based on the active mode.
+     * Now calls the correct "populate" function based on the active mode
+     * AND triggers the animation *after* population is complete.
      */
     observeOriginalWindow(windowElement) {
         if (this.contentObserver) this.contentObserver.disconnect();
@@ -621,9 +613,29 @@ const MobileUIHandler = {
                 
                 // --- [NEW] Router ---
                 if (this.activeMode === 'legacy') {
+                    // 1. Populate first (while off-screen)
                     this.populateLegacySheet(windowElement);
-                } else {
+                    
+                    // 2. NOW, animate it in
+                    if (this.activeWindow) {
+                        // Use a minimal timeout to ensure styles are applied, then animate
+                        setTimeout(() => {
+                            this.activeWindow.classList.add('visible', 'peek');
+                            this.legacySheetState.currentState = 'peek';
+                        }, 10);
+                    }
+
+                } else { // 'hud' mode
+                    // 1. Populate first (while off-screen)
                     this.populateSplitView(windowElement);
+                    
+                    // 2. NOW, animate them in
+                    // Use a minimal timeout to ensure styles are applied, then animate
+                    setTimeout(() => {
+                        if (this.topWindowEl) this.topWindowEl.classList.add('visible');
+                        if (this.miniIslandEl) this.miniIslandEl.classList.add('island-active');
+                        this.drawerState = 0; // Set initial state
+                    }, 10);
                 }
                 
                 obs.disconnect();
