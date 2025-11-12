@@ -467,10 +467,14 @@ const MobileUIHandler = {
                 /* The handle will wrap this */
             }
             
-            /* --- Hide desktop close/hide buttons --- */
+            /* --- [MODIFIED] Hide desktop close/hide buttons --- */
+            /*
             .mobile-legacy-sheet .overview-actions {
                 display: none !important;
             }
+            */
+            /* ^^^ Rule removed to show buttons ^^^ */
+
 
             /* ====================================================================
             --- [END] NEW CSS for "Legacy Sheet" Mode ---
@@ -741,6 +745,15 @@ const MobileUIHandler = {
             });
         }
         
+        // --- [NEW] Stop drag from starting on button tap ---
+        const buttonContainer = sheetElement.querySelector('.overview-actions');
+        if (buttonContainer) {
+            buttonContainer.addEventListener('touchstart', (e) => {
+                e.stopPropagation();
+            }, { passive: true });
+        }
+        // --- End [NEW] ---
+        
         // Find desktop buttons (they are still in this window)
         const closeBtn = sheetElement.querySelector('.aircraft-window-close-btn');
         const hideBtn = sheetElement.querySelector('.aircraft-window-hide-btn');
@@ -985,6 +998,8 @@ const MobileUIHandler = {
         if (this.legacySheetState.currentState === 'peek') {
             if (deltaY < -100) { // Swiped up
                 this.setLegacySheetState('expanded');
+            } else if (deltaY > 100) { // [MODIFIED] Swiped down to close
+                this.closeActiveWindow();
             } else { // Snap back
                 this.setLegacySheetState('peek');
             }
