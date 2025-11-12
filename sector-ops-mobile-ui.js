@@ -1,21 +1,3 @@
-/**
- * MobileUIHandler Module (Creative HUD Rehaul - v8.0 - Legacy Mode)
- *
- * REHAUL v8.0 CHANGES (Legacy Mode):
- * 1. ADDED: User-configurable setting (via localStorage 'mobileDisplayMode')
- * to switch between 'hud' (default) and 'legacy' modes.
- * 2. NEW: "Legacy Sheet" Mode. This mode re-styles the original desktop
- * info window as a draggable, 2-state (peek/expanded) bottom sheet.
- * 3. MODIFIED: `openWindow` now acts as a "router", checking the
- * setting and calling either the original HUD-builder
- * (`createSplitViewUI`) or the new Legacy-builder (`createLegacySheetUI`).
- * 4. MODIFIED: `closeActiveWindow` is now forked. It intelligently
- * tears down whichever UI (HUD or Legacy) is currently active.
- * 5. NEW: Added CSS in `injectMobileStyles` for `.mobile-legacy-sheet`
- * to handle the bottom-sheet appearance, states, and animations.
- * 6. NEW: Added `wireUpLegacySheetInteractions` to manage the
- * swipe/drag gestures for the new bottom sheet.
- */
 const MobileUIHandler = {
     // --- CONFIGURATION ---
     CONFIG: {
@@ -38,7 +20,6 @@ const MobileUIHandler = {
     expandedIslandEl: null,
     
     contentObserver: null,
-    documentListenersWired: false,
     drawerState: 0, // HUD Mode: 0 = Mini, 1 = Peek, 2 = Expanded
     
     // [LEGACY] Sheet state
@@ -54,6 +35,11 @@ const MobileUIHandler = {
         touchStartY: 0,
         isDragging: false,
     },
+
+    // [NEW] Bound event handlers for document listeners
+    boundHudTouchEnd: null,
+    boundLegacyTouchMove: null,
+    boundLegacyTouchEnd: null,
 
     /**
      * [MODIFIED] Restores the main map UI controls
@@ -74,6 +60,12 @@ const MobileUIHandler = {
      */
     init() {
         this.injectMobileStyles();
+
+        // [NEW] Pre-bind document-level handlers
+        this.boundHudTouchEnd = this.handleHudTouchEnd.bind(this);
+        this.boundLegacyTouchMove = this.handleLegacyTouchMove.bind(this);
+        this.boundLegacyTouchEnd = this.handleLegacyTouchEnd.bind(this);
+        
         console.log("Mobile UI Handler (HUD Rehaul v8.0 / Legacy Mode) Initialized.");
     },
 
@@ -81,6 +73,7 @@ const MobileUIHandler = {
      * Injects all the CSS for the new HUD-themed floating islands.
      */
     injectMobileStyles() {
+        // ... (CSS is unchanged, keeping it collapsed for clarity) ...
         const styleId = 'mobile-sector-ops-styles';
         if (document.getElementById(styleId)) document.getElementById(styleId).remove();
 
@@ -726,14 +719,12 @@ const MobileUIHandler = {
         
         handleElement.addEventListener('touchstart', this.handleLegacyTouchStart.bind(this), { passive: false });
         
-        // Use document-level listeners for move and end
-        if (!this.documentListenersWired) {
-            document.addEventListener('touchmove', this.handleLegacyTouchMove.bind(this), { passive: false });
-            document.addEventListener('touchend', this.handleLegacyTouchEnd.bind(this));
-            document.addEventListener('touchcancel', this.handleLegacyTouchEnd.bind(this));
-            this.documentListenersWired = true;
-        }
-
+        // [MODIFIED] Use document-level listeners for move and end
+        // Removed the 'if' check and use pre-bound handlers
+        document.addEventListener('touchmove', this.boundLegacyTouchMove, { passive: false });
+        document.addEventListener('touchend', this.boundLegacyTouchEnd);
+        document.addEventListener('touchcancel', this.boundLegacyTouchEnd);
+        
         // --- Close Handlers ---
         if (this.overlayEl) {
             this.overlayEl.addEventListener('click', () => {
@@ -819,10 +810,8 @@ const MobileUIHandler = {
         peekHandle.addEventListener('touchstart', this.handleHudTouchStart.bind(this), { passive: false });
         expandedHandle.addEventListener('touchstart', this.handleHudTouchStart.bind(this), { passive: false });
         
-        if (!this.documentListenersWired) {
-            document.addEventListener('touchend', this.handleHudTouchEnd.bind(this));
-            this.documentListenersWired = true;
-        }
+        // [MODIFIED] Remove the 'if' check and use pre-bound handler
+        document.addEventListener('touchend', this.boundHudTouchEnd);
 
         // --- Re-wire desktop buttons using event delegation ---
         this.topWindowEl.addEventListener('click', (e) => {
@@ -1050,6 +1039,11 @@ const MobileUIHandler = {
         const overlayToRemove = this.overlayEl;
         const sheetToClose = this.activeWindow;
         
+        // [FIX] Remove document listeners for this mode
+        document.removeEventListener('touchmove', this.boundLegacyTouchMove);
+        document.removeEventListener('touchend', this.boundLegacyTouchEnd);
+        document.removeEventListener('touchcancel', this.boundLegacyTouchEnd);
+        
         const resetState = () => {
             this.activeWindow = null;
             this.overlayEl = null;
@@ -1118,6 +1112,9 @@ const MobileUIHandler = {
             if (mainFlightContent) this.activeWindow.appendChild(mainFlightContent);
             clonedFlightContent?.remove();
         }
+
+        // [FIX] Remove document listener for this mode
+        document.removeEventListener('touchend', this.boundHudTouchEnd);
 
         const overlayToRemove = this.overlayEl;
         const topWindowToRemove = this.topWindowEl;
