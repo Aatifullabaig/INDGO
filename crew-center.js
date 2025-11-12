@@ -8662,7 +8662,7 @@ async function initializeApp() {
     const initialView = urlParams.get('view') || 'view-duty-status';
     switchView(initialView);
 
-    // Sidebar state (Desktop)
+    
     if (window.innerWidth > 992 && localStorage.getItem('sidebarState') === 'collapsed') {
         dashboardContainer.classList.add('sidebar-collapsed');
     }
