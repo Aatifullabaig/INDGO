@@ -4404,9 +4404,7 @@ async function initializeSectorOpsView() {
     try {
         // --- [NEW] Inject the Search Bar ---
         if (!document.getElementById('sector-ops-search-container')) {
-            // --- [START OF MODIFICATION] ---
-            // The HTML now includes the search-bar-container wrapper
-            // and the new search-results-dropdown.
+            // ... (search bar HTML unchanged) ...
             const searchHtml = `
                 <div id="sector-ops-search-container" class="sector-ops-search">
                     <div class="search-bar-container">
@@ -4421,13 +4419,12 @@ async function initializeSectorOpsView() {
                     <div id="search-results-dropdown" class="search-results-dropdown"></div>
                 </div>
             `;
-            // --- [END OF MODIFICATION] ---
             viewContainer.insertAdjacentHTML('beforeend', searchHtml);
         }
 
-        // Create and inject the Info Windows and their recall buttons into the main view container
+        // ... (Airport & Aircraft window HTML unchanged) ...
         if (!document.getElementById('airport-info-window')) {
-            const windowHtml = `
+             const windowHtml = `
                 <div id="airport-info-window" class="info-window">
                     <div class="info-window-header">
                         <h3 id="airport-window-title"></h3>
@@ -4449,9 +4446,8 @@ async function initializeSectorOpsView() {
             `;
             viewContainer.insertAdjacentHTML('beforeend', windowHtml);
         }
-
-        // --- [NEW] Inject the Weather Settings Window ---
         if (!document.getElementById('weather-settings-window')) {
+            // ... (Weather window HTML unchanged) ...
             const windowHtml = `
                 <div id="weather-settings-window" class="info-window">
                     <div class="info-window-header">
@@ -4563,6 +4559,20 @@ async function initializeSectorOpsView() {
                                 <label for="plan-filter-full"><i class="fa-solid fa-diagram-project"></i> Full Filed Plan</label>
                             </li>
                         </ul>
+
+                        <div class="filter-section-divider">
+                            <span class="filter-section-title">Mobile Display Mode</span>
+                        </div>
+                        <ul class="filter-toggle-list" id="mobile-mode-filter-group" style="padding-top: 8px;">
+                            <li class="filter-radio-item">
+                                <input type="radio" id="mobile-mode-hud" name="mobile-display-mode" value="hud" checked>
+                                <label for="mobile-mode-hud"><i class="fa-solid fa-rocket"></i> HUD View</label>
+                            </li>
+                            <li class="filter-radio-item">
+                                <input type="radio" id="mobile-mode-legacy" name="mobile-display-mode" value="legacy">
+                                <label for="mobile-mode-legacy"><i class="fa-solid fa-layer-group"></i> Legacy Sheet</label>
+                            </li>
+                        </ul>
                         </div>
                 </div>
             `;
@@ -4570,6 +4580,7 @@ async function initializeSectorOpsView() {
         }
         // --- [END MODIFIED FILTER WINDOW INJECTION] ---
         
+        // ... (Rest of the function is unchanged) ...
         const toolbarToggleBtn = document.getElementById('toolbar-toggle-panel-btn');
         if (toolbarToggleBtn) {
              if (!document.getElementById('airport-recall-btn')) {
@@ -4586,8 +4597,6 @@ async function initializeSectorOpsView() {
                     </button>
                 `);
              }
-
-             // --- [MODIFIED] Add ONE weather button, remove the other three ---
              if (!document.getElementById('open-weather-settings-btn')) {
                 toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
                     <button id="open-weather-settings-btn" class="toolbar-btn" title="Weather Settings">
@@ -4595,8 +4604,6 @@ async function initializeSectorOpsView() {
                     </button>
                 `);
              }
-
-             // --- [START NEW FILTER BUTTON INJECTION] ---
              if (!document.getElementById('open-filter-settings-btn')) {
                 toolbarToggleBtn.parentElement.insertAdjacentHTML('beforeend', `
                     <button id="open-filter-settings-btn" class="toolbar-btn" title="Map Filters">
@@ -4604,7 +4611,6 @@ async function initializeSectorOpsView() {
                     </button>
                 `);
              }
-             // --- [END NEW FILTER BUTTON INJECTION] ---
         }
         
         airportInfoWindow = document.getElementById('airport-info-window');
@@ -4612,7 +4618,7 @@ async function initializeSectorOpsView() {
         aircraftInfoWindow = document.getElementById('aircraft-info-window');
         aircraftInfoWindowRecallBtn = document.getElementById('aircraft-recall-btn');
         weatherSettingsWindow = document.getElementById('weather-settings-window');
-        filterSettingsWindow = document.getElementById('filter-settings-window'); // <-- ADD THIS
+        filterSettingsWindow = document.getElementById('filter-settings-window');
 
         // 1. Get pilot's available hubs
         const rosterRes = await fetch(`${API_BASE_URL}/api/rosters/my-rosters`, { headers: { 'Authorization': `Bearer ${token}` } });
@@ -4627,15 +4633,12 @@ async function initializeSectorOpsView() {
         // 3. Initialize the Mapbox map
         await initializeSectorOpsMap(selectedHub);
 
-        // 4. Fetch data for both tabs in parallel
+        // 4. Fetch data
         const [rosters, routes] = await Promise.all([
             fetchAndRenderRosters(selectedHub),
             fetchAndRenderRoutes()
         ]);
-        ALL_AVAILABLE_ROUTES = routes; // Store all routes for later use
-
-        // *** FIX APLIED HERE ***
-        // Immediately render markers with the static route data to prevent blank map on view switch
+        ALL_AVAILABLE_ROUTES = routes;
         renderAirportMarkers();
 
         // 5. Set up all event listeners
@@ -4643,8 +4646,8 @@ async function initializeSectorOpsView() {
         setupAirportWindowEvents();
         setupAircraftWindowEvents();
         setupWeatherSettingsWindowEvents();
-        setupFilterSettingsWindowEvents(); 
-        setupSearchEventListeners(); // <-- This function will be modified next
+        setupFilterSettingsWindowEvents(); // <-- This will be modified next
+        setupSearchEventListeners();
 
         // 6. Start the live data loop.
         startSectorOpsLiveLoop();
@@ -6027,39 +6030,25 @@ function renderPilotStatsHTML(stats, username) {
  * --- [MODIFIED v14 - REHAUL] Re-bound data to new top-down layout. Removed donut/odometer logic.
 */
 function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
-    // --- Get all DOM elements ---
-    const progressBarFill = document.getElementById('ac-progress-bar');
-    const phaseIndicator = document.getElementById('ac-phase-indicator');
-    const overviewPanel = document.getElementById('ac-overview-panel');
+    // --- Helper function to update all elements matching a selector ---
+    const updateAll = (selector, value, isHTML = false) => {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+            if (isHTML) {
+                el.innerHTML = value;
+            } else {
+                el.textContent = value;
+            }
+        });
+    };
     
-    // --- VSD Elements ---
-    const vsdPanel = document.getElementById('vsd-panel');
-    const vsdAircraftIcon = document.getElementById('vsd-aircraft-icon');
-    const vsdGraphWindow = document.getElementById('vsd-graph-window');
-    const vsdGraphContent = document.getElementById('vsd-graph-content');
-    const vsdProfilePath = document.getElementById('vsd-profile-path');
-    const vsdFlownPath = document.getElementById('vsd-flown-path'); // <-- The red line
-    const vsdWpLabels = document.getElementById('vsd-waypoint-labels');
-
-    // --- [NEW v14] Data Bar Elements ---
-    const nextWpEl = document.getElementById('ac-next-wp');
-    const nextWpDistValEl = document.getElementById('ac-next-wp-dist');
-    const distTextEl = document.getElementById('ac-dist');
-    const eteEl = document.getElementById('ac-ete');
-    const vsdSummaryVS = document.getElementById('ac-vs');
-
-    // --- [REMOVED v14] Old PFD Footer / Donut / Odometer Elements ---
-    // const distDonutEl = ...
-    // const eteHrEl = ...
-    // const eteMinEl = ...
-
-    // --- [MODIFIED - YOUR FIX] Route Summary Bar Elements ---
-    const atdEl = document.getElementById('ac-bar-atd'); // <-- Changed ID
-    const etaEl = document.getElementById('ac-bar-eta');
-    const depFlagEl = document.getElementById('ac-bar-dep-flag');
-    const arrFlagEl = document.getElementById('ac-bar-arr-flag');
-    // --- [END NEW] ---
-
+    // --- Helper for styling ---
+    const styleAll = (selector, property, value) => {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+            el.style[property] = value;
+        });
+    };
 
     // --- Get Original Data ---
     const originalFlatWaypoints = (plan && plan.flightPlanItems) ? flattenWaypointsFromPlan(plan.flightPlanItems) : [];
@@ -6070,6 +6059,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
     let totalDistanceNM = 0;
 
     if (hasPlan) {
+        // ... (calculation logic for progress, ete, etc. is unchanged) ...
         let totalDistanceKm = 0;
         for (let i = 0; i < originalFlatWaypoints.length - 1; i++) {
             const [lon1, lat1] = originalFlatWaypoints[i];
@@ -6094,8 +6084,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         }
     }
 
-    // --- [NEW in V7.1] Pre-calculate cumulative NM on the main waypoint objects ---
-    // This is required for the 'progressAlongRouteNM' calculation to work.
+    // --- Pre-calculate cumulative NM ---
     if (hasPlan) {
         let cumulativeDistNM = 0;
         let lastLat = originalFlatWaypointObjects[0].location.latitude;
@@ -6103,31 +6092,28 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
 
         for (let i = 0; i < originalFlatWaypointObjects.length; i++) {
             const wp = originalFlatWaypointObjects[i];
-            // Handle waypoints that might be missing location data
             if (!wp.location) continue; 
             const wpLat = wp.location.latitude;
             const wpLon = wp.location.longitude;
             
             const segmentDistNM = (i === 0) ? 0 : getDistanceKm(lastLat, lastLon, wpLat, wpLon) / 1.852;
             cumulativeDistNM += segmentDistNM;
-            wp.cumulativeNM = cumulativeDistNM; // Cache on the *original* object
+            wp.cumulativeNM = cumulativeDistNM;
             
             lastLat = wpLat;
             lastLon = wpLon;
         }
-        // Ensure totalDistanceNM matches the cumulative calculation
         totalDistanceNM = cumulativeDistNM;
     }
-    // --- [END NEW in V7.1] ---
 
-    // --- Flight Plan Data Extraction (for flight phase) ---
+    // --- Flight Plan Data Extraction ---
     let nextWpName = '---';
     let nextWpDistNM = '---';
     let bestWpIndex = -1;
-    let minScore = Infinity; // This will be distance in KM
+    let minScore = Infinity;
     if (plan) { 
+        // ... (logic for finding next waypoint is unchanged) ...
         const currentPos = baseProps.position;
-        // ⬇️ MODIFIED: Read from heading_deg
         const currentTrack = currentPos.heading_deg;
         
         if (originalFlatWaypointObjects.length > 1 && currentPos && typeof currentTrack === 'number') {
@@ -6154,7 +6140,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
                 nextWpDistNM = (minScore / 1.852).toFixed(0);
             }
         } else if (hasPlan && distanceToDestNM < 10 && distanceToDestNM > 0.5) {
-            nextWpName = originalFlatWaypointObjects.length > 0 ? (originalFlatWaypointObjects[originalFlatWaypointObjects.length - 1].identifier || originalFlatWaypointObjects[originalFlatWaypointObjects.length - 1].name) : "DEST";
+            nextWpName = originalFlatWaypointObjects.length > 0 ? (originalFlatWaypointObjects[originalFlatWaypoints.length - 1].identifier || originalFlatWaypointObjects[originalFlatWaypoints.length - 1].name) : "DEST";
             nextWpDistNM = distanceToDestNM.toFixed(0);
         } else if (hasPlan && distanceToDestNM <= 0.5) {
              nextWpName = "DEST";
@@ -6162,17 +6148,16 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         }
     }
     
-    // --- [MODIFIED in V7.1] Calculate accurate progress along the planned route ---
-    // This logic now works because 'cumulativeNM' was pre-cached.
+    // --- Calculate accurate progress along the planned route ---
     let progressAlongRouteNM = 0;
     if (hasPlan && bestWpIndex > 0) {
+        // ... (progressAlongRouteNM logic is unchanged) ...
         const prevWp = originalFlatWaypointObjects[bestWpIndex - 1];
         const nextWp = originalFlatWaypointObjects[bestWpIndex];
         
-        // Check if cumulativeNM was successfully cached
         if (prevWp && nextWp && prevWp.cumulativeNM != null && nextWp.cumulativeNM != null) {
             const segmentTotalNM = nextWp.cumulativeNM - prevWp.cumulativeNM;
-            const distToNextNM = minScore / 1.852; // minScore is distance in KM
+            const distToNextNM = minScore / 1.852;
             
             if (segmentTotalNM > 0) {
                 const segmentProgressNM = Math.max(0, segmentTotalNM - distToNextNM);
@@ -6181,47 +6166,25 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
                 progressAlongRouteNM = prevWp.cumulativeNM;
             }
         } else {
-             // Fallback if caching somehow failed, ensure it's not 0
              progressAlongRouteNM = Math.max(0.01, totalDistanceNM - distanceToDestNM);
         }
     } else if (hasPlan && (bestWpIndex === 0 || bestWpIndex === -1) && distanceToDestNM >= 1.0) { 
-        // We are on the first leg or off-track, use the fallback.
-        // --- [FIX] --- Ensure fallback is never 0 at takeoff by comparing "as the crow flies" dist.
         progressAlongRouteNM = Math.max(0.01, totalDistanceNM - distanceToDestNM);
     } else if (hasPlan && distanceToDestNM < 1.0) { 
-        // We are at the destination
         progressAlongRouteNM = totalDistanceNM;
     }
-    // --- [END MODIFIED in V7.1] ---
 
 
-    // --- [MODIFIED v14] Update New Data Bar ---
+    // --- [MODIFIED] Update New Data Bar (using helper) ---
     const nextWpDisplay = nextWpName;
     const nextWpDistDisplay = (nextWpDistNM === '---' || isNaN(parseFloat(nextWpDistNM))) ? '--.-' : Number(nextWpDistNM).toFixed(1);
 
-    if (nextWpEl) nextWpEl.textContent = nextWpDisplay;
-    if (nextWpDistValEl) {
-        nextWpDistValEl.innerHTML = `${nextWpDistDisplay}<span class="unit">NM</span>`;
-    }
-    if (distTextEl) {
-        distTextEl.innerHTML = `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`;
-    }
-    if (eteEl) {
-        eteEl.textContent = ete;
-    }
-    // --- [END MODIFIED v14] ---
+    updateAll('#ac-next-wp', nextWpDisplay);
+    updateAll('#ac-next-wp-dist', `${nextWpDistDisplay}<span class="unit">NM</span>`, true);
+    updateAll('#ac-dist', `${Math.round(distanceToDestNM)}<span class="unit">NM</span>`, true);
+    updateAll('#ac-ete', ete);
+    // --- [END MODIFIED] ---
 
-
-    // --- Configuration Thresholds (Unchanged) ---
-    const THRESHOLD = {
-        ON_GROUND_AGL: 75, PARKED_MAX_GS: 2, TAXI_MAX_GS: 35, TAKEOFF_MIN_VS: 300,
-        TAKEOFF_CEILING_AGL: 1500, CLIMB_MIN_VS: 500, DESCENT_MIN_VS: -500,
-        TERMINAL_AREA_DIST_NM: 40, APPROACH_PROGRESS_MIN: 5, LANDING_CEILING_AGL: 500,
-        CRUISE_MIN_ALT_MSL: 18000, CRUISE_VS_TOLERANCE: 500, RUNWAY_PROXIMITY_NM: 1.5,
-        RUNWAY_HEADING_TOLERANCE: 10, LANDING_FLARE_MAX_GS: 220, APPROACH_CEILING_AGL: 2500,
-        PARKED_PROGRESS_START: 2, PARKED_PROGRESS_END: 98, HOLD_SHORT_GS: 2.0,
-        HOLD_SHORT_PROXIMITY_NM: 0.15,
-    };
 
     // --- Flight Phase State Machine (Unchanged) ---
     // ... (This entire section is unchanged) ...
@@ -6237,15 +6200,14 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         departureIcao = plan.flightPlanItems[0]?.identifier?.trim().toUpperCase();
         arrivalIcao = plan.flightPlanItems[plan.flightPlanItems.length - 1]?.identifier?.trim().toUpperCase();
     }
-    // ⬇️ MODIFIED: Pass heading_deg to the pos object
     const aircraftPos = { lat: baseProps.position.lat, lon: baseProps.position.lon, heading_deg: baseProps.position.heading_deg };
     let nearestRunwayInfo = null;
     if (hasPlan) {
         const distanceFlownKm = totalDistanceNM * 1.852 - distanceToDestNM * 1.852;
         if (distanceToDestNM * 1.852 < distanceFlownKm && arrivalIcao) {
-             nearestRunwayInfo = getNearestRunway(aircraftPos, arrivalIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
+             nearestRunwayInfo = getNearestRunway(aircraftPos, arrivalIcao, 1.5);
         } else if (departureIcao) {
-             nearestRunwayInfo = getNearestRunway(aircraftPos, departureIcao, THRESHOLD.RUNWAY_PROXIMITY_NM);
+             nearestRunwayInfo = getNearestRunway(aircraftPos, departureIcao, 1.5);
         }
     }
     let altitudeAGL = null;
@@ -6259,21 +6221,21 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
             altitudeAGL = altitude - relevantElevationFt;
         }
     }
-    const aglCheck = altitudeAGL !== null && altitudeAGL < THRESHOLD.ON_GROUND_AGL;
-    const fallbackGroundCheck = altitudeAGL === null && gs < THRESHOLD.TAXI_MAX_GS && Math.abs(vs) < 150;
+    const aglCheck = altitudeAGL !== null && altitudeAGL < 75;
+    const fallbackGroundCheck = altitudeAGL === null && gs < 35 && Math.abs(vs) < 150;
     const isOnGround = aglCheck || fallbackGroundCheck;
-    const isLinedUpForLanding = nearestRunwayInfo && nearestRunwayInfo.airport === arrivalIcao && nearestRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE;
+    const isLinedUpForLanding = nearestRunwayInfo && nearestRunwayInfo.airport === arrivalIcao && nearestRunwayInfo.headingDiff < 10;
     if (isOnGround) {
-        if (gs > THRESHOLD.TAXI_MAX_GS) {
+        if (gs > 35) {
             if (progress > 90) { flightPhase = 'LANDING ROLLOUT'; phaseClass = 'phase-approach'; phaseIcon = 'fa-plane-arrival';
             } else if (progress < 10) { flightPhase = 'TAKEOFF ROLL'; phaseClass = 'phase-climb'; phaseIcon = 'fa-plane-departure';
             } else { flightPhase = 'HIGH-SPEED TAXI'; phaseIcon = 'fa-road'; phaseClass = 'phase-enroute'; }
         } else {
-            const isStopped = gs <= THRESHOLD.HOLD_SHORT_GS;
-            const isAtTerminal = (progress < THRESHOLD.PARKED_PROGRESS_START) || (progress > THRESHOLD.PARKED_PROGRESS_END);
+            const isStopped = gs <= 2.0;
+            const isAtTerminal = (progress < 2) || (progress > 98);
             const relevantIcao = progress < 50 ? departureIcao : arrivalIcao;
-            const closeRunwayInfo = getNearestRunway(aircraftPos, relevantIcao, THRESHOLD.HOLD_SHORT_PROXIMITY_NM);
-            const isLinedUp = closeRunwayInfo && closeRunwayInfo.headingDiff < THRESHOLD.RUNWAY_HEADING_TOLERANCE;
+            const closeRunwayInfo = getNearestRunway(aircraftPos, relevantIcao, 0.15);
+            const isLinedUp = closeRunwayInfo && closeRunwayInfo.headingDiff < 10;
             if (isLinedUp) { flightPhase = `LINED UP RWY ${closeRunwayInfo.ident}`; phaseIcon = 'fa-arrow-up'; phaseClass = 'phase-climb';
             } else if (isStopped) {
                 if (closeRunwayInfo) { flightPhase = `HOLDING SHORT RWY ${closeRunwayInfo.ident}`; phaseIcon = 'fa-pause-circle'; phaseClass = 'phase-enroute';
@@ -6287,50 +6249,55 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
         }
     } else {
         const isInLandingSequence = isLinedUpForLanding && altitudeAGL !== null;
-        if (isInLandingSequence && altitudeAGL < THRESHOLD.APPROACH_CEILING_AGL) {
+        if (isInLandingSequence && altitudeAGL < 2500) {
             if (altitudeAGL < 60 && vs < -50) { flightPhase = 'FLARE';
-            } else if (altitudeAGL < THRESHOLD.LANDING_CEILING_AGL) { flightPhase = 'SHORT FINAL';
+            } else if (altitudeAGL < 500) { flightPhase = 'SHORT FINAL';
             } else { flightPhase = 'FINAL APPROACH'; }
             phaseClass = 'phase-approach'; phaseIcon = 'fa-plane-arrival';
-        } else if (hasPlan && distanceToDestNM < THRESHOLD.TERMINAL_AREA_DIST_NM && progress > THRESHOLD.APPROACH_PROGRESS_MIN) {
+        } else if (hasPlan && distanceToDestNM < 40 && progress > 5) {
             flightPhase = 'APPROACH'; phaseClass = 'phase-approach'; phaseIcon = 'fa-plane-arrival';
-        } else if (vs > THRESHOLD.TAKEOFF_MIN_VS) {
+        } else if (vs > 300) {
             flightPhase = 'CLIMB'; phaseClass = 'phase-climb'; phaseIcon = 'fa-arrow-trend-up';
-            if (progress < 10 && altitudeAGL !== null && altitudeAGL < THRESHOLD.TAKEOFF_CEILING_AGL) {
+            if (progress < 10 && altitudeAGL !== null && altitudeAGL < 1500) {
                  flightPhase = 'LIFTOFF'; phaseIcon = 'fa-plane-up';
             }
-        } else if (vs < THRESHOLD.DESCENT_MIN_VS) {
+        } else if (vs < -500) {
             flightPhase = 'DESCENT'; phaseClass = 'phase-descent'; phaseIcon = 'fa-arrow-trend-down';
-        } else if (altitude > THRESHOLD.CRUISE_MIN_ALT_MSL && Math.abs(vs) < THRESHOLD.CRUISE_VS_TOLERANCE) {
+        } else if (altitude > 18000 && Math.abs(vs) < 500) {
             flightPhase = 'CRUISE'; phaseClass = 'phase-cruise'; phaseIcon = 'fa-minus';
         }
     }
-    // ... (End of unchanged section) ...
 
 
-    // --- [NEW] VSD LOGIC ---
-    if (vsdPanel && hasPlan && vsdGraphContent && vsdAircraftIcon) {
+    // --- [MODIFIED] VSD LOGIC (using querySelectorAll) ---
+    // This logic is now safe because it queries *within* its parent.
+    const vsdPanels = document.querySelectorAll('#vsd-panel');
+    vsdPanels.forEach(vsdPanel => {
+        if (!hasPlan) return;
+        
+        // Find elements *relative* to this specific vsdPanel
+        const vsdAircraftIcon = vsdPanel.querySelector('#vsd-aircraft-icon');
+        const vsdGraphWindow = vsdPanel.querySelector('#vsd-graph-window');
+        const vsdGraphContent = vsdPanel.querySelector('#vsd-graph-content');
+        const vsdProfilePath = vsdPanel.querySelector('#vsd-profile-path');
+        const vsdFlownPath = vsdPanel.querySelector('#vsd-flown-path');
+        const vsdWpLabels = vsdPanel.querySelector('#vsd-waypoint-labels');
+
+        if (!vsdGraphContent || !vsdAircraftIcon) return;
+
         // --- 1. Define VSD scales ---
-        const VSD_HEIGHT_PX = vsdGraphContent.clientHeight || 240; // Use 240 as fallback
+        const VSD_HEIGHT_PX = vsdGraphContent.clientHeight || 240;
         const MAX_ALT_FT = 45000;
         const Y_SCALE_PX_PER_FT = VSD_HEIGHT_PX / MAX_ALT_FT;
         const FIXED_X_SCALE_PX_PER_NM = 4;
         
-        // --- 2. Build the Profile (Only once per flight plan) ---
+        // --- 2. Build the Profile (Only once) ---
         const planId = plan.flightPlanId || plan.id || 'unknown';
         if (vsdPanel.dataset.profileBuilt !== 'true' || vsdPanel.dataset.planId !== planId) {
-            
-            // =================================================================
-            // --- [MODIFIED in V7.1] (Data sanitation for PLANNED line)
-            // =================================================================
-            // We use a deep copy because the altitude interpolation logic
-            // should not affect the original waypoint data.
+            // ... (VSD profile, label, and Y-axis generation logic is unchanged) ...
             let flatWaypointObjects = JSON.parse(JSON.stringify(originalFlatWaypointObjects));
-            
             if (flatWaypointObjects.length > 0) {
                 const lastIdx = flatWaypointObjects.length - 1;
-
-                // --- Pass 1: Anchor Start and End Altitudes ---
                 if (flatWaypointObjects[0].altitude == null) {
                     flatWaypointObjects[0].altitude = plan?.origin?.elevation_ft || 0;
                 }
@@ -6338,16 +6305,12 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
                     const prevAlt = (lastIdx > 0) ? flatWaypointObjects[lastIdx - 1]?.altitude : null;
                     flatWaypointObjects[lastIdx].altitude = (prevAlt != null) ? prevAlt : (plan?.destination?.elevation_ft || 0);
                 }
-
-                // --- Pass 2: Sanitize implausible intermediate altitudes ---
                 for (let i = 1; i < lastIdx; i++) {
                     const wp = flatWaypointObjects[i];
                     if (wp.altitude == null || (typeof wp.altitude === 'number' && wp.altitude <= 0)) {
                         wp.altitude = null;
                     }
                 }
-                
-                // --- Pass 3: Interpolation Pass (Look-Ahead Gap Filler) ---
                 let lastValidAltIndex = 0; 
                 for (let i = 1; i < flatWaypointObjects.length; i++) {
                     const wp = flatWaypointObjects[i];
@@ -6370,15 +6333,7 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
                     }
                 }
             }
-            // =================================================================
-            // --- [END V6.5 FIX] ---
-            // =================================================================
 
-            // =================================================================
-            // --- [MODIFIED in V7.1] (Y-Axis & Label De-confliction)
-            // =================================================================
-
-            // --- Build Y-Axis ---
             if (vsdGraphWindow && !vsdGraphWindow.querySelector('#vsd-y-axis')) {
                 let yAxisHtml = '<div id="vsd-y-axis">';
                 const altLabels = [10000, 20000, 30000, 40000];
@@ -6390,15 +6345,12 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
                 vsdGraphWindow.insertAdjacentHTML('afterbegin', yAxisHtml);
             }
             
-            // --- Build Profile Path & Staggered Labels ---
             let path_d = "";
             let labels_html = "";
             let current_x_px = 0;
-            
-            // --- De-confliction state ---
             let last_label_x_px = -1000;
-            let stagger_level = 0; // 0 = high, 1 = low
-            const MIN_LABEL_SPACING_PX = 80; // Min px distance between label centers
+            let stagger_level = 0;
+            const MIN_LABEL_SPACING_PX = 80;
             
             if (flatWaypointObjects.length === 0) return;
 
@@ -6406,73 +6358,50 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
                 const wp = flatWaypointObjects[i];
                 const wpAltFt = wp.altitude; 
                 const wpAltPx = VSD_HEIGHT_PX - (wpAltFt * Y_SCALE_PX_PER_FT);
-
-                // --- [MODIFIED in V7.1] Use pre-cached cumulativeNM ---
-                // wp.cumulativeNM was copied from originalFlatWaypointObjects
                 current_x_px = wp.cumulativeNM * FIXED_X_SCALE_PX_PER_NM;
-                // --- [END MODIFIED in V7.1] ---
 
                 if (i === 0) {
-                    path_d = `M ${current_x_px} ${wpAltPx}`; // Starts at X=0
+                    path_d = `M ${current_x_px} ${wpAltPx}`;
                 } else {
                     path_d += ` L ${current_x_px} ${wpAltPx}`;
                 }
 
-                // --- Label Staggering Logic ---
                 let label_top_px;
                 let label_class = '';
-                
                 if (current_x_px - last_label_x_px < MIN_LABEL_SPACING_PX) {
-                    // Too close! Use the other stagger level
-                    stagger_level = 1 - stagger_level; // Flip 0 to 1 or 1 to 0
+                    stagger_level = 1 - stagger_level;
                 } else {
-                    // Enough space, reset to default high
                     stagger_level = 0;
                 }
-
                 if (stagger_level === 1) {
-                    // Low label
                     label_class = 'low-label';
-                    label_top_px = wpAltPx + 12; // Position below line, plus 12px for tick
+                    label_top_px = wpAltPx + 12;
                 } else {
-                    // High label
                     label_class = 'high-label';
-                    label_top_px = wpAltPx - 42; // Position above line, minus 42px (label height + tick)
+                    label_top_px = wpAltPx - 42;
                 }
-                
-                last_label_x_px = current_x_px; // Store this label's position
+                last_label_x_px = current_x_px;
 
                 labels_html += `
                     <div class="vsd-wp-label ${label_class}" style="left: ${current_x_px}px; top: ${label_top_px}px;">
                         <span class="wp-name">${wp.identifier}</span>
                         <span class="wp-alt">${Math.round(wpAltFt)}ft</span>
                     </div>`;
-                // --- End Staggering Logic ---
             }
             
             vsdGraphContent.style.width = `${current_x_px + 100}px`;
             vsdProfilePath.closest('svg').style.width = `${current_x_px + 100}px`;
-            
             vsdProfilePath.setAttribute('d', path_d);
             vsdWpLabels.innerHTML = labels_html;
-            
             vsdPanel.dataset.profileBuilt = 'true';
             vsdPanel.dataset.planId = planId;
-            // =================================================================
-            // --- [END V6.6 FIX]
-            // =================================================================
         }
         
-        // =================================================================
-        // --- [MODIFIED in V7.0] (Build/Update Flown Altitude Path with SCALING)
-        // This logic is unchanged from V7.0, but will now work
-        // because `plannedProgressNM` is no longer 0.
-        // =================================================================
+        // --- 3. Build/Update Flown Altitude Path ---
         if (vsdFlownPath && hasPlan && originalFlatWaypointObjects.length > 0) {
+            // ... (VSD flown path logic is unchanged) ...
             let flown_path_d = "";
             let lastFlownLat, lastFlownLon;
-
-            // --- [V6.9 FIX - START] (Filter stale data) ---
             let currentFlightRoutePoints = [...sortedRoutePoints]; 
             const originLat = plan?.origin?.latitude;
             const originLon = plan?.origin?.longitude;
@@ -6491,63 +6420,46 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
                     currentFlightRoutePoints = sortedRoutePoints.slice(startIndex);
                 }
             }
-            // --- [V6.9 FIX - END] ---
-
             const fullFlownRoute = [];
             if (currentFlightRoutePoints && currentFlightRoutePoints.length > 0) {
                 fullFlownRoute.push(...currentFlightRoutePoints); 
                 lastFlownLat = currentFlightRoutePoints[0].latitude;
                 lastFlownLon = currentFlightRoutePoints[0].longitude;
             }
-            
             fullFlownRoute.push({
                 latitude: baseProps.position.lat,
                 longitude: baseProps.position.lon,
                 altitude: baseProps.position.alt_ft
             });
-
-            const flownPathPoints = []; // Store points for Pass 2
-            let totalActualFlownNM = 0; // Track total *actual* flown NM
-
+            const flownPathPoints = [];
+            let totalActualFlownNM = 0;
             if (fullFlownRoute.length > 0) {
-                if (!lastFlownLat) { // Handle case with no historical data
+                if (!lastFlownLat) {
                     lastFlownLat = fullFlownRoute[0].latitude;
                     lastFlownLon = fullFlownRoute[0].longitude;
                 }
-
                 const startAltFt = originalFlatWaypointObjects[0]?.altitude || fullFlownRoute[0].altitude;
                 const startAltPx = VSD_HEIGHT_PX - (startAltFt * Y_SCALE_PX_PER_FT);
-
-                // --- Pass 1: Calculate actual flown distance and Y positions ---
                 for (let i = 0; i < fullFlownRoute.length; i++) {
                     const point = fullFlownRoute[i];
                     const wpAltFt = typeof point.altitude === 'number' ? point.altitude : 0;
                     const wpAltPx = VSD_HEIGHT_PX - (wpAltFt * Y_SCALE_PX_PER_FT);
                     const wpLat = point.latitude;
                     const wpLon = point.longitude;
-                    
                     let segmentDistNM = 0;
                     if (i > 0) { 
                         segmentDistNM = getDistanceKm(lastFlownLat, lastFlownLon, wpLat, wpLon) / 1.852;
                     }
                     totalActualFlownNM += segmentDistNM;
-
-                    flownPathPoints.push({ x_nm: totalActualFlownNM, y_px: wpAltPx }); // Store NM and Px
-
+                    flownPathPoints.push({ x_nm: totalActualFlownNM, y_px: wpAltPx });
                     lastFlownLat = wpLat;
                     lastFlownLon = wpLon;
                 }
-                
-                // --- Pass 2: Build the scaled SVG path ---
                 const plannedProgressNM = progressAlongRouteNM;
-                
-                // [FIX] Ensure scaleFactor is never 0, even if plannedProgressNM is
                 const scaleFactor = (totalActualFlownNM > 0.1 && plannedProgressNM > 0.01) ? (plannedProgressNM / totalActualFlownNM) : 1;
-                
                 for (let i = 0; i < flownPathPoints.length; i++) {
                     const point = flownPathPoints[i];
                     const scaled_x_px = point.x_nm * scaleFactor * FIXED_X_SCALE_PX_PER_NM; 
-                    
                     if (i === 0) {
                         flown_path_d = `M 0 ${startAltPx}`;
                         if (flownPathPoints.length === 1) {
@@ -6557,123 +6469,89 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
                         flown_path_d += ` L ${scaled_x_px} ${point.y_px}`;
                     }
                 }
-                
                 vsdFlownPath.setAttribute('d', flown_path_d);
             }
         }
-        // =================================================================
-        // --- [END V7.0 LOGIC]
-        // =================================================================
 
-
-        // --- 3. Update Aircraft Icon Position (Vertical) ---
+        // --- 4. Update Aircraft Icon Position (Vertical) ---
         const currentAltPx = VSD_HEIGHT_PX - (altitude * Y_SCALE_PX_PER_FT);
         vsdAircraftIcon.style.top = `${currentAltPx}px`;
 
-        // =================================================================
-        // --- 4. [MODIFIED in V7.0] Scroll the Graph (Horizontal) ---
-        // =================================================================
+        // --- 5. Scroll the Graph (Horizontal) ---
         if (vsdGraphWindow && vsdGraphWindow.clientWidth > 0) {
-            // --- [FIX] Use the new accurate progress metric ---
             const distanceFlownNM = progressAlongRouteNM; 
             const scrollOffsetPx = (distanceFlownNM * FIXED_X_SCALE_PX_PER_NM);
-
             const vsdViewportWidth = vsdGraphWindow.clientWidth;
             const totalProfileWidthPx = vsdGraphContent.scrollWidth;
-            
-            const centerOffset = (vsdViewportWidth / 2) + 35; // 35px is Y-axis width
+            const centerOffset = (vsdViewportWidth / 2) + 35;
             const desiredTranslateX = centerOffset - scrollOffsetPx;
-            
             const maxTranslateX = 0;
             const minTranslateX = Math.min(0, vsdViewportWidth - totalProfileWidthPx);
-
             const finalTranslateX = Math.max(minTranslateX, Math.min(maxTranslateX, desiredTranslateX));
-
             vsdGraphContent.style.transform = `translateX(${finalTranslateX - 35}px)`;
-
             const iconLeftPx = scrollOffsetPx + finalTranslateX;
             vsdAircraftIcon.style.left = `${iconLeftPx}px`;
-
         } else {
-            // Fallback (unchanged)
-            // --- [FIX] Use the new accurate progress metric ---
             const distanceFlownNM = progressAlongRouteNM;
             const scrollOffsetPx = (distanceFlownNM * FIXED_X_SCALE_PX_PER_NM);
             const translateX = 75 - scrollOffsetPx; 
             vsdGraphContent.style.transform = `translateX(${translateX - 35}px)`;
-            vsdAircraftIcon.style.left = `75px`; // Set fallback icon pos
+            vsdAircraftIcon.style.left = `75px`;
         }
-        // =================================================================
-        // --- [END V7.0 FIX]
-        // =================================================================
         
-        // --- 5. [MODIFIED v14] Update Data Bar's V/S ---
-        if (vsdSummaryVS) vsdSummaryVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
-    }
-    // --- [END NEW VSD LOGIC] ---
+        // --- 6. [MODIFIED] Update Data Bar's V/S (using querySelector) ---
+        const vsdSummaryVS = vsdPanel.closest('.ac-tab-pane').querySelector('#ac-vs');
+        if (vsdSummaryVS) {
+            vsdSummaryVS.innerHTML = `<i class="fa-solid ${vs > 100 ? 'fa-arrow-up' : vs < -100 ? 'fa-arrow-down' : 'fa-minus'}"></i> ${Math.round(vs)}<span class="unit">fpm</span>`;
+        }
+    });
+    // --- [END VSD LOGIC] ---
 
 
-    // --- Update Other DOM Elements ---
-    if (progressBarFill) progressBarFill.style.width = `${progress.toFixed(1)}%`;
-
-    if (phaseIndicator) {
-        phaseIndicator.className = `flight-phase-indicator ${phaseClass}`;
-        phaseIndicator.innerHTML = `<i class="fa-solid ${phaseIcon}"></i> ${flightPhase}`;
-    }
-
-    // --- [REMOVED v14] Donut and Odometer update logic ---
-    // if (distDonutEl) ...
-    // updateOdometerDigit(eteHrEl, eteHr);
-    // updateOdometerDigit(eteMinEl, eteMin);
-
-    // --- [MODIFIED - YOUR FIX] Update Times and Flags ---
+    // --- [MODIFIED] Update Other DOM Elements (using helpers) ---
+    styleAll('#ac-progress-bar', 'width', `${progress.toFixed(1)}%`);
+    updateAll('#ac-phase-indicator', `<i class="fa-solid ${phaseIcon}"></i> ${flightPhase}`, true);
     
-    // 1. Get Actual Departure Time (ATD) from the *first* route point
+    // Set the class separately as it's a list
+    const phaseIndicators = document.querySelectorAll('#ac-phase-indicator');
+    phaseIndicators.forEach(el => {
+        el.className = `flight-phase-indicator ${phaseClass}`;
+    });
+
+    // --- Update Times and Flags ---
     const atdTimestamp = (sortedRoutePoints && sortedRoutePoints.length > 0) ? sortedRoutePoints[0].date : null;
     const atdTime = atdTimestamp ? formatTimeFromTimestamp(atdTimestamp) : '--:--';
-
-    // 2. Calculate live ETA (Current Time + ETE)
-    // 'ete' string ("HH:MM") is calculated earlier in this function. We need the raw hours.
     let etaTime = '--:--';
     if (baseProps.position.gs_kt > 50 && totalDistanceNM > 0) {
         const eteHours = distanceToDestNM / baseProps.position.gs_kt;
-        // Check for valid ETE (e.g., less than 48 hours to avoid crazy numbers from AP+)
         if (eteHours > 0 && eteHours < 48) { 
             const eteMs = eteHours * 3600 * 1000;
             const etaTimestamp = new Date(Date.now() + eteMs);
             etaTime = formatTimeFromTimestamp(etaTimestamp);
         }
     }
-
-    // 3. Get Country Flags (logic is unchanged)
-    // --- [FIX v11] ---
-    // Get country code from our own airportsData using the ICAO, not the plan object.
     const depCountryCode = airportsData[departureIcao]?.country ? airportsData[departureIcao].country.toLowerCase() : '';
     const arrCountryCode = airportsData[arrivalIcao]?.country ? airportsData[arrivalIcao].country.toLowerCase() : '';
-    // --- [END FIX v11] ---
-
     const depFlagSrc = depCountryCode ? `https://flagcdn.com/w20/${depCountryCode}.png` : '';
     const arrFlagSrc = arrCountryCode ? `https://flagcdn.com/w20/${arrCountryCode}.png` : '';
 
-    // 4. Update the DOM
-    if (atdEl) atdEl.textContent = `${atdTime} Z`;
-    if (etaEl) etaEl.textContent = `${etaTime} Z`;
+    updateAll('#ac-bar-atd', `${atdTime} Z`);
+    updateAll('#ac-bar-eta', `${etaTime} Z`);
     
-    if (depFlagEl) { 
-        depFlagEl.src = depFlagSrc; 
-        depFlagEl.alt = depCountryCode; 
-        depFlagEl.style.display = depCountryCode ? 'block' : 'none'; 
-    }
-    if (arrFlagEl) { 
-        arrFlagEl.src = arrFlagSrc; 
-        arrFlagEl.alt = arrCountryCode; 
-        arrFlagEl.style.display = arrCountryCode ? 'block' : 'none'; 
-    }
-    // --- [END FIX] ---
+    document.querySelectorAll('#ac-bar-dep-flag').forEach(el => {
+        el.src = depFlagSrc; 
+        el.alt = depCountryCode; 
+        el.style.display = depCountryCode ? 'block' : 'none'; 
+    });
+    document.querySelectorAll('#ac-bar-arr-flag').forEach(el => {
+        el.src = arrFlagSrc; 
+        el.alt = arrCountryCode; 
+        el.style.display = arrCountryCode ? 'block' : 'none'; 
+    });
 
-    // --- [FIX: REMOVED GRADIENT] ---
-    // Update Aircraft Image. The gradient is now handled in CSS.
-    if (overviewPanel) {
+    // --- Update Aircraft Image (using querySelectorAll) ---
+    const overviewPanels = document.querySelectorAll('#ac-overview-panel');
+    overviewPanels.forEach(overviewPanel => {
         const sanitizeFilename = (name) => {
             if (!name || typeof name !== 'string') return 'unknown';
             return name.trim().toLowerCase().replace(/[^a-z0-j-9-]/g, '_');
@@ -6690,17 +6568,15 @@ function updateAircraftInfoWindow(baseProps, plan, sortedRoutePoints) {
             const img = new Image();
             img.src = imagePath;
             img.onload = () => {
-                // We no longer add the gradient variable here
                 overviewPanel.style.backgroundImage = newImageUrl;
                 overviewPanel.dataset.currentPath = imagePath;
             };
             img.onerror = () => {
-                // We no longer add the gradient variable here
                 overviewPanel.style.backgroundImage = `url('${fallbackPath}')`;
                 overviewPanel.dataset.currentPath = fallbackPath;
             };
         }
-    }
+    });
 }
 
     /**
@@ -7055,19 +6931,28 @@ function setupSectorOpsEventListeners() {
 
 
 
-/**
- * Sets up event listeners for the new Filter Settings info window.
- */
 function setupFilterSettingsWindowEvents() {
     if (!filterSettingsWindow || filterSettingsWindow.dataset.eventsAttached === 'true') {
         return;
     }
 
+    // --- [NEW] Read settings from localStorage on window open ---
+    const currentMobileMode = localStorage.getItem('mobileDisplayMode') || 'hud';
+    const mobileModeHud = document.getElementById('mobile-mode-hud');
+    const mobileModeLegacy = document.getElementById('mobile-mode-legacy');
+    if (mobileModeHud && mobileModeLegacy) {
+        if (currentMobileMode === 'legacy') {
+            mobileModeLegacy.checked = true;
+        } else {
+            mobileModeHud.checked = true;
+        }
+    }
+    // --- [END NEW] ---
+
     // Use a single listener on the window for better performance
     filterSettingsWindow.addEventListener('click', (e) => {
+        // ... (close button logic unchanged) ...
         const target = e.target;
-
-        // Handle Close or Hide buttons
         if (target.closest('.filter-window-close-btn') || target.closest('.filter-window-hide-btn')) {
             filterSettingsWindow.classList.remove('visible');
             MobileUIHandler.closeActiveWindow();
@@ -7078,50 +6963,54 @@ function setupFilterSettingsWindowEvents() {
     filterSettingsWindow.addEventListener('change', (e) => {
         const target = e.target;
         
-        // --- [START NEW] Handle Radio Button Logic ---
+        // --- Handle Flight Plan Radio Logic ---
         if (target.name === 'plan-display-mode') {
             mapFilters.planDisplayMode = target.value;
-            
-            // If an aircraft is currently selected, update its plan line immediately
             if (currentFlightInWindow && cachedFlightDataForStatsView.plan) {
                 const { flightProps, plan } = cachedFlightDataForStatsView;
                 const position = currentAircraftPositionForGeocode || flightProps.position;
-                
-                // Call the new helper to redraw all plan layers
                 updateFlightPlanLayer(currentFlightInWindow, plan, position);
             }
-            // We don't call updateMapFilters() here as this isn't a layer filter
+            return;
+        }
+        
+        // --- [START NEW] Handle Mobile Display Mode Radio Logic ---
+        if (target.name === 'mobile-display-mode') {
+            const newMode = target.value;
+            localStorage.setItem('mobileDisplayMode', newMode);
+            // Show a note that a change requires re-opening the window
+            if (!document.getElementById('mobile-mode-note')) {
+                document.getElementById('mobile-mode-filter-group').insertAdjacentHTML(
+                    'beforeend',
+                    '<p id="mobile-mode-note" class="muted-text" style="padding: 10px 0 0 0; text-align: left; font-size: 0.8rem;">Changes will apply the next time you open an aircraft window.</p>'
+                );
+            }
             return; // Stop processing
         }
         // --- [END NEW] ---
 
         if (target.type !== 'checkbox') return;
 
-        // --- [NEW] Get DOM elements for style toggles ---
+        // --- Handle Map Style Logic ---
         const lightModeToggle = document.getElementById('filter-toggle-light-mode');
         const satelliteModeToggle = document.getElementById('filter-toggle-satellite-mode');
         let styleChanged = false;
         let newMapStyle = currentMapStyle;
 
-        // --- [NEW] Radio button logic for map styles ---
         if (target.id === 'filter-toggle-light-mode' && target.checked) {
-            // If user turned Light ON, turn Satellite OFF
             if (satelliteModeToggle) satelliteModeToggle.checked = false;
             newMapStyle = MAP_STYLE_LIGHT;
             styleChanged = true;
         } else if (target.id === 'filter-toggle-satellite-mode' && target.checked) {
-            // If user turned Satellite ON, turn Light OFF
             if (lightModeToggle) lightModeToggle.checked = false;
             newMapStyle = MAP_STYLE_SATELLITE;
             styleChanged = true;
         } else if ((target.id === 'filter-toggle-light-mode' || target.id === 'filter-toggle-satellite-mode') && !target.checked) {
-            // If user turned one OFF, check if both are off
             if (!lightModeToggle.checked && !satelliteModeToggle.checked) {
                 newMapStyle = MAP_STYLE_DARK; // Revert to dark
                 styleChanged = true;
             }
         }
-        // --- [END NEW] ---
 
         // 1. Update the global mapFilters state object from the DOM
         mapFilters.showVaOnly = document.getElementById('filter-toggle-members-only')?.checked || false;
@@ -7130,19 +7019,14 @@ function setupFilterSettingsWindowEvents() {
         
         // 2. Decide whether to change style or just filters
         if (styleChanged && newMapStyle !== currentMapStyle) {
-            // --- [NEW] Trigger a full map style change ---
             console.log(`Changing map style to: ${newMapStyle}`);
             currentMapStyle = newMapStyle;
             sectorOpsMap.setStyle(currentMapStyle);
-            // The 'style.load' event will handle rebuilding all layers.
-            
         } else if (!styleChanged) {
-            // --- [ORIGINAL] Only a filter changed, just update layers ---
             updateMapFilters();
         }
 
         // 3. Update toolbar button state (always)
-        // This is safe to call, it reads from the state object.
         updateMapFilters();
     });
 
@@ -8662,7 +8546,7 @@ async function initializeApp() {
     const initialView = urlParams.get('view') || 'view-duty-status';
     switchView(initialView);
 
-    
+
     if (window.innerWidth > 992 && localStorage.getItem('sidebarState') === 'collapsed') {
         dashboardContainer.classList.add('sidebar-collapsed');
     }
